@@ -1,21 +1,26 @@
 # Curso de LangGraph — de cero al p99
 
-Un curso completo de **LangGraph en español**, en 28 notebooks interactivos, construido y
+Un curso completo de **LangGraph en español**, en 33 notebooks interactivos, construido y
 verificado contra **LangGraph 1.2** y **LangChain 1.3**.
 
 No es una traducción de la documentación. Cada afirmación técnica del material se comprobó
 ejecutándola, y varias de las que "todo el mundo sabe" resultaron ser falsas en esta versión
 (están documentadas más abajo, en *Detalles que sorprenden*).
 
+El **módulo 7** nació de un barrido de foros —GitHub Issues y Discussions de
+`langchain-ai/langgraph`, el foro de LangChain, Stack Overflow y post-mortems publicados— y
+cubre lo que rompe *después* de desplegar: serialización del estado, crecimiento de la
+persistencia, concurrencia por `thread_id` y control de acceso.
+
 | | |
 |---|---|
-| **Notebooks** | 28 (22 de contenido + 6 de proyecto) |
-| **Módulos** | 7 |
-| **Celdas** | 1000 (557 de teoría, 443 de código ejecutable) |
+| **Notebooks** | 33 (26 de contenido + 7 de proyecto) |
+| **Módulos** | 8 |
+| **Celdas** | 1169 (658 de teoría, 511 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
-| **Pruebas** | 25 pruebas automáticas que corren en 0,3 s sin llamar a ningún modelo |
-| **Dedicación estimada** | 39-45 horas |
+| **Pruebas** | 50 pruebas automáticas que corren en 1,5 s sin llamar a ningún modelo |
+| **Dedicación estimada** | 46-53 horas |
 | **Coste en API** | unos 2 € en total con `gpt-4o-mini` |
 
 ---
@@ -103,6 +108,19 @@ es opcional pero muy recomendable — depurar un grafo sin trazas es adivinar.
 | [`21_agentes_horizonte_largo`](06_produccion/21_agentes_horizonte_largo.ipynb) | Los cinco pilares de los agentes que trabajan durante horas: plan, memoria externa, divulgación progresiva, subagentes y compactación |
 | **[`P6 · Capstone`](06_produccion/P6_capstone.ipynb)** | El sistema completo: triaje, RAG, aprobación, memoria, seguridad y evaluación |
 
+### Módulo 7 · Operación real
+
+Lo que rompe cuando el sistema ya funciona y lleva tres semanas en producción. Este módulo
+sale de contrastar el resto del curso con los problemas que la gente reporta en los foros.
+
+| Notebook | Qué aprendes |
+|---|---|
+| [`22_serializacion_del_estado`](07_operacion/22_serializacion_del_estado.ipynb) | Qué tipos sobreviven al checkpoint, la tupla que vuelve como lista, CVE-2026-28277 y el modo estricto de msgpack |
+| [`23_persistencia_a_escala`](07_operacion/23_persistencia_a_escala.ipynb) | La fórmula de checkpoints por turno, el efecto real de `durability`, poda del checkpointer y los parámetros de Postgres que nadie documenta |
+| [`24_concurrencia_y_servidor`](07_operacion/24_concurrencia_y_servidor.ipynb) | La pérdida de escrituras con dos peticiones al mismo hilo, cerrojos por `thread_id`, *double texting* y un servidor SSE propio |
+| [`25_auth_y_multitenencia`](07_operacion/25_auth_y_multitenencia.ipynb) | `langgraph_sdk.Auth`, filtros de metadatos, aislamiento del `Store` y el `langgraph.json` completo |
+| **[`P7 · Auditoría de producción`](07_operacion/P7_proyecto_endurecer.ipynb)** | Un auditor que aplica los cuatro detectores a una aplicación heredada y a su versión endurecida |
+
 ---
 
 ## Cómo está construido
@@ -172,7 +190,11 @@ Cada notebook pasó por tres filtros antes de darse por bueno:
    donde apareció el fallo de las importaciones relativas: ninguna comprobación estática lo
    detecta, y el material lo documenta precisamente por eso.
 5. **Todo lo anterior se repitió en un entorno virgen** creado solo desde `requirements.txt`,
-   para garantizar que el fichero de dependencias basta: 28/28 notebooks y 25/25 pruebas.
+   para garantizar que el fichero de dependencias basta: 33/33 notebooks y 50/50 pruebas.
+6. **La capa de autenticación se ejercitó por HTTP.** `despliegue/langgraph.produccion.json`
+   se arrancó con `langgraph dev` y se comprobaron los 401 sin token, los 403 por falta de
+   permiso, los 200 con el `owner` escrito en los metadatos, el aislamiento entre usuarios y
+   el 404 (que no 403) al pedir un recurso ajeno.
 
 ---
 
@@ -199,6 +221,17 @@ suele darse por supuesto:
 | La **descripción** de una herramienta MCP de terceros **es prompt**: puede llevar instrucciones para tu agente | 20 |
 | Reutilizar el mismo objeto `AIMessage` en un guion de pruebas hace que `add_messages` lo **sustituya** en vez de añadirlo | 21 |
 | El servidor carga tu grafo **por ruta de fichero**: con importaciones relativas no arranca | 18 |
+| Una `tuple` en el estado **vuelve como `list`** tras el checkpoint, sin error ni aviso | 22 |
+| El modo estricto de msgpack **no lanza excepción**: degrada el objeto a `dict` y sigue | 22 |
+| Con el modo estricto, solo sobreviven los tipos **declarados en el esquema**: lo que viaja dentro de `Any` vuelve como `dict` | 22 |
+| Un turno escribe **`superpasos + 2` checkpoints**, cada uno con el estado **completo**; `durability="exit"` lo baja a uno | 23 |
+| Los `writes` crecen también con **cuántas claves escribe cada nodo**, no solo con los superpasos | 23 |
+| LangGraph **no serializa dos ejecuciones del mismo `thread_id`**: se pierden escrituras en silencio | 24 |
+| Una desconexión del cliente **no tira el trabajo hecho**: deja el hilo a medias y reanudable con `ainvoke(None, config)` | 24 |
+| El servidor de auth ejecuta **un solo manejador** por petición, el más específico: los `@auth.on` **no se encadenan** | 25 |
+| El `Store` no se protege con filtros: hay que **reescribir el `namespace`** | 25 |
+| Pedir un recurso ajeno devuelve **404, no 403** (un 403 confirmaría que existe) | 25 |
+| `langgraph dev` aborta con `BlockingError` ante cualquier E/S bloqueante dentro de un nodo `async` | 18 |
 
 ---
 

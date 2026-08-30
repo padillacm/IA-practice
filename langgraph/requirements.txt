@@ -33,6 +33,11 @@ langsmith>=0.11
 pytest>=8.2
 pytest-asyncio>=0.24
 
+# --- servidor propio (notebook 24) ---------------------------------------
+starlette>=0.41                    # el servidor SSE del notebook 24 (FastAPI va por dentro)
+httpx>=0.27                        # TestClient de Starlette
+uvicorn>=0.30                      # para servirlo de verdad fuera del notebook
+
 # --- integración con el ecosistema (notebook 20) --------------------------
 langchain-mcp-adapters>=0.3        # conectar servidores MCP a un agente de LangGraph
 

@@ -839,3 +839,11 @@ Las cinco ideas que conviene que sobrevivan a todo lo demás:
 
 Y una advertencia final, que es la más útil: **la mayoría de los problemas de un agente se
 arreglan mejorando las herramientas, no añadiendo agentes**. Empieza siempre por ahí.
+
+---
+
+**Siguiente:** el sistema funciona. Falta lo que separa "funciona" de "está en producción":
+el [módulo 7](../07_operacion/22_serializacion_del_estado.ipynb) audita serialización,
+crecimiento de la persistencia, concurrencia y control de acceso — y termina con
+[`P7`](../07_operacion/P7_proyecto_endurecer.ipynb), que es la auditoría que le puedes pasar
+a este mismo capstone.

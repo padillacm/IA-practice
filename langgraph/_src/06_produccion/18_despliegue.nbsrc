@@ -372,6 +372,41 @@ recarga automática al guardar. La salida incluye el enlace a **LangGraph Studio
 Un aviso práctico: `langgraph dev` es **para desarrollo**. Guarda en memoria y se pierde todo
 al reiniciar. Para producción hace falta un almacenamiento persistente.
 
+### 3.1 `BlockingError`: el error que solo aparece al servir
+
+Hay un error que no verás nunca en un notebook y que aparece la primera vez que arrancas
+`langgraph dev`:
+
+```
+BlockingError: Blocking call to socket.connect
+```
+
+El servidor corre sobre un bucle de eventos asíncrono y usa **blockbuster** para detectar
+llamadas bloqueantes dentro de él: una lectura de fichero, un `requests.get`, una
+inicialización de cliente que lee credenciales del disco. En un notebook eso no molesta a
+nadie; en un servidor ASGI, una llamada bloqueante **para todas las peticiones en curso**,
+no solo la tuya.
+
+Es de los errores que más aparecen en el repositorio, casi siempre con la misma forma: un
+integrador de modelo que hace una llamada síncrona al inicializarse.
+
+**Qué hacer, en orden de preferencia:**
+
+| Situación | Arreglo |
+|---|---|
+| Tu propio código hace E/S bloqueante | Usa la variante `async` (`httpx.AsyncClient` en vez de `requests`) |
+| No hay variante asíncrona | `await asyncio.to_thread(funcion_bloqueante, ...)` |
+| Es la inicialización de un cliente o modelo | Constrúyelo **a nivel de módulo**, no dentro del nodo: así ocurre al importar, fuera del bucle |
+| Estás depurando y quieres seguir | `langgraph dev --allow-blocking` (solo en local) |
+| Es una librería de terceros y no puedes tocarla | Variable de entorno `BG_JOB_ISOLATED_LOOPS=true` en el despliegue |
+
+Las dos últimas filas son **paliativos, no soluciones**: silencian el detector, no la
+llamada bloqueante. Si las usas, deja escrito por qué.
+
+> El truco de "constrúyelo a nivel de módulo" es el que resuelve la mayoría de los casos y
+> además es mejor código: crear el cliente del modelo en cada invocación del nodo es
+> desperdiciar el pool de conexiones.
+
 #%%md
 ## 4. Consumir el servicio
 
@@ -432,6 +467,39 @@ curl -N -X POST http://localhost:2024/threads/<thread_id>/runs/stream \\
 # Consultar el estado (¿hay algo esperando aprobación?)
 curl http://localhost:2024/threads/<thread_id>/state
 ''')
+
+#%%md
+### 4.1 Las opciones de un *run* que no salen en los tutoriales
+
+`runs.create` acepta bastante más que `input`. Estas son las que cambian el comportamiento
+en producción; no las adivines, léelas de la propia firma del SDK:
+
+#%%py
+import inspect
+
+from langgraph_sdk.client import RunsClient
+
+interesantes = {"multitask_strategy", "on_completion", "after_seconds", "if_not_exists",
+                "stream_resumable", "durability", "webhook", "checkpoint_during"}
+for nombre, parametro in inspect.signature(RunsClient.create).parameters.items():
+    if nombre in interesantes:
+        print(f"  {nombre:20s} {parametro.annotation}")
+
+#%%md
+| Opción | Para qué |
+|---|---|
+| `multitask_strategy` | Qué hacer si llega otra ejecución al mismo hilo: `enqueue`, `reject`, `interrupt`, `rollback`. Es el *double texting* del notebook 24 |
+| `if_not_exists` | `"create"` crea el hilo si no existe; te ahorra una petición y una condición de carrera |
+| `after_seconds` | Retrasa el arranque. Útil para agrupar mensajes seguidos del mismo usuario |
+| `on_completion` | Qué hacer con el hilo al terminar: conservarlo o borrarlo. Con `"delete"` no acumulas hilos de un solo uso |
+| `stream_resumable` | Permite reconectar al stream tras una caída de red sin perder lo emitido |
+| `durability` | El mismo del notebook 23, por ejecución |
+| `webhook` | URL a la que avisar al terminar; imprescindible para trabajos largos |
+
+Dos de ellas resuelven problemas que la gente suele resolver mal a mano:
+`if_not_exists="create"` sustituye el clásico "compruebo si el hilo existe y si no lo creo"
+(que tiene una carrera entre las dos peticiones), y `on_completion="delete"` es la respuesta
+correcta a los hilos de un solo uso que en el notebook 23 acabábamos barriendo con un cron.
 
 #%%md
 ## 5. Assistants: versionar la configuración sin desplegar
@@ -612,6 +680,10 @@ COMPROBACIONES = [
         "Las herramientas destructivas pasan por aprobación humana (notebook 10)",
         "Las herramientas validan sus argumentos con Literal o Pydantic, y no ejecutan código generado",
         "Hay un límite de peticiones por usuario, no solo global",
+        "auth configurado en langgraph.json, con reglas por recurso (notebook 25)",
+        "CORS acotado a tus dominios; nunca ['*'] junto a allow_credentials",
+        "Rutas no usadas apagadas: disable_meta, disable_store, disable_mcp (notebook 25)",
+        "LANGGRAPH_STRICT_MSGPACK activado, con prueba de ida y vuelta del estado (notebook 22)",
     ]),
     ("FIABILIDAD", [
         "recursion_limit explícito y ajustado en TODAS las invocaciones",
@@ -619,6 +691,8 @@ COMPROBACIONES = [
         "error_handler o modelo de respaldo en los caminos críticos",
         "Timeouts en los nodos de E/S (y por tanto, nodos async)",
         "Tope de coste por ejecución, en euros y no solo en llamadas",
+        "Una sola ejecución a la vez por thread_id, con cerrojo o multitask_strategy (notebook 24)",
+        "Ninguna llamada bloqueante dentro de un nodo async (sección 3.1)",
     ]),
     ("OBSERVABILIDAD", [
         "LangSmith activado con metadata de cliente, plan y versión de prompt",
@@ -632,6 +706,9 @@ COMPROBACIONES = [
         "Política de retención y borrado de hilos, con un procedimiento probado",
         "Postgres con copias de seguridad; el checkpointer ES tu base de datos",
         "Un procedimiento de borrado por usuario, para el RGPD",
+        "TTL de checkpoints y del store configurado, o un cron de purga (notebook 23)",
+        "Presupuesto de crecimiento calculado, no estimado a ojo (notebook 23)",
+        "Los hilos interrumpidos que nadie resuelve tienen caducidad (notebook 23)",
     ]),
 ]
 
@@ -851,6 +928,9 @@ else:
 - Si te lo sirves tú: `lifespan` para el checkpointer, `ainvoke` con savers asíncronos,
   `recursion_limit` explícito y el **`thread_id` derivado del usuario autenticado**.
 - Pasa la lista de comprobación antes de abrir al público.
+
+> Los puntos que citan los notebooks 22-25 son del **módulo 7**, que profundiza en cada uno.
+> Si estás desplegando de verdad, hazlo después de terminar el módulo 6.
 
 **Siguiente:** [`19_patrones_p99.ipynb`](19_patrones_p99.ipynb) — ingeniería de contexto,
 seguridad frente a inyección de prompts y los patrones que separan un sistema bueno de uno

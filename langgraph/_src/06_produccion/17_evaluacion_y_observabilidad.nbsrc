@@ -428,6 +428,62 @@ print("\nEtiqueta siempre la versión del prompt: es lo que te deja responder a"
 print("'¿el acierto bajó cuando cambiamos el prompt?' sin adivinar.")
 
 #%%md
+### 5.1 Observabilidad sin LangSmith: OpenTelemetry
+
+Pregunta recurrente en los foros, y con motivo: *"quiero trazas, pero no puedo mandar los
+prompts de mis clientes a un servicio de terceros"*. En sectores regulados no es una
+preferencia, es un requisito.
+
+LangChain expone su instrumentación por **OpenTelemetry**, que es el estándar del resto de
+tu observabilidad. Con eso, las trazas del agente van al mismo sitio que las de tus
+servicios: Grafana Tempo, Jaeger, SigNoz, Datadog, o un colector propio.
+
+```bash
+pip install openinference-instrumentation-langchain \
+            opentelemetry-sdk opentelemetry-exporter-otlp
+```
+
+```python
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from openinference.instrumentation.langchain import LangChainInstrumentor
+
+proveedor = TracerProvider()
+proveedor.add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://colector:4318/v1/traces")))
+trace.set_tracer_provider(proveedor)
+
+# A partir de aquí, cada nodo, cada llamada al modelo y cada herramienta emite un span.
+LangChainInstrumentor().instrument()
+```
+
+Tres decisiones que hay que tomar y que nadie toma por ti:
+
+| Decisión | Por qué importa |
+|---|---|
+| **¿Se envían los prompts y las respuestas?** | Es el dato más útil para depurar y el más sensible. OpenInference permite excluirlos por configuración; decídelo explícitamente |
+| **Muestreo** | Un agente de 10 nodos genera decenas de spans por ejecución. Con volumen, muestrea (por ejemplo, el 100 % de los errores y el 5 % del resto) |
+| **Un colector en medio** | El colector de OpenTelemetry te deja mandar las mismas trazas a varios destinos y cambiar de proveedor sin tocar la aplicación |
+
+Y una nota práctica: **no son excluyentes**. Puedes tener LangSmith en desarrollo, donde el
+detalle por nodo es insustituible, y OpenTelemetry en producción, donde manda tu política
+de datos. Las variables `LANGSMITH_TRACING` y el proveedor OTel se activan por separado.
+
+#%%py
+import os
+
+print("interruptores de trazado que ve este entorno:")
+for variable in ("LANGSMITH_TRACING", "LANGSMITH_PROJECT", "LANGSMITH_ENDPOINT",
+                 "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_SERVICE_NAME"):
+    print(f"  {variable:28s} {os.environ.get(variable) or '(sin definir)'}")
+
+print("""
+Si los dos primeros están vacíos, no se envía nada a ningún sitio: el trazado de LangSmith
+es opt-in. Conviene comprobarlo antes de ejecutar nada con datos reales.""")
+
+#%%md
 ## 6. Qué vigilar en producción
 
 Las cuatro señales que de verdad importan en un sistema de agentes, y ninguna es "el
