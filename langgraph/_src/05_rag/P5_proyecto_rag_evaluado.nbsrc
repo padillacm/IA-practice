@@ -1,0 +1,649 @@
+#%%md
+# P5 · Proyecto: asistente de documentación, evaluado en serio
+
+**Módulo 5 · Proyecto** — *tiempo estimado: 2 h 30 min · coste aproximado: 0,20 € con `gpt-4o-mini`*
+
+## El encargo
+
+Un equipo que está adoptando LangGraph pierde horas buscando en la documentación. Quieren un
+asistente que responda con precisión y **que diga que no sabe cuando no sabe**, porque una
+respuesta inventada sobre una API les cuesta media tarde de depuración.
+
+Requisitos:
+
+1. Responde preguntas técnicas **citando la fuente**.
+2. **Se abstiene** cuando la respuesta no está en la documentación.
+3. Se puede **medir**: hay que poder decir si una versión es mejor que otra.
+
+## Por qué este proyecto es distinto
+
+Los proyectos anteriores medían una cosa. Un RAG hay que medirlo **por capas**, porque falla
+por sitios distintos y el arreglo depende de dónde falle:
+
+| Capa | Métrica | Si falla, se arregla en... |
+|---|---|---|
+| **Recuperación** | recall@k | el troceado, el recuperador, la consulta |
+| **Fidelidad** | ¿la respuesta se apoya en el contexto? | el prompt, la calificación de fragmentos |
+| **Corrección** | ¿la respuesta es correcta? | cualquiera de las dos anteriores |
+| **Abstención** | ¿dice "no sé" cuando toca? | el ciclo de autocorrección, el umbral |
+
+Medir solo la última —"¿la respuesta es buena?"— es la razón por la que tanta gente pasa
+semanas afinando prompts cuando el problema estaba en el troceado.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-P5")
+
+#%%md
+## Fase 0 · El índice
+
+Reutilizamos las piezas del notebook 14, que viven empaquetadas en `utils/rag.py`. Todo lo de
+ahí es determinista y sin coste; los embeddings los construimos aquí, a la vista.
+
+#%%py
+import time
+
+from langchain.embeddings import init_embeddings
+from langchain_core.documents import Document
+from langchain_core.vectorstores import InMemoryVectorStore
+
+from utils.rag import (RecuperadorLexico, cargar_fragmentos, cobertura_lexica,
+                       formatear_contexto, fusion_rrf, tokenizar)
+
+FRAGMENTOS = cargar_fragmentos(tamano=1200, solape=150)
+print(f"{len(FRAGMENTOS)} fragmentos de {len({d.metadata['fuente'] for d in FRAGMENTOS})} documentos")
+
+t0 = time.perf_counter()
+embeddings = init_embeddings("openai:text-embedding-3-small")
+almacen = InMemoryVectorStore(embeddings)
+almacen.add_documents(FRAGMENTOS)
+lexico = RecuperadorLexico(FRAGMENTOS)
+print(f"índice construido en {time.perf_counter() - t0:.0f} s")
+
+
+def buscar(consulta: str, k: int = 6) -> list[Document]:
+    """Recuperación híbrida: vectorial + léxica, fusionadas por posición."""
+    vectoriales = almacen.similarity_search(consulta, k=8)
+    lexicos = [d for d, _ in lexico.buscar(consulta, k=8)]
+    return fusion_rrf([vectoriales, lexicos], limite=k)
+
+
+print("\nprueba:", [d.metadata["fuente"] for d in buscar("time travel checkpoint fork", k=3)])
+
+#%%md
+## Fase 1 · El conjunto dorado
+
+Veinte preguntas: **quince con respuesta** en la documentación y **cinco sin ella**. Las cinco
+últimas son las que de verdad separan un RAG serio de uno que rellena.
+
+Cada pregunta con respuesta lleva:
+- el **documento esperado** (para medir recuperación),
+- una **respuesta de referencia** (para medir corrección),
+- si el sistema **debería abstenerse** o no.
+
+#%%py
+class Caso(dict):
+    """Un caso del conjunto dorado. Un dict con nombres, para que se lea el código."""
+
+
+def caso(pregunta, fuente=None, referencia="", responde=True) -> Caso:
+    return Caso(pregunta=pregunta, fuente=fuente, referencia=referencia, responde=responde)
+
+
+CONJUNTO_DORADO = [
+    # --- con respuesta en la documentación ---
+    caso("¿Qué guarda exactamente un checkpointer y en qué momento?",
+         "langgraph-persistence",
+         "Guarda una instantánea del estado del grafo después de cada super-paso, agrupada por thread_id."),
+    caso("¿Para qué sirve la función interrupt y qué se necesita para usarla?",
+         "langgraph-interrupts",
+         "Pausa el grafo dentro de un nodo y devuelve un valor al cliente; requiere un checkpointer "
+         "y se reanuda con Command(resume=...)."),
+    caso("¿Qué modos de streaming acepta el método stream?",
+         "langgraph-streaming",
+         "values, updates, messages, custom, debug, tasks y checkpoints; se pueden combinar en una lista."),
+    caso("¿En qué se diferencia un Store de un checkpointer?",
+         "langgraph-stores",
+         "El checkpointer guarda el estado de un hilo; el Store guarda datos compartidos entre hilos, "
+         "organizados por espacios de nombres."),
+    caso("¿Qué error se produce si dos nodos concurrentes escriben en la misma clave sin reducer?",
+         "langgraph-graph-api",
+         "InvalidUpdateError: solo se puede recibir un valor por paso; hay que anotar la clave con un reducer."),
+    caso("¿Cómo se añade un subgrafo a un grafo padre?",
+         "langgraph-use-subgraphs",
+         "Si comparten claves de estado, el grafo compilado se pasa directamente a add_node; si no, "
+         "se envuelve en una función que traduzca el estado."),
+    caso("¿Qué son entrypoint y task en el Functional API?",
+         "langgraph-functional-api",
+         "Decoradores: entrypoint define el flujo de trabajo con persistencia y task marca unidades "
+         "de trabajo cuyo resultado se guarda en el checkpoint."),
+    caso("¿Cómo se configura un reintento automático de un nodo?",
+         "langgraph-fault-tolerance",
+         "Con retry_policy y un objeto RetryPolicy en add_node, que define intentos, retroceso y qué "
+         "excepciones reintentar."),
+    caso("¿Qué parámetros principales acepta create_agent?",
+         "langchain-agents",
+         "model, tools, system_prompt, middleware, response_format, checkpointer, store y context_schema."),
+    caso("¿Qué puntos de enganche ofrece el middleware de un agente?",
+         "langchain-middleware-custom",
+         "before_agent, before_model, wrap_model_call, after_model, wrap_tool_call y after_agent."),
+    caso("¿Cómo se traspasa el control de un agente a otro?",
+         "langchain-multi-agent-handoffs",
+         "Con una herramienta de handoff que devuelve Command con goto y graph=Command.PARENT."),
+    caso("¿Para qué sirve el API Send?",
+         "langgraph-graph-api",
+         "Crea dinámicamente N ejecuciones de un nodo, cada una con su propio estado; es el 'map' de "
+         "un map-reduce."),
+    caso("¿Qué hace el parámetro durability al invocar un grafo?",
+         "langgraph-persistence",
+         "Controla cuándo se escriben los checkpoints: sync tras cada paso, async en segundo plano, "
+         "exit solo al terminar."),
+    caso("¿Qué es un super-paso en LangGraph?",
+         "langgraph-pregel",
+         "Una iteración del motor Pregel: todos los nodos activos se ejecutan a la vez y sus "
+         "escrituras se aplican al final."),
+    caso("¿Cómo se recupera el historial de estados de un hilo?",
+         "langgraph-persistence",
+         "Con get_state_history sobre la configuración del hilo, que devuelve los snapshots del más "
+         "reciente al más antiguo."),
+
+    # --- SIN respuesta en la documentación: el sistema debe abstenerse ---
+    caso("¿Cuánto cuesta LangGraph Platform al mes para 50 usuarios?", responde=False),
+    caso("¿Qué versión de LangGraph usa internamente Netflix en producción?", responde=False),
+    caso("¿Cuál es la latencia media de un nodo en un servidor de 4 vCPU?", responde=False),
+    caso("¿Quién es el director de ingeniería de LangChain?", responde=False),
+    caso("¿Cómo integro LangGraph con el ERP de mi empresa que se llama Kroniks?", responde=False),
+]
+
+con_respuesta = [c for c in CONJUNTO_DORADO if c["responde"]]
+sin_respuesta = [c for c in CONJUNTO_DORADO if not c["responde"]]
+print(f"{len(con_respuesta)} preguntas con respuesta, {len(sin_respuesta)} sin respuesta")
+
+#%%md
+> **Las cinco preguntas sin respuesta son la mitad del valor del conjunto.** Están elegidas
+> para ser **plausibles**: hablan de LangGraph, usan su vocabulario y suenan a algo que
+> debería estar documentado. Un sistema que se abstiene ante "¿cuál es la capital de
+> Francia?" no demuestra nada; abstenerse ante "¿cuánto cuesta LangGraph Platform?" sí.
+
+#%%md
+## Fase 2 · Medir la recuperación primero
+
+Antes de generar una sola respuesta, comprobamos si el documento correcto llega siquiera al
+contexto. Es la capa de abajo y la más barata de medir: no cuesta ni una llamada al modelo.
+
+#%%py
+def evaluar_recuperacion(buscador, k_valores=(3, 5, 8)) -> dict:
+    resultados = {}
+    for k in k_valores:
+        aciertos, fallos = 0, []
+        for c in con_respuesta:
+            fuentes = [d.metadata["fuente"] for d in buscador(c["pregunta"], k=k)]
+            if c["fuente"] in fuentes:
+                aciertos += 1
+            elif k == max(k_valores):
+                fallos.append((c["pregunta"], c["fuente"], fuentes[:3]))
+        resultados[k] = aciertos / len(con_respuesta)
+    resultados["fallos"] = fallos
+    return resultados
+
+
+rec = evaluar_recuperacion(buscar)
+print("recall del recuperador híbrido:")
+for k in (3, 5, 8):
+    print(f"  recall@{k}: {rec[k]:.0%}")
+
+if rec["fallos"]:
+    print(f"\npreguntas donde el documento correcto NO aparece ni en el top-8:")
+    for pregunta, esperado, obtenidos in rec["fallos"]:
+        print(f"  · {pregunta}")
+        print(f"      esperado: {esperado}   obtenidos: {obtenidos}")
+
+#%%md
+Si el `recall@8` no llega al 90 %, **para aquí**. Ninguna mejora de prompt va a recuperar un
+documento que no se recupera. Las palancas, por orden de eficacia:
+
+1. **Revisar el troceado** (el ejercicio 14.2).
+2. **Expandir la consulta**: generar variantes y fusionarlas.
+3. **Reordenar** los candidatos con un modelo de reranking.
+4. **Revisar el conjunto dorado**: a veces la etiqueta está mal y el sistema tenía razón.
+
+Probemos la segunda, que es barata y suele dar el mayor salto.
+
+#%%py
+from pydantic import BaseModel, Field
+
+modelo = llm()
+
+
+class Variantes(BaseModel):
+    """Reformulaciones de una pregunta para mejorar la recuperación."""
+    variantes: list[str] = Field(
+        description="Tres formas distintas de buscar lo mismo: una con términos técnicos en inglés, "
+                    "una con sinónimos, y una centrada en el nombre exacto de la API si lo hay."
+    )
+
+
+generador_variantes = modelo.with_structured_output(Variantes)
+
+
+def buscar_multiconsulta(consulta: str, k: int = 6) -> list[Document]:
+    """Expansión de consulta: buscamos con varias formulaciones y fusionamos los rankings."""
+    v = generador_variantes.invoke(
+        f"El corpus es la documentación de LangGraph, en inglés. Genera variantes de búsqueda "
+        f"para esta pregunta:\n{consulta}"
+    )
+    listas = [buscar(consulta, k=8)] + [buscar(x, k=8) for x in v.variantes[:3]]
+    return fusion_rrf(listas, limite=k)
+
+
+rec_multi = evaluar_recuperacion(buscar_multiconsulta)
+print(f"{'recuperador':<22} {'recall@3':>9} {'recall@5':>9} {'recall@8':>9}")
+print("-" * 52)
+print(f"{'híbrido':<22} {rec[3]:>8.0%} {rec[5]:>9.0%} {rec[8]:>9.0%}")
+print(f"{'híbrido + variantes':<22} {rec_multi[3]:>8.0%} {rec_multi[5]:>9.0%} {rec_multi[8]:>9.0%}")
+print("\n(la expansión cuesta una llamada al modelo por pregunta; mira si el salto la justifica)")
+
+#%%md
+## Fase 3 · Las tres configuraciones a comparar
+
+#%%py
+import operator
+from typing import Annotated, Literal, TypedDict
+
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelCallLimitMiddleware, ToolCallLimitMiddleware
+from langchain.messages import HumanMessage, SystemMessage
+from langchain.tools import tool
+from langgraph.graph import END, START, StateGraph
+
+INSTRUCCIONES = (
+    "Eres un asistente experto en LangGraph. Respondes SOLO con lo que aparece en el contexto.\n"
+    "- Cita las fuentes con su número entre corchetes: [1], [2].\n"
+    "- Si el contexto no contiene la respuesta, empieza tu respuesta EXACTAMENTE con "
+    "'NO ENCONTRADO:' y explica qué falta. No inventes ni completes con conocimiento propio.\n"
+    "- Responde en español aunque el contexto esté en inglés.\n"
+    "- Máximo 4 frases."
+)
+
+
+class EstadoRAG(TypedDict):
+    pregunta: str
+    consulta: str
+    documentos: list[Document]
+    relevantes: list[Document]
+    intentos: Annotated[int, operator.add]
+    respuesta: str
+    bitacora: Annotated[list[str], operator.add]
+
+
+def generar(estado: EstadoRAG) -> dict:
+    docs = estado["relevantes"] or estado["documentos"]
+    contexto = formatear_contexto(docs)
+    r = modelo.invoke([SystemMessage(INSTRUCCIONES),
+                       HumanMessage(f"Contexto:\n\n{contexto}\n\nPregunta: {estado['pregunta']}")])
+    return {"respuesta": r.text, "bitacora": [f"generado con {len(docs)} fragmentos"]}
+
+
+# --- configuración A: RAG lineal ---
+def recuperar_simple(estado: EstadoRAG) -> dict:
+    return {"documentos": buscar(estado["pregunta"], k=6), "bitacora": ["búsqueda única"]}
+
+
+rag_lineal = (
+    StateGraph(EstadoRAG)
+    .add_sequence([("recuperar", recuperar_simple), ("generar", generar)])
+    .add_edge(START, "recuperar")
+    .compile()
+)
+
+
+# --- configuración B: CRAG con calificación en lote y reformulación ---
+class DecisionFragmento(BaseModel):
+    indice: int = Field(description="Número del fragmento tal como aparece entre corchetes")
+    relevante: bool = Field(description="True solo si contribuye directamente a responder")
+
+
+class CalificacionLote(BaseModel):
+    """Una decisión por cada fragmento recibido."""
+    decisiones: list[DecisionFragmento]
+
+
+class Reformulacion(BaseModel):
+    consulta: str = Field(description="Nueva consulta con términos técnicos en inglés, sin interrogación")
+
+
+calificador = modelo.with_structured_output(CalificacionLote)
+reformulador = modelo.with_structured_output(Reformulacion)
+
+MIN_RELEVANTES, MAX_INTENTOS = 2, 2
+
+
+def recuperar_crag(estado: EstadoRAG) -> dict:
+    consulta = estado["consulta"] or estado["pregunta"]
+    return {"documentos": buscar(consulta, k=6), "intentos": 1,
+            "bitacora": [f"búsqueda {estado['intentos'] + 1}: {consulta[:50]!r}"]}
+
+
+def calificar(estado: EstadoRAG) -> dict:
+    docs = estado["documentos"]
+    bloques = "\n\n".join(f"[{i}] {d.page_content[:700]}" for i, d in enumerate(docs, 1))
+    r = calificador.invoke(
+        f"Pregunta: {estado['pregunta']}\n\nJuzga CADA UNO de estos {len(docs)} fragmentos. "
+        "Relevante solo si contribuye directamente a responder; ser del mismo tema no basta.\n\n"
+        + bloques
+    )
+    indices = {d.indice for d in r.decisiones if d.relevante}
+    relevantes = [d for i, d in enumerate(docs, 1) if i in indices]
+    return {"relevantes": relevantes,
+            "bitacora": [f"calificación: {len(relevantes)}/{len(docs)} relevantes"]}
+
+
+def decidir(estado: EstadoRAG) -> Literal["generar", "reformular", "rendirse"]:
+    if len(estado["relevantes"]) >= MIN_RELEVANTES:
+        return "generar"
+    return "reformular" if estado["intentos"] < MAX_INTENTOS else "rendirse"
+
+
+def reformular(estado: EstadoRAG) -> dict:
+    r = reformulador.invoke(
+        f"Pregunta: {estado['pregunta']}\nConsulta usada: {estado['consulta'] or estado['pregunta']}\n"
+        f"Solo {len(estado['relevantes'])} fragmentos relevantes. El corpus es documentación de "
+        "LangGraph en inglés. Reescribe la consulta con los términos que aparecerían literalmente ahí."
+    )
+    return {"consulta": r.consulta, "relevantes": [], "bitacora": [f"reformulada: {r.consulta!r}"]}
+
+
+def rendirse(estado: EstadoRAG) -> dict:
+    return {"respuesta": ("NO ENCONTRADO: no he localizado esta información en la documentación "
+                          f"tras {estado['intentos']} búsquedas."),
+            "bitacora": ["abstención por falta de fragmentos relevantes"]}
+
+
+crag = (
+    StateGraph(EstadoRAG)
+    .add_node("recuperar", recuperar_crag).add_node("calificar", calificar)
+    .add_node("reformular", reformular).add_node("generar", generar).add_node("rendirse", rendirse)
+    .add_edge(START, "recuperar").add_edge("recuperar", "calificar")
+    .add_conditional_edges("calificar", decidir,
+                           {"generar": "generar", "reformular": "reformular", "rendirse": "rendirse"})
+    .add_edge("reformular", "recuperar").add_edge("generar", END).add_edge("rendirse", END)
+    .compile()
+)
+
+mostrar_grafo(crag)
+
+#%%py
+# --- configuración C: agéntico ---
+@tool(parse_docstring=True)
+def buscar_documentacion(consulta: str) -> str:
+    """Busca en la documentación oficial de LangGraph y LangChain.
+
+    Úsala para cualquier pregunta técnica sobre LangGraph. Si la primera búsqueda no da lo
+    que necesitas, reformula con términos técnicos en inglés y vuelve a intentarlo.
+
+    Args:
+        consulta: términos de búsqueda; funcionan mejor los técnicos y concretos.
+    """
+    docs = buscar(consulta, k=5)
+    if not docs:
+        return f"Sin resultados para '{consulta}'."
+    return formatear_contexto(docs, maximo_caracteres=4500)
+
+
+agente_rag = create_agent(
+    model=modelo, tools=[buscar_documentacion],
+    system_prompt=INSTRUCCIONES + "\n- Busca en la documentación antes de responder.",
+    middleware=[ModelCallLimitMiddleware(run_limit=6, exit_behavior="end"),
+                ToolCallLimitMiddleware(run_limit=4, exit_behavior="continue")],
+)
+
+ENTRADA_RAG = {"consulta": "", "documentos": [], "relevantes": [], "intentos": 0,
+               "respuesta": "", "bitacora": []}
+
+
+def ejecutar(configuracion: str, pregunta: str) -> dict:
+    """Ejecuta una configuración y devuelve respuesta, contexto usado y coste."""
+    t0 = time.perf_counter()
+    if configuracion == "agentico":
+        salida = agente_rag.invoke({"messages": [HumanMessage(pregunta)]}, {"recursion_limit": 25})
+        respuesta = salida["messages"][-1].text
+        contexto = "\n".join(m.content for m in salida["messages"] if m.type == "tool")
+        llamadas = sum(1 for m in salida["messages"] if m.type == "ai")
+        bitacora = [f"{sum(len(getattr(m, 'tool_calls', None) or []) for m in salida['messages'])} búsquedas"]
+    else:
+        grafo = rag_lineal if configuracion == "lineal" else crag
+        salida = grafo.invoke({"pregunta": pregunta, **ENTRADA_RAG}, {"recursion_limit": 30})
+        respuesta = salida["respuesta"]
+        contexto = formatear_contexto(salida["relevantes"] or salida["documentos"])
+        llamadas = 1 + (2 * salida["intentos"] if configuracion == "crag" else 0)
+        bitacora = salida["bitacora"]
+    return {"respuesta": respuesta, "contexto": contexto, "segundos": time.perf_counter() - t0,
+            "llamadas": llamadas, "bitacora": bitacora}
+
+
+separador("una pregunta con respuesta")
+r = ejecutar("crag", con_respuesta[0]["pregunta"])
+print(f"P: {con_respuesta[0]['pregunta']}")
+for b in r["bitacora"]:
+    print("   ·", b)
+print(f"R: {r['respuesta']}")
+
+separador("una pregunta SIN respuesta")
+r = ejecutar("crag", sin_respuesta[0]["pregunta"])
+print(f"P: {sin_respuesta[0]['pregunta']}")
+for b in r["bitacora"]:
+    print("   ·", b)
+print(f"R: {r['respuesta']}")
+
+#%%md
+## Fase 4 · Los jueces
+
+Dos jueces distintos, porque miden cosas distintas y confundirlos es el error clásico:
+
+- **Fidelidad**: ¿cada afirmación de la respuesta se apoya en el contexto? Puede ser **fiel y
+  equivocada** (si el contexto lo estaba).
+- **Corrección**: ¿la respuesta coincide con la de referencia? Puede ser **correcta e infiel**
+  (si el modelo lo sabía de memoria y no del contexto).
+
+Un RAG bueno necesita las dos altas. Si la fidelidad es alta y la corrección baja, el problema
+es la recuperación. Si la corrección es alta y la fidelidad baja, el modelo está respondiendo
+de memoria y **tendrás suerte hasta que dejes de tenerla**.
+
+#%%py
+class JuicioFidelidad(BaseModel):
+    """¿La respuesta se apoya en el contexto?"""
+    fiel: bool = Field(description="True si TODAS las afirmaciones concretas de la respuesta se "
+                                   "pueden verificar en el contexto")
+    afirmaciones_sin_respaldo: list[str] = Field(description="Las que no aparecen en el contexto")
+
+
+class JuicioCorreccion(BaseModel):
+    """¿La respuesta coincide con la de referencia?"""
+    correcta: bool = Field(description="True si dice lo mismo que la referencia, aunque con otras "
+                                       "palabras. False si contradice, omite lo esencial o divaga.")
+    motivo: str = Field(description="Una frase")
+
+
+juez_fidelidad = modelo.with_structured_output(JuicioFidelidad)
+juez_correccion = modelo.with_structured_output(JuicioCorreccion)
+
+
+def se_abstiene(respuesta: str) -> bool:
+    señales = ("no encontrado", "no he encontrado", "no localiz", "no aparece en la documentación",
+               "no dispongo", "no está en el contexto", "no puedo responder")
+    return any(s in respuesta.lower() for s in señales)
+
+
+def evaluar_respuesta(caso: Caso, resultado: dict) -> dict:
+    respuesta, contexto = resultado["respuesta"], resultado["contexto"]
+    abstiene = se_abstiene(respuesta)
+
+    if not caso["responde"]:
+        # Para las preguntas sin respuesta, lo único que importa es si se abstuvo.
+        return {"abstiene": abstiene, "acierto_abstencion": abstiene,
+                "fiel": None, "correcta": None, "cobertura": None}
+
+    if abstiene:
+        # Se abstuvo cuando SÍ había respuesta: no es una alucinación, pero es un fallo.
+        return {"abstiene": True, "acierto_abstencion": False, "fiel": True, "correcta": False,
+                "cobertura": None}
+
+    fid = juez_fidelidad.invoke(
+        f"Contexto:\n{contexto[:6000]}\n\nRespuesta a evaluar:\n{respuesta}\n\n"
+        "¿Toda la respuesta se apoya en el contexto?"
+    )
+    cor = juez_correccion.invoke(
+        f"Pregunta: {caso['pregunta']}\nRespuesta de referencia: {caso['referencia']}\n"
+        f"Respuesta a evaluar: {respuesta}\n\n¿Dice lo mismo que la referencia?"
+    )
+    return {"abstiene": False, "acierto_abstencion": True, "fiel": fid.fiel,
+            "correcta": cor.correcta, "cobertura": cobertura_lexica(respuesta, contexto)}
+
+
+print("jueces listos")
+
+#%%md
+## Fase 5 · La evaluación completa
+
+#%%py
+def evaluar_configuracion(nombre: str, casos=CONJUNTO_DORADO) -> dict:
+    filas = []
+    t0 = time.perf_counter()
+
+    for c in casos:
+        resultado = ejecutar(nombre, c["pregunta"])
+        juicio = evaluar_respuesta(c, resultado)
+        filas.append({**c, **resultado, **juicio})
+
+    segundos = time.perf_counter() - t0
+    con_r = [f for f in filas if f["responde"]]
+    sin_r = [f for f in filas if not f["responde"]]
+
+    resumen = {
+        "nombre": nombre,
+        "correccion": sum(bool(f["correcta"]) for f in con_r) / len(con_r),
+        "fidelidad": sum(bool(f["fiel"]) for f in con_r) / len(con_r),
+        "abstencion_correcta": sum(f["abstiene"] for f in sin_r) / len(sin_r),
+        "abstencion_indebida": sum(f["abstiene"] for f in con_r) / len(con_r),
+        "llamadas": sum(f["llamadas"] for f in filas),
+        "segundos": segundos,
+        "filas": filas,
+    }
+    return resumen
+
+
+def imprimir(resumen: dict) -> None:
+    separador(resumen["nombre"].upper())
+    print(f"  corrección (15 con respuesta)   : {resumen['correccion']:>6.0%}")
+    print(f"  fidelidad al contexto           : {resumen['fidelidad']:>6.0%}")
+    print(f"  abstención correcta (5 sin resp): {resumen['abstencion_correcta']:>6.0%}   <- la clave")
+    print(f"  abstención INDEBIDA             : {resumen['abstencion_indebida']:>6.0%}   <- se rindió teniendo la respuesta")
+    print(f"  llamadas al modelo / tiempo     : {resumen['llamadas']} / {resumen['segundos']:.0f} s")
+
+    fallos = [f for f in resumen["filas"] if f["responde"] and not f["correcta"]]
+    if fallos:
+        print("\n  incorrectas:")
+        for f in fallos[:4]:
+            print(f"    · {f['pregunta'][:66]}")
+            print(f"        dijo: {f['respuesta'][:100]}")
+
+    inventadas = [f for f in resumen["filas"] if not f["responde"] and not f["abstiene"]]
+    if inventadas:
+        print("\n  INVENTADAS (no debería haber respondido):")
+        for f in inventadas:
+            print(f"    · {f['pregunta'][:66]}")
+            print(f"        dijo: {f['respuesta'][:110]}")
+
+
+resultados = {}
+for configuracion in ("lineal", "crag", "agentico"):
+    resultados[configuracion] = evaluar_configuracion(configuracion)
+    imprimir(resultados[configuracion])
+
+#%%md
+## Fase 6 · La comparativa y la decisión
+
+#%%py
+print(f"{'configuración':<14} {'correcc.':>9} {'fidel.':>8} {'abst. ok':>9} "
+      f"{'abst. mal':>10} {'llamadas':>9} {'seg':>6}")
+print("-" * 72)
+for nombre, r in resultados.items():
+    print(f"{nombre:<14} {r['correccion']:>8.0%} {r['fidelidad']:>8.0%} "
+          f"{r['abstencion_correcta']:>9.0%} {r['abstencion_indebida']:>10.0%} "
+          f"{r['llamadas']:>9} {r['segundos']:>6.0f}")
+
+print("""
+Cómo se lee esta tabla, y el orden importa:
+
+1. ABSTENCIÓN CORRECTA primero. Es el requisito 2 del encargo y el que distingue un
+   asistente en el que se puede confiar. Una configuración con 95 % de corrección y 20 % de
+   abstención correcta es peligrosa: acierta casi siempre y, cuando falla, lo hace con
+   aplomo.
+
+2. ABSTENCIÓN INDEBIDA como contrapeso. Un sistema que se abstiene siempre saca un 100 % en
+   la métrica anterior y no sirve para nada. Hay que mirar las dos juntas: es el mismo
+   compromiso entre precisión y cobertura de toda la vida.
+
+3. FIDELIDAD frente a CORRECCIÓN. Si la corrección es alta y la fidelidad baja, el modelo
+   está respondiendo de memoria en vez de con el contexto. Funciona con LangGraph, que
+   conoce; no funcionará con tu documentación interna.
+
+4. Y solo entonces, coste y latencia.
+""")
+
+#%%py
+mejor = max(resultados.values(),
+            key=lambda r: r["correccion"] + r["abstencion_correcta"] - r["abstencion_indebida"])
+print(f"Mejor equilibrio con este criterio: {mejor['nombre'].upper()}")
+print(f"  corrección {mejor['correccion']:.0%} · abstención correcta {mejor['abstencion_correcta']:.0%} "
+      f"· abstención indebida {mejor['abstencion_indebida']:.0%}")
+print(f"  coste relativo: {mejor['llamadas']} llamadas frente a las "
+      f"{resultados['lineal']['llamadas']} de la versión lineal")
+print("""
+El criterio de arriba pesa igual acertar y abstenerse bien, y penaliza rendirse de más. Si
+tu caso es distinto —un asistente médico penaliza muchísimo más inventar que abstenerse—
+cambia los pesos. Lo importante es que ahora esa conversación se tiene con números.
+""")
+
+#%%md
+## Retos para llevarlo más lejos
+
+1. **Valida a los jueces.** Etiqueta tú mismo diez respuestas como correcta/incorrecta y
+   compara con el juez. Si coinciden menos del 80 % de las veces, toda la fase 5 es ruido y
+   hay que arreglar la rúbrica antes que el sistema. Es el reto más importante de la lista.
+
+2. **Reranking.** Recupera 20 candidatos y reordénalos con una llamada al modelo que puntúe
+   la relevancia de cada uno. Mide cuánto sube `recall@5` y cuánto cuesta.
+
+3. **Umbral de similitud.** El recuperador vectorial siempre devuelve k documentos. Usa
+   `similarity_search_with_score` para descartar los que estén por debajo de un umbral y mide
+   cómo cambia la abstención. Es la forma más barata de que el sistema sepa que no sabe.
+
+4. **Caché de embeddings.** Reconstruir el índice cuesta tiempo y dinero cada vez que
+   reinicias el kernel. Guarda los vectores en disco y cárgalos si el corpus no ha cambiado
+   (compara un hash del contenido).
+
+5. **Preguntas de dos saltos.** Añade tres preguntas que requieran combinar dos documentos
+   ("¿en qué se parecen los reintentos de nodo y los de herramienta?"). Mide cuánto cae la
+   corrección: ahí es donde el RAG agéntico se separa del lineal, porque puede buscar dos
+   veces con consultas distintas.
+
+## Lo que te llevas
+
+- **Un RAG se mide por capas.** Recuperación primero: si el documento no llega al contexto,
+  el prompt es irrelevante.
+- **Fidelidad y corrección son cosas distintas.** Una respuesta puede ser fiel y equivocada,
+  o correcta e infiel. La segunda es una bomba de relojería.
+- **Las preguntas sin respuesta son la mitad del conjunto dorado**, y tienen que ser
+  plausibles para que midan algo.
+- **Abstención correcta e indebida se miran juntas.** Por separado, cada una se puede
+  maximizar con un sistema inútil.
+- **Valida a tus jueces.** Un evaluador automático sin contrastar con humanos es un número
+  que da confianza sin darla.
+
+**Siguiente módulo:** [`../06_produccion/15_fiabilidad_y_rendimiento.ipynb`](../06_produccion/15_fiabilidad_y_rendimiento.ipynb)
+— reintentos, cachés, tiempos de espera y durabilidad.

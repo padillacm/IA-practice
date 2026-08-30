@@ -1,0 +1,830 @@
+#%%md
+# 14 · RAG agéntico: recuperar con criterio
+
+**Módulo 5 · RAG** — *tiempo estimado: 2 h · coste aproximado: 0,10 € con `gpt-4o-mini`*
+
+El RAG clásico es una cadena: *recuperar → pegar en el prompt → responder*. Funciona en la
+demo y falla en producción, siempre por las mismas cinco razones:
+
+| Modo de fallo | Qué pasa |
+|---|---|
+| **La pregunta no se parece a la respuesta** | "¿cómo evito que se duplique?" no comparte palabras con el texto que lo explica |
+| **Recupera basura y responde igual** | Nada comprueba si lo recuperado sirve. El modelo rellena |
+| **Una sola pasada** | Si la primera búsqueda falla, no hay segunda |
+| **Recupera cuando no hace falta** | "hola" dispara una búsqueda vectorial y mete ruido |
+| **No sabe decir que no sabe** | Prefiere inventar antes que admitir que no está en las fuentes |
+
+El RAG **agéntico** convierte esa cadena en un grafo con decisiones: *¿hace falta buscar?
+¿sirve lo que he encontrado? ¿reformulo? ¿me rindo y lo digo?*
+
+Al terminar sabrás:
+
+1. Trocear e indexar un corpus real **con criterio**, no con los valores por defecto.
+2. Combinar recuperación **vectorial y léxica** con fusión de rangos, y medir la mejora.
+3. Convertir el recuperador en una **herramienta** para que el modelo decida.
+4. Montar el ciclo de **autocorrección**: calificar, reformular, reintentar, rendirse.
+5. Producir **citas verificables** y detectar respuestas sin respaldo.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m5")
+
+#%%md
+## 1. El corpus
+
+Datos reales y, además, útiles: **la documentación oficial de LangGraph y LangChain**, que
+está en `data/kb/` (18 páginas, unos 490 KB, licencia MIT). Al terminar el módulo tendrás un
+asistente que responde preguntas sobre la herramienta que estás aprendiendo.
+
+#%%py
+from utils.datos import documentos_kb
+
+ficheros = documentos_kb()
+print(f"{len(ficheros)} documentos, {sum(f.stat().st_size for f in ficheros) / 1024:.0f} KB\n")
+for f in ficheros[:6]:
+    primera = f.read_text(encoding="utf-8").split("\n# ")[1].split("\n")[0]
+    print(f"  {f.stem:<38} {f.stat().st_size / 1024:>5.0f} KB   {primera}")
+print("  ...")
+
+#%%md
+## 2. Trocear con criterio
+
+El troceado es la decisión que más afecta a la calidad de un RAG y la que más gente resuelve
+copiando `chunk_size=1000` de un tutorial. Los tres criterios que importan:
+
+1. **Respeta la estructura.** Un fragmento debería ser una unidad de sentido: una sección,
+   no 1000 caracteres arbitrarios. Cortar un bloque de código por la mitad produce fragmentos
+   que no responden a nada.
+2. **Guarda de dónde viene.** Sin metadatos de procedencia no puedes citar, y sin citas no
+   puedes verificar.
+3. **Elige el tamaño según la pregunta**, no según el modelo. Preguntas puntuales →
+   fragmentos pequeños y precisos. Preguntas conceptuales → fragmentos grandes con contexto.
+
+Vamos a hacerlo en dos pasos: primero por cabeceras de Markdown, después por tamaño.
+
+#%%py
+import re
+
+from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+
+
+def trocear(tamano: int = 1200, solape: int = 150, minimo: int = 120) -> list[Document]:
+    por_cabecera = MarkdownHeaderTextSplitter(
+        [("#", "titulo"), ("##", "seccion"), ("###", "subseccion")], strip_headers=False
+    )
+    por_tamano = RecursiveCharacterTextSplitter(
+        chunk_size=tamano, chunk_overlap=solape,
+        # El orden es la parte importante: partir por secciones antes que por líneas, y
+        # tratar ``` como frontera para no destrozar los bloques de código.
+        separators=["\n## ", "\n### ", "\n```", "\n\n", "\n", " "],
+    )
+
+    fragmentos = []
+    for fichero in documentos_kb():
+        texto = re.sub(r"^<!--.*?-->\n", "", fichero.read_text(encoding="utf-8"), flags=re.S)
+        for seccion in por_cabecera.split_text(texto):
+            for trozo in por_tamano.split_text(seccion.page_content):
+                if len(trozo.strip()) < minimo:      # cabeceras sueltas: ruido
+                    continue
+                fragmentos.append(Document(
+                    page_content=trozo,
+                    metadata={"fuente": fichero.stem, "id": f"{fichero.stem}#{len(fragmentos)}",
+                              **seccion.metadata},
+                ))
+    return fragmentos
+
+
+import statistics
+
+for tamano in (400, 1200, 3000):
+    fr = trocear(tamano=tamano)
+    tam = [len(d.page_content) for d in fr]
+    print(f"  chunk_size={tamano:<5} -> {len(fr):>4} fragmentos, "
+          f"mediana {statistics.median(tam):>4.0f} caracteres")
+
+FRAGMENTOS = trocear()
+print(f"\nusaremos {len(FRAGMENTOS)} fragmentos")
+print("metadatos de ejemplo:", FRAGMENTOS[42].metadata)
+
+#%%md
+> **El compromiso del tamaño, en una frase:** fragmentos pequeños recuperan con más precisión
+> pero pierden contexto; fragmentos grandes traen contexto y también ruido, y llenan la
+> ventana. 1200 caracteres con 150 de solape es un punto de partida razonable para
+> documentación técnica. **Para tus datos, mídelo** — al final del notebook verás cómo.
+
+#%%md
+## 3. Tres formas de recuperar
+
+#%%md
+### 3.1 Vectorial: entiende el significado
+
+Convierte cada fragmento en un vector y busca por proximidad. Encuentra "cómo evito
+duplicados" ↔ "deduplicación", aunque no compartan ni una palabra.
+
+Su punto ciego: los **identificadores literales**. `InvalidUpdateError` es, para un modelo de
+embeddings, un token raro sin mucho significado, y la búsqueda vectorial lo diluye.
+
+#%%py
+from langchain.embeddings import init_embeddings
+from langchain_core.vectorstores import InMemoryVectorStore
+
+embeddings = init_embeddings("openai:text-embedding-3-small")
+
+# Indexar 594 fragmentos cuesta unos 0,01 €. Tarda medio minuto.
+almacen = InMemoryVectorStore(embeddings)
+almacen.add_documents(FRAGMENTOS)
+print(f"{len(FRAGMENTOS)} fragmentos indexados")
+
+
+def buscar_vectorial(consulta: str, k: int = 5) -> list[Document]:
+    return almacen.similarity_search(consulta, k=k)
+
+
+for d in buscar_vectorial("¿cómo evito que se dupliquen los resultados al combinar ramas?", k=3):
+    print(f"  [{d.metadata['fuente']}] {d.metadata.get('seccion', '')[:40]}")
+    print(f"      {d.page_content[:110].replace(chr(10), ' ')}...")
+
+#%%md
+### 3.2 Léxica (BM25): encuentra la palabra exacta
+
+BM25 puntúa por coincidencia de términos, ponderando los raros. Es lo contrario del
+vectorial: no entiende nada, pero encuentra el identificador exacto.
+
+Lo implementamos directamente sobre `rank_bm25`, sin envoltorios: son diez líneas y así se
+ve lo que hace.
+
+#%%py
+from rank_bm25 import BM25Okapi
+
+
+def tokenizar(texto: str) -> list[str]:
+    return re.findall(r"[a-z0-9áéíóúüñ_]+", texto.lower())
+
+
+bm25 = BM25Okapi([tokenizar(d.page_content) for d in FRAGMENTOS])
+
+
+def buscar_lexica(consulta: str, k: int = 5) -> list[Document]:
+    puntuaciones = bm25.get_scores(tokenizar(consulta))
+    mejores = sorted(range(len(puntuaciones)), key=lambda i: puntuaciones[i], reverse=True)[:k]
+    return [FRAGMENTOS[i] for i in mejores if puntuaciones[i] > 0]
+
+
+separador("la prueba del identificador literal")
+CONSULTA = "InvalidUpdateError"
+for nombre, fn in [("vectorial", buscar_vectorial), ("léxica  ", buscar_lexica)]:
+    encontrados = fn(CONSULTA, k=3)
+    aciertos = sum(CONSULTA.lower() in d.page_content.lower() for d in encontrados)
+    print(f"  {nombre}: {aciertos}/3 fragmentos contienen literalmente '{CONSULTA}'")
+    for d in encontrados[:2]:
+        print(f"      [{d.metadata['fuente']}] {d.page_content[:70].replace(chr(10), ' ')}...")
+
+#%%md
+### 3.3 Híbrida con Reciprocal Rank Fusion
+
+Lo obvio sería mezclar las puntuaciones de los dos, y es justo lo que no se puede hacer: una
+similitud coseno de 0,82 y un BM25 de 13,3 no viven en la misma escala, y normalizarlas es
+frágil.
+
+**RRF** resuelve el problema ignorando las puntuaciones y usando solo las **posiciones**:
+
+```
+puntos(documento) = suma sobre cada lista de   1 / (k + posición_en_esa_lista)
+```
+
+Con `k=60` (el valor del artículo original de Cormack et al.). Estar razonablemente arriba en
+las dos listas vale más que ser el primero en una sola, que es exactamente lo que queremos.
+
+#%%py
+from collections import defaultdict
+
+
+def fusion_rrf(listas: list[list[Document]], k: int = 60, limite: int = 6) -> list[Document]:
+    puntos: dict[str, float] = defaultdict(float)
+    documentos: dict[str, Document] = {}
+    for lista in listas:
+        for posicion, doc in enumerate(lista, start=1):
+            clave = doc.metadata["id"]
+            puntos[clave] += 1.0 / (k + posicion)
+            documentos.setdefault(clave, doc)
+    ordenados = sorted(puntos, key=lambda c: puntos[c], reverse=True)[:limite]
+    return [documentos[c] for c in ordenados]
+
+
+def buscar_hibrida(consulta: str, k: int = 6) -> list[Document]:
+    return fusion_rrf([buscar_vectorial(consulta, k=8), buscar_lexica(consulta, k=8)], limite=k)
+
+
+for consulta in ["InvalidUpdateError", "¿cómo pauso el grafo para que decida una persona?"]:
+    print(f"\nconsulta: {consulta!r}")
+    for d in buscar_hibrida(consulta, k=3):
+        en_vec = any(x.metadata["id"] == d.metadata["id"] for x in buscar_vectorial(consulta, k=8))
+        en_lex = any(x.metadata["id"] == d.metadata["id"] for x in buscar_lexica(consulta, k=8))
+        origen = "ambas" if en_vec and en_lex else ("vectorial" if en_vec else "léxica")
+        print(f"  [{origen:<9}] {d.metadata['fuente']} — {d.metadata.get('seccion', '')[:38]}")
+
+#%%md
+### Medir la mejora, no suponerla
+
+Un conjunto de preguntas con el documento correcto conocido convierte "la híbrida parece
+mejor" en un número. Aquí usamos **recall@k**: de las preguntas, ¿en cuántas aparece el
+documento correcto entre los k primeros?
+
+#%%py
+PREGUNTAS_ETIQUETADAS = [
+    ("¿Qué guarda un checkpointer y cuándo?", "langgraph-persistence"),
+    ("¿Cómo pauso el grafo para pedir aprobación humana?", "langgraph-interrupts"),
+    ("¿Qué modos de streaming existen?", "langgraph-streaming"),
+    ("¿Cómo comparto memoria entre hilos distintos?", "langgraph-stores"),
+    ("InvalidUpdateError al escribir en paralelo", "langgraph-graph-api"),
+    ("¿Cómo se anida un grafo dentro de otro?", "langgraph-use-subgraphs"),
+    ("¿Qué es el entrypoint del Functional API?", "langgraph-functional-api"),
+    ("¿Cómo reintento un nodo que ha fallado?", "langgraph-fault-tolerance"),
+    ("¿Qué hace create_agent y qué parámetros acepta?", "langchain-agents"),
+    ("¿Cómo escribo un middleware propio?", "langchain-middleware-custom"),
+    ("¿Cómo se traspasa el control entre agentes?", "langchain-multi-agent-handoffs"),
+    ("Send para map-reduce dinámico", "langgraph-graph-api"),
+]
+
+
+def recall_en_k(buscador, k: int = 5) -> float:
+    aciertos = sum(
+        any(d.metadata["fuente"] == esperado for d in buscador(pregunta, k=k))
+        for pregunta, esperado in PREGUNTAS_ETIQUETADAS
+    )
+    return aciertos / len(PREGUNTAS_ETIQUETADAS)
+
+
+print(f"{'recuperador':<14} {'recall@3':>9} {'recall@5':>9}")
+print("-" * 34)
+for nombre, fn in [("vectorial", buscar_vectorial), ("léxica", buscar_lexica),
+                   ("híbrida", buscar_hibrida)]:
+    print(f"{nombre:<14} {recall_en_k(fn, 3):>8.0%} {recall_en_k(fn, 5):>9.0%}")
+
+#%%md
+Este es el experimento que hay que hacer **antes** de tocar el prompt. Si el documento
+correcto no está entre los recuperados, ningún prompt del mundo va a arreglar la respuesta:
+el problema está aguas arriba, y afinar la generación es perder el tiempo.
+
+#%%md
+## 4. RAG como grafo, no como cadena
+
+Ahora sí, montamos el sistema. Empezamos por el equivalente lineal, para tener con qué
+comparar.
+
+#%%py
+from typing import Annotated, Literal, TypedDict
+
+from langchain.messages import HumanMessage, SystemMessage
+from langgraph.graph import END, START, StateGraph
+
+modelo = llm()
+
+
+def formatear_contexto(documentos: list[Document], maximo: int = 6000) -> str:
+    """Numera los fragmentos para que el modelo pueda citarlos y nosotros verificarlos."""
+    partes, total = [], 0
+    for i, d in enumerate(documentos, start=1):
+        cabecera = f"[{i}] fuente: {d.metadata['fuente']}"
+        if d.metadata.get("seccion"):
+            cabecera += f" — sección: {d.metadata['seccion']}"
+        bloque = f"{cabecera}\n{d.page_content.strip()}"
+        if total + len(bloque) > maximo:
+            break
+        partes.append(bloque)
+        total += len(bloque)
+    return "\n\n---\n\n".join(partes)
+
+
+INSTRUCCIONES = (
+    "Eres un asistente experto en LangGraph. Respondes SOLO con la información del contexto.\n"
+    "- Cita las fuentes con su número entre corchetes: [1], [2].\n"
+    "- Si el contexto no contiene la respuesta, dilo explícitamente. No inventes.\n"
+    "- Responde en español, aunque el contexto esté en inglés.\n"
+    "- Sé conciso: 4 frases como máximo, salvo que pidan código."
+)
+
+
+class EstadoRAG(TypedDict):
+    pregunta: str
+    documentos: list[Document]
+    respuesta: str
+
+
+def recuperar(estado: EstadoRAG) -> dict:
+    return {"documentos": buscar_hibrida(estado["pregunta"], k=6)}
+
+
+def generar(estado: EstadoRAG) -> dict:
+    contexto = formatear_contexto(estado["documentos"])
+    r = modelo.invoke([SystemMessage(INSTRUCCIONES),
+                       HumanMessage(f"Contexto:\n\n{contexto}\n\nPregunta: {estado['pregunta']}")])
+    return {"respuesta": r.text}
+
+
+rag_lineal = (
+    StateGraph(EstadoRAG)
+    .add_sequence([("recuperar", recuperar), ("generar", generar)])
+    .add_edge(START, "recuperar")
+    .compile()
+)
+
+salida = rag_lineal.invoke({"pregunta": "¿Qué diferencia hay entre un checkpointer y un store?",
+                            "documentos": [], "respuesta": ""})
+print(salida["respuesta"])
+print("\nfuentes recuperadas:", [d.metadata["fuente"] for d in salida["documentos"]])
+
+#%%md
+Funciona. Y ahora la pregunta incómoda: **¿qué pasa si preguntamos algo que no está?**
+
+#%%py
+salida = rag_lineal.invoke({"pregunta": "¿Cuál es el precio por token de gpt-4o en Azure?",
+                            "documentos": [], "respuesta": ""})
+print(salida["respuesta"])
+print("\nfuentes que ha recuperado igualmente:", [d.metadata["fuente"] for d in salida["documentos"]])
+
+#%%md
+Ahí está el problema: **el recuperador siempre devuelve algo**, aunque no tenga nada que ver.
+Un buscador vectorial no dice "no hay nada": dice "esto es lo menos lejano que tengo". Si el
+modelo obedece las instrucciones, dirá que no lo sabe; si no, rellenará con lo que haya.
+
+No se arregla con el prompt. Se arregla **comprobando lo recuperado antes de generar**.
+
+#%%md
+## 5. El ciclo de autocorrección
+
+El patrón, conocido como **CRAG** (*Corrective RAG*) y emparentado con **Self-RAG**, añade
+tres decisiones al grafo:
+
+```
+                    ┌──────────────────────────────────┐
+                    ▼                                  │
+  pregunta ──> recuperar ──> calificar ──> ¿sirve? ──NO─┴─> reformular ──┐
+                                              │                          │
+                                              SÍ            (máximo N veces)
+                                              ▼                          │
+                                           generar ──> verificar ──> respuesta
+                                                                         │
+                                       si tras N intentos no sirve: rendirse
+```
+
+1. **Calificar**: ¿cada documento recuperado es relevante para la pregunta?
+2. **Reformular**: si no hay suficientes, reescribir la consulta y volver a buscar.
+3. **Rendirse**: tras N intentos, decirlo. Es una respuesta legítima, y de las buenas.
+
+#%%py
+import operator
+
+from pydantic import BaseModel, Field
+
+
+class Calificacion(BaseModel):
+    """¿Este fragmento ayuda a responder la pregunta?"""
+    relevante: bool = Field(description="True solo si el fragmento contiene información que "
+                                        "contribuye directamente a responder. Ser del mismo tema "
+                                        "no basta.")
+    motivo: str = Field(description="Media frase justificando la decisión")
+
+
+class ConsultaReformulada(BaseModel):
+    """Reescritura de la consulta para mejorar la recuperación."""
+    razonamiento: str = Field(description="Por qué falló la búsqueda anterior")
+    consulta: str = Field(description="Nueva consulta: términos técnicos concretos, en el idioma "
+                                      "del corpus (inglés), sin signos de interrogación")
+
+
+calificador = modelo.with_structured_output(Calificacion)
+reformulador = modelo.with_structured_output(ConsultaReformulada)
+
+MIN_RELEVANTES = 2
+MAX_INTENTOS = 2
+
+
+class EstadoCRAG(TypedDict):
+    pregunta: str
+    consulta: str
+    documentos: list[Document]
+    relevantes: list[Document]
+    intentos: Annotated[int, operator.add]
+    respuesta: str
+    bitacora: Annotated[list[str], operator.add]
+
+
+def recuperar_crag(estado: EstadoCRAG) -> dict:
+    consulta = estado["consulta"] or estado["pregunta"]
+    docs = buscar_hibrida(consulta, k=6)
+    return {"documentos": docs, "intentos": 1,
+            "bitacora": [f"búsqueda {estado['intentos'] + 1} con {consulta!r}: {len(docs)} fragmentos"]}
+
+
+def calificar(estado: EstadoCRAG) -> dict:
+    """Un juicio por fragmento. Es la parte cara del patrón: N llamadas al modelo."""
+    relevantes, descartados = [], 0
+    for d in estado["documentos"]:
+        veredicto = calificador.invoke(
+            f"Pregunta: {estado['pregunta']}\n\nFragmento:\n{d.page_content[:900]}\n\n"
+            "¿Este fragmento contribuye a responder la pregunta?"
+        )
+        if veredicto.relevante:
+            relevantes.append(d)
+        else:
+            descartados += 1
+    return {"relevantes": relevantes,
+            "bitacora": [f"calificación: {len(relevantes)} relevantes, {descartados} descartados"]}
+
+
+def decidir(estado: EstadoCRAG) -> Literal["generar", "reformular", "rendirse"]:
+    if len(estado["relevantes"]) >= MIN_RELEVANTES:
+        return "generar"
+    if estado["intentos"] < MAX_INTENTOS:
+        return "reformular"
+    return "rendirse"
+
+
+def reformular(estado: EstadoCRAG) -> dict:
+    r = reformulador.invoke(
+        f"Pregunta original del usuario: {estado['pregunta']}\n"
+        f"Consulta usada: {estado['consulta'] or estado['pregunta']}\n"
+        f"Resultado: solo {len(estado['relevantes'])} fragmentos relevantes de "
+        f"{len(estado['documentos'])}.\n\n"
+        "El corpus es la documentación de LangGraph, en inglés. Reescribe la consulta usando "
+        "los términos técnicos que aparecerían literalmente en esa documentación."
+    )
+    return {"consulta": r.consulta, "bitacora": [f"reformulada -> {r.consulta!r} ({r.razonamiento})"]}
+
+
+def generar_crag(estado: EstadoCRAG) -> dict:
+    contexto = formatear_contexto(estado["relevantes"])
+    r = modelo.invoke([SystemMessage(INSTRUCCIONES),
+                       HumanMessage(f"Contexto:\n\n{contexto}\n\nPregunta: {estado['pregunta']}")])
+    return {"respuesta": r.text, "bitacora": [f"respuesta generada con {len(estado['relevantes'])} fragmentos"]}
+
+
+def rendirse(estado: EstadoCRAG) -> dict:
+    return {
+        "respuesta": ("No he encontrado esa información en la documentación de la que dispongo. "
+                      f"He buscado {estado['intentos']} veces sin dar con fragmentos relevantes. "
+                      "Puede que esté fuera del alcance de este corpus, o que la pregunta necesite "
+                      "otros términos."),
+        "bitacora": [f"me rindo tras {estado['intentos']} intentos"],
+    }
+
+
+crag = (
+    StateGraph(EstadoCRAG)
+    .add_node("recuperar", recuperar_crag)
+    .add_node("calificar", calificar)
+    .add_node("reformular", reformular)
+    .add_node("generar", generar_crag)
+    .add_node("rendirse", rendirse)
+    .add_edge(START, "recuperar")
+    .add_edge("recuperar", "calificar")
+    .add_conditional_edges("calificar", decidir,
+                           {"generar": "generar", "reformular": "reformular", "rendirse": "rendirse"})
+    .add_edge("reformular", "recuperar")          # el ciclo
+    .add_edge("generar", END).add_edge("rendirse", END)
+    .compile()
+)
+
+mostrar_grafo(crag)
+
+#%%py
+def preguntar_crag(pregunta: str) -> dict:
+    salida = crag.invoke({"pregunta": pregunta, "consulta": "", "documentos": [], "relevantes": [],
+                          "intentos": 0, "respuesta": "", "bitacora": []},
+                         {"recursion_limit": 30})
+    print(f"P: {pregunta}")
+    for linea in salida["bitacora"]:
+        print(f"   · {linea}")
+    print(f"R: {salida['respuesta']}\n")
+    return salida
+
+
+preguntar_crag("¿Qué diferencia hay entre un checkpointer y un store?")
+preguntar_crag("¿Cuál es el precio por token de gpt-4o en Azure?")
+
+#%%md
+La segunda pregunta ahora se responde con un "no lo sé" honesto en vez de con un párrafo
+inventado. Y fíjate en la bitácora de la primera: si la búsqueda inicial no dio suficientes
+fragmentos relevantes, el sistema **reformuló al inglés** y volvió a buscar. Ese salto de
+idioma es un caso muy real —usuarios preguntando en español sobre documentación en inglés— y
+el ciclo de reformulación lo resuelve sin que nadie lo programe explícitamente.
+
+> **El coste de calificar.** Un juicio por fragmento son 6 llamadas extra al modelo por
+> pregunta. Tres formas de abaratarlo, en orden de eficacia:
+> 1. **Califica en lote**: una sola llamada que juzgue los 6 a la vez (el ejercicio 14.1).
+> 2. **Usa un modelo pequeño** solo para calificar: es una tarea binaria, no necesita el caro.
+> 3. **Califica solo si hace falta**: si la puntuación del recuperador ya es alta, sáltatelo.
+
+#%%md
+## 6. RAG agéntico: que decida el modelo
+
+Hasta aquí, **siempre** buscamos. Pero para "hola, ¿qué tal?" buscar es tirar dinero y meter
+ruido. La alternativa es dar el recuperador **como herramienta** y dejar que el modelo decida
+si busca, qué busca y cuántas veces.
+
+| | RAG como grafo (secciones 4-5) | RAG agéntico |
+|---|---|---|
+| ¿Cuándo se busca? | siempre | lo decide el modelo |
+| ¿Con qué consulta? | la del usuario, o reformulada por una regla | la que el modelo formule |
+| ¿Varias búsquedas? | según el ciclo que programaste | tantas como quiera |
+| Predecible | **sí** | no |
+| Coste | acotado | variable |
+
+Ninguno es mejor: **el grafo es predecible y el agente es flexible**. Para un producto con
+SLA, el grafo; para exploración abierta, el agente.
+
+#%%py
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelCallLimitMiddleware, ToolCallLimitMiddleware
+from langchain.tools import tool
+
+
+@tool(parse_docstring=True)
+def buscar_documentacion(consulta: str) -> str:
+    """Busca en la documentación de LangGraph y LangChain.
+
+    Úsala siempre que la pregunta sea sobre cómo funciona LangGraph, su API o sus patrones.
+    NO la uses para saludos ni para preguntas generales que no sean sobre esta herramienta.
+    Si la primera búsqueda no da lo que necesitas, prueba con términos técnicos en inglés
+    (el corpus está en inglés).
+
+    Args:
+        consulta: términos de búsqueda. Funciona mejor con términos técnicos concretos que
+            con preguntas completas.
+    """
+    docs = buscar_hibrida(consulta, k=5)
+    if not docs:
+        return f"Sin resultados para '{consulta}'. Prueba con otros términos, en inglés."
+    return formatear_contexto(docs, maximo=4500)
+
+
+agente_rag = create_agent(
+    model=modelo,
+    tools=[buscar_documentacion],
+    system_prompt=(
+        "Eres un asistente experto en LangGraph. Respondes basándote en la documentación.\n"
+        "- Busca en la documentación antes de responder cualquier cosa técnica.\n"
+        "- Cita las fuentes con el número entre corchetes que trae el contexto.\n"
+        "- Si tras buscar no encuentras la respuesta, dilo. No inventes.\n"
+        "- Para saludos o charla, responde sin buscar.\n"
+        "- En español, conciso."
+    ),
+    middleware=[ModelCallLimitMiddleware(run_limit=6, exit_behavior="end"),
+                ToolCallLimitMiddleware(run_limit=4, exit_behavior="continue")],
+)
+
+
+def preguntar_agente(pregunta: str) -> None:
+    salida = agente_rag.invoke({"messages": [HumanMessage(pregunta)]}, {"recursion_limit": 25})
+    busquedas = [tc["args"]["consulta"] for m in salida["messages"]
+                 for tc in (getattr(m, "tool_calls", None) or [])]
+    print(f"P: {pregunta}")
+    print(f"   búsquedas ({len(busquedas)}): {busquedas}")
+    print(f"R: {salida['messages'][-1].text}\n")
+
+
+preguntar_agente("Hola, ¿qué tal?")
+preguntar_agente("¿Cómo hago que un subgrafo devuelva el control a un nodo del grafo padre?")
+
+#%%md
+El saludo no dispara ninguna búsqueda; la pregunta técnica sí, y puede disparar varias con
+consultas distintas. Esa decisión es exactamente lo que compras al hacerlo agéntico — y lo
+que pagas en imprevisibilidad.
+
+#%%md
+## 7. Citas verificables
+
+"Cita las fuentes" en el prompt no garantiza nada: el modelo puede citar `[3]` cuando el
+dato salió de `[1]`, o inventarse un `[7]` que no existe. Hay que **comprobarlo**.
+
+Dos comprobaciones baratas y deterministas:
+
+1. **Las citas existen**: todo `[n]` que aparezca corresponde a un fragmento real.
+2. **Cobertura léxica**: qué fracción de los términos poco comunes de la respuesta aparece en
+   el contexto. Bajo = está diciendo cosas que no estaban ahí.
+
+#%%py
+def verificar_citas(respuesta: str, documentos: list[Document]) -> dict:
+    citadas = {int(n) for n in re.findall(r"\[(\d+)\]", respuesta)}
+    validas = set(range(1, len(documentos) + 1))
+    return {
+        "citas": sorted(citadas),
+        "inventadas": sorted(citadas - validas),
+        "sin_citar": sorted(validas - citadas),
+        "tiene_citas": bool(citadas),
+    }
+
+
+def cobertura_lexica(respuesta: str, contexto: str) -> float:
+    """Fracción de términos largos de la respuesta presentes en el contexto."""
+    vocabulario = set(tokenizar(contexto))
+    terminos = [t for t in set(tokenizar(respuesta)) if len(t) > 5]
+    return sum(t in vocabulario for t in terminos) / len(terminos) if terminos else 1.0
+
+
+for pregunta in ["¿Qué hace exactamente el parámetro durability al invocar un grafo?",
+                 "¿Cuántos empleados tiene LangChain?"]:
+    salida = crag.invoke({"pregunta": pregunta, "consulta": "", "documentos": [], "relevantes": [],
+                          "intentos": 0, "respuesta": "", "bitacora": []}, {"recursion_limit": 30})
+    contexto = formatear_contexto(salida["relevantes"])
+    citas = verificar_citas(salida["respuesta"], salida["relevantes"])
+    cob = cobertura_lexica(salida["respuesta"], contexto)
+
+    print(f"P: {pregunta}")
+    print(f"   citas={citas['citas']} inventadas={citas['inventadas']} cobertura={cob:.0%}")
+    print(f"R: {salida['respuesta'][:260]}\n")
+
+#%%md
+> **Cómo leer la cobertura léxica.** No es una medida de verdad, es una **señal**. Un valor
+> alto (>70 %) dice que la respuesta usa el vocabulario del contexto; uno bajo dice que está
+> introduciendo términos de su cuenta, lo que a veces es una alucinación y a veces es
+> simplemente que está traduciendo al español un contexto en inglés — que es justo nuestro
+> caso, así que aquí los valores serán bajos y **eso no significa que mienta**.
+>
+> Es un ejemplo perfecto de por qué las métricas automáticas hay que calibrarlas contra tu
+> propio caso antes de usarlas para decidir nada. En el módulo 6 lo hacemos bien.
+
+#%%md
+## 8. Ejercicios
+
+> **EJERCICIO 14.1 — Calificación en lote**
+>
+> El nodo `calificar` hace una llamada por fragmento: seis llamadas por pregunta. Reescríbelo
+> para que haga **una sola** llamada que juzgue los seis a la vez, devolviendo una lista de
+> decisiones. Mide la diferencia de tiempo y comprueba que las decisiones no empeoran.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 14.1</b></summary>
+
+La clave es pedir al modelo una <b>lista con el índice de cada fragmento</b>, no una lista de
+booleanos: si solo pide booleanos y devuelve cinco en vez de seis, no sabes cuál falta.
+Con índices explícitos, un elemento ausente se puede tratar como "no relevante" sin
+desalinear nada.
+
+El compromiso real: en lote es entre 4 y 6 veces más rápido y más barato, pero los juicios se
+contaminan entre sí — un fragmento flojo al lado de uno excelente tiende a puntuar peor de lo
+que puntuaría solo. Para filtrar ruido grueso, que es lo que hacemos aquí, compensa
+claramente.
+</details>
+
+#%%py
+import time
+
+
+class DecisionFragmento(BaseModel):
+    """Decisión sobre un fragmento concreto."""
+    indice: int = Field(description="El número del fragmento, tal como aparece entre corchetes")
+    relevante: bool = Field(description="True si contribuye directamente a responder la pregunta")
+
+
+class CalificacionLote(BaseModel):
+    """Decisiones sobre todos los fragmentos de una tanda."""
+    decisiones: list[DecisionFragmento] = Field(
+        description="Una entrada por CADA fragmento recibido, sin saltarse ninguno"
+    )
+
+
+calificador_lote = modelo.with_structured_output(CalificacionLote)
+
+
+def calificar_en_lote(estado: EstadoCRAG) -> dict:
+    documentos = estado["documentos"]
+    bloques = "\n\n".join(f"[{i}] {d.page_content[:700]}" for i, d in enumerate(documentos, 1))
+
+    resultado = calificador_lote.invoke(
+        f"Pregunta: {estado['pregunta']}\n\n"
+        f"Juzga CADA UNO de estos {len(documentos)} fragmentos. Un fragmento es relevante solo si "
+        "contribuye directamente a responder; ser del mismo tema general no basta.\n\n" + bloques
+    )
+
+    # Un índice ausente se trata como no relevante: nunca damos por bueno lo que no se dijo.
+    relevantes_idx = {d.indice for d in resultado.decisiones if d.relevante}
+    relevantes = [d for i, d in enumerate(documentos, 1) if i in relevantes_idx]
+    return {"relevantes": relevantes,
+            "bitacora": [f"calificación en lote: {len(relevantes)}/{len(documentos)} relevantes"]}
+
+
+PREGUNTA_PRUEBA = "¿Cómo funciona el viaje en el tiempo en LangGraph?"
+docs_prueba = buscar_hibrida(PREGUNTA_PRUEBA, k=6)
+estado_prueba = {"pregunta": PREGUNTA_PRUEBA, "consulta": "", "documentos": docs_prueba,
+                 "relevantes": [], "intentos": 1, "respuesta": "", "bitacora": []}
+
+for nombre, fn in [("uno a uno", calificar), ("en lote  ", calificar_en_lote)]:
+    t0 = time.perf_counter()
+    r = fn(estado_prueba)
+    seg = time.perf_counter() - t0
+    ids = {d.metadata["id"] for d in r["relevantes"]}
+    print(f"  {nombre}: {seg:>5.1f} s, {len(r['relevantes'])}/6 relevantes")
+
+crag_lote = (
+    StateGraph(EstadoCRAG)
+    .add_node("recuperar", recuperar_crag).add_node("calificar", calificar_en_lote)
+    .add_node("reformular", reformular).add_node("generar", generar_crag).add_node("rendirse", rendirse)
+    .add_edge(START, "recuperar").add_edge("recuperar", "calificar")
+    .add_conditional_edges("calificar", decidir,
+                           {"generar": "generar", "reformular": "reformular", "rendirse": "rendirse"})
+    .add_edge("reformular", "recuperar").add_edge("generar", END).add_edge("rendirse", END)
+    .compile()
+)
+print("\ngrafo con calificación en lote listo")
+
+#%%md
+> **EJERCICIO 14.2 — Elegir el tamaño de fragmento con datos**
+>
+> Construye índices con `chunk_size` de 400, 800, 1600 y 3000 y mide `recall@5` con el
+> conjunto etiquetado de la sección 3. Contando además cuántos tokens ocupa el contexto
+> resultante, decide cuál usarías.
+>
+> Pista: para que la comparación sea justa, el número de fragmentos recuperados (k) debe
+> ser el mismo, pero el **contexto** que producen será muy distinto.
+>
+> **Aviso de coste:** la solución reindexa el corpus entero cuatro veces. Son unos 0,04 € de
+> embeddings y un par de minutos. Si prefieres no gastarlo, reduce la lista de tamaños a dos
+> valores; la conclusión se ve igual.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 14.2</b></summary>
+
+Lo que casi siempre sale: el <code>recall</code> sube poco entre 800 y 3000, pero el
+<b>contexto se dispara</b>. Es decir, los fragmentos grandes no encuentran mucho más; solo
+traen más texto alrededor de lo mismo, y lo pagas en cada llamada.
+
+Ese es el argumento para preferir fragmentos medianos con solape: recall parecido, coste
+mucho menor y menos ruido para el modelo. Pero fíjate en que es una conclusión <b>de estos
+datos</b> — documentación técnica muy estructurada. Con actas de reunión o transcripciones,
+el óptimo se mueve, y por eso hay que medirlo cada vez.
+</details>
+
+#%%py
+from langchain_core.messages.utils import count_tokens_approximately
+
+
+def evaluar_tamano(tamano: int) -> dict:
+    fragmentos = trocear(tamano=tamano, solape=int(tamano * 0.12))
+    almacen_tmp = InMemoryVectorStore(embeddings)
+    almacen_tmp.add_documents(fragmentos)
+    bm25_tmp = BM25Okapi([tokenizar(d.page_content) for d in fragmentos])
+
+    def buscar(consulta: str, k: int = 5) -> list[Document]:
+        vec = almacen_tmp.similarity_search(consulta, k=8)
+        puntuaciones = bm25_tmp.get_scores(tokenizar(consulta))
+        idx = sorted(range(len(puntuaciones)), key=lambda i: puntuaciones[i], reverse=True)[:8]
+        lex = [fragmentos[i] for i in idx if puntuaciones[i] > 0]
+        return fusion_rrf([vec, lex], limite=k)
+
+    aciertos = sum(any(d.metadata["fuente"] == esperado for d in buscar(p, k=5))
+                   for p, esperado in PREGUNTAS_ETIQUETADAS)
+    tokens = statistics.median(
+        count_tokens_approximately([HumanMessage(formatear_contexto(buscar(p, k=5), maximo=100_000))])
+        for p, _ in PREGUNTAS_ETIQUETADAS
+    )
+    return {"tamano": tamano, "fragmentos": len(fragmentos),
+            "recall": aciertos / len(PREGUNTAS_ETIQUETADAS), "tokens": tokens}
+
+
+print(f"{'chunk_size':>11} {'fragmentos':>11} {'recall@5':>9} {'tokens de contexto':>19}")
+print("-" * 54)
+resultados = []
+for tamano in (400, 800, 1600, 3000):
+    r = evaluar_tamano(tamano)
+    resultados.append(r)
+    print(f"{r['tamano']:>11} {r['fragmentos']:>11} {r['recall']:>8.0%} {r['tokens']:>19,.0f}")
+
+mejor = max(resultados, key=lambda r: r["recall"] - r["tokens"] / 100_000)
+print(f"\nMejor relación recall/coste: chunk_size={mejor['tamano']}")
+print("(el criterio de arriba penaliza los tokens; ajústalo a lo que te cueste a ti cada uno)")
+
+#%%md
+## 9. Resumen
+
+- El RAG lineal falla porque **el recuperador siempre devuelve algo**, aunque no sirva.
+  Comprobarlo antes de generar es lo que arregla el problema; el prompt no.
+- **Trocear es la decisión que más importa.** Respeta la estructura, guarda la procedencia y
+  elige el tamaño **midiendo**, no copiando.
+- **Vectorial** entiende significado; **léxica** encuentra identificadores exactos;
+  **híbrida con RRF** combina las dos usando posiciones, sin normalizar puntuaciones.
+- Mide **recall@k** con preguntas etiquetadas **antes** de tocar el prompt. Si el documento
+  correcto no se recupera, la generación no tiene arreglo.
+- El ciclo **CRAG** —calificar, reformular, reintentar, rendirse— convierte "invento algo" en
+  "no lo sé", que es una respuesta mucho mejor.
+- **RAG agéntico** (el recuperador como herramienta) es flexible e imprevisible; el grafo es
+  predecible y acotado. Elige según necesites SLA o exploración.
+- **Verifica las citas** y vigila la cobertura léxica, pero **calibra el umbral** contra tu
+  caso: traducir de idioma baja la cobertura sin que nadie mienta.
+
+**Siguiente:** [`P5_proyecto_rag_evaluado.ipynb`](P5_proyecto_rag_evaluado.ipynb) — un
+asistente de documentación con evaluación completa: recuperación, fidelidad y abstención.
