@@ -1,0 +1,690 @@
+#%%md
+# 12 · Subgrafos: componer sin acabar en espaguetis
+
+**Módulo 4 · Composición** — *tiempo estimado: 1 h 15 min*
+
+Un grafo de 30 nodos no se puede leer, no se puede probar por partes y no se puede reutilizar.
+La solución es la misma que en cualquier software: **componer**. Un grafo compilado es un
+nodo, y con eso puedes construir sistemas grandes hechos de piezas pequeñas y comprobables.
+
+Al terminar sabrás:
+
+1. Las **dos formas** de anidar grafos, y cuál toca en cada caso.
+2. Cómo se comporta la persistencia, el streaming y el `interrupt()` a través de subgrafos.
+3. `Command(graph=Command.PARENT)`, la pieza que hace posible el multiagente.
+4. Cuándo **no** usar un subgrafo, que también hay que saberlo.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m4")
+
+#%%md
+## 1. Las dos formas de anidar
+
+Todo se reduce a una pregunta: **¿el subgrafo habla el mismo idioma que el padre?**
+
+| | **Claves compartidas** | **Esquemas distintos** |
+|---|---|---|
+| Cómo | `add_node("nombre", subgrafo_compilado)` | `add_node("nombre", funcion_envoltorio)` |
+| El estado | fluye directamente | lo traduces tú, en los dos sentidos |
+| Acoplamiento | alto: comparten esquema | bajo: solo el contrato de la función |
+| Cuándo | partes de un mismo sistema | componentes reutilizables |
+
+#%%md
+### 1.1 Claves compartidas: el subgrafo es un nodo
+
+Cuando el subgrafo lee y escribe las mismas claves que el padre, se enchufa directamente.
+
+#%%py
+import operator
+from typing import Annotated, TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoAnalisis(TypedDict):
+    texto: str
+    hallazgos: Annotated[list[str], operator.add]
+    veredicto: str
+
+
+# --- el subgrafo: análisis de calidad ---
+def revisar_longitud(estado: EstadoAnalisis) -> dict:
+    n = len(estado["texto"].split())
+    return {"hallazgos": [f"longitud: {n} palabras" + (" (demasiado corto)" if n < 10 else "")]}
+
+
+def revisar_tono(estado: EstadoAnalisis) -> dict:
+    duras = [p for p in ("nunca", "imposible", "no podemos") if p in estado["texto"].lower()]
+    return {"hallazgos": [f"tono: {'expresiones tajantes ' + str(duras) if duras else 'correcto'}"]}
+
+
+calidad = (
+    StateGraph(EstadoAnalisis)
+    .add_node("revisar_longitud", revisar_longitud)
+    .add_node("revisar_tono", revisar_tono)
+    .add_edge(START, "revisar_longitud")
+    .add_edge(START, "revisar_tono")          # las dos revisiones, en paralelo
+    .compile()
+)
+
+# --- el padre: usa el subgrafo como un nodo más ---
+principal = (
+    StateGraph(EstadoAnalisis)
+    .add_node("preparar", lambda e: {"hallazgos": ["--- inicio del análisis ---"]})
+    .add_node("calidad", calidad)                        # <- el subgrafo compilado, tal cual
+    .add_node("concluir", lambda e: {"veredicto": f"{len(e['hallazgos']) - 1} hallazgos"})
+    .add_edge(START, "preparar").add_edge("preparar", "calidad").add_edge("calidad", "concluir")
+    .compile()
+)
+
+salida = principal.invoke({"texto": "Nunca podremos hacer eso.", "hallazgos": [], "veredicto": ""})
+for h in salida["hallazgos"]:
+    print("  ", h)
+print("\nveredicto:", salida["veredicto"])
+
+#%%py
+mostrar_grafo(principal)
+
+#%%py
+separador("con xray=1: el subgrafo se despliega")
+mostrar_grafo(principal, xray=1)
+
+#%%md
+### 1.2 Esquemas distintos: una función de traducción
+
+Un componente reutilizable de verdad no debería conocer el esquema de quien lo usa. Aquí el
+subgrafo tiene **su propio estado**, y una función traduce en la entrada y en la salida.
+
+#%%py
+class EstadoResumidor(TypedDict):
+    """El esquema propio del componente. No sabe nada de quién lo llama."""
+    documento: str
+    idioma: str
+    resumen: str
+    palabras_clave: list[str]
+
+
+modelo = llm()
+
+
+def resumir(estado: EstadoResumidor) -> dict:
+    r = modelo.invoke(
+        f"Resume en {estado['idioma']} este texto en una sola frase:\n\n{estado['documento']}"
+    )
+    return {"resumen": r.text.strip()}
+
+
+def extraer_claves(estado: EstadoResumidor) -> dict:
+    r = modelo.invoke(
+        f"Extrae 3 palabras clave del texto, separadas por comas y sin más texto:\n\n{estado['documento']}"
+    )
+    return {"palabras_clave": [p.strip() for p in r.text.split(",")][:3]}
+
+
+resumidor = (
+    StateGraph(EstadoResumidor)
+    .add_node("resumir", resumir).add_node("extraer_claves", extraer_claves)
+    .add_edge(START, "resumir").add_edge(START, "extraer_claves")
+    .compile()
+)
+
+
+# --- un padre con un esquema COMPLETAMENTE distinto ---
+class EstadoTicket(TypedDict):
+    id_ticket: str
+    mensaje_cliente: str
+    sintesis: str
+    etiquetas: list[str]
+
+
+def nodo_resumir(estado: EstadoTicket) -> dict:
+    """El adaptador: traduce el estado del padre al del subgrafo y de vuelta.
+
+    Este es el único punto de acoplamiento. Si el subgrafo cambia su esquema, solo hay
+    que tocar esta función.
+    """
+    resultado = resumidor.invoke({
+        "documento": estado["mensaje_cliente"],
+        "idioma": "español",
+        "resumen": "",
+        "palabras_clave": [],
+    })
+    return {"sintesis": resultado["resumen"], "etiquetas": resultado["palabras_clave"]}
+
+
+from utils.datos import tickets
+
+df = tickets()
+
+procesador = (
+    StateGraph(EstadoTicket)
+    .add_node("resumir_ticket", nodo_resumir)
+    .add_edge(START, "resumir_ticket")
+    .compile()
+)
+
+fila = df.iloc[7]
+salida = procesador.invoke({"id_ticket": fila.id_ticket, "mensaje_cliente": fila.mensaje,
+                            "sintesis": "", "etiquetas": []})
+print(f"ticket   : {salida['id_ticket']}")
+print(f"original : {fila.mensaje[:110]}...")
+print(f"síntesis : {salida['sintesis']}")
+print(f"etiquetas: {salida['etiquetas']}")
+
+#%%md
+**Cómo elegir.** Si estás dudando, la pregunta útil es: *¿usaría este subgrafo en otro
+proyecto?* Si la respuesta es sí, dale su propio esquema y un adaptador. Si es una parte de
+este sistema que has separado solo para poder leerlo, comparte claves y ahórrate el
+adaptador.
+
+#%%md
+## 2. Persistencia a través de subgrafos
+
+Regla sencilla y muy importante: **el subgrafo hereda el checkpointer del padre**. No le
+pases uno propio salvo que quieras que sea un sistema independiente.
+
+#%%py
+from langgraph.checkpoint.memory import InMemorySaver
+
+
+class EstadoContado(TypedDict):
+    n: Annotated[int, operator.add]
+    trazas: Annotated[list[str], operator.add]
+
+
+def sumar_uno(nombre: str):
+    return lambda e: {"n": 1, "trazas": [nombre]}
+
+
+hijo = StateGraph(EstadoContado).add_node("hijo_a", sumar_uno("hijo_a")) \
+    .add_node("hijo_b", sumar_uno("hijo_b")) \
+    .add_edge(START, "hijo_a").add_edge("hijo_a", "hijo_b").compile()   # sin checkpointer
+
+padre = (
+    StateGraph(EstadoContado)
+    .add_node("antes", sumar_uno("antes"))
+    .add_node("hijo", hijo)
+    .add_node("despues", sumar_uno("despues"))
+    .add_edge(START, "antes").add_edge("antes", "hijo").add_edge("hijo", "despues")
+    .compile(checkpointer=InMemorySaver())          # el checkpointer va aquí, y basta
+)
+
+conf = {"configurable": {"thread_id": "anidado"}}
+resultado = padre.invoke({"n": 0, "trazas": []}, conf)
+print("ejecución:", resultado)
+print("\ncheckpoints del padre:", len(list(padre.get_state_history(conf))))
+
+#%%md
+> ## La trampa del reducer acumulador compartido
+>
+> Mira bien la salida: `trazas` contiene **`'antes'` dos veces** y `n` vale **5** cuando solo
+> hay cuatro nodos que suman uno. No es un error del ejemplo: es cómo funciona, y muerde a
+> todo el mundo la primera vez.
+>
+> **Por qué pasa.** Un subgrafo embebido como nodo recibe el estado del padre y devuelve
+> **su estado completo**, no solo lo que cambió. Ese estado completo incluye el
+> `trazas=['antes']` que heredó. El padre lo trata como una actualización más y le aplica el
+> reducer: `['antes'] + ['antes', 'hijo_a', 'hijo_b']`. De ahí el duplicado.
+>
+> Es decir: **con claves de reducer acumulador, embeber el subgrafo directamente duplica lo
+> que ya había.** Con claves normales (último valor gana) no se nota, porque sobrescribir el
+> mismo valor es inofensivo. Por eso el fallo aparece justo cuando empiezas a acumular, que es
+> cuando el sistema ya es grande.
+>
+> Y ojo: **`output_schema` en el subgrafo no lo arregla**, porque el problema no es qué claves
+> salen sino que salen con el valor acumulado incluido.
+
+#%%py
+# La demostración del arreglo: un envoltorio que le da al subgrafo su propio estado limpio
+# y devuelve al padre SOLO el delta.
+def envoltorio_limpio(estado: EstadoContado) -> dict:
+    """El subgrafo arranca de cero; el padre recibe únicamente lo que el subgrafo produjo."""
+    resultado = hijo.invoke({"n": 0, "trazas": []})
+    return {"n": resultado["n"], "trazas": resultado["trazas"]}
+
+
+padre_limpio = (
+    StateGraph(EstadoContado)
+    .add_node("antes", sumar_uno("antes"))
+    .add_node("hijo", envoltorio_limpio)
+    .add_node("despues", sumar_uno("despues"))
+    .add_edge(START, "antes").add_edge("antes", "hijo").add_edge("hijo", "despues")
+    .compile(checkpointer=InMemorySaver())
+)
+
+print("embebido directo  :", padre.invoke({"n": 0, "trazas": []},
+                                          {"configurable": {"thread_id": "dup"}}))
+print("con envoltorio    :", padre_limpio.invoke({"n": 0, "trazas": []},
+                                                 {"configurable": {"thread_id": "limpio"}}))
+print("\nRegla: si el padre y el hijo comparten una clave con reducer acumulador,")
+print("usa un envoltorio con estado propio, no el subgrafo embebido.")
+
+#%%md
+### Inspeccionar el estado de un subgrafo pausado
+
+`get_state(config, subgraphs=True)` incluye, en `tasks`, el estado interno de los subgrafos
+que estén en marcha. Es imprescindible cuando el subgrafo se ha detenido en un `interrupt()`.
+
+#%%py
+from langgraph.types import Command, interrupt
+
+
+def pedir_dentro(estado: EstadoContado) -> dict:
+    respuesta = interrupt({"pregunta": "¿continúo desde dentro del subgrafo?"})
+    return {"n": 1, "trazas": [f"respuesta={respuesta}"]}
+
+
+hijo_hil = StateGraph(EstadoContado).add_node("pedir", pedir_dentro) \
+    .add_edge(START, "pedir").compile()
+
+padre_hil = (
+    StateGraph(EstadoContado)
+    .add_node("hijo", hijo_hil)
+    .add_node("final", sumar_uno("final"))
+    .add_edge(START, "hijo").add_edge("hijo", "final")
+    .compile(checkpointer=InMemorySaver())
+)
+
+conf_h = {"configurable": {"thread_id": "hil-anidado"}}
+salida = padre_hil.invoke({"n": 0, "trazas": []}, conf_h)
+
+print("la interrupción del HIJO llega al padre:", salida["__interrupt__"][0].value)
+
+snap = padre_hil.get_state(conf_h, subgraphs=True)
+print("\nnext del padre:", snap.next)
+for tarea in snap.tasks:
+    print(f"  tarea '{tarea.name}'  ¿tiene estado interno?: {tarea.state is not None}")
+    if tarea.state is not None:
+        print(f"    el subgrafo está parado en: {tarea.state.next}")
+
+print("\nreanudando desde el PADRE:", padre_hil.invoke(Command(resume="sí"), conf_h))
+
+#%%md
+Lo relevante: **la interrupción sube hasta arriba y se reanuda desde arriba**. No tienes que
+saber en qué subgrafo estaba parado; `Command(resume=...)` sobre el padre baja hasta donde
+haga falta. Para tu API HTTP, un grafo anidado se comporta exactamente igual que uno plano.
+
+#%%md
+## 3. `Command(graph=Command.PARENT)`: saltar hacia arriba
+
+Por defecto, un `Command(goto=...)` navega **dentro** del grafo donde está. Con
+`graph=Command.PARENT`, el salto es a un nodo del **grafo padre**.
+
+Esto es lo que permite que un subgrafo diga "yo ya no soy el adecuado, que siga otro", y es
+literalmente el mecanismo de los *handoffs* entre agentes del próximo notebook.
+
+#%%py
+from typing import Literal
+
+
+class EstadoEnrutado(TypedDict):
+    consulta: str
+    respuesta: str
+    ruta: Annotated[list[str], operator.add]
+
+
+def triaje_tecnico(estado: EstadoEnrutado) -> Command:
+    """Un subgrafo que puede decidir que el caso no es suyo y devolverlo al padre.
+
+    OJO con el tipo de retorno: aquí NO se anota `Command[Literal["experto_facturacion"]]`.
+    Esa anotación hace que LangGraph intente crear una arista hacia ese nodo **en el grafo
+    donde vive la función** — es decir, en el subgrafo, donde `experto_facturacion` no existe —
+    y `compile()` falla con `Found edge ending at unknown node`. Para saltos al padre, la
+    anotación se omite y los destinos se declaran en el padre con `destinations=`.
+    """
+    if "factura" in estado["consulta"].lower() or "cobro" in estado["consulta"].lower():
+        # No es mío: salto a un nodo DEL PADRE.
+        return Command(
+            goto="experto_facturacion",
+            graph=Command.PARENT,
+            update={"ruta": ["técnico: no es mi área, derivo a facturación"]},
+        )
+    return Command(update={"respuesta": "Lo revisa el equipo técnico.",
+                           "ruta": ["técnico: caso aceptado"]})
+
+
+equipo_tecnico = StateGraph(EstadoEnrutado).add_node("triaje_tecnico", triaje_tecnico) \
+    .add_edge(START, "triaje_tecnico").compile()
+
+soporte = (
+    StateGraph(EstadoEnrutado)
+    # `destinations` en el PADRE: documenta el salto y lo dibuja en el diagrama.
+    .add_node("equipo_tecnico", equipo_tecnico, destinations=("experto_facturacion",))
+    .add_node("experto_facturacion", lambda e: {
+        "respuesta": "Lo revisa el equipo de facturación.",
+        "ruta": ["facturación: caso recibido"],
+    })
+    .add_edge(START, "equipo_tecnico")
+    .add_edge("experto_facturacion", END)
+    .compile()
+)
+
+for consulta in ["El panel no carga desde ayer", "Me han cobrado la factura dos veces"]:
+    r = soporte.invoke({"consulta": consulta, "respuesta": "", "ruta": []})
+    print(f"  {consulta[:42]:<44} -> {r['respuesta']}")
+    for paso in r["ruta"]:
+        print(f"      {paso}")
+
+#%%md
+> **Tres reglas que no se pueden saltar** al usar `Command.PARENT`:
+>
+> 1. **No anotes el tipo de retorno con `Command[Literal[...]]`.** Esa anotación crea aristas
+>    en el grafo donde está la función —el hijo—, y el destino no existe allí: `compile()`
+>    falla con `Found edge ending at unknown node`. Para que el diagrama del padre muestre el
+>    salto, usa `destinations=` al añadir el subgrafo como nodo, como arriba.
+> 2. El nodo destino tiene que **existir en el padre**. Si no, el salto se descarta en
+>    silencio (el mismo comportamiento que vimos en el notebook 01 con las ramas condicionales
+>    a nodos inexistentes).
+> 3. Las claves del `update` tienen que existir en el **estado del padre**, y si son
+>    concurrentes necesitan un reducer. Por eso `ruta` lleva `operator.add`.
+
+#%%md
+## 4. Streaming a través de subgrafos
+
+Ya lo vimos en el notebook 11, pero conviene tenerlo aquí junto con el resto: sin
+`subgraphs=True`, un subgrafo emite **un único evento**.
+
+#%%py
+separador("sin subgraphs: caja negra")
+for ev in padre.stream({"n": 0, "trazas": []}, {"configurable": {"thread_id": "s1"}},
+                       stream_mode="updates"):
+    print("  ", ev)
+
+separador("con subgraphs=True: se ve el interior, y de dónde viene cada evento")
+for ruta, ev in padre.stream({"n": 0, "trazas": []}, {"configurable": {"thread_id": "s2"}},
+                             stream_mode="updates", subgraphs=True):
+    sangria = "  " * (len(ruta) + 1)
+    print(f"{sangria}{'(padre)' if not ruta else ruta[-1].split(':')[0]}: {ev}")
+
+#%%md
+## 5. Cuándo NO usar un subgrafo
+
+Un subgrafo tiene coste: otro esquema que mantener, otro nivel de indirección al depurar, y
+un adaptador si los esquemas difieren. No lo uses por costumbre.
+
+| Situación | Mejor opción |
+|---|---|
+| Tres nodos que van seguidos | `add_sequence`, y ya |
+| Quieres reutilizar una **función** | una función normal, llamada desde el nodo |
+| Quieres "ordenar" un grafo de 8 nodos | probablemente no hace falta; ordena los nombres |
+| Un componente que usarás en varios proyectos | **subgrafo con esquema propio** |
+| Un agente completo dentro de un sistema mayor | **subgrafo** |
+| Una parte que quieres probar por separado | **subgrafo** |
+
+La prueba definitiva: **¿escribirías pruebas unitarias para esa parte por separado?** Si sí,
+es un subgrafo. Si no, probablemente es solo un grupo de nodos.
+
+#%%md
+### Un grafo como herramienta
+
+Hay una tercera forma de composición, a medio camino: convertir un grafo en una **herramienta**
+que el modelo pueda invocar. Deja de ser una decisión tuya de topología para pasar a ser una
+decisión del modelo en ejecución.
+
+#%%py
+from langchain.tools import tool
+
+
+@tool(parse_docstring=True)
+def resumir_texto(texto: str) -> str:
+    """Resume un texto largo en una frase y extrae sus palabras clave.
+
+    Args:
+        texto: el texto a resumir. Máximo unos 2000 caracteres.
+    """
+    r = resumidor.invoke({"documento": texto[:2000], "idioma": "español",
+                          "resumen": "", "palabras_clave": []})
+    return f"Resumen: {r['resumen']}\nPalabras clave: {', '.join(r['palabras_clave'])}"
+
+
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
+
+agente = create_agent(model=modelo, tools=[resumir_texto],
+                      system_prompt="Eres un asistente. Usa las herramientas. Responde en español.")
+
+texto_largo = " ".join(df.head(4).mensaje.tolist())
+salida = agente.invoke(
+    {"messages": [HumanMessage(f"Resume esto y dime de qué van:\n\n{texto_largo}")]},
+    {"recursion_limit": 15},
+)
+print(salida["messages"][-1].text)
+
+#%%md
+| Forma de composición | Quién decide si se ejecuta |
+|---|---|
+| Subgrafo como nodo | **tú**, al diseñar la topología |
+| Grafo como herramienta | **el modelo**, en ejecución |
+
+La segunda es más flexible y menos predecible. Como todo lo que se delega en el modelo: úsala
+cuando la decisión dependa del contenido, no porque suene más moderno.
+
+#%%md
+## 6. Ejercicios
+
+> **EJERCICIO 12.1 — Una tubería de análisis reutilizable**
+>
+> Construye un subgrafo `analizador` con esquema propio que, dado un `texto`, devuelva
+> `sentimiento`, `urgencia` (0-10) y `temas` (lista). Después úsalo desde **dos padres
+> distintos** con esquemas diferentes: uno que analiza tickets de soporte y otro que analiza
+> reseñas de producto.
+>
+> El objetivo es comprobar que el subgrafo no sabe nada de sus dos usuarios.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 12.1</b></summary>
+
+Fíjate en que <code>analizador</code> no importa nada de sus padres, y los padres solo
+conocen su esquema de entrada y salida. Si mañana el analizador añade un campo, los padres
+siguen funcionando; si un padre necesita ese campo, toca <b>solo su adaptador</b>.
+
+Es el mismo criterio de acoplamiento que aplicarías a cualquier módulo: la frontera está en
+la firma, no en la implementación.
+</details>
+
+#%%py
+from pydantic import BaseModel, Field
+
+
+class EstadoAnalizador(TypedDict):
+    """Esquema propio del componente reutilizable."""
+    texto: str
+    sentimiento: str
+    urgencia: int
+    temas: list[str]
+
+
+class Analisis(BaseModel):
+    """Análisis de un texto de cliente."""
+    sentimiento: Literal["negativo", "neutro", "positivo"]
+    urgencia: int = Field(ge=0, le=10, description="0 = ninguna prisa, 10 = bloqueo total")
+    temas: list[str] = Field(description="Entre 1 y 3 temas, en minúsculas y una palabra cada uno")
+
+
+analista = modelo.with_structured_output(Analisis)
+
+analizador = (
+    StateGraph(EstadoAnalizador)
+    .add_node("analizar", lambda e: {
+        **analista.invoke(f"Analiza este texto de un cliente:\n\n{e['texto']}").model_dump()
+    })
+    .add_edge(START, "analizar")
+    .compile()
+)
+
+
+# --- padre 1: tickets de soporte ---
+class EstadoSoporte(TypedDict):
+    id_ticket: str
+    mensaje: str
+    prioridad_sugerida: str
+    etiquetas: list[str]
+
+
+def analizar_ticket(estado: EstadoSoporte) -> dict:
+    r = analizador.invoke({"texto": estado["mensaje"], "sentimiento": "", "urgencia": 0, "temas": []})
+    prioridad = "critica" if r["urgencia"] >= 8 else "alta" if r["urgencia"] >= 5 else "media"
+    return {"prioridad_sugerida": prioridad, "etiquetas": r["temas"]}
+
+
+soporte_g = StateGraph(EstadoSoporte).add_node("analizar", analizar_ticket) \
+    .add_edge(START, "analizar").compile()
+
+
+# --- padre 2: reseñas de producto ---
+class EstadoResenas(TypedDict):
+    resena: str
+    puntuacion_estimada: int
+    aspectos: list[str]
+
+
+def analizar_resena(estado: EstadoResenas) -> dict:
+    r = analizador.invoke({"texto": estado["resena"], "sentimiento": "", "urgencia": 0, "temas": []})
+    puntuacion = {"negativo": 2, "neutro": 3, "positivo": 5}[r["sentimiento"]]
+    return {"puntuacion_estimada": puntuacion, "aspectos": r["temas"]}
+
+
+resenas_g = StateGraph(EstadoResenas).add_node("analizar", analizar_resena) \
+    .add_edge(START, "analizar").compile()
+
+fila = df[df.prioridad == "critica"].iloc[0]
+r1 = soporte_g.invoke({"id_ticket": fila.id_ticket, "mensaje": fila.mensaje,
+                       "prioridad_sugerida": "", "etiquetas": []})
+print(f"soporte : {fila.id_ticket} -> prioridad {r1['prioridad_sugerida']}, etiquetas {r1['etiquetas']}")
+print(f"          (prioridad real en los datos: {fila.prioridad})")
+
+r2 = resenas_g.invoke({"resena": "La aplicación va bien pero la exportación a PDF se echa mucho de menos.",
+                       "puntuacion_estimada": 0, "aspectos": []})
+print(f"reseña  : {r2['puntuacion_estimada']}/5 estrellas, aspectos {r2['aspectos']}")
+print("\nEl mismo subgrafo, dos padres, cero acoplamiento entre ellos.")
+
+#%%md
+> **EJERCICIO 12.2 — Derivación entre equipos con `Command.PARENT`**
+>
+> Monta un sistema con tres subgrafos —`equipo_tecnico`, `equipo_facturacion` y
+> `equipo_legal`— donde cada uno pueda **derivar** el caso a otro con
+> `Command(graph=Command.PARENT)` si detecta que no es su área.
+>
+> Registra la ruta completa de derivaciones y protégete de los bucles infinitos
+> (A deriva a B, B deriva a A...).
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 12.2</b></summary>
+
+Los dos detalles que hacen esto seguro en producción:
+
+<ol>
+<li><b>La lista <code>visitados</code> con reducer acumulador</b>. Un equipo no deriva a
+alguien que ya lo vio. Sin eso, dos equipos que se pasan el caso el uno al otro agotan el
+<code>recursion_limit</code> y el usuario recibe una excepción.</li>
+<li><b>El tope de derivaciones</b> como segunda red. Si la primera falla (porque un equipo se
+deriva a sí mismo, o porque aparece un tercero), el caso acaba en un humano con una
+explicación, no en un error 500.</li>
+</ol>
+
+Esta estructura —derivación con memoria de por dónde ha pasado— es exactamente el patrón de
+<i>handoffs</i> del próximo notebook.
+</details>
+
+#%%py
+MAX_DERIVACIONES = 3
+
+
+class EstadoDerivacion(TypedDict):
+    consulta: str
+    resuelto_por: str
+    ruta: Annotated[list[str], operator.add]
+    visitados: Annotated[list[str], operator.add]
+
+
+PALABRAS = {
+    "tecnico": ("error", "caído", "lento", "webhook", "api", "no carga", "timeout"),
+    "facturacion": ("factura", "cobro", "pago", "importe", "reembolso", "€"),
+    "legal": ("rgpd", "datos personales", "contrato", "dpa", "borrado", "auditoría"),
+}
+
+
+def hacer_equipo(nombre: str):
+    """Fabrica un subgrafo de equipo que acepta el caso o lo deriva al que corresponda."""
+
+    def nodo(estado: EstadoDerivacion) -> Command:
+        texto = estado["consulta"].lower()
+        visitados = estado["visitados"]
+
+        # ¿Es claramente de otro y ese otro no lo ha visto ya?
+        for otro, palabras in PALABRAS.items():
+            if otro == nombre or otro in visitados:
+                continue
+            if any(p in texto for p in palabras) and not any(p in texto for p in PALABRAS[nombre]):
+                if len(visitados) >= MAX_DERIVACIONES:
+                    break
+                return Command(
+                    goto=f"equipo_{otro}", graph=Command.PARENT,
+                    update={"ruta": [f"{nombre} -> deriva a {otro}"], "visitados": [nombre]},
+                )
+
+        motivo = "es mi área" if any(p in texto for p in PALABRAS[nombre]) else "nadie más lo quiere"
+        return Command(update={"resuelto_por": nombre,
+                               "ruta": [f"{nombre}: acepto el caso ({motivo})"],
+                               "visitados": [nombre]})
+
+    return StateGraph(EstadoDerivacion).add_node(nombre, nodo).add_edge(START, nombre).compile()
+
+
+centro = StateGraph(EstadoDerivacion)
+for equipo in PALABRAS:
+    centro.add_node(f"equipo_{equipo}", hacer_equipo(equipo))
+centro.add_edge(START, "equipo_tecnico")            # todo entra por técnico
+enrutador = centro.compile()
+
+for consulta in [
+    "El webhook lleva 5 horas caído",
+    "Me habéis cobrado dos veces la factura de mayo",
+    "Solicito el borrado de mis datos personales según el RGPD",
+    "Buenos días, tengo una duda general",
+]:
+    r = enrutador.invoke({"consulta": consulta, "resuelto_por": "", "ruta": [], "visitados": []},
+                         {"recursion_limit": 20})
+    print(f"  {consulta[:46]:<48} -> {r['resuelto_por']}")
+    for paso in r["ruta"]:
+        print(f"      {paso}")
+    print()
+
+#%%py
+mostrar_grafo(enrutador, xray=1)
+
+#%%md
+## 7. Resumen
+
+- **Un grafo compilado es un nodo.** Si comparte claves con el padre, se enchufa directo; si
+  no, va envuelto en una función que traduce en los dos sentidos.
+- La pregunta que decide: *¿usaría esto en otro proyecto?* Si sí, esquema propio y adaptador.
+- El subgrafo **hereda el checkpointer** del padre. No le pongas uno propio salvo que quieras
+  un sistema independiente.
+- Un `interrupt()` dentro de un subgrafo **sube al padre** y se reanuda desde el padre. Para
+  tu API, un grafo anidado se comporta igual que uno plano.
+- `get_state(config, subgraphs=True)` te enseña el estado interno de los subgrafos en marcha.
+- **Con claves de reducer acumulador, embeber el subgrafo directamente duplica lo heredado.**
+  Usa un envoltorio con estado propio que devuelva solo el delta.
+- `Command(graph=Command.PARENT)` salta a un nodo del padre: es la base del multiagente. **No
+  anotes** el tipo de retorno con el destino (crearía aristas en el hijo); decláralo con
+  `destinations=` en el padre. El destino debe existir y las claves del `update` también.
+- `stream(..., subgraphs=True)` abre la caja negra.
+- **No abuses.** Tres nodos seguidos son `add_sequence`, no un subgrafo. La prueba: si le
+  escribirías pruebas por separado, es un subgrafo.
+
+**Siguiente:** [`13_multiagente.ipynb`](13_multiagente.ipynb) — supervisor, handoffs y
+enjambres, con criterio para elegir entre ellos.

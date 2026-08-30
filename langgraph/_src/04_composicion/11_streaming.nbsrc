@@ -1,0 +1,610 @@
+#%%md
+# 11 · Streaming: los siete modos y cuándo usar cada uno
+
+**Módulo 4 · Composición** — *tiempo estimado: 1 h 15 min*
+
+Un agente serio tarda entre 5 y 60 segundos. Sin streaming, el usuario mira una ruedecita y
+se va. Con streaming, ve trabajo en curso y espera.
+
+Pero el streaming no es solo experiencia de usuario: es también **tu principal herramienta de
+depuración**. Un `invoke()` que devuelve un resultado raro no te dice nada; el mismo grafo en
+`stream_mode="updates"` te enseña exactamente qué escribió cada nodo y en qué orden.
+
+Al terminar sabrás:
+
+1. Los **siete modos** de stream y qué problema resuelve cada uno.
+2. Emitir eventos propios desde dentro de un nodo con `get_stream_writer`.
+3. Filtrar tokens por nodo: mostrar los del redactor y ocultar los del clasificador.
+4. Ver dentro de los subgrafos con `subgraphs=True`.
+5. Construir un renderizador de progreso completo.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m4")
+
+#%%md
+## 1. Los siete modos
+
+| Modo | Qué emite | Para qué sirve |
+|---|---|---|
+| `"values"` | el **estado completo** tras cada super-paso | Inspeccionar cómo evoluciona el estado |
+| `"updates"` | solo **lo que escribió** cada nodo | **Depurar.** El que más vas a usar |
+| `"messages"` | tokens del LLM, con metadatos | Escribir la respuesta letra a letra |
+| `"custom"` | lo que tú emitas con `get_stream_writer()` | Progreso de trabajo que no es del LLM |
+| `"debug"` | eventos internos detallados | Diagnóstico profundo |
+| `"tasks"` | inicio y fin de cada tarea | Métricas por nodo, trazas propias |
+| `"checkpoints"` | cada checkpoint guardado | Auditoría en vivo (necesita checkpointer) |
+
+Se pueden combinar pasando una lista. En ese caso cada evento llega como tupla
+`(modo, dato)`.
+
+#%%py
+import operator
+import time
+from typing import Annotated, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.config import get_stream_writer
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoDemo(TypedDict):
+    entrada: str
+    limpio: str
+    puntuacion: int
+    veredicto: str
+
+
+def normalizar(estado: EstadoDemo) -> dict:
+    time.sleep(0.05)
+    return {"limpio": estado["entrada"].strip().lower()}
+
+
+def puntuar(estado: EstadoDemo) -> dict:
+    time.sleep(0.05)
+    return {"puntuacion": len(estado["limpio"].split())}
+
+
+def decidir(estado: EstadoDemo) -> dict:
+    return {"veredicto": "largo" if estado["puntuacion"] > 5 else "corto"}
+
+
+demo = (
+    StateGraph(EstadoDemo)
+    .add_sequence([normalizar, puntuar, decidir])
+    .add_edge(START, "normalizar")
+    .compile(checkpointer=InMemorySaver())
+)
+
+ENTRADA = {"entrada": "  El WEBHOOK dejó de disparar eventos esta mañana  ",
+           "limpio": "", "puntuacion": 0, "veredicto": ""}
+CONF = {"configurable": {"thread_id": "demo-stream"}}
+
+for modo in ["values", "updates", "debug", "tasks", "checkpoints"]:
+    eventos = list(demo.stream(ENTRADA, {"configurable": {"thread_id": f"m-{modo}"}}, stream_mode=modo))
+    print(f"  {modo:<12} {len(eventos):>2} eventos   primero: {str(eventos[0])[:88] if eventos else '-'}")
+
+#%%md
+### `values` frente a `updates`: la diferencia que importa
+
+#%%py
+separador("values — el estado ENTERO en cada paso")
+for i, ev in enumerate(demo.stream(ENTRADA, {"configurable": {"thread_id": "v"}}, stream_mode="values")):
+    print(f"  {i}: {ev}")
+
+separador("updates — SOLO lo que escribió cada nodo")
+for i, ev in enumerate(demo.stream(ENTRADA, {"configurable": {"thread_id": "u"}}, stream_mode="updates")):
+    print(f"  {i}: {ev}")
+
+#%%md
+Tres diferencias con consecuencias prácticas:
+
+1. **`values` emite un evento más**: el estado inicial, antes de que corra ningún nodo.
+2. **`updates` dice quién escribió**, con el nombre del nodo como clave. `values` no.
+3. **`values` crece** con el estado; en un agente con 50 mensajes cada evento los lleva todos.
+   Para una interfaz que solo pinta progreso, `updates` mueve una fracción del volumen.
+
+**La regla:** `updates` para depurar y para interfaces de progreso; `values` cuando de verdad
+necesites el estado completo (por ejemplo, para redibujar toda una vista).
+
+#%%md
+## 2. `custom`: tu propio canal de progreso
+
+Los modos anteriores emiten lo que LangGraph sabe. Pero dentro de un nodo pasan cosas que
+LangGraph no puede saber: "procesando el documento 3 de 40", "consultando la API de pagos".
+
+`get_stream_writer()` te da una función para emitir lo que quieras.
+
+#%%py
+class EstadoLote(TypedDict):
+    documentos: list[str]
+    procesados: Annotated[list[str], operator.add]
+
+
+def procesar_lote(estado: EstadoLote) -> dict:
+    emitir = get_stream_writer()          # solo funciona DENTRO de un nodo
+    total = len(estado["documentos"])
+    resultados = []
+
+    emitir({"fase": "inicio", "total": total})
+    for i, doc in enumerate(estado["documentos"], 1):
+        time.sleep(0.03)
+        emitir({"fase": "progreso", "hecho": i, "total": total,
+                "porcentaje": round(i / total * 100), "actual": doc})
+        resultados.append(f"{doc}: ok")
+    emitir({"fase": "fin", "procesados": total})
+
+    return {"procesados": resultados}
+
+
+lotes = StateGraph(EstadoLote).add_node("procesar_lote", procesar_lote) \
+    .add_edge(START, "procesar_lote").compile()
+
+documentos = [f"informe_{i:02d}.pdf" for i in range(1, 8)]
+
+for ev in lotes.stream({"documentos": documentos, "procesados": []}, stream_mode="custom"):
+    if ev["fase"] == "progreso":
+        barra = "#" * (ev["porcentaje"] // 5)
+        print(f"\r  [{barra:<20}] {ev['porcentaje']:>3}%  {ev['actual']}", end="", flush=True)
+    else:
+        print(f"\n  {ev}")
+
+#%%md
+Esa barra de progreso es lo que separa "el sistema se ha colgado" de "el sistema está
+trabajando". Y funciona igual desde un servidor web: los eventos `custom` viajan por
+server-sent events o WebSocket sin ninguna ceremonia adicional.
+
+> **Detalle importante:** `get_stream_writer()` solo funciona dentro de un nodo en ejecución.
+> Fuera de ese contexto devuelve una función que no hace nada — no lanza error, simplemente no
+> emite. Si tus eventos personalizados "no llegan", comprueba primero que el `writer` se pide
+> dentro del nodo y no en el módulo.
+
+#%%md
+## 3. Varios modos a la vez
+
+Pasa una lista y cada evento llega como `(modo, dato)`. Es lo que quieres en una interfaz de
+verdad: progreso, tokens y actualizaciones de estado por el mismo canal.
+
+#%%py
+def paso_con_progreso(estado: EstadoDemo) -> dict:
+    emitir = get_stream_writer()
+    emitir({"nota": "empiezo a normalizar"})
+    time.sleep(0.03)
+    return {"limpio": estado["entrada"].strip().lower()}
+
+
+mixto = (
+    StateGraph(EstadoDemo)
+    .add_node("normalizar", paso_con_progreso)
+    .add_node("puntuar", puntuar)
+    .add_edge(START, "normalizar").add_edge("normalizar", "puntuar")
+    .compile()
+)
+
+for modo, dato in mixto.stream(ENTRADA, stream_mode=["updates", "custom"]):
+    print(f"  [{modo:<8}] {dato}")
+
+#%%md
+## 4. `messages`: tokens del LLM con metadatos
+
+Cada evento es una tupla `(fragmento, metadatos)`. Los metadatos son la clave: traen
+`langgraph_node`, y con eso puedes decidir **qué tokens ve el usuario**.
+
+Es el caso más frecuente en un agente real: el clasificador interno genera tokens que a nadie
+le interesan, y el redactor final genera los que hay que mostrar.
+
+#%%py
+from typing import Literal
+
+from langchain.messages import HumanMessage, SystemMessage
+from langgraph.graph import MessagesState
+
+modelo = llm()
+
+
+class EstadoRedaccion(MessagesState):
+    categoria: str
+
+
+def clasificar(estado: EstadoRedaccion) -> dict:
+    """Nodo interno: sus tokens NO deben llegar al usuario."""
+    r = modelo.invoke([SystemMessage(
+        "Clasifica la consulta en una palabra: tecnica, comercial u otra. Responde solo esa palabra."
+    ), estado["messages"][-1]])
+    return {"categoria": r.text.strip().lower()}
+
+
+def redactar(estado: EstadoRedaccion) -> dict:
+    """Nodo de cara al usuario: sus tokens SÍ se muestran."""
+    r = modelo.invoke([SystemMessage(
+        f"Eres un asistente de soporte. La consulta es de tipo {estado['categoria']}. "
+        "Responde en español, en 3 frases."
+    ), *estado["messages"]])
+    return {"messages": [r]}
+
+
+redaccion = (
+    StateGraph(EstadoRedaccion)
+    .add_sequence([("clasificar", clasificar), ("redactar", redactar)])
+    .add_edge(START, "clasificar")
+    .compile()
+)
+
+entrada = {"messages": [HumanMessage("¿Por qué mi webhook deja de recibir eventos cada pocas horas?")],
+           "categoria": ""}
+
+separador("TODOS los tokens (se cuela el clasificador)")
+for fragmento, meta in redaccion.stream(entrada, stream_mode="messages"):
+    if fragmento.text:
+        print(f"[{meta['langgraph_node']}]{fragmento.text}", end="")
+
+#%%py
+separador("SOLO los del redactor: lo que ve el usuario")
+for fragmento, meta in redaccion.stream(entrada, stream_mode="messages"):
+    if meta.get("langgraph_node") == "redactar" and fragmento.text:
+        print(fragmento.text, end="", flush=True)
+print()
+
+#%%md
+### Marcar nodos como no emisores
+
+Filtrar por nombre de nodo funciona, pero acopla tu interfaz a la topología del grafo. Una
+alternativa más limpia: etiquetar la llamada con `tags` y filtrar por la etiqueta.
+
+#%%py
+def clasificar_silencioso(estado: EstadoRedaccion) -> dict:
+    r = modelo.with_config(tags=["interno"]).invoke([
+        SystemMessage("Clasifica en una palabra: tecnica, comercial u otra."),
+        estado["messages"][-1],
+    ])
+    return {"categoria": r.text.strip().lower()}
+
+
+redaccion2 = (
+    StateGraph(EstadoRedaccion)
+    .add_sequence([("clasificar", clasificar_silencioso), ("redactar", redactar)])
+    .add_edge(START, "clasificar")
+    .compile()
+)
+
+for fragmento, meta in redaccion2.stream(entrada, stream_mode="messages"):
+    if "interno" in (meta.get("tags") or []):
+        continue                                # se descarta sin saber de qué nodo viene
+    if fragmento.text:
+        print(fragmento.text, end="", flush=True)
+print()
+
+#%%md
+## 5. Ver dentro de los subgrafos
+
+Por defecto, un subgrafo aparece como **un solo evento**: lo que devolvió en total. Con
+`subgraphs=True` recibes también sus eventos internos, y cada uno viene acompañado de la
+**ruta de espacios de nombres** que dice de dónde sale.
+
+#%%py
+class EstadoSub(TypedDict):
+    consulta: str
+    resultado: str
+
+
+def buscar(estado: EstadoSub) -> dict:
+    time.sleep(0.02)
+    return {"resultado": f"docs sobre {estado['consulta']}"}
+
+
+def filtrar(estado: EstadoSub) -> dict:
+    return {"resultado": estado["resultado"] + " (filtrados)"}
+
+
+subgrafo = StateGraph(EstadoSub).add_sequence([buscar, filtrar]).add_edge(START, "buscar").compile()
+
+
+class EstadoPadre(TypedDict):
+    consulta: str
+    resultado: str
+    informe: str
+
+
+padre = (
+    StateGraph(EstadoPadre)
+    .add_node("recuperar", subgrafo)                    # un grafo compilado ES un nodo
+    .add_node("redactar", lambda e: {"informe": f"Informe basado en: {e['resultado']}"})
+    .add_edge(START, "recuperar").add_edge("recuperar", "redactar")
+    .compile()
+)
+
+entrada_p = {"consulta": "webhooks", "resultado": "", "informe": ""}
+
+separador("sin subgraphs: el subgrafo es una caja negra")
+for ev in padre.stream(entrada_p, stream_mode="updates"):
+    print("  ", ev)
+
+separador("con subgraphs=True: se ve por dentro")
+for ruta, ev in padre.stream(entrada_p, stream_mode="updates", subgraphs=True):
+    profundidad = "  " * (len(ruta) + 1)
+    origen = ruta[-1].split(":")[0] if ruta else "(padre)"
+    print(f"{profundidad}[{origen}] {ev}")
+
+#%%py
+mostrar_grafo(padre, xray=1)
+
+#%%md
+## 6. Asíncrono
+
+En un servidor web querrás `astream`. La API es idéntica; solo cambia el `async for`.
+
+#%%py
+import asyncio
+
+
+async def demo_async():
+    salida = []
+    async for modo, dato in mixto.astream(ENTRADA, stream_mode=["updates", "custom"]):
+        salida.append(f"[{modo}] {dato}")
+    return salida
+
+
+for linea in asyncio.run(demo_async()):
+    print("  ", linea)
+
+#%%md
+Recuerda la regla del notebook 01: si **algún** nodo es `async def`, el API síncrono no vale.
+El asíncrono, en cambio, sirve para todo. En un servidor, `astream` no es opcional: la
+versión síncrona bloquea el bucle de eventos en cada super-paso y te tumba la concurrencia.
+
+#%%md
+## 7. Un renderizador de progreso completo
+
+Juntemos todo en algo que podrías poner delante de un usuario: una función que consume el
+stream y traduce cada evento a una línea legible.
+
+#%%py
+from langchain.tools import tool
+from langgraph.prebuilt import ToolNode, tools_condition
+
+from utils.datos import tickets
+
+df = tickets()
+
+
+@tool(parse_docstring=True)
+def contar_tickets(categoria: str = "todas") -> str:
+    """Cuenta tickets de una categoría.
+
+    Args:
+        categoria: la categoría a contar, o 'todas'.
+    """
+    emitir = get_stream_writer()
+    emitir({"herramienta": "contar_tickets", "estado": "consultando la base de datos"})
+    time.sleep(0.05)
+    sel = df if categoria == "todas" else df[df.categoria == categoria]
+    emitir({"herramienta": "contar_tickets", "estado": f"{len(sel)} filas leídas"})
+    return f"{len(sel)} tickets de categoría {categoria}."
+
+
+agente = (
+    StateGraph(MessagesState)
+    .add_node("modelo", lambda e: {"messages": [modelo.bind_tools([contar_tickets]).invoke(e["messages"])]})
+    .add_node("tools", ToolNode([contar_tickets], handle_tool_errors=True))
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", tools_condition)
+    .add_edge("tools", "modelo")
+    .compile()
+)
+
+
+def renderizar(grafo, entrada, config=None, mostrar_nodos=("modelo",)):
+    """Consume el stream y lo traduce a progreso legible. Devuelve la respuesta final."""
+    respuesta = []
+    escribiendo = False
+
+    for modo, dato in grafo.stream(entrada, config or {"recursion_limit": 20},
+                                   stream_mode=["updates", "custom", "messages"]):
+        if modo == "custom":
+            print(f"\n  · {dato.get('estado', dato)}")
+            escribiendo = False
+
+        elif modo == "updates":
+            for nodo, actualizacion in dato.items():
+                for m in actualizacion.get("messages", []):
+                    if getattr(m, "tool_calls", None):
+                        for tc in m.tool_calls:
+                            print(f"\n  → llamando a {tc['name']}({tc['args']})")
+                        escribiendo = False
+
+        elif modo == "messages":
+            fragmento, meta = dato
+            if meta.get("langgraph_node") in mostrar_nodos and fragmento.text:
+                if not escribiendo:
+                    print("\n  ", end="")
+                    escribiendo = True
+                print(fragmento.text, end="", flush=True)
+                respuesta.append(fragmento.text)
+
+    print()
+    return "".join(respuesta)
+
+
+separador("progreso en vivo")
+texto = renderizar(agente, {"messages": [HumanMessage(
+    "¿Cuántos tickets hay de rendimiento y cuántos de facturación?"
+)]})
+
+#%%md
+Ese `renderizar` de 25 líneas es, en esencia, lo que hay detrás de la interfaz de cualquier
+producto de agentes que hayas usado: llamadas a herramientas anunciadas, progreso interno y
+texto escribiéndose. Nada de magia.
+
+#%%md
+## 8. `stream_events`: el nivel más fino
+
+Cuando `stream_mode` no basta —porque necesitas eventos de componentes anidados, de
+recuperadores, de cadenas dentro de un nodo— está `astream_events(version="v2")`, que emite
+un evento por cada inicio, fragmento y fin de **cada** componente ejecutable.
+
+Es caro en volumen y muy detallado. Úsalo para diagnóstico, no como canal por defecto.
+
+#%%py
+async def contar_eventos():
+    from collections import Counter
+    tipos = Counter()
+    async for ev in agente.astream_events(
+        {"messages": [HumanMessage("¿Cuántos tickets de integraciones hay?")]},
+        {"recursion_limit": 20}, version="v2",
+    ):
+        tipos[ev["event"]] += 1
+    return tipos
+
+
+for tipo, n in asyncio.run(contar_eventos()).most_common():
+    print(f"  {tipo:<28} {n}")
+
+#%%md
+> **Sobre `version="v3"`.** LangGraph 1.x incluye un protocolo de streaming nuevo,
+> `stream_events(version="v3")`, orientado a bloques de contenido y con proyecciones tipadas
+> (`run.output`, `run.interrupts`). Está marcado como **experimental** en el propio código y
+> su API puede cambiar. Conócelo, pero para código que tenga que durar, usa `stream(...)` con
+> los modos de este notebook, que son estables.
+
+#%%md
+## 9. Ejercicios
+
+> **EJERCICIO 11.1 — Panel de métricas por nodo**
+>
+> Usando `stream_mode=["tasks", "updates"]`, escribe una función `perfilar(grafo, entrada)`
+> que devuelva, por cada nodo: cuántas veces se ejecutó, cuánto tardó en total y cuántos
+> caracteres escribió en el estado. Pruébala con el agente de la sección 7.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 11.1</b></summary>
+
+El modo <code>tasks</code> emite un evento al empezar cada tarea y otro al terminar; se
+distinguen porque el segundo trae <code>result</code>. Emparejándolos por <code>id</code>
+sale la duración real de cada nodo, incluida la de los que corrieron en paralelo.
+
+Este perfilado es la respuesta a "el agente va lento": casi siempre es un nodo concreto, y
+casi nunca el que uno habría apostado.
+</details>
+
+#%%py
+def perfilar(grafo, entrada, config=None) -> None:
+    from collections import defaultdict
+
+    inicios: dict[str, tuple[str, float]] = {}
+    stats = defaultdict(lambda: {"veces": 0, "segundos": 0.0, "caracteres": 0})
+
+    for modo, dato in grafo.stream(entrada, config or {"recursion_limit": 20},
+                                   stream_mode=["tasks", "updates"]):
+        if modo == "tasks":
+            if "result" not in dato:                       # evento de inicio
+                inicios[dato["id"]] = (dato["name"], time.perf_counter())
+            else:                                          # evento de fin
+                nombre, t0 = inicios.pop(dato["id"], (dato["name"], time.perf_counter()))
+                stats[nombre]["veces"] += 1
+                stats[nombre]["segundos"] += time.perf_counter() - t0
+        else:
+            for nodo, actualizacion in dato.items():
+                stats[nodo]["caracteres"] += len(str(actualizacion))
+
+    total = sum(s["segundos"] for s in stats.values()) or 1.0
+    print(f"  {'nodo':<14} {'veces':>6} {'seg':>7} {'% tiempo':>9} {'caracteres':>11}")
+    print("  " + "-" * 52)
+    for nombre, s in sorted(stats.items(), key=lambda kv: -kv[1]["segundos"]):
+        print(f"  {nombre:<14} {s['veces']:>6} {s['segundos']:>7.2f} "
+              f"{s['segundos'] / total:>8.0%} {s['caracteres']:>11,}")
+
+
+perfilar(agente, {"messages": [HumanMessage(
+    "¿Cuántos tickets hay de rendimiento, de facturación y de integraciones?"
+)]})
+
+#%%md
+> **EJERCICIO 11.2 — Streaming con cancelación**
+>
+> Escribe una función que consuma el stream de un grafo y **corte** en cuanto se cumpla una
+> condición (por ejemplo, que ya haya emitido 200 caracteres de respuesta), liberando el
+> generador. Comprueba que el grafo deja de ejecutarse de verdad y no sigue gastando tokens
+> en segundo plano.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 11.2</b></summary>
+
+La parte que sorprende: <b>cerrar el generador basta</b>. Un <code>break</code> sobre un
+<code>for</code> deja el generador para el recolector de basura, que llama a
+<code>close()</code>, que lanza <code>GeneratorExit</code> dentro del bucle de LangGraph y lo
+detiene. No hay ningún hilo suelto siguiendo adelante.
+
+Lo llamamos explícitamente con <code>try/finally</code> para no depender del recolector, que
+es lo correcto en un servidor donde el cliente puede desconectarse en cualquier momento.
+
+<b>El aviso importante:</b> cortar el stream detiene la ejecución, pero <b>lo ya hecho está
+hecho</b>. Si un nodo llamó a la API de pagos antes de que cortases, ese cargo existe. La
+cancelación no es una transacción.
+</details>
+
+#%%py
+def consumir_con_tope(grafo, entrada, tope_caracteres: int = 200, config=None) -> dict:
+    """Consume el stream hasta un tope y cierra el generador de forma explícita."""
+    generador = grafo.stream(entrada, config or {"recursion_limit": 20},
+                             stream_mode=["messages", "updates"])
+    texto, nodos, cortado = [], [], False
+    try:
+        for modo, dato in generador:
+            if modo == "updates":
+                nodos.extend(dato.keys())
+            elif modo == "messages":
+                fragmento, _meta = dato
+                if fragmento.text:
+                    texto.append(fragmento.text)
+                    if sum(len(t) for t in texto) >= tope_caracteres:
+                        cortado = True
+                        break
+    finally:
+        generador.close()          # explícito: no dependemos del recolector de basura
+
+    return {"texto": "".join(texto), "nodos_ejecutados": nodos, "cortado": cortado}
+
+
+largo = {"messages": [HumanMessage(
+    "Explica con mucho detalle, en al menos 15 frases, cómo funciona el ciclo de un agente "
+    "de LangGraph desde que recibe un mensaje hasta que responde."
+)]}
+
+sin_tope = consumir_con_tope(agente, largo, tope_caracteres=100_000)
+con_tope = consumir_con_tope(agente, largo, tope_caracteres=200)
+
+print(f"sin tope : {len(sin_tope['texto']):>5} caracteres, cortado={sin_tope['cortado']}")
+print(f"con tope : {len(con_tope['texto']):>5} caracteres, cortado={con_tope['cortado']}")
+print(f"\nlos primeros caracteres emitidos:\n  {con_tope['texto'][:180]}...")
+
+#%%md
+## 10. Resumen
+
+- **Siete modos.** `updates` para depurar y para progreso; `values` cuando necesitas el estado
+  entero; `messages` para tokens; `custom` para tu propio progreso; `debug`, `tasks` y
+  `checkpoints` para diagnóstico y métricas.
+- `values` emite un evento más que `updates` (el estado inicial) y mueve mucho más volumen.
+- `get_stream_writer()` **solo funciona dentro de un nodo**. Fuera, no emite y no avisa.
+- Pasa una **lista de modos** y recibirás tuplas `(modo, dato)`. Es lo que quiere una
+  interfaz real.
+- En `messages`, `meta["langgraph_node"]` y `meta["tags"]` te dejan decidir qué ve el usuario.
+  Etiquetar es más robusto que filtrar por nombre de nodo.
+- `subgraphs=True` abre la caja negra de los subgrafos y te dice de dónde viene cada evento.
+- `astream_events(version="v2")` es el nivel más fino; `version="v3"` existe pero es
+  experimental.
+- Cerrar el generador **cancela la ejecución**, pero no deshace lo ya hecho.
+
+**Siguiente:** [`12_subgrafos.ipynb`](12_subgrafos.ipynb) — componer grafos dentro de grafos
+sin acabar con un plato de espaguetis.
