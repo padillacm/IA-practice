@@ -780,5 +780,5 @@ sin respuesta.""")
 - Un nodo `async` tiene que ser una función `async def`, no un `lambda` que devuelva una
   corrutina.
 
-**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría de
-producción, ahora con la comprobación previa al despliegue en la lista.
+**Siguiente:** [`29_limites_colas_e_incidentes.ipynb`](29_limites_colas_e_incidentes.ipynb) —
+qué hacer cuando el proveedor te dice que no, y qué mirar primero a las tres de la mañana.

@@ -1,0 +1,760 @@
+#%%md
+# 29 · Límites, colas e incidentes
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 30 min*
+
+Este notebook cierra el módulo con lo que queda cuando ya sabes desplegar, autenticar,
+exponer y evaluar: **qué haces cuando el proveedor te dice que no**, y qué haces a las tres
+de la mañana cuando algo va mal.
+
+Es material de buenas prácticas, y conviene decirlo: aquí hay menos hallazgos sorprendentes
+que en los notebooks 22-28. Aun así, tres cosas se miden en vez de suponerse, y una de las
+tres contradice lo que casi todo el mundo asume sobre `InMemoryRateLimiter`.
+
+Al terminar sabrás:
+
+1. Los cuatro límites que te puede imponer un proveedor, y cuál te va a morder primero.
+2. Qué hace exactamente `InMemoryRateLimiter` — y las tres cosas que **no** hace.
+3. Por qué un reintento sin *jitter* convierte un pico en una avalancha, medido.
+4. Poner *backpressure* con un semáforo, y por qué un panel de concurrencia sano puede ser
+   la señal de que todo está fallando.
+5. Degradar en vez de caerse, y tener un interruptor que se acciona sin desplegar.
+6. Convertir el *runbook* en código que se ejecuta.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+#%%md
+## 1. Los cuatro límites
+
+"Me da 429" no es un diagnóstico. Los proveedores imponen **cuatro límites distintos** y
+cada uno se arregla de otra forma:
+
+| Límite | Se mide en | Te muerde cuando | Se arregla con |
+|---|---|---|---|
+| **RPM** — peticiones por minuto | peticiones | Muchos usuarios con prompts cortos | Limitador de ritmo (sección 2) |
+| **TPM** — tokens por minuto | tokens de entrada + salida | Pocos usuarios con contexto largo | Recortar contexto (nb 19) y caché de prefijo |
+| **Concurrencia** | peticiones a la vez | Fan-out con `Send`, multiagente | Semáforo (sección 4) |
+| **Cuota** (diaria, mensual) | dinero o tokens | Un bucle que nadie paró | Topes por ejecución (nb 15) y alertas |
+
+La distinción que más tiempo ahorra: **un limitador de peticiones no te protege del límite
+de tokens**. Si tu problema es TPM, puedes bajar las peticiones por segundo a la mitad y
+seguir chocando exactamente igual, porque cada petición lleva 30.000 tokens de contexto.
+
+Y el diagnóstico es barato: mira si el 429 llega con **pocas peticiones y prompts largos**
+(TPM) o con **muchas peticiones y prompts cortos** (RPM). La cabecera de respuesta del
+proveedor suele decir cuál se agotó.
+
+#%%md
+## 2. `InMemoryRateLimiter`, medido
+
+LangChain trae un limitador que se enchufa directamente al modelo. Antes de usarlo, conviene
+saber qué hace de verdad, porque el nombre de sus parámetros sugiere algo que no es.
+
+#%%py
+import time
+
+from langchain_core.rate_limiters import InMemoryRateLimiter
+
+limitador = InMemoryRateLimiter(
+    requests_per_second=5,        # el ritmo sostenido
+    check_every_n_seconds=0.01,   # cada cuánto mira si hay ficha
+    max_bucket_size=5,            # cuántas fichas puede acumular
+)
+
+print("fichas disponibles al arrancar:", limitador.available_tokens)
+
+inicio = time.monotonic()
+marcas = []
+for _ in range(10):
+    limitador.acquire()
+    marcas.append(time.monotonic() - inicio)
+
+print("\n10 peticiones seguidas desde un proceso recién arrancado:")
+print("  primeras 5:", [f"{t:.2f}s" for t in marcas[:5]])
+print("  últimas 5 :", [f"{t:.2f}s" for t in marcas[5:]])
+print(f"  total     : {marcas[-1]:.2f}s")
+
+#%%md
+Ahí está la sorpresa: **el cubo arranca vacío**. Con `max_bucket_size=5` uno espera que las
+cinco primeras peticiones salgan de golpe y a partir de ahí se regule; lo que pasa es que
+las diez van espaciadas a 5 por segundo desde la primera.
+
+`max_bucket_size` gobierna la ráfaga **después de un periodo de reposo**, no al arrancar:
+
+#%%py
+limitador.acquire()               # arranca el contador
+time.sleep(1.5)                   # 1,5 s sin pedir: el cubo se llena (tope 5)
+
+inicio = time.monotonic()
+for _ in range(5):
+    limitador.acquire()
+print(f"5 peticiones tras 1,5 s de reposo : {time.monotonic() - inicio:.3f}s  ← ráfaga")
+
+inicio = time.monotonic()
+for _ in range(5):
+    limitador.acquire()
+print(f"otras 5 seguidas                  : {time.monotonic() - inicio:.3f}s  ← ya sin fichas")
+
+#%%md
+La consecuencia práctica es de despliegue: **un pod recién arrancado está limitado desde la
+primera petición**. Si escalas horizontalmente para absorber un pico, los pods nuevos no
+absorben nada durante el primer segundo. No es grave, pero explica un patrón de latencia
+que si no, parece inexplicable.
+
+### 2.1 Las tres cosas que NO hace
+
+| No hace | Consecuencia |
+|---|---|
+| **No es distribuido** | Es por proceso. Con 4 pods a 5 rps cada uno, el proveedor ve 20 rps. Divide tu cuota entre las réplicas, o usa un limitador en Redis |
+| **No cuenta tokens** | Cuenta peticiones. Contra un límite de TPM no sirve de nada |
+| **No reintenta** | Solo espacia. Si aun así te llega un 429, lo gestiona el reintento (sección 3) |
+
+#%%py
+# Conectado al modelo: cada llamada pasa por el limitador, sin tocar los nodos.
+print('''from langchain_core.rate_limiters import InMemoryRateLimiter
+from langchain_openai import ChatOpenAI
+
+REPLICAS = 4            # divide la cuota entre los procesos que la comparten
+CUOTA_RPS = 20
+
+modelo = ChatOpenAI(
+    model="gpt-4o-mini",
+    rate_limiter=InMemoryRateLimiter(
+        requests_per_second=CUOTA_RPS / REPLICAS,
+        check_every_n_seconds=0.05,
+        max_bucket_size=5,
+    ),
+    max_retries=3,          # reintentos del SDK ante 429 y 5xx
+    request_timeout=30,     # sin esto, una petición colgada bloquea un hueco para siempre
+)''')
+
+print("\nParámetros relevantes de ChatOpenAI, leídos del propio modelo:")
+from langchain_openai import ChatOpenAI
+
+for campo in ("rate_limiter", "max_retries", "request_timeout"):
+    if campo in ChatOpenAI.model_fields:
+        print(f"  {campo:16s} por defecto = {ChatOpenAI.model_fields[campo].default!r}")
+
+#%%md
+> **`request_timeout` es el que más se olvida.** Sin él, una petición que se queda colgada
+> ocupa un hueco de concurrencia indefinidamente. Con suficientes peticiones colgadas, tu
+> servicio deja de trabajar sin que ninguna métrica de error se mueva.
+
+#%%md
+## 3. Reintentos: el rebaño atronador
+
+Cuando llega el 429, se reintenta. El detalle que decide si el reintento arregla el problema
+o lo empeora es el **jitter**.
+
+Sin jitter, todos los clientes que rebotaron en el mismo instante esperan **exactamente** lo
+mismo y vuelven **exactamente** a la vez. El pico no se disuelve: se reproduce.
+
+#%%py
+import collections
+import random
+
+
+def simular_reintentos(n_clientes: int, intentos: int, base: float,
+                       jitter: str, semilla: int = 42) -> collections.Counter:
+    """Cuenta cuántos clientes reintentan dentro de cada franja de 0,25 s.
+
+    `jitter`: "no" (espera fija), "mitad" (la mitad fija + la mitad aleatoria) o
+    "completo" (todo aleatorio entre 0 y la espera).
+    """
+    azar = random.Random(semilla)
+    franjas: collections.Counter = collections.Counter()
+
+    for _ in range(n_clientes):
+        instante = 0.0
+        for intento in range(intentos):
+            espera = base * (2 ** intento)
+            if jitter == "mitad":
+                espera = espera / 2 + azar.uniform(0, espera / 2)
+            elif jitter == "completo":
+                espera = azar.uniform(0, espera)
+            instante += espera
+            franjas[round(instante / 0.25)] += 1
+
+    return franjas
+
+
+print(f"{'estrategia':22s} {'pico simultáneo':>16s} {'momentos distintos':>20s}")
+print("-" * 62)
+for etiqueta, modo in [("sin jitter", "no"),
+                       ("jitter a la mitad", "mitad"),
+                       ("jitter completo", "completo")]:
+    franjas = simular_reintentos(200, intentos=4, base=0.5, jitter=modo)
+    print(f"{etiqueta:22s} {max(franjas.values()):16d} {len(franjas):20d}")
+
+#%%md
+Sin jitter, **los 200 clientes reintentan a la vez, y solo hay cuatro momentos distintos en
+todo el experimento**. Es decir: has convertido un pico en cuatro picos idénticos, y cada
+uno vuelve a rebotar. Con jitter, los mismos 200 reintentos se reparten en ~25 momentos.
+
+La comparación entre las dos formas de jitter es más sutil y el resultado lo enseña: *jitter
+completo* concentra algo más al principio (la espera puede salir casi cero) mientras que *a
+la mitad* garantiza un mínimo. Para reintentos ante 429, cualquiera de las dos es
+enormemente mejor que ninguna; la discusión entre ellas es de segundo orden.
+
+**La buena noticia:** LangChain lo trae bien puesto por defecto.
+
+#%%py
+import inspect
+
+from langchain_core.runnables import Runnable
+
+print("Runnable.with_retry:")
+print(" ", inspect.signature(Runnable.with_retry))
+print("\n`wait_exponential_jitter=True` por defecto: el jitter está puesto sin hacer nada.")
+
+#%%md
+### 3.1 Qué NO se reintenta
+
+Reintentar lo que no se debe es peor que no reintentar. El notebook 15 ya lo trató con
+`RetryPolicy(retry_on=...)`; aquí va la lista concreta para un proveedor de modelos:
+
+| Código | ¿Reintentar? | Por qué |
+|---|---|---|
+| **429** | **Sí**, con backoff y jitter | Es temporal por definición |
+| **500, 502, 503, 504** | **Sí** | Fallo del proveedor, casi siempre transitorio |
+| **408 / timeout** | **Con cuidado** | Puede que la petición SÍ se procesara: si tiene efectos, hazla idempotente antes |
+| **401, 403** | **No** | Tu clave no va a mejorar sola. Reintentar solo gasta tiempo y esconde el problema |
+| **400** (contexto demasiado largo) | **No tal cual** | Reintentar lo mismo da lo mismo. Recorta y **entonces** reintenta |
+| **Contenido rechazado por filtros** | **No** | Es determinista |
+
+Ese `400` merece un párrafo, porque es el que más se maltrata: el error *"maximum context
+length exceeded"* no es transitorio, y sin embargo cae dentro de casi todos los `except
+Exception: reintentar`. Lo correcto es capturarlo aparte, recortar el historial y volver
+a intentarlo **con menos contexto**, que es una degradación, no un reintento.
+
+#%%md
+## 4. Backpressure: el semáforo
+
+El limitador de ritmo controla **peticiones por segundo**. La concurrencia es otra cosa: es
+cuántas hay **en vuelo a la vez**, y es la que revienta con un fan-out.
+
+Vamos a simular un proveedor que rechaza por encima de 8 llamadas simultáneas.
+
+#%%py
+import asyncio
+
+
+class ProveedorConLimite:
+    """API de mentira que devuelve 429 si se superan `maximo` llamadas simultáneas."""
+
+    def __init__(self, maximo: int):
+        self.maximo = maximo
+        self.en_vuelo = 0
+        self.pico = 0
+        self.rechazos = 0
+
+    async def llamar(self) -> None:
+        self.en_vuelo += 1
+        self.pico = max(self.pico, self.en_vuelo)
+        try:
+            if self.en_vuelo > self.maximo:
+                self.rechazos += 1
+                raise RuntimeError("429 too many concurrent requests")
+            await asyncio.sleep(0.05)
+        finally:
+            self.en_vuelo -= 1
+
+
+async def lanzar_todas(n: int, proveedor: ProveedorConLimite) -> None:
+    async def una():
+        try:
+            await proveedor.llamar()
+        except RuntimeError:
+            pass
+
+    await asyncio.gather(*(una() for _ in range(n)))
+
+
+async def con_semaforo(n: int, proveedor: ProveedorConLimite, permitidas: int) -> None:
+    sem = asyncio.Semaphore(permitidas)
+
+    async def una():
+        async with sem:                      # la cola vive aquí, no en el proveedor
+            try:
+                await proveedor.llamar()
+            except RuntimeError:
+                pass
+
+    await asyncio.gather(*(una() for _ in range(n)))
+
+
+async def comparar():
+    print(f"{'estrategia':30s} {'pico en vuelo':>14s} {'429 recibidos':>15s}")
+    print("-" * 62)
+
+    p = ProveedorConLimite(maximo=8)
+    await lanzar_todas(40, p)
+    print(f"{'lanzar las 40 a la vez':30s} {p.pico:14d} {p.rechazos:15d}")
+
+    for permitidas in (8, 6):
+        p = ProveedorConLimite(maximo=8)
+        await con_semaforo(40, p, permitidas)
+        print(f"{'semáforo de ' + str(permitidas):30s} {p.pico:14d} {p.rechazos:15d}")
+
+
+asyncio.run(comparar())
+
+#%%md
+**32 de 40 llamadas rechazadas** sin control de concurrencia; **cero** con un semáforo. Y hay
+un detalle en la columna del medio que merece una lectura despacio.
+
+Fíjate en que el "pico en vuelo" del caso sin control es **9**, más bajo que el del semáforo
+de 8… y sin embargo es el caso catastrófico. La razón: los rechazos son instantáneos, así
+que las llamadas fallidas apenas figuran como "en vuelo".
+
+> **Un panel de concurrencia bajo puede significar que todo va bien o que todo está
+> fallando.** Un sistema que rechaza rápido parece ocioso. La concurrencia solo se
+> interpreta junto a la tasa de error y al *throughput* útil; por sí sola engaña.
+
+### 4.1 Dimensionar el semáforo
+
+La ley de Little, que es la única fórmula que hace falta aquí:
+
+> **concurrencia = throughput × latencia**
+
+Si quieres sostener 20 peticiones por segundo y cada llamada al modelo tarda 2 s, necesitas
+**40 en vuelo**. Y al revés, que es como se usa de verdad: si el proveedor te permite 40
+simultáneas y tu latencia es de 2 s, tu techo son 20 rps, por muchos pods que pongas.
+
+#%%py
+def dimensionar(throughput_objetivo: float, latencia_s: float, replicas: int) -> dict:
+    concurrencia = throughput_objetivo * latencia_s
+    return {
+        "concurrencia total necesaria": round(concurrencia),
+        "por réplica": max(1, round(concurrencia / replicas)),
+        "techo con 40 simultáneas": round(40 / latencia_s, 1),
+    }
+
+
+for latencia in (0.5, 2.0, 8.0):
+    d = dimensionar(throughput_objetivo=20, latencia_s=latencia, replicas=4)
+    print(f"latencia {latencia:4.1f}s -> {d}")
+
+print("""
+La tercera columna es la que cambia decisiones: con llamadas de 8 s, 40 huecos de
+concurrencia dan como mucho 5 rps. Si necesitas 20, el problema no se arregla con más
+réplicas — se arregla bajando la latencia o subiendo la cuota.""")
+
+#%%md
+## 5. Degradar en vez de caerse
+
+Cuando el proveedor está caído o la cuota se agotó, tienes tres respuestas, y la peor es la
+que sale por defecto:
+
+| Respuesta | Qué ve el usuario | Cuándo |
+|---|---|---|
+| **Fallar** | Un error | Casi nunca es lo correcto |
+| **Degradar** | Una respuesta peor, con aviso | Casi siempre |
+| **Encolar** | "Lo tendrás en X minutos" | Trabajo que no es interactivo |
+
+El notebook 15 ya cubrió el modelo de respaldo con `with_fallbacks`. Lo que falta aquí es la
+otra mitad: **poder decidirlo sin desplegar**.
+
+#%%py
+import os
+from dataclasses import dataclass
+
+
+@dataclass
+class Interruptores:
+    """Banderas que se leen del entorno en CADA petición, no al arrancar.
+
+    Leerlas al arrancar es el error que convierte un interruptor en un despliegue. En la
+    plataforma, esto encaja mejor todavía como configuración de un *assistant* (nb 18):
+    cambias la configuración, no el código, y queda versionado.
+    """
+
+    modelo_barato: bool = False        # degradar a un modelo más pequeño
+    herramientas_caras: bool = True    # apagar el RAG, la búsqueda web…
+    admitir_trafico: bool = True       # el freno de emergencia
+
+    @classmethod
+    def leer(cls) -> "Interruptores":
+        def bandera(nombre: str, por_defecto: bool) -> bool:
+            valor = os.environ.get(nombre)
+            return por_defecto if valor is None else valor.lower() in ("1", "true", "si", "sí")
+
+        return cls(
+            modelo_barato=bandera("AGENTE_MODELO_BARATO", False),
+            herramientas_caras=bandera("AGENTE_HERRAMIENTAS_CARAS", True),
+            admitir_trafico=bandera("AGENTE_ADMITIR_TRAFICO", True),
+        )
+
+
+def plan_de_respuesta(interruptores: Interruptores) -> str:
+    if not interruptores.admitir_trafico:
+        return "503 con Retry-After: rechazamos rápido y explicamos por qué"
+    if interruptores.modelo_barato and not interruptores.herramientas_caras:
+        return "modelo pequeño, sin RAG: respuestas más pobres pero el servicio vive"
+    if interruptores.modelo_barato:
+        return "modelo pequeño, con herramientas: degradación suave"
+    return "servicio completo"
+
+
+print(f"{'situación':38s} plan")
+print("-" * 96)
+for etiqueta, interruptores in [
+    ("todo normal", Interruptores()),
+    ("el proveedor va lento", Interruptores(modelo_barato=True)),
+    ("cuota casi agotada", Interruptores(modelo_barato=True, herramientas_caras=False)),
+    ("incidente grave", Interruptores(admitir_trafico=False)),
+]:
+    print(f"{etiqueta:38s} {plan_de_respuesta(interruptores)}")
+
+print("\nleído del entorno ahora mismo:", Interruptores.leer())
+
+#%%md
+Tres reglas sobre los interruptores, que son las que hacen que sirvan cuando hace falta:
+
+1. **Se leen en cada petición**, no al arrancar. Un interruptor que exige reiniciar es un
+   despliegue con otro nombre.
+2. **Rechazar rápido es una respuesta válida.** Un `503` con `Retry-After` es
+   infinitamente mejor que una petición que tarda 90 s y acaba fallando: el cliente puede
+   reintentar con criterio y tú dejas de acumular trabajo que no vas a poder hacer.
+3. **Pruébalos.** Un interruptor que nunca se ha accionado no se sabe si funciona. Actívalo
+   en preproducción una vez al trimestre, o el día del incidente descubrirás que la
+   variable se llamaba de otra forma.
+
+#%%md
+## 6. El *runbook*, pero ejecutable
+
+Un *runbook* en prosa se lee la primera vez y se ignora las siguientes. Uno que se ejecuta
+responde en veinte segundos las preguntas que de verdad se hacen en un incidente.
+
+Todo lo que hay aquí viene del propio módulo 7: los hilos parados son del notebook 28, el
+crecimiento del 23, el contrato expuesto del 26.
+
+#%%py
+import json
+import operator
+import sqlite3
+from typing import Annotated
+
+from typing_extensions import TypedDict
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import interrupt
+
+
+def diagnostico(app, conexion) -> dict:
+    """Las seis preguntas de un incidente, respondidas con datos.
+
+    Se ejecuta contra la base de datos REAL y contra el grafo que está desplegado — no
+    contra el candidato (notebook 28, sección 4.1).
+    """
+    hilos = [t for (t,) in conexion.execute("SELECT DISTINCT thread_id FROM checkpoints")]
+    instantaneas = {t: app.get_state({"configurable": {"thread_id": t}}) for t in hilos}
+
+    parados = {t: s for t, s in instantaneas.items() if s.next}
+    esperando_humano = {t: s for t, s in parados.items() if s.interrupts}
+
+    por_nodo: dict[str, int] = {}
+    for s in parados.values():
+        for nodo in s.next:
+            por_nodo[nodo] = por_nodo.get(nodo, 0) + 1
+
+    filas, bytes_totales = conexion.execute(
+        "SELECT count(*), coalesce(sum(length(checkpoint)), 0) FROM checkpoints").fetchone()
+
+    return {
+        "1 · hilos totales": len(hilos),
+        "2 · hilos a medias": len(parados),
+        "3 · esperando a un humano": len(esperando_humano),
+        "4 · a medias SIN humano (los que hay que reanudar)":
+            len(parados) - len(esperando_humano),
+        "5 · dónde están parados": por_nodo,
+        "6 · peso del almacén": f"{filas} checkpoints, {bytes_totales / 1024:.1f} KB",
+    }
+
+
+# --- montamos un sistema con incidentes de mentira para probarlo ---
+class EstadoSoporte(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+    decision: str
+
+
+def clasificar(estado):
+    return {"pasos": ["clasificar"]}
+
+
+def aprobar(estado):
+    return {"decision": interrupt({"pregunta": "¿procedo?"}), "pasos": ["aprobar"]}
+
+
+def resolver(estado):
+    return {"pasos": ["resolver"]}
+
+
+bd = sqlite3.connect(":memory:", check_same_thread=False)
+sistema = (
+    StateGraph(EstadoSoporte)
+    .add_node("clasificar", clasificar)
+    .add_node("aprobar", aprobar)
+    .add_node("resolver", resolver)
+    .add_edge(START, "clasificar")
+    .add_edge("clasificar", "aprobar")
+    .add_edge("aprobar", "resolver")
+    .add_edge("resolver", END)
+    .compile(checkpointer=SqliteSaver(bd))
+)
+
+from langgraph.types import Command
+
+for i in range(7):
+    cfg = {"configurable": {"thread_id": f"t{i}"}}
+    sistema.invoke({"pasos": [], "decision": ""}, cfg)
+    if i < 3:                                   # tres se resuelven
+        sistema.invoke(Command(resume="sí"), cfg)
+
+print("DIAGNÓSTICO")
+print("=" * 60)
+for pregunta, respuesta in diagnostico(sistema, bd).items():
+    print(f"  {pregunta:52s} {respuesta}")
+
+#%%md
+Cuatro hilos esperando a un humano: eso es una bandeja, no un incidente. La fila que sí
+sería una alarma es la **4**: hilos a medias que **no** esperan a nadie. Eso significa
+ejecuciones cortadas —un despliegue sin drenaje (nb 28), un pod que murió, una desconexión
+(nb 24)— y nadie las va a retomar salvo que tengas un barredor.
+
+#%%py
+def reanudar_huerfanos(app, conexion, limite: int = 50) -> list[str]:
+    """Retoma los hilos a medias que NO esperan a un humano.
+
+    Es el barredor que convierte "trabajo pendiente" en "trabajo hecho". Dos precauciones:
+    va con un tope (un barredor sin límite en un incidente lo empeora) y NO toca los hilos
+    con interrupciones, que son decisiones de una persona.
+    """
+    reanudados = []
+    for (id_hilo,) in conexion.execute("SELECT DISTINCT thread_id FROM checkpoints"):
+        if len(reanudados) >= limite:
+            break
+        cfg = {"configurable": {"thread_id": id_hilo}}
+        instantanea = app.get_state(cfg)
+        if instantanea.next and not instantanea.interrupts:
+            app.invoke(None, cfg)
+            reanudados.append(id_hilo)
+    return reanudados
+
+
+# Creamos un huérfano de verdad: aprobado, pero cortado antes de `resolver`.
+cfg_huerfano = {"configurable": {"thread_id": "cortado"}}
+sistema.invoke({"pasos": [], "decision": ""}, cfg_huerfano)
+sistema.update_state(cfg_huerfano, {"decision": "sí", "pasos": ["aprobar"]}, as_node="aprobar")
+
+antes = diagnostico(sistema, bd)
+print("antes del barrido · a medias sin humano:",
+      antes["4 · a medias SIN humano (los que hay que reanudar)"])
+
+print("reanudados        :", reanudar_huerfanos(sistema, bd))
+
+despues = diagnostico(sistema, bd)
+print("después           · a medias sin humano:",
+      despues["4 · a medias SIN humano (los que hay que reanudar)"])
+print("estado del hilo   :", sistema.get_state(cfg_huerfano).values["pasos"])
+
+#%%md
+### 6.1 La tarjeta del incidente
+
+Con el diagnóstico resuelto, lo que queda cabe en media pantalla. Esto es lo que va pegado
+al panel, no en un documento de veinte páginas que nadie abre:
+
+| Síntoma | Primera comprobación | Causa más probable |
+|---|---|---|
+| Latencia alta, sin errores | ¿Sube `cache_read / input_tokens`? (nb 19) | Alguien metió algo variable en el prefijo del prompt |
+| 429 con pocas peticiones | Longitud media del prompt | Límite de **TPM**, no de RPM (sección 1) |
+| "A veces se pierde un mensaje" | ¿Hay cerrojo por `thread_id`? (nb 24) | Dos ejecuciones concurrentes en el mismo hilo |
+| La bandeja de aprobaciones se vació sola | ¿Hubo despliegue? ¿Cambió algún nodo de nombre? (nb 28) | Hilos abandonados por un renombrado |
+| `AttributeError` tras un reinicio | ¿El campo va dentro de un `Any`? (nb 22) | Serialización: el objeto volvió como `dict` |
+| La base de datos crece sin parar | `checkpoints` por hilo (nb 23) | Sin TTL ni poda, o estado con cargas útiles |
+| El coste se dispara sin más tráfico | `output_token_details["reasoning"]` (nb 19) | Tokens de razonamiento, que no se ven en la respuesta |
+| Todo va bien pero no se responde nada | Peticiones colgadas sin `request_timeout` | Huecos de concurrencia ocupados para siempre |
+
+Cada fila apunta a un notebook con la comprobación concreta. **Un runbook útil no explica el
+problema: dice qué mirar primero.**
+
+#%%md
+## 7. Ejercicios
+
+### 7.1 Diagnostica tres incidentes
+
+Para cada síntoma, di qué límite de la sección 1 es y qué arreglo aplicarías:
+
+1. *"Con 3 usuarios simultáneos empezamos a recibir 429. Los prompts llevan el manual entero
+   en el contexto."*
+2. *"Funciona bien hasta que un ticket dispara un `Send` a 50 documentos; entonces falla
+   todo el lote."*
+3. *"A las 18:00 de cada día empieza a fallar y a las 00:00 vuelve a funcionar."*
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+1. **TPM.** Tres usuarios no agotan un límite de peticiones; el manual entero en cada prompt
+   sí agota el de tokens. Bajar `requests_per_second` **no arregla nada**. Se ataca con el
+   notebook 19: sacar el manual del prompt y meterlo en un RAG, o resumirlo por bloques. La
+   caché de prefijo ayuda con el coste pero **no** con el límite de TPM: los tokens cacheados
+   siguen contando para el límite en la mayoría de proveedores.
+
+2. **Concurrencia.** Un `Send` a 50 documentos son 50 llamadas simultáneas. Se ataca con el
+   semáforo de la sección 4, dimensionado con la ley de Little. Y hay un segundo arreglo que
+   sale gratis: el notebook 15 demostró que si una rama del fan-out falla, **solo se
+   reejecuta esa rama** — así que un reintento aquí es barato.
+
+3. **Cuota diaria.** El patrón horario lo delata: se agota por la tarde y se renueva a
+   medianoche. No es un problema de ritmo sino de presupuesto. Se ataca con topes por
+   ejecución (nb 15), con una alerta al 80 % de la cuota, y con los interruptores de la
+   sección 5 para degradar a un modelo más barato **antes** de agotarla, no después.
+
+</details>
+
+### 7.2 Un semáforo que no bloquea el proceso entero
+
+El semáforo de la sección 4 limita **todas** las llamadas por igual. En un sistema real
+quieres que una consulta interactiva no espere detrás de un lote de 500 documentos.
+
+Implementa dos carriles con cuotas distintas y demuestra que el interactivo no se queda
+atrapado detrás del lote.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+async def dos_carriles():
+    """Dos semáforos independientes sobre el mismo proveedor: prioridad por reserva."""
+    proveedor = ProveedorConLimite(maximo=10)
+    interactivo = asyncio.Semaphore(4)      # reservado, siempre disponible
+    lote = asyncio.Semaphore(6)             # el trabajo masivo, acotado
+
+    latencias_interactivas = []
+
+    async def peticion(sem, registrar=False):
+        inicio = asyncio.get_running_loop().time()
+        async with sem:
+            try:
+                await proveedor.llamar()
+            except RuntimeError:
+                pass
+        if registrar:
+            latencias_interactivas.append(asyncio.get_running_loop().time() - inicio)
+
+    # 200 del lote y 10 interactivas, todas a la vez.
+    await asyncio.gather(
+        *(peticion(lote) for _ in range(200)),
+        *(peticion(interactivo, registrar=True) for _ in range(10)),
+    )
+    return proveedor, latencias_interactivas
+
+
+async def un_carril():
+    """El mismo trabajo con un solo semáforo compartido."""
+    proveedor = ProveedorConLimite(maximo=10)
+    compartido = asyncio.Semaphore(10)
+    latencias_interactivas = []
+
+    async def peticion(registrar=False):
+        inicio = asyncio.get_running_loop().time()
+        async with compartido:
+            try:
+                await proveedor.llamar()
+            except RuntimeError:
+                pass
+        if registrar:
+            latencias_interactivas.append(asyncio.get_running_loop().time() - inicio)
+
+    await asyncio.gather(*(peticion() for _ in range(200)),
+                         *(peticion(registrar=True) for _ in range(10)))
+    return proveedor, latencias_interactivas
+
+
+async def comparar_carriles():
+    p2, lat2 = await dos_carriles()
+    p1, lat1 = await un_carril()
+    print(f"{'reparto':22s} {'429':>6s} {'latencia interactiva p_max':>28s}")
+    print("-" * 60)
+    print(f"{'un solo carril':22s} {p1.rechazos:6d} {max(lat1):27.2f}s")
+    print(f"{'dos carriles (4 + 6)':22s} {p2.rechazos:6d} {max(lat2):27.2f}s")
+    print(f"\nmejora de la peor latencia interactiva: {max(lat1) / max(lat2):.1f}x")
+
+
+asyncio.run(comparar_carriles())
+
+#%%md
+El truco no es limitar más, es **reservar**. Con un solo carril, las 10 interactivas se
+ponen a la cola detrás de 200; con carriles separados, encuentran hueco siempre.
+
+Es el mismo principio que aplican los sistemas operativos con las colas de prioridad, y la
+razón por la que en producción conviene separar el tráfico interactivo del de lotes **antes**
+de que haga falta.
+
+</details>
+
+### 7.3 Prueba tu interruptor
+
+Coge la aplicación de `despliegue/` y añade un interruptor `AGENTE_ADMITIR_TRAFICO` que, en
+`false`, haga que `/salud` (notebook 26) devuelva 503. Comprueba que el balanceador te
+sacaría del servicio sin reiniciar el proceso.
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+En `mi_agente/rutas.py`, dentro de `salud_profunda`, basta con una comprobación más:
+
+```python
+comprobaciones["admitiendo_trafico"] = (
+    os.environ.get("AGENTE_ADMITIR_TRAFICO", "true").lower() not in ("0", "false", "no")
+)
+```
+
+Como la sonda de *readiness* ya apunta a `/salud`, poner la variable a `false` saca el pod
+del balanceador **sin matarlo**: las ejecuciones en vuelo terminan y no entran nuevas. Es
+exactamente el drenaje del notebook 28, accionado a mano.
+
+Y la comprobación que cierra el círculo: `livenessProbe` apunta a `/ok`, que **no** mira esta
+bandera. Si las dos sondas miraran lo mismo, activar el interruptor reiniciaría el pod en
+bucle — que es el fallo clásico de configurar las dos sondas con la misma URL.
+
+</details>
+
+## 8. Resumen
+
+- **"Me da 429" no es un diagnóstico.** RPM, TPM, concurrencia y cuota son cuatro límites
+  distintos con cuatro arreglos distintos. Un limitador de peticiones no te salva de un
+  límite de tokens.
+- `InMemoryRateLimiter` **arranca con el cubo vacío**: `max_bucket_size` gobierna la ráfaga
+  tras un reposo, no al arrancar. Un pod nuevo está limitado desde la primera petición.
+- Y no es distribuido, no cuenta tokens y no reintenta. Divide tu cuota entre las réplicas.
+- **`request_timeout` es el parámetro que más se olvida.** Sin él, una petición colgada ocupa
+  un hueco de concurrencia para siempre, sin mover ninguna métrica de error.
+- Sin *jitter*, 200 clientes que rebotan vuelven **los 200 a la vez**, en cuatro momentos
+  distintos. `with_retry` lo trae activado por defecto.
+- No se reintenta un 401, un 403 ni un "contexto demasiado largo". Ese último se **degrada**,
+  recortando antes de reintentar.
+- Un semáforo pasa de 32 rechazos a 0. Y ojo: **un panel de concurrencia bajo puede ser la
+  señal de que todo está fallando**, porque rechazar es instantáneo.
+- Dimensiona con la ley de Little: `concurrencia = throughput × latencia`. Con llamadas
+  lentas, más réplicas no suben el techo.
+- Los **interruptores se leen en cada petición**, y el que nunca se ha accionado no se sabe
+  si funciona.
+- El *runbook* que sirve **se ejecuta**: hilos a medias sin humano detrás es la fila que
+  importa, y el barredor que los reanuda va con tope.
+
+**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría de
+producción que junta todo el módulo en una lista que se ejecuta.

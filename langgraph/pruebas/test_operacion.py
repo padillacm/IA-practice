@@ -680,3 +680,180 @@ def test_update_state_as_node_rescata_un_hilo_abandonado():
                        as_node="aprobacion_humana")
     assert nueva.get_state(cfg).next == ("ejecutar",)
     assert "ejecutar" in nueva.invoke(None, cfg)["pasos"]
+
+
+# ======================================================================================
+# Notebook 29 · límites, colas e incidentes
+# ======================================================================================
+def test_el_limitador_arranca_con_el_cubo_vacio():
+    """`max_bucket_size` gobierna la ráfaga tras un reposo, no al arrancar.
+
+    Es lo contrario de lo que sugiere el nombre, y explica por qué un pod recién arrancado
+    está limitado desde la primera petición.
+    """
+    from langchain_core.rate_limiters import InMemoryRateLimiter
+
+    limitador = InMemoryRateLimiter(requests_per_second=20, check_every_n_seconds=0.005,
+                                    max_bucket_size=5)
+    assert limitador.available_tokens == 0.0
+
+    inicio = time.monotonic()
+    for _ in range(3):
+        limitador.acquire()
+    transcurrido = time.monotonic() - inicio
+
+    # Si el cubo arrancara lleno, las 3 saldrían instantáneas (< 0,01 s).
+    assert transcurrido > 0.10, "el cubo parece arrancar lleno; revisar el notebook 29"
+
+
+def test_el_limitador_permite_rafaga_tras_un_reposo():
+    from langchain_core.rate_limiters import InMemoryRateLimiter
+
+    limitador = InMemoryRateLimiter(requests_per_second=50, check_every_n_seconds=0.005,
+                                    max_bucket_size=5)
+    limitador.acquire()
+    time.sleep(0.3)                       # a 50 rps, de sobra para llenar el cubo
+
+    inicio = time.monotonic()
+    for _ in range(5):
+        limitador.acquire()
+    assert time.monotonic() - inicio < 0.05, "tras el reposo debería haber ráfaga"
+
+
+def test_el_limitador_se_comparte_entre_hilos_del_proceso():
+    """Es por proceso: protege de tu propio paralelismo, no del de tus réplicas."""
+    from langchain_core.rate_limiters import InMemoryRateLimiter
+
+    limitador = InMemoryRateLimiter(requests_per_second=20, check_every_n_seconds=0.005,
+                                    max_bucket_size=1)
+    inicio = time.monotonic()
+
+    def pedir():
+        for _ in range(3):
+            limitador.acquire()
+
+    hilos = [threading.Thread(target=pedir) for _ in range(3)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    # 9 peticiones a 20 rps ≈ 0,45 s. Si cada hilo tuviera su cubo, sería ~0,15 s.
+    assert time.monotonic() - inicio > 0.30
+
+
+def test_sin_jitter_los_reintentos_se_sincronizan():
+    """El rebaño atronador, fijado como prueba."""
+    import collections
+    import random
+
+    def simular(jitter: str) -> collections.Counter:
+        azar = random.Random(42)
+        franjas: collections.Counter = collections.Counter()
+        for _ in range(200):
+            instante = 0.0
+            for intento in range(4):
+                espera = 0.5 * (2 ** intento)
+                if jitter == "mitad":
+                    espera = espera / 2 + azar.uniform(0, espera / 2)
+                instante += espera
+                franjas[round(instante / 0.25)] += 1
+        return franjas
+
+    sin_jitter = simular("no")
+    con_jitter = simular("mitad")
+
+    assert max(sin_jitter.values()) == 200, "sin jitter deberían coincidir los 200"
+    assert len(sin_jitter) == 4, "sin jitter solo hay 4 momentos distintos"
+    assert max(con_jitter.values()) < 200 / 1.5, "el jitter debería repartir el pico"
+    assert len(con_jitter) > 4 * 3, "el jitter debería multiplicar los momentos distintos"
+
+
+def test_el_semaforo_evita_los_rechazos_por_concurrencia():
+    import asyncio
+
+    class Proveedor:
+        def __init__(self, maximo):
+            self.maximo, self.en_vuelo, self.rechazos = maximo, 0, 0
+
+        async def llamar(self):
+            self.en_vuelo += 1
+            try:
+                if self.en_vuelo > self.maximo:
+                    self.rechazos += 1
+                    raise RuntimeError("429")
+                await asyncio.sleep(0.01)
+            finally:
+                self.en_vuelo -= 1
+
+    async def correr(permitidas: int | None) -> int:
+        proveedor = Proveedor(maximo=8)
+        sem = asyncio.Semaphore(permitidas) if permitidas else None
+
+        async def una():
+            if sem is None:
+                try:
+                    await proveedor.llamar()
+                except RuntimeError:
+                    pass
+                return
+            async with sem:
+                try:
+                    await proveedor.llamar()
+                except RuntimeError:
+                    pass
+
+        await asyncio.gather(*(una() for _ in range(40)))
+        return proveedor.rechazos
+
+    assert asyncio.run(correr(None)) > 20, "sin semáforo deberían llover los 429"
+    assert asyncio.run(correr(8)) == 0, "con semáforo no debería haber ninguno"
+
+
+def test_el_barredor_no_toca_los_hilos_que_esperan_a_un_humano():
+    """La precaución que hace seguro al barredor del notebook 29."""
+    from langgraph.types import Command, interrupt
+    from typing_extensions import TypedDict as TD
+
+    class E(TD):
+        pasos: Annotated[list[str], operator.add]
+        decision: str
+
+    def clasificar(estado):
+        return {"pasos": ["clasificar"]}
+
+    def aprobar(estado):
+        return {"decision": interrupt({"p": "?"}), "pasos": ["aprobar"]}
+
+    def resolver(estado):
+        return {"pasos": ["resolver"]}
+
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    app = (StateGraph(E).add_node("clasificar", clasificar).add_node("aprobar", aprobar)
+           .add_node("resolver", resolver).add_edge(START, "clasificar")
+           .add_edge("clasificar", "aprobar").add_edge("aprobar", "resolver")
+           .add_edge("resolver", END).compile(checkpointer=SqliteSaver(con)))
+
+    # Uno esperando a un humano y otro cortado tras la aprobación.
+    esperando = {"configurable": {"thread_id": "espera"}}
+    app.invoke({"pasos": [], "decision": ""}, esperando)
+
+    cortado = {"configurable": {"thread_id": "cortado"}}
+    app.invoke({"pasos": [], "decision": ""}, cortado)
+    app.update_state(cortado, {"decision": "sí", "pasos": ["aprobar"]}, as_node="aprobar")
+
+    def barrer(limite=50):
+        reanudados = []
+        for (tid,) in con.execute("SELECT DISTINCT thread_id FROM checkpoints"):
+            if len(reanudados) >= limite:
+                break
+            cfg = {"configurable": {"thread_id": tid}}
+            snap = app.get_state(cfg)
+            if snap.next and not snap.interrupts:
+                app.invoke(None, cfg)
+                reanudados.append(tid)
+        return reanudados
+
+    assert barrer() == ["cortado"], "solo debería reanudar el huérfano"
+    assert app.get_state(esperando).next == ("aprobar",), "el que espera no se toca"
+    assert "resolver" in app.get_state(cortado).values["pasos"]

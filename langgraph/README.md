@@ -1,6 +1,6 @@
 # Curso de LangGraph — de cero al p99
 
-Un curso completo de **LangGraph en español**, en 36 notebooks interactivos, construido y
+Un curso completo de **LangGraph en español**, en 37 notebooks interactivos, construido y
 verificado contra **LangGraph 1.2** y **LangChain 1.3**.
 
 No es una traducción de la documentación. Cada afirmación técnica del material se comprobó
@@ -14,13 +14,13 @@ persistencia, concurrencia por `thread_id` y control de acceso.
 
 | | |
 |---|---|
-| **Notebooks** | 36 (29 de contenido + 7 de proyecto) |
+| **Notebooks** | 37 (30 de contenido + 7 de proyecto) |
 | **Módulos** | 8 |
-| **Celdas** | 1290 (731 de teoría, 559 de código ejecutable) |
+| **Celdas** | 1324 (752 de teoría, 572 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
-| **Pruebas** | 71 pruebas automáticas que corren en 2,3 s sin llamar a ningún modelo |
-| **Dedicación estimada** | 52-59 horas |
+| **Pruebas** | 77 pruebas automáticas que corren en 7 s sin llamar a ningún modelo |
+| **Dedicación estimada** | 54-61 horas |
 | **Coste en API** | unos 2 € en total con `gpt-4o-mini` |
 
 ---
@@ -154,6 +154,7 @@ sale de contrastar el resto del curso con los problemas que la gente reporta en 
 | [`26_exponer_el_agente`](07_operacion/26_exponer_el_agente.ipynb) | El agente como servicio para otros agentes: endpoint `/mcp`, protocolo A2A, rutas HTTP propias y el diseño del contrato que ve el otro modelo |
 | [`27_evaluar_trayectorias`](07_operacion/27_evaluar_trayectorias.ipynb) | Evaluar **cómo** llegó el agente a la respuesta: los cuatro modos de coincidencia de `agentevals`, la trampa de los argumentos en lenguaje natural, trayectorias de grafo con interrupciones y los límites del juez LLM |
 | [`28_ciclo_de_vida_del_despliegue`](07_operacion/28_ciclo_de_vida_del_despliegue.ipynb) | La **segunda** vez que despliegas: migración del esquema sobre hilos vivos, los hilos que un renombrado abandona en silencio, la comprobación previa, el apagado ordenado medido, el contenedor real y la CI |
+| [`29_limites_colas_e_incidentes`](07_operacion/29_limites_colas_e_incidentes.ipynb) | Los cuatro límites del proveedor y cuál te muerde, `InMemoryRateLimiter` medido, el rebaño atronador, *backpressure* con semáforo, interruptores para degradar sin desplegar y un *runbook* que se ejecuta |
 | **[`P7 · Auditoría de producción`](07_operacion/P7_proyecto_endurecer.ipynb)** | Un auditor que aplica los cuatro detectores a una aplicación heredada y a su versión endurecida |
 
 ---
@@ -201,7 +202,7 @@ ejemplos/                  servidores MCP de demostración (notebook 20)
 utils/curso.py             arranque, fábrica de modelos, visualización, impresión legible
 utils/datos.py             carga de los conjuntos de datos
 utils/rag.py               troceado, BM25 y fusión de rangos (del notebook 14)
-pruebas/                   71 pruebas automáticas, sin llamadas a modelos
+pruebas/                   77 pruebas automáticas, sin llamadas a modelos
 despliegue/                aplicación desplegable que genera el notebook 18, con su
                            versión endurecida (auth.py + langgraph.produccion.json)
 ```
@@ -236,7 +237,7 @@ Cada notebook pasó por siete filtros antes de darse por bueno:
    detecta, y el material lo documenta precisamente por eso.
 5. **Todo lo anterior se repitió en dos entornos vírgenes**, uno creado con `uv sync` desde
    el lock y otro con `pip install -r requirements.txt`, para garantizar que las dos vías de
-   instalación dan lo mismo: 35/35 notebooks y 66/66 pruebas en ambos, con versiones idénticas.
+   instalación dan lo mismo: 37/37 notebooks y 77/77 pruebas en ambos, con versiones idénticas.
 6. **La capa de autenticación se ejercitó por HTTP.** `despliegue/langgraph.produccion.json`
    se arrancó con `langgraph dev` y se comprobaron los 401 sin token, los 403 por falta de
    permiso, los 200 con el `owner` escrito en los metadatos, el aislamiento entre usuarios y
@@ -293,6 +294,8 @@ suele darse por supuesto:
 | **Renombrar un nodo abandona en silencio los hilos parados en él**: no hay excepción, la aprobación se pierde y el hilo queda marcado como terminado | 28 |
 | Tras ese despliegue, los hilos abandonados **desaparecen de la bandeja de pendientes**: con el grafo nuevo tienen `next` vacío y cero interrupciones | 28 |
 | Quitar un campo del esquema lo hace **invisible** en `values`, aunque siga escrito en el checkpoint. Un `revert` lo resucita con el valor viejo | 28 |
+| `InMemoryRateLimiter` **arranca con el cubo vacío**: `max_bucket_size` gobierna la ráfaga tras un reposo, no al arrancar | 29 |
+| Un panel de concurrencia **bajo** puede ser la señal de que todo está fallando: rechazar es instantáneo, así que las llamadas fallidas no figuran como "en vuelo" | 29 |
 
 ---
 

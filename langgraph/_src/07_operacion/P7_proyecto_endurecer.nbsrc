@@ -24,10 +24,10 @@ volver a usar.
 | 4 | La configuración de despliegue y las reglas de acceso | 25 |
 | 5 | El informe, y el mismo informe sobre la versión arreglada | — |
 
-> **Tres detectores más, para cuando los tengas montados:** los notebooks 26, 27 y 28
-> aportan comprobaciones que encajan aquí — el contrato que expones (`input_schema`,
-> `description`), las invariantes de trayectoria y la revisión previa al despliegue. Están
-> como retos al final.
+> **Cuatro detectores más, para cuando los tengas montados:** los notebooks 26 a 29 aportan
+> comprobaciones que encajan aquí — el contrato que expones (`input_schema`, `description`),
+> las invariantes de trayectoria, la revisión previa al despliegue y el diagnóstico de
+> incidentes. Están como retos al final.
 
 #%%py
 import sys, pathlib
@@ -587,7 +587,11 @@ print(f"\n{'concurrencia':30s} {'pierde escrituras':>14s} {'correcta':>14s}")
    comprobación de esta lista que **no** puede vivir en la CI de un *pull request*, porque
    necesita leer la base de datos real — y por eso es la que se olvida.
 
-8. **Aplícalo al capstone.** Pasa los detectores al sistema que construiste en `P6`. Es la
+8. **Incorpora el diagnóstico del notebook 29** como quinta fase. Sus seis preguntas se
+   responden con la misma conexión que ya usa el auditor, y la fila que importa —hilos a
+   medias que no esperan a ningún humano— no la produce ninguna otra comprobación.
+
+9. **Aplícalo al capstone.** Pasa los detectores al sistema que construiste en `P6`. Es la
    mejor forma de comprobar si el módulo se te ha quedado.
 
 ## Lo que te llevas
