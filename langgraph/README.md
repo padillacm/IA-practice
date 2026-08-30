@@ -1,6 +1,6 @@
 # Curso de LangGraph — de cero al p99
 
-Un curso completo de **LangGraph en español**, en 27 notebooks interactivos, construido y
+Un curso completo de **LangGraph en español**, en 28 notebooks interactivos, construido y
 verificado contra **LangGraph 1.2** y **LangChain 1.3**.
 
 No es una traducción de la documentación. Cada afirmación técnica del material se comprobó
@@ -9,14 +9,14 @@ ejecutándola, y varias de las que "todo el mundo sabe" resultaron ser falsas en
 
 | | |
 |---|---|
-| **Notebooks** | 27 (21 de contenido + 6 de proyecto) |
+| **Notebooks** | 28 (22 de contenido + 6 de proyecto) |
 | **Módulos** | 7 |
-| **Celdas** | 964 (539 de teoría, 425 de código ejecutable) |
+| **Celdas** | 1000 (557 de teoría, 443 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
 | **Pruebas** | 25 pruebas automáticas que corren en 0,3 s sin llamar a ningún modelo |
-| **Dedicación estimada** | 37-42 horas |
-| **Coste en API** | unos 1,50 € en total con `gpt-4o-mini` |
+| **Dedicación estimada** | 39-45 horas |
+| **Coste en API** | unos 2 € en total con `gpt-4o-mini` |
 
 ---
 
@@ -100,6 +100,7 @@ es opcional pero muy recomendable — depurar un grafo sin trazas es adivinar.
 | [`18_despliegue`](06_produccion/18_despliegue.ipynb) | `langgraph.json`, servidor local, assistants y las tres opciones de despliegue |
 | [`19_patrones_p99`](06_produccion/19_patrones_p99.ipynb) | Ingeniería de contexto, escalado de herramientas, seguridad e inyección indirecta |
 | [`20_mcp_e_integracion`](06_produccion/20_mcp_e_integracion.ipynb) | MCP: servidores propios, seguridad frente a servidores de terceros, límites de ritmo y `as_tool` |
+| [`21_agentes_horizonte_largo`](06_produccion/21_agentes_horizonte_largo.ipynb) | Los cinco pilares de los agentes que trabajan durante horas: plan, memoria externa, divulgación progresiva, subagentes y compactación |
 | **[`P6 · Capstone`](06_produccion/P6_capstone.ipynb)** | El sistema completo: triaje, RAG, aprobación, memoria, seguridad y evaluación |
 
 ---
@@ -190,6 +191,7 @@ suele darse por supuesto:
 | Los **timeouts por nodo solo funcionan en nodos `async`**; con uno síncrono, `compile()` falla | 15 |
 | Las herramientas MCP son **asíncronas** y devuelven **bloques de contenido**, no cadenas | 20 |
 | La **descripción** de una herramienta MCP de terceros **es prompt**: puede llevar instrucciones para tu agente | 20 |
+| Reutilizar el mismo objeto `AIMessage` en un guion de pruebas hace que `add_messages` lo **sustituya** en vez de añadirlo | 21 |
 
 ---
 

@@ -1,0 +1,858 @@
+#%%md
+# 21 · Agentes de horizonte largo
+
+**Módulo 6 · Producción** — *tiempo estimado: 1 h 45 min*
+
+Todo lo que has construido hasta aquí resuelve tareas de entre 1 y 10 vueltas. Los agentes que
+de verdad impresionan —los que investigan durante media hora, escriben y depuran código, o
+redactan un informe a partir de cuarenta fuentes— trabajan en **horizontes largos**: decenas o
+cientos de pasos.
+
+Y ahí, un agente normal **se degrada de forma predecible**:
+
+| A las... | Qué pasa |
+|---|---|
+| ~10 vueltas | Empieza a repetir consultas que ya hizo |
+| ~20 vueltas | El contexto está lleno de observaciones antiguas y pierde el objetivo |
+| ~30 vueltas | Ha olvidado la mitad de lo que descubrió y "concluye" con lo que tiene a mano |
+| ~50 vueltas | Revienta la ventana, o el presupuesto |
+
+Este notebook cubre los **cinco pilares** que resuelven eso. Son la arquitectura que hay
+debajo de los agentes de programación y de investigación profunda que ya conoces, y todos se
+construyen con primitivas que ya has visto.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+info = init(proyecto="curso-langgraph-m6")
+RAIZ = info["raiz"]
+
+#%%md
+## 1. Los cinco pilares
+
+| Pilar | Qué problema resuelve | Con qué se construye |
+|---|---|---|
+| **1. Plan explícito** | El agente pierde el objetivo entre las vueltas | `TodoListMiddleware` |
+| **2. Memoria de trabajo externa** | El contexto no da para todo lo descubierto | Ficheros o `Store` |
+| **3. Divulgación progresiva** | Las instrucciones de dominio inflan el prompt | Instrucciones cargadas bajo demanda |
+| **4. Subagentes aislados** | Una subtarea larga contamina el hilo principal | Agentes como herramienta |
+| **5. Compactación** | El historial crece sin límite | `SummarizationMiddleware` |
+
+Una idea común los une, y es la que conviene retener:
+
+> **El contexto es memoria a corto plazo, y es cara. Todo lo que no se necesite *ahora mismo*
+> debe vivir fuera de él, con una forma barata de recuperarlo.**
+
+Es exactamente cómo trabaja una persona: no memorizas el informe entero, lo escribes y lo
+consultas.
+
+#%%md
+## 2. Pilar 1 · El plan explícito
+
+Un agente sin plan re-decide qué hacer en cada vuelta, a partir de un contexto que va cambiando.
+Con un plan **en el estado**, el objetivo sobrevive a la compactación y a los cambios de rumbo.
+
+`TodoListMiddleware` da al agente una herramienta `write_todos` y una clave `todos` en el estado.
+
+#%%py
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelCallLimitMiddleware, TodoListMiddleware
+from langchain.messages import HumanMessage
+from langchain.tools import tool
+
+from utils.datos import tickets
+
+df = tickets()
+
+
+@tool(parse_docstring=True)
+def analizar_categoria(categoria: str) -> str:
+    """Analiza una categoría de tickets: volumen, reparto de prioridad y tiempos.
+
+    Args:
+        categoria: la categoría a analizar.
+    """
+    sel = df[df.categoria == categoria]
+    if sel.empty:
+        return f"No hay tickets de '{categoria}'. Válidas: {', '.join(sorted(df.categoria.unique()))}."
+    return (f"{categoria}: {len(sel)} tickets, prioridades {sel.prioridad.value_counts().to_dict()}, "
+            f"mediana de respuesta {sel.minutos_primera_respuesta.median():.0f} min.")
+
+
+planificador = create_agent(
+    model=llm(),
+    tools=[analizar_categoria],
+    system_prompt="Eres un analista de soporte. Para tareas de varios pasos, planifica primero "
+                  "con write_todos y ve marcando lo completado. Responde en español.",
+    middleware=[TodoListMiddleware(), ModelCallLimitMiddleware(run_limit=12, exit_behavior="end")],
+)
+
+salida = planificador.invoke(
+    {"messages": [HumanMessage(
+        "Analiza las categorías rendimiento, integraciones y facturacion, y dime cuál "
+        "necesita más atención del equipo."
+    )]},
+    {"recursion_limit": 30},
+)
+
+print("plan que se construyó el agente:")
+for t in salida.get("todos", []):
+    print(f"  [{t.get('status', '?'):<11}] {t.get('content', '')}")
+print(f"\n{salida['messages'][-1].text}")
+
+#%%md
+Ese `todos` en el estado hace tres cosas que no son obvias:
+
+1. **Sobrevive a la compactación.** Aunque el resumen se lleve por delante la conversación, el
+   plan sigue ahí.
+2. **Es inspeccionable desde fuera.** Una interfaz puede mostrar el progreso real, no una
+   ruedecita.
+3. **Es un punto de control.** Puedes cortar si el plan crece demasiado, o pedir aprobación
+   humana antes de ejecutarlo (notebook 10).
+
+> **Cuándo NO usarlo:** para tareas de dos o tres pasos, planificar cuesta una llamada y no
+> aporta nada. El propio prompt del middleware se lo dice al modelo; aun así, si tus tareas son
+> siempre cortas, quítalo.
+
+#%%md
+## 3. Pilar 2 · Memoria de trabajo fuera del contexto
+
+Este es el pilar que más cambia las cosas. En vez de acumular hallazgos en el historial, el
+agente los **escribe** y luego los **lee**.
+
+La diferencia práctica: un informe de 40 fuentes ocupa 60.000 tokens si va en el contexto, y
+200 tokens si va en ficheros y el agente solo lee el que necesita.
+
+#%%py
+import tempfile
+
+from langchain.tools import ToolRuntime
+
+
+class EspacioTrabajo:
+    """Un directorio de trabajo acotado. Toda ruta se resuelve DENTRO de él.
+
+    La comprobación de contención no es paranoia: sin ella, un `../../etc/passwd` generado
+    por el modelo sale del espacio de trabajo.
+    """
+
+    def __init__(self, raiz: pathlib.Path | None = None):
+        self.raiz = pathlib.Path(raiz or tempfile.mkdtemp(prefix="agente_"))
+        self.raiz.mkdir(parents=True, exist_ok=True)
+
+    def resolver(self, nombre: str) -> pathlib.Path:
+        destino = (self.raiz / nombre).resolve()
+        if not destino.is_relative_to(self.raiz.resolve()):
+            raise ValueError(f"ruta fuera del espacio de trabajo: {nombre!r}")
+        return destino
+
+
+ESPACIO = EspacioTrabajo()
+print("espacio de trabajo:", ESPACIO.raiz)
+
+
+@tool(parse_docstring=True)
+def escribir_nota(nombre: str, contenido: str) -> str:
+    """Guarda un hallazgo en un fichero del espacio de trabajo, para consultarlo después.
+
+    Úsala en cuanto averigües algo que vayas a necesitar más adelante, en vez de intentar
+    recordarlo. Sobrescribe si el fichero ya existe.
+
+    Args:
+        nombre: nombre del fichero, con extensión .md. Sin barras ni rutas.
+        contenido: el texto a guardar.
+    """
+    if "/" in nombre or "\\" in nombre:
+        return "Error: 'nombre' debe ser un fichero suelto, sin rutas. Ejemplo: 'rendimiento.md'."
+    destino = ESPACIO.resolver(nombre)
+    destino.write_text(contenido, encoding="utf-8")
+    return f"guardado {nombre} ({len(contenido)} caracteres)"
+
+
+@tool(parse_docstring=True)
+def leer_nota(nombre: str) -> str:
+    """Lee un fichero que guardaste antes con escribir_nota.
+
+    Args:
+        nombre: el nombre exacto del fichero.
+    """
+    destino = ESPACIO.resolver(nombre)
+    if not destino.exists():
+        existentes = [p.name for p in ESPACIO.raiz.iterdir()]
+        return f"No existe '{nombre}'. Ficheros disponibles: {existentes or 'ninguno'}."
+    return destino.read_text(encoding="utf-8")
+
+
+@tool
+def listar_notas() -> str:
+    """Lista los ficheros del espacio de trabajo con su tamaño."""
+    ficheros = sorted(ESPACIO.raiz.iterdir())
+    if not ficheros:
+        return "El espacio de trabajo está vacío."
+    return "\n".join(f"- {p.name} ({p.stat().st_size} bytes)" for p in ficheros)
+
+
+HERRAMIENTAS_FICHEROS = [escribir_nota, leer_nota, listar_notas]
+print("herramientas de espacio de trabajo:", [h.name for h in HERRAMIENTAS_FICHEROS])
+
+#%%py
+investigador = create_agent(
+    model=llm(),
+    tools=[analizar_categoria, *HERRAMIENTAS_FICHEROS],
+    system_prompt=(
+        "Eres un analista de soporte que trabaja en tareas largas.\n"
+        "MÉTODO OBLIGATORIO:\n"
+        "1. Planifica con write_todos antes de empezar.\n"
+        "2. Cada vez que analices algo, GUARDA el hallazgo con escribir_nota en un fichero "
+        "   por tema. No lo acumules en tu respuesta.\n"
+        "3. Para redactar la conclusión, LEE tus notas con leer_nota.\n"
+        "Responde en español, y al final resume en 4 frases."
+    ),
+    middleware=[TodoListMiddleware(), ModelCallLimitMiddleware(run_limit=20, exit_behavior="end")],
+)
+
+salida = investigador.invoke(
+    {"messages": [HumanMessage(
+        "Investiga las categorías rendimiento, integraciones, facturacion y acceso_cuenta. "
+        "Guarda una nota por categoría y luego redacta la conclusión leyendo tus notas."
+    )]},
+    {"recursion_limit": 45},
+)
+
+print("ficheros que dejó el agente:")
+for p in sorted(ESPACIO.raiz.iterdir()):
+    print(f"  {p.name:<28} {p.stat().st_size:>5} bytes")
+print(f"\n{salida['messages'][-1].text}")
+
+#%%py
+from langchain_core.messages.utils import count_tokens_approximately
+
+tokens_contexto = count_tokens_approximately(salida["messages"])
+tokens_ficheros = sum(len(p.read_text(encoding="utf-8")) for p in ESPACIO.raiz.iterdir()) // 4
+
+print(f"  tokens en el contexto final : {tokens_contexto:,}")
+print(f"  tokens guardados en ficheros: {tokens_ficheros:,}")
+print(f"\n  Esos {tokens_ficheros:,} tokens están disponibles pero NO se pagan en cada llamada.")
+print("  Con 40 fuentes en vez de 4, esa diferencia es la que decide si el agente termina.")
+
+#%%md
+## 4. Pilar 3 · Divulgación progresiva (*skills*)
+
+Un agente experto necesita saber muchas cosas: cómo se escalan los tickets, qué dice el
+contrato de cada plan, cómo se redacta una respuesta de incidente. Meterlo todo en el prompt de
+sistema tiene dos problemas: ocupa contexto **siempre**, y el modelo lo ignora a la mitad.
+
+La alternativa es la **divulgación progresiva**: un índice corto siempre presente, y el
+contenido completo **bajo demanda**.
+
+#%%py
+HABILIDADES = {
+    "escalado": {
+        "resumen": "Cómo y cuándo escalar un ticket a la guardia de ingeniería.",
+        "contenido": (
+            "# Procedimiento de escalado\n\n"
+            "1. Solo se escala a guardia si el servicio está caído para el cliente O hay riesgo "
+            "de seguridad. Un ticket 'urgente' según el cliente no basta.\n"
+            "2. Antes de escalar, comprobar el panel de estado: si ya hay un incidente abierto, "
+            "se adjunta el ticket al incidente en vez de escalar de nuevo.\n"
+            "3. El escalado incluye siempre: identificador del ticket, plan del cliente, número "
+            "de usuarios afectados y qué se ha probado ya.\n"
+            "4. Los clientes de plan free no generan avisos de guardia; van a la cola normal."
+        ),
+    },
+    "redaccion": {
+        "resumen": "Reglas de estilo para responder a clientes.",
+        "contenido": (
+            "# Estilo de respuesta al cliente\n\n"
+            "1. Nunca prometer plazos concretos de resolución ni reembolsos.\n"
+            "2. Empezar reconociendo el problema en una frase; nada de disculpas largas.\n"
+            "3. Decir qué se ha hecho y qué se hará, en ese orden.\n"
+            "4. Si no hay solución todavía, dar el plazo del SLA del plan y nada más.\n"
+            "5. Máximo cuatro frases."
+        ),
+    },
+    "sla": {
+        "resumen": "Los compromisos de tiempo de respuesta por plan.",
+        "contenido": (
+            "# SLA por plan\n\n"
+            "| plan | primera respuesta | resolución objetivo |\n"
+            "|---|---|---|\n"
+            "| free | 48 h | sin compromiso |\n"
+            "| pro | 8 h | 5 días |\n"
+            "| business | 4 h | 2 días |\n"
+            "| enterprise | 1 h | 8 h |\n\n"
+            "El SLA de primera respuesta se mide desde la creación del ticket, no desde su lectura."
+        ),
+    },
+}
+
+INDICE = "\n".join(f"- {nombre}: {h['resumen']}" for nombre, h in HABILIDADES.items())
+
+
+@tool(parse_docstring=True)
+def cargar_habilidad(nombre: str) -> str:
+    """Carga las instrucciones completas de un procedimiento interno.
+
+    Úsala en cuanto la tarea toque uno de los temas del índice. No adivines el procedimiento:
+    cárgalo.
+
+    Args:
+        nombre: el nombre exacto del procedimiento, tal como aparece en el índice.
+    """
+    habilidad = HABILIDADES.get(nombre)
+    if habilidad is None:
+        return f"No existe '{nombre}'. Disponibles: {', '.join(HABILIDADES)}."
+    return habilidad["contenido"]
+
+
+print(f"índice (siempre en el prompt, {len(INDICE)} caracteres):")
+print(INDICE)
+completo = sum(len(h["contenido"]) for h in HABILIDADES.values())
+print(f"\ncontenido completo: {completo} caracteres ({completo / len(INDICE):.0f}x el índice)")
+print("Con 30 procedimientos en vez de 3, esa proporción decide si el prompt cabe.")
+
+#%%py
+agente_experto = create_agent(
+    model=llm(),
+    tools=[cargar_habilidad, analizar_categoria],
+    system_prompt=(
+        "Eres un agente de soporte técnico senior.\n\n"
+        "Tienes procedimientos internos disponibles bajo demanda. Este es el índice:\n"
+        f"{INDICE}\n\n"
+        "REGLA: si la tarea toca uno de esos temas, CARGA el procedimiento con "
+        "cargar_habilidad antes de responder. No improvises el procedimiento.\n"
+        "Responde en español."
+    ),
+    middleware=[ModelCallLimitMiddleware(run_limit=8, exit_behavior="end")],
+)
+
+salida = agente_experto.invoke(
+    {"messages": [HumanMessage(
+        "Un cliente de plan free dice que el servicio está caído y pide que lo escalemos ya. "
+        "¿Qué hago y qué le respondo?"
+    )]},
+    {"recursion_limit": 20},
+)
+
+cargadas = [tc["args"]["nombre"] for m in salida["messages"]
+            for tc in (getattr(m, "tool_calls", None) or []) if tc["name"] == "cargar_habilidad"]
+print(f"procedimientos que cargó: {cargadas}\n")
+print(salida["messages"][-1].text)
+
+#%%md
+Fíjate en lo que ha pasado si el ejemplo ha ido bien: el agente cargó `escalado`, leyó que
+**los clientes free no generan avisos de guardia**, y respondió en consecuencia. Esa regla no
+estaba en su prompt; la fue a buscar.
+
+Y lo importante para el horizonte largo: **el prompt de sistema no crece con el número de
+procedimientos**. Puedes tener trescientos.
+
+#%%md
+## 5. Pilar 4 · Subagentes con contexto aislado
+
+Una subtarea larga —investigar diez fuentes, iterar sobre un gráfico— genera decenas de
+mensajes que **el hilo principal no necesita**. Sí necesita la conclusión.
+
+Un subagente como herramienta hace exactamente eso: trabaja en su propio contexto y devuelve
+un resumen. Es el "aislar" de la ingeniería de contexto (notebook 19), llevado al extremo.
+
+#%%py
+def crear_subagente_investigador():
+    """Un agente completo, con su propio contexto, envuelto como herramienta."""
+    interno = create_agent(
+        model=llm(),
+        tools=[analizar_categoria],
+        system_prompt="Eres un investigador especializado. Analizas a fondo lo que te pidan "
+                      "usando tus herramientas y devuelves SOLO las conclusiones, en 3 frases "
+                      "con cifras exactas. En español.",
+        middleware=[ModelCallLimitMiddleware(run_limit=8, exit_behavior="end")],
+    )
+
+    @tool(parse_docstring=True)
+    def investigar_a_fondo(tema: str) -> str:
+        """Delega una investigación completa a un especialista y devuelve sus conclusiones.
+
+        El especialista trabaja por su cuenta: consulta lo que necesite y te devuelve solo el
+        resultado. Úsala para subtareas que requieran varios pasos.
+
+        Args:
+            tema: qué investigar, con el detalle suficiente para que trabaje solo.
+        """
+        resultado = interno.invoke({"messages": [HumanMessage(tema)]}, {"recursion_limit": 20})
+        # Solo la conclusión sale del subagente. Sus 15 mensajes internos se quedan dentro.
+        return resultado["messages"][-1].text
+
+    return investigar_a_fondo
+
+
+investigar_a_fondo = crear_subagente_investigador()
+
+coordinador = create_agent(
+    model=llm(),
+    tools=[investigar_a_fondo],
+    system_prompt="Eres un coordinador. Delegas las investigaciones y sintetizas los "
+                  "resultados. Responde en español, en 4 frases.",
+    middleware=[TodoListMiddleware(), ModelCallLimitMiddleware(run_limit=10, exit_behavior="end")],
+)
+
+salida = coordinador.invoke(
+    {"messages": [HumanMessage("Compara a fondo las categorías rendimiento e integraciones "
+                               "y dime dónde poner el foco.")]},
+    {"recursion_limit": 30},
+)
+
+print(f"mensajes en el hilo del COORDINADOR: {len(salida['messages'])}")
+print("(cada investigación generó muchos más dentro del subagente, y no llegaron aquí)\n")
+print(salida["messages"][-1].text)
+
+#%%md
+> **El compromiso del subagente**, que conviene tener claro: aísla el contexto, y por eso
+> mismo **pierde información**. El coordinador no ve las observaciones intermedias, así que no
+> puede detectar que el subagente se equivocó a mitad de camino.
+>
+> La regla: delega **subtareas con un resultado bien definido**. Si necesitas supervisar el
+> proceso y no solo el resultado, no es un subagente, es un subgrafo (notebook 12), donde el
+> estado sí es compartido.
+
+#%%md
+## 6. Pilar 5 · Compactación automática
+
+El quinto pilar ya lo conoces del notebook 07: `SummarizationMiddleware` resume el historial
+cuando pasa un umbral. En un horizonte largo deja de ser una optimización y pasa a ser
+**obligatorio**: sin él, la ejecución termina cuando revienta la ventana.
+
+La clave es combinarlo con los pilares anteriores, y el orden importa.
+
+#%%py
+from langchain.agents.middleware import SummarizationMiddleware
+
+agente_profundo = create_agent(
+    model=llm(),
+    tools=[analizar_categoria, cargar_habilidad, investigar_a_fondo, *HERRAMIENTAS_FICHEROS],
+    system_prompt=(
+        "Eres un analista senior que trabaja en investigaciones largas.\n\n"
+        f"Procedimientos disponibles bajo demanda:\n{INDICE}\n\n"
+        "MÉTODO:\n"
+        "1. Planifica con write_todos.\n"
+        "2. Carga los procedimientos que apliquen antes de decidir nada.\n"
+        "3. Delega las investigaciones profundas con investigar_a_fondo.\n"
+        "4. Guarda cada hallazgo con escribir_nota; no lo acumules en la conversación.\n"
+        "5. Redacta la conclusión leyendo tus notas.\n"
+        "En español."
+    ),
+    middleware=[
+        # El orden es el de la composición: primero = más externo (notebook 07).
+        TodoListMiddleware(),                                   # el plan, siempre visible
+        SummarizationMiddleware(model=llm(), trigger=("tokens", 6000), keep=("messages", 12)),
+        ModelCallLimitMiddleware(run_limit=25, exit_behavior="end"),
+    ],
+)
+
+mostrar_grafo(agente_profundo)
+
+#%%py
+import time
+
+t0 = time.perf_counter()
+salida = agente_profundo.invoke(
+    {"messages": [HumanMessage(
+        "Investiga a fondo las cuatro categorías con más volumen de tickets, guarda una nota "
+        "por cada una, y redacta un informe de tres párrafos: situación, riesgos y "
+        "recomendación. Aplica los procedimientos internos que correspondan."
+    )]},
+    {"recursion_limit": 60},
+)
+segundos = time.perf_counter() - t0
+
+print(f"({segundos:.0f} s, {len(salida['messages'])} mensajes en el contexto final)\n")
+print("plan:")
+for t in salida.get("todos", []):
+    print(f"  [{t.get('status', '?'):<11}] {t.get('content', '')[:70]}")
+print("\nnotas en el espacio de trabajo:")
+for p in sorted(ESPACIO.raiz.iterdir()):
+    print(f"  {p.name} ({p.stat().st_size} bytes)")
+print(f"\n{salida['messages'][-1].text}")
+
+#%%md
+## 7. Ejecutar comandos: el pilar que exige aislamiento
+
+Los agentes de programación necesitan **ejecutar** cosas. LangChain trae
+`ShellToolMiddleware`, con políticas de ejecución que imponen límites de recursos.
+
+Antes del código, la regla, porque no admite matices:
+
+> **Un agente que ejecuta comandos debe hacerlo en un entorno aislado y desechable.** No en el
+> proceso de tu servidor, no en la máquina del desarrollador, no con las credenciales de
+> producción en el entorno. Un contenedor efímero, sin red salvo lo necesario y sin acceso a
+> secretos.
+>
+> `HostExecutionPolicy` ejecuta **en tu máquina**: sirve para desarrollar en un entorno de
+> usar y tirar. Para cualquier otra cosa, `DockerExecutionPolicy` o un sandbox gestionado.
+
+#%%py
+from langchain.agents.middleware import HostExecutionPolicy, ShellToolMiddleware
+
+TRABAJO = pathlib.Path(tempfile.mkdtemp(prefix="sandbox_"))
+(TRABAJO / "ventas.csv").write_text(
+    "producto,unidades,precio\nteclado,12,45.5\nraton,30,12.0\nmonitor,5,220.0\n", encoding="utf-8")
+
+shell = ShellToolMiddleware(
+    workspace_root=str(TRABAJO),
+    execution_policy=HostExecutionPolicy(
+        command_timeout=10,          # ningún comando dura más de 10 s
+        max_output_lines=40,         # la salida no inunda el contexto
+        cpu_time_seconds=10,         # tope de CPU
+        memory_bytes=256 * 1024**2,  # tope de memoria
+    ),
+)
+
+print("espacio de trabajo:", TRABAJO)
+print("herramienta que aporta:", [t.name for t in shell.tools])
+print("\nlímites impuestos por la política: 10 s de reloj, 10 s de CPU, 256 MB, 40 líneas de salida")
+print("\nEsos límites NO son opcionales: un agente puede escribir un bucle infinito")
+print("sin ninguna mala intención, simplemente porque se equivocó.")
+
+#%%py
+agente_shell = create_agent(
+    model=llm(),
+    tools=[],
+    system_prompt=("Eres un analista de datos. Tienes una shell en un espacio de trabajo con "
+                   "ficheros CSV. Usa comandos de UNIX para inspeccionarlos y responder. "
+                   "Responde en español, en 2 frases, con las cifras que obtengas."),
+    middleware=[shell, ModelCallLimitMiddleware(run_limit=8, exit_behavior="end")],
+)
+
+salida = agente_shell.invoke(
+    {"messages": [HumanMessage("¿Cuántas líneas de datos tiene ventas.csv y qué productos hay?")]},
+    {"recursion_limit": 20},
+)
+
+comandos = [tc["args"].get("command") for m in salida["messages"]
+            for tc in (getattr(m, "tool_calls", None) or []) if tc["name"] == "shell"]
+print("comandos que ejecutó:", comandos)
+print(f"\n{salida['messages'][-1].text}")
+
+#%%md
+### La lista de comprobación antes de darle una shell a un agente
+
+#%%py
+print("""
+  [ ] Se ejecuta en un CONTENEDOR EFÍMERO, no en el proceso del servidor
+  [ ] El contenedor no tiene credenciales de producción en el entorno
+  [ ] Sin red, o con una lista blanca de destinos
+  [ ] Límites de CPU, memoria, tiempo y tamaño de salida (política de ejecución)
+  [ ] El espacio de trabajo se monta con solo los ficheros necesarios
+  [ ] La salida se trunca antes de entrar en el contexto
+  [ ] Hay un registro de TODOS los comandos ejecutados
+  [ ] Las operaciones destructivas (rm, curl a hosts externos) pasan por aprobación
+  [ ] El contenedor se destruye al terminar la sesión
+
+Si no puedes marcar las nueve, no le des una shell: dale herramientas específicas de
+dominio cerrado. Es menos flexible y es la decisión correcta (notebook 05).
+""")
+
+#%%md
+## 8. Ejercicios
+
+> **EJERCICIO 21.1 — Detector de agente atascado**
+>
+> En un horizonte largo, el fallo más caro es el agente que **cree** que avanza y no avanza:
+> repite consultas, reescribe la misma nota, no cierra ninguna tarea del plan.
+>
+> Escribe un middleware `@after_model` que detecte tres señales de estancamiento y, cuando se
+> cumplan, inyecte un mensaje que obligue al agente a cambiar de estrategia o rendirse:
+>
+> 1. La misma llamada a herramienta (nombre + argumentos) tres veces.
+> 2. Cinco vueltas sin que cambie el número de tareas completadas del plan.
+> 3. Cinco vueltas sin escribir ninguna nota nueva.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 21.1</b></summary>
+
+Lo que hace que esto funcione y no sea otro bucle: <b>la intervención es una sola vez</b>
+(<code>intervenido</code> en el estado) y el mensaje dice explícitamente qué hacer, incluida
+la opción de rendirse.
+
+Un detector que grita cada vuelta acaba ignorado, igual que un verificador demasiado estricto
+(notebook 06). Una intervención bien puesta, con instrucciones concretas, cambia el rumbo; diez
+intervenciones son ruido.
+</details>
+
+#%%py
+import json
+import operator
+from typing import Annotated
+
+from langchain.agents.middleware import AgentState, after_model
+from langchain.messages import SystemMessage
+
+REPETICIONES_MAXIMAS = 3
+VUELTAS_SIN_PROGRESO = 5
+
+
+class EstadoVigilado(AgentState):
+    intervenido: bool
+    diagnostico: Annotated[list[str], operator.add]
+
+
+def firma(llamada: dict) -> str:
+    return f"{llamada['name']}::{json.dumps(llamada['args'], sort_keys=True, ensure_ascii=False)}"
+
+
+@after_model(state_schema=EstadoVigilado)
+def detectar_estancamiento(state, runtime):
+    if state.get("intervenido"):
+        return None                      # una sola intervención por ejecución
+
+    mensajes = state["messages"]
+    llamadas = [tc for m in mensajes for tc in (getattr(m, "tool_calls", None) or [])]
+    if len(llamadas) < REPETICIONES_MAXIMAS:
+        return None
+
+    señales = []
+
+    # (1) la misma llamada repetida
+    from collections import Counter
+    repetidas = Counter(firma(tc) for tc in llamadas)
+    for f, n in repetidas.items():
+        if n >= REPETICIONES_MAXIMAS:
+            señales.append(f"has llamado {n} veces a {f.split('::')[0]} con los mismos argumentos")
+
+    # (2) plan sin avanzar
+    todos = state.get("todos") or []
+    completadas = sum(1 for t in todos if t.get("status") == "completed")
+    turnos_ia = sum(1 for m in mensajes if m.type == "ai")
+    if todos and turnos_ia >= VUELTAS_SIN_PROGRESO and completadas == 0:
+        señales.append(f"llevas {turnos_ia} turnos y ninguna de las {len(todos)} tareas está completada")
+
+    # (3) sin producir nada nuevo
+    escrituras = sum(1 for tc in llamadas if tc["name"] == "escribir_nota")
+    if turnos_ia >= VUELTAS_SIN_PROGRESO and escrituras == 0:
+        señales.append(f"llevas {turnos_ia} turnos sin guardar ningún hallazgo")
+
+    if not señales:
+        return None
+
+    return {
+        "intervenido": True,
+        "diagnostico": señales,
+        "messages": [SystemMessage(
+            "AVISO DEL SUPERVISOR: parece que no estás avanzando. Detectado: "
+            + "; ".join(señales) + ".\n"
+            "Cambia de estrategia AHORA: usa otra herramienta, reformula lo que buscas, o si "
+            "no puedes avanzar, responde ya con lo que tengas y di explícitamente qué te ha "
+            "quedado sin comprobar. NO repitas la misma llamada."
+        )],
+    }
+
+
+@tool(parse_docstring=True)
+def buscar_inexistente(consulta: str) -> str:
+    """Busca en un índice que siempre devuelve vacío, para provocar el estancamiento.
+
+    Args:
+        consulta: los términos de búsqueda.
+    """
+    return "Sin resultados."
+
+
+agente_vigilado = create_agent(
+    model=llm(),
+    tools=[buscar_inexistente],
+    system_prompt="Eres un investigador tenaz. Insiste hasta encontrar lo que te piden. "
+                  "Responde en español.",
+    middleware=[detectar_estancamiento, ModelCallLimitMiddleware(run_limit=10, exit_behavior="end")],
+)
+
+salida = agente_vigilado.invoke(
+    {"messages": [HumanMessage("Busca el informe de ventas del año 2050. Insiste hasta dar con él.")],
+     "intervenido": False, "diagnostico": []},
+    {"recursion_limit": 30},
+)
+
+print(f"¿intervino el supervisor?: {salida['intervenido']}")
+for d in salida["diagnostico"]:
+    print(f"  - {d}")
+print(f"\n{salida['messages'][-1].text}")
+
+#%%md
+### Verificarlo sin depender del modelo
+
+Un detector que solo se puede probar esperando a que un modelo real se atasque no es un
+detector, es una esperanza. Con un modelo guionizado (notebook 17) lo forzamos a mano y
+comprobamos que salta.
+
+#%%py
+sys.path.insert(0, str(RAIZ / "pruebas"))
+from conftest import con_herramientas, guionizar
+
+# Tres llamadas IDÉNTICAS y luego una rendición.
+# OJO con un detalle que cuesta media hora: cada AIMessage debe ser un objeto DISTINTO con su
+# propio id. Si reutilizas el mismo objeto tres veces, `add_messages` lo trata como el mismo
+# mensaje (mismo id) y lo SUSTITUYE en vez de añadirlo — la lección del notebook 02 mordiendo
+# aquí. El bucle nunca llegaría a tres y el detector nunca saltaría.
+modelo_atascado = guionizar(
+    *[con_herramientas("buscar_inexistente", {"consulta": "informe 2050"}, f"c{i}")
+      for i in range(1, 4)],
+    "No he encontrado el informe de 2050.",
+)
+
+agente_prueba = create_agent(
+    model=modelo_atascado, tools=[buscar_inexistente],
+    middleware=[detectar_estancamiento, ModelCallLimitMiddleware(run_limit=8, exit_behavior="end")],
+)
+
+resultado = agente_prueba.invoke(
+    {"messages": [HumanMessage("busca el informe de 2050")], "intervenido": False, "diagnostico": []},
+    {"recursion_limit": 25},
+)
+
+print(f"  ¿intervino?: {resultado['intervenido']}")
+print(f"  diagnóstico: {resultado['diagnostico']}")
+print(f"  aviso inyectado: {[m.text[:70] for m in resultado['messages'] if m.type == 'system']}")
+print("\n  Determinista, gratis y en milisegundos. Esta es la prueba que va a la CI.")
+
+#%%md
+> **EJERCICIO 21.2 — Espacio de trabajo persistente entre sesiones**
+>
+> El espacio de trabajo del pilar 2 vive en un directorio temporal y se pierde. Reescríbelo
+> sobre el **`Store`** del notebook 09, de forma que:
+>
+> - Cada usuario tenga su propio espacio, aislado por namespace.
+> - Las notas sobrevivan entre hilos y entre reinicios.
+> - El agente pueda **buscar** entre sus notas por significado, no solo leerlas por nombre.
+>
+> Comprueba que dos usuarios no ven las notas del otro.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 21.2</b></summary>
+
+El salto conceptual: <b>el espacio de trabajo deja de ser un directorio y pasa a ser memoria de
+largo plazo consultable</b>. La herramienta <code>buscar_nota</code> es la que lo hace útil de
+verdad — con veinte notas, listarlas y leerlas una a una gasta más contexto del que ahorra;
+buscar por significado devuelve las dos que importan.
+
+Fíjate también en que el aislamiento entre usuarios <b>no lo comprueba ninguna condición</b>:
+está en el namespace, y las herramientas leen el usuario de <code>ToolRuntime.context</code>,
+que el modelo no puede tocar (notebook 19).
+</details>
+
+#%%py
+from dataclasses import dataclass
+
+from langchain.embeddings import init_embeddings
+from langgraph.store.memory import InMemoryStore
+
+store = InMemoryStore(index={"embed": init_embeddings("openai:text-embedding-3-small"),
+                             "dims": 1536, "fields": ["contenido"]})
+
+
+@dataclass
+class ContextoUsuario:
+    id_usuario: str
+
+
+def espacio_de(ctx: ContextoUsuario) -> tuple[str, ...]:
+    return ("espacio_trabajo", ctx.id_usuario)
+
+
+@tool(parse_docstring=True)
+def guardar_nota(nombre: str, contenido: str, runtime: ToolRuntime) -> str:
+    """Guarda un hallazgo en tu espacio de trabajo personal, que persiste entre sesiones.
+
+    Args:
+        nombre: identificador corto en snake_case, sin puntos ni barras.
+        contenido: el texto a guardar.
+    """
+    if "." in nombre or "/" in nombre:
+        return "Error: el nombre debe ser snake_case sin puntos ni barras. Ejemplo: 'analisis_rendimiento'."
+    runtime.store.put(espacio_de(runtime.context), nombre, {"contenido": contenido})
+    return f"guardado '{nombre}' ({len(contenido)} caracteres)"
+
+
+@tool(parse_docstring=True)
+def buscar_nota(consulta: str, runtime: ToolRuntime) -> str:
+    """Busca entre TUS notas por significado, no por nombre exacto.
+
+    Úsala cuando no recuerdes cómo llamaste a una nota o quieras todo lo relacionado con un tema.
+
+    Args:
+        consulta: qué buscas, en lenguaje natural.
+    """
+    encontradas = runtime.store.search(espacio_de(runtime.context), query=consulta, limit=3)
+    if not encontradas:
+        return "No tienes ninguna nota relacionada con eso."
+    return "\n\n".join(f"### {i.key}\n{i.value['contenido'][:500]}" for i in encontradas)
+
+
+@tool
+def listar_mis_notas(runtime: ToolRuntime) -> str:
+    """Lista los nombres de todas tus notas guardadas."""
+    notas = runtime.store.search(espacio_de(runtime.context), limit=50)
+    return ", ".join(n.key for n in notas) if notas else "No tienes notas guardadas."
+
+
+agente_persistente = create_agent(
+    model=llm(),
+    tools=[analizar_categoria, guardar_nota, buscar_nota, listar_mis_notas],
+    system_prompt="Eres un analista. Guarda cada hallazgo con guardar_nota y consulta tus "
+                  "notas anteriores con buscar_nota antes de repetir trabajo. En español.",
+    context_schema=ContextoUsuario,
+    store=store,
+    middleware=[ModelCallLimitMiddleware(run_limit=12, exit_behavior="end")],
+)
+
+separador("sesión 1 de Ana: investiga y guarda")
+r = agente_persistente.invoke(
+    {"messages": [HumanMessage("Analiza la categoría rendimiento y guarda el hallazgo.")]},
+    context=ContextoUsuario(id_usuario="u-ana"), config={"recursion_limit": 25})
+print(" ", r["messages"][-1].text[:200])
+
+separador("sesión 2 de Ana: HILO NUEVO, consulta lo guardado")
+r = agente_persistente.invoke(
+    {"messages": [HumanMessage("¿Qué averiguaste sobre rendimiento? Búscalo en tus notas.")]},
+    context=ContextoUsuario(id_usuario="u-ana"), config={"recursion_limit": 25})
+print(" ", r["messages"][-1].text[:250])
+
+separador("Luis: el mismo agente, otro usuario")
+r = agente_persistente.invoke(
+    {"messages": [HumanMessage("¿Qué notas tienes guardadas?")]},
+    context=ContextoUsuario(id_usuario="u-luis"), config={"recursion_limit": 25})
+print(" ", r["messages"][-1].text[:200])
+
+print("\naislamiento comprobado:")
+print("  notas de Ana :", [n.key for n in store.search(("espacio_trabajo", "u-ana"))])
+print("  notas de Luis:", [n.key for n in store.search(("espacio_trabajo", "u-luis"))])
+
+#%%md
+## 9. Resumen
+
+- Un agente normal se degrada de forma predecible a partir de las 10-20 vueltas. Los cinco
+  pilares son lo que lo evita.
+- **Plan explícito** (`TodoListMiddleware`): el objetivo sobrevive a la compactación y es
+  inspeccionable desde fuera.
+- **Memoria de trabajo externa**: lo descubierto se escribe y se relee. Es el pilar que más
+  cambia las cosas — el contexto pasa de crecer con el trabajo a mantenerse plano.
+- **Divulgación progresiva**: un índice corto siempre presente y el procedimiento completo bajo
+  demanda. El prompt deja de crecer con el número de procedimientos.
+- **Subagentes**: aíslan contexto a cambio de perder visibilidad. Delega subtareas con
+  resultado definido; si necesitas supervisar el proceso, usa un subgrafo.
+- **Compactación**: en horizonte largo no es una optimización, es lo que permite terminar.
+- Si el agente ejecuta comandos, **el aislamiento no es opcional**: contenedor efímero, sin
+  credenciales, con límites de recursos y con registro. Si no puedes garantizarlo, dale
+  herramientas de dominio cerrado.
+- Vigila el **estancamiento**: repetición de llamadas, plan que no avanza, nada producido. Una
+  intervención bien puesta cambia el rumbo; diez son ruido.
+
+**Siguiente:** [`P6_capstone.ipynb`](P6_capstone.ipynb) — el proyecto final del curso.

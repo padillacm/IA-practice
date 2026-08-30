@@ -713,4 +713,5 @@ if MCP_DISPONIBLE:
 - `grafo.as_tool()` deja que el **modelo** decida invocar un grafo entero; un subgrafo es
   cuando lo decides **tú**.
 
-**Siguiente:** [`P6_capstone.ipynb`](P6_capstone.ipynb) — el proyecto final del curso.
+**Siguiente:** [`21_agentes_horizonte_largo.ipynb`](21_agentes_horizonte_largo.ipynb) — los
+cinco pilares de los agentes que trabajan durante horas.
