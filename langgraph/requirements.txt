@@ -14,8 +14,10 @@ langgraph-checkpoint-sqlite>=3.1   # SqliteSaver (módulo 3)
 
 # --- RAG (módulo 5) -------------------------------------------------------
 langchain-text-splitters>=1.0
-langchain-community>=0.4           # aporta InMemoryVectorStore/BM25 y utilidades
-rank-bm25>=0.2                     # recuperación léxica para el híbrido
+rank-bm25>=0.2                     # recuperación léxica para el híbrido del módulo 5
+# Nota: NO usamos langchain-community. Está en proceso de retirada y sus integraciones
+# se están moviendo a paquetes propios; el curso implementa el recuperador léxico
+# directamente sobre rank-bm25, que además se entiende mejor.
 
 # --- utilidades de notebook ----------------------------------------------
 jupyterlab>=4.2

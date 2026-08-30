@@ -28,7 +28,7 @@ RAIZ = pathlib.Path(__file__).resolve().parent.parent
 #: (dependencias opcionales o de despliegue). No se consideran error.
 OPCIONALES = {
     "langgraph.checkpoint.postgres", "langgraph_sdk", "langgraph_supervisor",
-    "langgraph_swarm", "tavily", "langchain_tavily", "psycopg", "psycopg_pool",
+    "langgraph_swarm", "tavily", "langchain_tavily", "psycopg", "psycopg_pool", "langchain_community",
     "matplotlib", "matplotlib.pyplot", "sklearn", "rank_bm25", "IPython",
     "IPython.display", "pytest", "langsmith", "dotenv",
 }
