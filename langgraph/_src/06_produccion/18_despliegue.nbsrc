@@ -1,0 +1,829 @@
+#%%md
+# 18 · De un notebook a un servicio
+
+**Módulo 6 · Producción** — *tiempo estimado: 1 h 30 min*
+
+Un grafo en un notebook no es un producto. Este notebook cubre el trayecto: estructurar el
+proyecto, servirlo, exponerlo por HTTP, versionarlo y las decisiones de seguridad que hay que
+tomar antes de que lo use alguien de fuera.
+
+Al terminar sabrás:
+
+1. Estructurar una aplicación de LangGraph con `langgraph.json`.
+2. Levantar el servidor en local con `langgraph dev` y usar LangGraph Studio.
+3. Consumir el servicio desde el SDK y desde HTTP puro.
+4. Qué son los **assistants** y por qué son la pieza que falta para versionar prompts.
+5. Las tres opciones de despliegue y cómo elegir.
+6. La lista de comprobación de seguridad que no puedes saltarte.
+
+Al final del notebook tendrás una aplicación **real y ejecutable** en `langgraph/despliegue/`.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, separador
+
+info = init(proyecto="curso-langgraph-m6")
+RAIZ = info["raiz"]
+
+#%%md
+## 1. La estructura de una aplicación
+
+Un notebook no se despliega. Lo primero es sacar el grafo a módulos normales de Python.
+
+```
+mi-app/
+├── langgraph.json          # el manifiesto: qué grafos hay y dónde
+├── requirements.txt        # dependencias
+├── .env                    # variables (NUNCA en el repositorio)
+└── mi_agente/
+    ├── __init__.py
+    ├── estado.py           # los esquemas de estado
+    ├── herramientas.py     # las herramientas
+    ├── nodos.py            # las funciones de nodo
+    └── grafo.py            # construye y exporta el grafo compilado
+```
+
+La regla que importa: **`grafo.py` exporta un grafo compilado, y nada más**. Sin código de
+demostración, sin `if __name__ == "__main__"` que se ejecute al importar. El servidor importa
+ese módulo y espera encontrar el objeto.
+
+Vamos a crearla de verdad.
+
+#%%py
+APP = RAIZ / "despliegue"
+PAQUETE = APP / "mi_agente"
+PAQUETE.mkdir(parents=True, exist_ok=True)
+
+(PAQUETE / "__init__.py").write_text(
+    '"""Agente de soporte desplegable."""\n', encoding="utf-8")
+
+(PAQUETE / "estado.py").write_text('''"""Esquemas de estado y de contexto del agente."""
+
+from __future__ import annotations
+
+import operator
+from dataclasses import dataclass
+from typing import Annotated
+
+from langgraph.graph import MessagesState
+
+
+class EstadoSoporte(MessagesState):
+    """Estado del agente. `messages` viene de MessagesState."""
+
+    #: Traza de decisiones, para auditoría. Reducer acumulador porque varios nodos escriben.
+    bitacora: Annotated[list[str], operator.add]
+    #: Número de consultas a herramientas, para vigilar el coste.
+    consultas: Annotated[int, operator.add]
+
+
+@dataclass
+class ContextoPeticion:
+    """Datos de la petición: los fija quien llama y el grafo no los modifica.
+
+    Van aquí y no en el estado porque no se persisten en cada checkpoint y porque
+    ningún nodo debería poder cambiarlos.
+    """
+
+    id_usuario: str = "anonimo"
+    plan: str = "free"
+    idioma: str = "es"
+''', encoding="utf-8")
+
+print("creado:", PAQUETE / "estado.py")
+
+#%%py
+(PAQUETE / "herramientas.py").write_text('''"""Herramientas del agente.
+
+Se cargan los datos UNA vez al importar el módulo, no en cada llamada: el servidor
+importa esto al arrancar y lo reutiliza en todas las peticiones.
+"""
+
+from __future__ import annotations
+
+import pathlib
+
+import pandas as pd
+from langchain_core.tools import tool
+
+_DATOS = pathlib.Path(__file__).resolve().parent.parent.parent / "data" / "tickets_soporte.csv"
+_DF = pd.read_csv(_DATOS)
+
+CATEGORIAS = sorted(_DF["categoria"].unique())
+
+
+@tool(parse_docstring=True)
+def contar_tickets(categoria: str = "todas", prioridad: str = "todas") -> str:
+    """Cuenta tickets de soporte con los filtros indicados.
+
+    Args:
+        categoria: la categoría a filtrar, o 'todas'.
+        prioridad: baja, media, alta, critica, o 'todas'.
+    """
+    sel = _DF
+    if categoria != "todas":
+        sel = sel[sel["categoria"] == categoria]
+        if sel.empty:
+            return f"No existe la categoría '{categoria}'. Válidas: {', '.join(CATEGORIAS)}."
+    if prioridad != "todas":
+        sel = sel[sel["prioridad"] == prioridad]
+    return f"{len(sel)} tickets (categoría={categoria}, prioridad={prioridad})."
+
+
+@tool(parse_docstring=True)
+def detalle_ticket(id_ticket: str) -> str:
+    """Devuelve el detalle de un ticket concreto.
+
+    Args:
+        id_ticket: identificador con formato TCK-0001.
+    """
+    fila = _DF[_DF["id_ticket"] == id_ticket]
+    if fila.empty:
+        return f"No existe {id_ticket}. El formato correcto es TCK-0001."
+    r = fila.iloc[0]
+    return f"{r['id_ticket']} [{r['categoria']}/{r['prioridad']}] {r['asunto']}"
+
+
+HERRAMIENTAS = [contar_tickets, detalle_ticket]
+''', encoding="utf-8")
+
+print("creado:", PAQUETE / "herramientas.py")
+
+#%%py
+(PAQUETE / "grafo.py").write_text('''"""Construcción del grafo. Este módulo solo EXPORTA; no ejecuta nada al importarse."""
+
+from __future__ import annotations
+
+import os
+
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import SystemMessage
+from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.runtime import Runtime
+
+from .estado import ContextoPeticion, EstadoSoporte
+from .herramientas import HERRAMIENTAS
+
+MODELO = os.environ.get("MODELO_AGENTE", "openai:gpt-4o-mini")
+
+INSTRUCCIONES = {
+    "es": ("Eres un asistente de soporte técnico. Usa las herramientas para dar cifras exactas. "
+           "Responde en español, en 3 frases como máximo."),
+    "en": ("You are a technical support assistant. Use the tools for exact figures. "
+           "Answer in English, 3 sentences maximum."),
+}
+
+
+def _modelo():
+    """Una instancia por proceso: crear un cliente por petición abre conexiones de más."""
+    global _CACHE
+    try:
+        return _CACHE
+    except NameError:
+        _CACHE = init_chat_model(MODELO, temperature=0).bind_tools(HERRAMIENTAS)
+        return _CACHE
+
+
+def pensar(estado: EstadoSoporte, runtime: Runtime[ContextoPeticion]) -> dict:
+    idioma = runtime.context.idioma if runtime.context else "es"
+    sistema = SystemMessage(INSTRUCCIONES.get(idioma, INSTRUCCIONES["es"]))
+    respuesta = _modelo().invoke([sistema, *estado["messages"]])
+    n = len(getattr(respuesta, "tool_calls", None) or [])
+    return {"messages": [respuesta], "consultas": n,
+            "bitacora": [f"modelo: {n} herramienta(s) solicitada(s)"]}
+
+
+def construir():
+    """Devuelve el grafo compilado.
+
+    Sin checkpointer: en LangGraph Platform lo inyecta el servidor con su propia base de
+    datos. Ponerlo aquí a mano lo SOBRESCRIBIRÍA y perderías la persistencia real.
+    """
+    return (
+        StateGraph(EstadoSoporte, context_schema=ContextoPeticion)
+        .add_node("pensar", pensar)
+        .add_node("herramientas", ToolNode(HERRAMIENTAS, handle_tool_errors=True))
+        .add_edge(START, "pensar")
+        .add_conditional_edges("pensar", tools_condition, {"tools": "herramientas", END: END})
+        .add_edge("herramientas", "pensar")
+        .compile()
+    )
+
+
+#: Lo que `langgraph.json` apunta. El servidor importa este objeto.
+grafo = construir()
+''', encoding="utf-8")
+
+print("creado:", PAQUETE / "grafo.py")
+
+#%%md
+> **El detalle que más gente falla al desplegar:** no pongas un `checkpointer=` en el grafo
+> que exportas a LangGraph Platform. El servidor inyecta el suyo, conectado a su base de
+> datos; el que pongas tú lo sobrescribe y acabas con persistencia en memoria que se pierde
+> en cada reinicio, sin ningún error que te avise.
+>
+> En cambio, **sí** lo necesitas si te sirves el grafo tú mismo desde FastAPI.
+
+#%%md
+## 2. `langgraph.json`, el manifiesto
+
+Cuatro claves que necesitas conocer:
+
+| Clave | Qué es |
+|---|---|
+| `dependencies` | Paquetes y rutas locales a instalar. `"."` incluye tu propio proyecto |
+| `graphs` | `"nombre": "ruta/al/fichero.py:variable"`. El nombre es el del **assistant** |
+| `env` | Ruta al `.env`, o un diccionario de variables |
+| `python_version` | La versión de Python del contenedor |
+
+#%%py
+import json
+
+configuracion = {
+    "dependencies": ["."],
+    "graphs": {
+        # El nombre de la izquierda es el que usarás como assistant_id en la API.
+        "soporte": "./mi_agente/grafo.py:grafo",
+    },
+    "env": "../.env",
+    "python_version": "3.11",
+}
+
+(APP / "langgraph.json").write_text(json.dumps(configuracion, indent=2) + "\n", encoding="utf-8")
+
+(APP / "requirements.txt").write_text(
+    "langgraph>=1.2,<2\n"
+    "langchain>=1.3,<2\n"
+    "langchain-openai>=1.6,<2\n"
+    "pandas>=2.2\n",
+    encoding="utf-8",
+)
+
+(APP / "README.md").write_text('''# Agente de soporte — aplicación desplegable
+
+Generada por el notebook `06_produccion/18_despliegue.ipynb` del curso.
+
+## Ejecutar en local
+
+```bash
+pip install "langgraph-cli[inmem]"
+cd langgraph/despliegue
+langgraph dev
+```
+
+Se levanta en `http://127.0.0.1:2024` y la salida incluye el enlace a LangGraph Studio.
+
+## Probar
+
+```bash
+curl -s http://127.0.0.1:2024/assistants/search -X POST \\
+  -H 'Content-Type: application/json' -d '{"limit": 10}'
+```
+''', encoding="utf-8")
+
+print(json.dumps(configuracion, indent=2))
+print("\nficheros creados:")
+for f in sorted(APP.rglob("*")):
+    if f.is_file():
+        print(f"  {f.relative_to(RAIZ)}  ({f.stat().st_size} bytes)")
+
+#%%md
+### Comprobar que el grafo se importa como lo hará el servidor
+
+Antes de arrancar nada, verifica que el módulo se puede importar y que la variable existe.
+Es exactamente lo que hace el servidor, y así el fallo aparece aquí y no en el despliegue.
+
+#%%py
+import importlib
+import importlib.util
+
+sys.path.insert(0, str(APP))
+modulo = importlib.import_module("mi_agente.grafo")
+importlib.reload(modulo)
+
+grafo_desplegable = modulo.grafo
+print("grafo importado:", type(grafo_desplegable).__name__)
+print("nodos          :", [n for n in grafo_desplegable.get_graph().nodes if not n.startswith("__")])
+print("checkpointer   :", grafo_desplegable.checkpointer, " <- None es lo correcto para Platform")
+
+#%%py
+from langchain.messages import HumanMessage
+
+from mi_agente.estado import ContextoPeticion
+
+salida = grafo_desplegable.invoke(
+    {"messages": [HumanMessage("¿Cuántos tickets críticos de rendimiento hay?")],
+     "bitacora": [], "consultas": 0},
+    context=ContextoPeticion(id_usuario="u-1", plan="pro", idioma="es"),
+    config={"recursion_limit": 20},
+)
+print(salida["messages"][-1].text)
+print("\nbitácora:", salida["bitacora"])
+
+#%%py
+mostrar_grafo(grafo_desplegable)
+
+#%%md
+## 3. Servirlo en local: `langgraph dev`
+
+```bash
+pip install "langgraph-cli[inmem]"
+cd langgraph/despliegue
+langgraph dev
+```
+
+Levanta un servidor completo en `http://127.0.0.1:2024`, con persistencia en memoria y
+recarga automática al guardar. La salida incluye el enlace a **LangGraph Studio**:
+
+```
+- 🚀 API: http://127.0.0.1:2024
+- 🎨 Studio: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+```
+
+**Studio** es la herramienta que más rápido rentabiliza el rato de configurar todo esto:
+
+| Qué hace | Por qué importa |
+|---|---|
+| Dibuja el grafo y **resalta el nodo activo** | Ves el flujo real, no el que creías |
+| Permite **editar el estado** y reejecutar | Depuración por bisección, sin tocar código |
+| Muestra los **hilos** y su historial | El viaje en el tiempo del notebook 08, con ratón |
+| Gestiona las **interrupciones** pendientes | La bandeja del notebook 10, ya hecha |
+
+Un aviso práctico: `langgraph dev` es **para desarrollo**. Guarda en memoria y se pierde todo
+al reiniciar. Para producción hace falta un almacenamiento persistente.
+
+#%%md
+## 4. Consumir el servicio
+
+Dos formas, la misma API por debajo.
+
+#%%py
+print('''# --- SDK de Python (asíncrono) ---
+# pip install langgraph-sdk
+
+from langgraph_sdk import get_client
+
+cliente = get_client(url="http://localhost:2024")
+
+# (a) Ejecución sin hilo: una pregunta suelta, sin memoria.
+async for fragmento in cliente.runs.stream(
+    None,                       # sin thread_id
+    "soporte",                  # el nombre del grafo en langgraph.json
+    input={"messages": [{"role": "human", "content": "¿cuántos tickets críticos hay?"}]},
+    stream_mode="messages",
+):
+    print(fragmento.event, fragmento.data)
+
+# (b) Con hilo: conversación con memoria entre peticiones.
+hilo = await cliente.threads.create()
+respuesta = await cliente.runs.wait(
+    hilo["thread_id"], "soporte",
+    input={"messages": [{"role": "human", "content": "y de facturación?"}]},
+    config={"configurable": {"user_id": "u-1"}},
+)
+
+# (c) Estado y reanudación de una interrupción.
+estado = await cliente.threads.get_state(hilo["thread_id"])
+if estado["next"]:
+    await cliente.runs.wait(hilo["thread_id"], "soporte",
+                            command={"resume": {"decision": "aprobar"}})
+''')
+
+#%%py
+print('''# --- HTTP puro: sirve desde cualquier lenguaje ---
+
+# Crear un hilo
+curl -X POST http://localhost:2024/threads \\
+  -H 'Content-Type: application/json' -d '{}'
+
+# Lanzar una ejecución y esperar el resultado
+curl -X POST http://localhost:2024/threads/<thread_id>/runs/wait \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+        "assistant_id": "soporte",
+        "input": {"messages": [{"role": "human", "content": "hola"}]}
+      }'
+
+# Streaming por server-sent events
+curl -N -X POST http://localhost:2024/threads/<thread_id>/runs/stream \\
+  -H 'Content-Type: application/json' \\
+  -d '{"assistant_id": "soporte", "input": {...}, "stream_mode": ["messages", "updates"]}'
+
+# Consultar el estado (¿hay algo esperando aprobación?)
+curl http://localhost:2024/threads/<thread_id>/state
+''')
+
+#%%md
+## 5. Assistants: versionar la configuración sin desplegar
+
+Esta es la pieza que más gente desconoce y la que resuelve un problema muy real.
+
+Un **assistant** es un grafo **más una configuración**: prompt, modelo, parámetros. Del mismo
+grafo puedes tener varios assistants, versionarlos y cambiar entre ellos **sin volver a
+desplegar código**.
+
+#%%py
+print('''# Dos assistants sobre el MISMO grafo, con configuración distinta.
+
+conservador = await cliente.assistants.create(
+    graph_id="soporte",
+    config={"configurable": {"model": "openai:gpt-4o-mini", "temperature": 0}},
+    metadata={"entorno": "produccion", "version_prompt": "2026-08-a"},
+    name="soporte-conservador",
+)
+
+experimental = await cliente.assistants.create(
+    graph_id="soporte",
+    config={"configurable": {"model": "openai:gpt-4o", "temperature": 0.3}},
+    metadata={"entorno": "experimento", "version_prompt": "2026-08-b"},
+    name="soporte-experimental",
+)
+
+# Prueba A/B: el 10 % del tráfico al experimental.
+import random
+elegido = experimental if random.random() < 0.10 else conservador
+await cliente.runs.wait(hilo["thread_id"], elegido["assistant_id"], input=...)
+
+# Los assistants se versionan: puedes actualizar y volver atrás.
+await cliente.assistants.update(conservador["assistant_id"],
+                                config={"configurable": {"temperature": 0.1}})
+versiones = await cliente.assistants.get_versions(conservador["assistant_id"])
+await cliente.assistants.set_latest(conservador["assistant_id"], version=1)   # revertir
+''')
+
+#%%md
+Por qué esto importa: **cambiar un prompt deja de ser un despliegue**. Se convierte en una
+actualización de configuración, con historial de versiones y reversión inmediata. Combinado
+con las etiquetas de LangSmith del notebook 17, puedes responder a "¿el acierto bajó cuando
+cambiamos el prompt?" mirando datos en vez de recordando.
+
+#%%md
+## 6. Las tres opciones de despliegue
+
+| | **Servirlo tú** (FastAPI) | **Platform autoalojado** | **Platform gestionado** |
+|---|---|---|---|
+| Control | total | alto | medio |
+| Trabajo de operación | **todo tuyo** | medio | **casi ninguno** |
+| Colas, reintentos, escalado | los escribes tú | incluidos | incluidos |
+| Studio, assistants, crons | no | sí | sí |
+| Datos | donde tú digas | tu infraestructura | la de LangChain |
+| Coste | tu infraestructura | infraestructura + licencia | por uso |
+
+**Cómo elegir**, sin rodeos:
+
+- **Servirlo tú** si ya tienes una plataforma, el grafo es sencillo y no necesitas colas ni
+  ejecuciones largas. Es más trabajo del que parece en cuanto aparecen las ejecuciones que
+  duran minutos.
+- **Autoalojado** si los datos no pueden salir de tu infraestructura, que es el caso de
+  cualquier sector regulado.
+- **Gestionado** si quieres centrarte en el agente y no en la infraestructura. Es lo más
+  rápido para llegar a producción.
+
+#%%md
+### Servirlo tú mismo con FastAPI
+
+La opción "servirlo tú" es perfectamente razonable para muchos casos. Este es el esqueleto
+mínimo que funciona, con las tres rutas que necesitas.
+
+#%%py
+print('''from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, HTTPException
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.types import Command
+from pydantic import BaseModel
+
+from mi_agente.estado import ContextoPeticion
+from mi_agente.grafo import construir
+
+ESTADO = {}
+
+
+@asynccontextmanager
+async def ciclo_vida(app: FastAPI):
+    """El checkpointer se abre UNA vez al arrancar, no por petición."""
+    async with AsyncPostgresSaver.from_conn_string(os.environ["POSTGRES_URL"]) as saver:
+        await saver.setup()
+        ESTADO["grafo"] = construir().with_config(checkpointer=saver)
+        yield
+    ESTADO.clear()
+
+
+app = FastAPI(lifespan=ciclo_vida)
+
+
+class Peticion(BaseModel):
+    mensaje: str
+    id_conversacion: str | None = None
+
+
+@app.post("/chat")
+async def chat(p: Peticion, usuario=Depends(usuario_autenticado)):
+    # CLAVE DE SEGURIDAD: el thread_id se deriva del usuario AUTENTICADO,
+    # nunca de un valor que mande el cliente. Si no, un usuario lee los hilos de otro.
+    hilo = f"{usuario.id}:{p.id_conversacion or 'principal'}"
+
+    salida = await ESTADO["grafo"].ainvoke(
+        {"messages": [{"role": "human", "content": p.mensaje}], "bitacora": [], "consultas": 0},
+        config={"configurable": {"thread_id": hilo}, "recursion_limit": 25},
+        context=ContextoPeticion(id_usuario=usuario.id, plan=usuario.plan),
+    )
+
+    if "__interrupt__" in salida:
+        return {"estado": "esperando_aprobacion", "peticion": salida["__interrupt__"][0].value}
+    return {"estado": "ok", "respuesta": salida["messages"][-1].content}
+
+
+@app.post("/chat/{id_conversacion}/aprobar")
+async def aprobar(id_conversacion: str, decision: dict, usuario=Depends(usuario_autenticado)):
+    hilo = f"{usuario.id}:{id_conversacion}"
+    salida = await ESTADO["grafo"].ainvoke(
+        Command(resume=decision), config={"configurable": {"thread_id": hilo}})
+    return {"respuesta": salida["messages"][-1].content}
+''')
+
+#%%md
+Cuatro detalles de ese esqueleto que no son decorativos:
+
+1. **`lifespan`**: el checkpointer se abre al arrancar, no por petición. Abrir una conexión a
+   Postgres en cada llamada es la forma más rápida de agotar el pool.
+2. **`AsyncPostgresSaver`** y `ainvoke`: en un servidor asíncrono, la versión síncrona
+   bloquea el bucle de eventos en cada super-paso y te tumba la concurrencia.
+3. **El `thread_id` sale del usuario autenticado.** Lo repetimos porque es el fallo de
+   seguridad más común y el más grave.
+4. **`recursion_limit` explícito.** El valor por defecto (10007) no te protege de nada
+   (notebook 03).
+
+#%%md
+## 7. Tareas programadas y webhooks
+
+Dos capacidades de Platform que evitan escribir infraestructura.
+
+#%%py
+print('''# --- Cron: ejecuta un grafo periódicamente ---
+await cliente.crons.create(
+    assistant_id="soporte",
+    schedule="0 8 * * 1",                     # todos los lunes a las 8:00
+    input={"messages": [{"role": "human", "content": "Genera el informe semanal"}]},
+)
+
+# --- Webhook: te avisa cuando una ejecución larga termina ---
+await cliente.runs.create(
+    hilo["thread_id"], "soporte",
+    input={...},
+    webhook="https://mi-servicio.example/langgraph/terminado",
+)
+# El servicio devuelve el control al instante; el resultado llega por POST a esa URL.
+''')
+
+#%%md
+El webhook es la respuesta correcta a "mi agente tarda tres minutos y el navegador da
+timeout". Lanzas la ejecución, devuelves un identificador, y avisas cuando acabe.
+
+#%%md
+## 8. Lista de comprobación antes de abrir al público
+
+#%%py
+COMPROBACIONES = [
+    ("SEGURIDAD", [
+        "El thread_id se deriva de la sesión AUTENTICADA, nunca de la entrada del cliente",
+        "Los namespaces del Store incluyen el identificador de organización desde el primer nivel",
+        "Las claves de API están en variables de entorno; el .env no está en el repositorio",
+        "Las herramientas destructivas pasan por aprobación humana (notebook 10)",
+        "Las herramientas validan sus argumentos con Literal o Pydantic, y no ejecutan código generado",
+        "Hay un límite de peticiones por usuario, no solo global",
+    ]),
+    ("FIABILIDAD", [
+        "recursion_limit explícito y ajustado en TODAS las invocaciones",
+        "RetryPolicy con retry_on selectivo en los nodos que llaman a servicios externos",
+        "error_handler o modelo de respaldo en los caminos críticos",
+        "Timeouts en los nodos de E/S (y por tanto, nodos async)",
+        "Tope de coste por ejecución, en euros y no solo en llamadas",
+    ]),
+    ("OBSERVABILIDAD", [
+        "LangSmith activado con metadata de cliente, plan y versión de prompt",
+        "Alertas sobre latencia p95, tasa de error por nodo y distribución de tokens",
+        "Un identificador de correlación que una tus logs con las trazas",
+        "Batería de pruebas en la CI (notebook 17)",
+        "Evaluación con conjunto dorado y umbral de regresión con tolerancia medida",
+    ]),
+    ("DATOS", [
+        "El estado no contiene secretos ni recursos vivos (usa EphemeralValue o context)",
+        "Política de retención y borrado de hilos, con un procedimiento probado",
+        "Postgres con copias de seguridad; el checkpointer ES tu base de datos",
+        "Un procedimiento de borrado por usuario, para el RGPD",
+    ]),
+]
+
+for seccion, puntos in COMPROBACIONES:
+    print(f"\n{seccion}")
+    for p in puntos:
+        print(f"  [ ] {p}")
+
+#%%md
+## 9. Ejercicios
+
+> **EJERCICIO 18.1 — Un comprobador de despliegue**
+>
+> Escribe una función `revisar_aplicacion(ruta)` que verifique automáticamente que un
+> directorio es una aplicación de LangGraph válida: que existe `langgraph.json`, que es JSON
+> correcto, que tiene las claves obligatorias, que los ficheros de los grafos existen, que la
+> variable exportada está ahí, y que el grafo **no** trae un checkpointer propio.
+>
+> Es lo que querrías tener en la CI antes de desplegar.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 18.1</b></summary>
+
+La comprobación que más veces salva el despliegue es la última: un <code>checkpointer</code>
+no nulo en un grafo destinado a Platform es un fallo silencioso —el servidor arranca, todo
+parece funcionar, y la persistencia se pierde en cada reinicio sin un solo error.
+
+Fíjate también en que la función <b>importa el módulo de verdad</b> en vez de leerlo con
+expresiones regulares. Es lo que hace el servidor, así que es la única comprobación que de
+verdad prueba algo: un fallo de importación aquí es un fallo de arranque allí.
+</details>
+
+#%%py
+import importlib.util
+
+
+def revisar_aplicacion(ruta: pathlib.Path) -> list[tuple[str, bool, str]]:
+    """Comprueba que un directorio es una aplicación de LangGraph desplegable."""
+    resultados: list[tuple[str, bool, str]] = []
+    avisos: list[str] = []
+
+    def comprobar(nombre: str, condicion: bool, detalle: str = "") -> bool:
+        resultados.append((nombre, condicion, detalle))
+        return condicion
+
+    manifiesto = ruta / "langgraph.json"
+    if not comprobar("existe langgraph.json", manifiesto.exists(), str(manifiesto)):
+        return resultados
+
+    try:
+        configuracion = json.loads(manifiesto.read_text(encoding="utf-8"))
+        comprobar("langgraph.json es JSON válido", True)
+    except json.JSONDecodeError as exc:
+        comprobar("langgraph.json es JSON válido", False, str(exc))
+        return resultados
+
+    for clave in ("dependencies", "graphs"):
+        comprobar(f"tiene la clave '{clave}'", clave in configuracion)
+
+    comprobar("declara dependencias", bool(configuracion.get("dependencies")))
+    comprobar("hay ficheros de dependencias",
+              any((ruta / f).exists() for f in ("requirements.txt", "pyproject.toml")))
+
+    sys.path.insert(0, str(ruta))
+    for nombre_grafo, referencia in configuracion.get("graphs", {}).items():
+        if ":" not in referencia:
+            comprobar(f"grafo '{nombre_grafo}': formato fichero.py:variable", False, referencia)
+            continue
+
+        ruta_relativa, variable = referencia.rsplit(":", 1)
+        fichero = (ruta / ruta_relativa).resolve()
+        if not comprobar(f"grafo '{nombre_grafo}': el fichero existe", fichero.exists(), str(fichero)):
+            continue
+
+        # Importamos por NOMBRE DE MÓDULO, no por ruta de fichero: es lo que hace el
+        # servidor, y es lo único que respeta los imports relativos del paquete
+        # (`from .estado import ...`). Cargarlo por ruta falla con ImportError.
+        nombre_modulo = (ruta_relativa.removeprefix("./").removesuffix(".py").replace("/", "."))
+        try:
+            modulo = importlib.import_module(nombre_modulo)
+            importlib.reload(modulo)
+            comprobar(f"grafo '{nombre_grafo}': el módulo importa", True)
+        except Exception as exc:
+            comprobar(f"grafo '{nombre_grafo}': el módulo importa", False, f"{type(exc).__name__}: {exc}")
+            continue
+
+        objeto = getattr(modulo, variable, None)
+        if not comprobar(f"grafo '{nombre_grafo}': existe la variable '{variable}'", objeto is not None):
+            continue
+
+        comprobar(f"grafo '{nombre_grafo}': está compilado", hasattr(objeto, "invoke"))
+        comprobar(f"grafo '{nombre_grafo}': SIN checkpointer propio",
+                  getattr(objeto, "checkpointer", None) is None,
+                  "un checkpointer aquí sobrescribe el del servidor y pierde la persistencia")
+
+    entorno = configuracion.get("env")
+    if isinstance(entorno, str) and not (ruta / entorno).exists():
+        # Aviso, no fallo: en producción las variables vienen del entorno, no de un fichero.
+        avisos.append(f"el .env referenciado ({entorno}) no existe en este equipo")
+
+    return resultados
+
+
+print(f"revisando {APP.relative_to(RAIZ)}\n")
+AVISOS: list[str] = []
+resultados = revisar_aplicacion(APP)
+fallos = 0
+for nombre, ok, detalle in resultados:
+    marca = "ok  " if ok else "FALLA"
+    fallos += not ok
+    print(f"  [{marca}] {nombre}" + (f"  — {detalle}" if detalle and not ok else ""))
+print(f"\n{fallos} problema(s) bloqueante(s)")
+print("(los avisos no bloquean: el .env local no tiene por qué existir en la CI)")
+
+#%%md
+> **EJERCICIO 18.2 — Un cliente HTTP contra tu propio servidor**
+>
+> Arranca `langgraph dev` en `langgraph/despliegue/` desde una terminal y, desde otra celda,
+> escribe un pequeño cliente que use `requests` para: crear un hilo, lanzar una ejecución,
+> leer el estado y comprobar que la memoria funciona entre peticiones.
+>
+> Como el servidor tiene que estar levantado, el código de abajo comprueba primero si
+> responde y, si no, explica qué hacer en vez de fallar.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 18.2</b></summary>
+
+El detalle que enseña este ejercicio: <b>el mismo <code>thread_id</code> en dos peticiones
+HTTP distintas da continuidad</b>. Eso es todo lo que hay detrás de "el agente recuerda la
+conversación" en un producto real — ningún estado en el servidor de aplicación, ninguna
+sesión en memoria. La memoria vive en el checkpointer y se direcciona con un identificador.
+</details>
+
+#%%py
+BASE = "http://127.0.0.1:2024"
+
+
+def servidor_disponible(url: str, segundos: float = 1.5) -> bool:
+    try:
+        import requests
+        requests.get(f"{url}/ok", timeout=segundos)
+        return True
+    except Exception:
+        return False
+
+
+if not servidor_disponible(BASE):
+    print(f"""El servidor no responde en {BASE}.
+
+Para hacer este ejercicio, en una terminal:
+
+    pip install "langgraph-cli[inmem]"
+    cd {APP}
+    langgraph dev
+
+y vuelve a ejecutar esta celda.""")
+else:
+    import requests
+
+    hilo = requests.post(f"{BASE}/threads", json={}).json()
+    id_hilo = hilo["thread_id"]
+    print(f"hilo creado: {id_hilo}\n")
+
+    def preguntar(texto: str) -> str:
+        r = requests.post(
+            f"{BASE}/threads/{id_hilo}/runs/wait",
+            json={"assistant_id": "soporte",
+                  "input": {"messages": [{"role": "human", "content": texto}],
+                            "bitacora": [], "consultas": 0}},
+            timeout=120,
+        ).json()
+        return r["messages"][-1]["content"]
+
+    print("P: ¿Cuántos tickets críticos hay?")
+    print("R:", preguntar("¿Cuántos tickets críticos hay?"), "\n")
+    print("P: ¿Y de facturación?   (sin repetir el contexto: la memoria la pone el hilo)")
+    print("R:", preguntar("¿Y de facturación?"), "\n")
+
+    estado = requests.get(f"{BASE}/threads/{id_hilo}/state", timeout=30).json()
+    print(f"mensajes acumulados en el hilo: {len(estado['values']['messages'])}")
+    print(f"consultas a herramientas      : {estado['values'].get('consultas')}")
+
+#%%md
+## 10. Resumen
+
+- Saca el grafo del notebook a módulos. `grafo.py` **solo exporta** un grafo compilado.
+- **No pongas `checkpointer=` en el grafo que despliegas en Platform**: el servidor inyecta el
+  suyo y el tuyo lo sobrescribe, perdiendo la persistencia sin ningún aviso.
+- `langgraph.json` declara `dependencies`, `graphs` (`fichero.py:variable`) y `env`. El nombre
+  del grafo es el `assistant_id` de la API.
+- `langgraph dev` levanta el servidor y Studio en local. **Es solo para desarrollo**: guarda
+  en memoria.
+- Se consume por SDK o por HTTP puro. Con `thread_id` hay memoria; sin él, ejecución suelta.
+- Los **assistants** versionan la configuración: cambiar un prompt deja de ser un despliegue
+  y pasa a ser una actualización reversible.
+- Tres opciones: servirlo tú (más trabajo del que parece), autoalojado (datos propios) o
+  gestionado (llegar rápido).
+- Si te lo sirves tú: `lifespan` para el checkpointer, `ainvoke` con savers asíncronos,
+  `recursion_limit` explícito y el **`thread_id` derivado del usuario autenticado**.
+- Pasa la lista de comprobación antes de abrir al público.
+
+**Siguiente:** [`19_patrones_p99.ipynb`](19_patrones_p99.ipynb) — ingeniería de contexto,
+seguridad frente a inyección de prompts y los patrones que separan un sistema bueno de uno
+excelente.

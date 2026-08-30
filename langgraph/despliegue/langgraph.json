@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "soporte": "./mi_agente/grafo.py:grafo"
+  },
+  "env": "../.env",
+  "python_version": "3.11"
+}

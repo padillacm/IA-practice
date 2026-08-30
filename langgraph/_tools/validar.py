@@ -33,6 +33,10 @@ OPCIONALES = {
     "IPython.display", "pytest", "langsmith", "dotenv",
 }
 
+#: Módulos propios del curso: existen, pero solo tras el arranque que hace cada
+#: notebook (insertan la raíz o `pruebas/` en sys.path). No son un error.
+LOCALES = {"utils", "conftest", "mi_agente"}
+
 MAGIA = re.compile(r"^\s*[!%]")
 
 
@@ -52,7 +56,7 @@ def revisar_importaciones(arbol: ast.AST, origen: str, fallos: list[str]) -> Non
     for nodo in ast.walk(arbol):
         if isinstance(nodo, ast.Import):
             for a in nodo.names:
-                if a.name.split(".")[0] in {"utils"} or a.name in OPCIONALES:
+                if a.name.split(".")[0] in LOCALES or a.name in OPCIONALES:
                     continue
                 if importable(a.name) is None:
                     fallos.append(f"{origen}: no se puede importar el módulo `{a.name}`")
@@ -60,7 +64,7 @@ def revisar_importaciones(arbol: ast.AST, origen: str, fallos: list[str]) -> Non
         elif isinstance(nodo, ast.ImportFrom):
             if nodo.level or not nodo.module:
                 continue
-            if nodo.module.split(".")[0] == "utils" or nodo.module in OPCIONALES:
+            if nodo.module.split(".")[0] in LOCALES or nodo.module in OPCIONALES:
                 continue
             mod = importable(nodo.module)
             if mod is None:

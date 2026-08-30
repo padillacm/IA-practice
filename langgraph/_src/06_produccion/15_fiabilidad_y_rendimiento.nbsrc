@@ -1,0 +1,726 @@
+#%%md
+# 15 · Fiabilidad y rendimiento
+
+**Módulo 6 · Producción** — *tiempo estimado: 1 h 30 min*
+
+Todo lo anterior daba por hecho que las cosas funcionan. En producción no funcionan: las APIs
+dan timeout, los modelos devuelven 429, los procesos mueren a la mitad y alguien pregunta por
+qué la factura del mes se ha triplicado.
+
+Este notebook cubre las herramientas que LangGraph da para eso, y varias son poco conocidas
+aunque estén a una línea de distancia.
+
+Al terminar sabrás:
+
+1. `RetryPolicy` con reintento **selectivo**: qué reintentar y qué no.
+2. `error_handler`: degradar en vez de reventar.
+3. `CachePolicy`: no volver a pagar lo mismo dos veces.
+4. Tiempos de espera por nodo, con la restricción que casi nadie conoce.
+5. Modelos de respaldo, presupuestos y el catálogo de decisiones de rendimiento.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m6")
+
+#%%md
+## 1. Taxonomía de fallos
+
+Antes de las herramientas, la clasificación. Cada familia de fallo tiene una respuesta
+distinta, y aplicar la equivocada empeora las cosas.
+
+| Fallo | Ejemplo | Respuesta correcta |
+|---|---|---|
+| **Transitorio** | timeout de red, 429, 503 | **Reintentar** con retroceso |
+| **Permanente** | 401, argumento inválido, 404 | **No reintentar.** Degradar o fallar rápido |
+| **De contenido** | el modelo devuelve algo mal formado | Reintentar **cambiando la petición** |
+| **De recursos** | el proceso muere, se agota la memoria | Reanudar desde el checkpoint |
+| **De coste** | el agente da vueltas | Presupuestos y topes |
+
+El error más caro es tratar un fallo permanente como transitorio: reintentar tres veces un
+401 son tres llamadas pagadas y tres veces la latencia, para acabar en el mismo sitio.
+
+#%%md
+## 2. `RetryPolicy`
+
+Se declara por nodo. Los parámetros que importan:
+
+| Parámetro | Qué hace | Valor por defecto |
+|---|---|---|
+| `max_attempts` | intentos totales, incluido el primero | 3 |
+| `initial_interval` | espera antes del primer reintento | 0.5 s |
+| `backoff_factor` | multiplicador entre intentos | 2.0 |
+| `max_interval` | tope de la espera | 128 s |
+| `jitter` | añade ruido para no sincronizar reintentos | True |
+| **`retry_on`** | **qué excepciones se reintentan** | un filtro por defecto |
+
+#%%py
+import operator
+import time
+from typing import Annotated, TypedDict
+
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import CachePolicy, RetryPolicy
+
+
+class EstadoR(TypedDict):
+    n: Annotated[int, operator.add]
+    bitacora: Annotated[list[str], operator.add]
+
+
+INTENTOS = {"transitorio": 0, "permanente": 0}
+
+
+def api_inestable(estado: EstadoR) -> dict:
+    """Falla las dos primeras veces con un error transitorio, luego funciona."""
+    INTENTOS["transitorio"] += 1
+    if INTENTOS["transitorio"] < 3:
+        raise ConnectionError("la API remota no responde")
+    return {"n": 1, "bitacora": [f"éxito en el intento {INTENTOS['transitorio']}"]}
+
+
+g = (
+    StateGraph(EstadoR)
+    .add_node("api", api_inestable,
+              retry_policy=RetryPolicy(max_attempts=4, initial_interval=0.05, backoff_factor=2.0))
+    .add_edge(START, "api")
+    .compile()
+)
+
+t0 = time.perf_counter()
+print("resultado:", g.invoke({"n": 0, "bitacora": []}))
+print(f"({INTENTOS['transitorio']} intentos en {time.perf_counter() - t0:.2f} s, con esperas crecientes)")
+
+#%%md
+### `retry_on`: la parte que marca la diferencia
+
+Sin `retry_on`, reintentas también los errores que nunca van a funcionar. Con él, declaras
+qué es transitorio en **tu** sistema.
+
+#%%py
+INTENTOS["permanente"] = 0
+
+
+def credenciales_malas(estado: EstadoR) -> dict:
+    INTENTOS["permanente"] += 1
+    raise PermissionError("401: la clave de API no es válida")
+
+
+g_selectivo = (
+    StateGraph(EstadoR)
+    .add_node("api", credenciales_malas,
+              retry_policy=RetryPolicy(max_attempts=4, initial_interval=0.05,
+                                       # SOLO estas se reintentan. Un 401 no.
+                                       retry_on=(ConnectionError, TimeoutError)))
+    .add_edge(START, "api")
+    .compile()
+)
+
+t0 = time.perf_counter()
+try:
+    g_selectivo.invoke({"n": 0, "bitacora": []})
+except PermissionError as exc:
+    print(f"falló en {time.perf_counter() - t0:.2f} s tras {INTENTOS['permanente']} intento(s): {exc}")
+    print("\nSin retry_on habrían sido 4 intentos y unos 3 s de espera, para el mismo resultado.")
+
+#%%md
+`retry_on` también acepta una **función**, que es lo que necesitas cuando el proveedor
+codifica el tipo de fallo dentro del mensaje o del código de estado.
+
+#%%py
+class ErrorAPI(Exception):
+    def __init__(self, codigo: int):
+        self.codigo = codigo
+        super().__init__(f"HTTP {codigo}")
+
+
+def es_transitorio(exc: Exception) -> bool:
+    """429 (límite de ritmo) y 5xx sí; 4xx de cliente no."""
+    if isinstance(exc, ErrorAPI):
+        return exc.codigo == 429 or 500 <= exc.codigo < 600
+    return isinstance(exc, (ConnectionError, TimeoutError))
+
+
+for codigo in (429, 503, 401, 404):
+    print(f"  HTTP {codigo}: {'se reintenta' if es_transitorio(ErrorAPI(codigo)) else 'NO se reintenta'}")
+
+politica = RetryPolicy(max_attempts=5, initial_interval=0.5, backoff_factor=2.0,
+                       max_interval=20.0, jitter=True, retry_on=es_transitorio)
+print(f"\npolítica lista: hasta {politica.max_attempts} intentos, esperas de "
+      f"{politica.initial_interval}s x{politica.backoff_factor} con tope {politica.max_interval}s")
+
+#%%md
+> **Por qué el `jitter` importa.** Si mil peticiones fallan a la vez por un 503 y todas
+> reintentan exactamente a los 0,5 s, vuelves a tumbar el servicio en el mismo instante. El
+> ruido aleatorio reparte los reintentos en el tiempo. Está activado por defecto; no lo
+> desactives salvo que sepas exactamente por qué.
+
+#%%md
+## 3. `error_handler`: degradar en vez de reventar
+
+Cuando los reintentos se agotan, por defecto la excepción sube y mata la ejecución.
+`error_handler` te deja poner un nodo alternativo que se ejecuta en su lugar.
+
+Es la diferencia entre un error 500 y una respuesta parcial con una nota.
+
+#%%py
+def enriquecer_con_api(estado: EstadoR) -> dict:
+    raise ConnectionError("el servicio de enriquecimiento lleva caído todo el día")
+
+
+def sin_enriquecer(estado: EstadoR) -> dict:
+    """Plan B: seguimos adelante con lo que tenemos y lo dejamos anotado."""
+    return {"n": 0, "bitacora": ["AVISO: sin datos de enriquecimiento; se continúa con lo básico"]}
+
+
+g_degradado = (
+    StateGraph(EstadoR)
+    .add_node("base", lambda e: {"n": 1, "bitacora": ["datos básicos cargados"]})
+    .add_node("enriquecer", enriquecer_con_api,
+              retry_policy=RetryPolicy(max_attempts=2, initial_interval=0.02),
+              error_handler=sin_enriquecer)                    # <- el plan B
+    .add_node("informe", lambda e: {"bitacora": [f"informe generado con n={e['n']}"]})
+    .add_edge(START, "base").add_edge("base", "enriquecer")
+    .add_edge("enriquecer", "informe").add_edge("informe", END)
+    .compile()
+)
+
+for linea in g_degradado.invoke({"n": 0, "bitacora": []})["bitacora"]:
+    print("  ", linea)
+
+#%%md
+El grafo **terminó**, produjo un informe y dejó constancia de lo que faltaba. Esa nota es lo
+importante: una degradación silenciosa es peor que un error, porque nadie se entera de que
+los datos están incompletos.
+
+#%%md
+## 4. `CachePolicy`: no pagar dos veces lo mismo
+
+Un nodo con caché no se vuelve a ejecutar si recibe la misma entrada. Requiere pasar un
+`cache=` al compilar.
+
+Es una de las funcionalidades con mejor relación beneficio/esfuerzo de todo LangGraph, y muy
+poca gente la usa.
+
+#%%py
+from langgraph.cache.memory import InMemoryCache
+
+
+class EstadoCache(TypedDict):
+    consulta: str
+    resultado: str
+
+
+EJECUCIONES = {"n": 0}
+
+
+def consulta_cara(estado: EstadoCache) -> dict:
+    """Simula algo lento: una consulta pesada, una llamada a un modelo grande, un scraping."""
+    EJECUCIONES["n"] += 1
+    time.sleep(0.4)
+    return {"resultado": f"resultado de {estado['consulta']!r} (ejecución real #{EJECUCIONES['n']})"}
+
+
+g_cache = (
+    StateGraph(EstadoCache)
+    .add_node("consultar", consulta_cara, cache_policy=CachePolicy(ttl=300))   # 5 minutos
+    .add_edge(START, "consultar")
+    .compile(cache=InMemoryCache())        # <- sin esto, cache_policy no hace nada
+)
+
+for i, consulta in enumerate(["ventas de mayo", "ventas de mayo", "ventas de junio", "ventas de mayo"], 1):
+    t0 = time.perf_counter()
+    r = g_cache.invoke({"consulta": consulta, "resultado": ""})
+    ms = (time.perf_counter() - t0) * 1000
+    print(f"  {i}. {consulta:<16} {ms:>6.0f} ms   {'CACHÉ' if ms < 100 else 'ejecutado'}")
+
+print(f"\n4 invocaciones, {EJECUCIONES['n']} ejecuciones reales")
+
+#%%md
+### La clave de caché: `key_func`
+
+Por defecto, la clave se calcula sobre **toda** la entrada del nodo. Eso significa que si el
+estado lleva una marca de tiempo o un identificador de petición, **nunca habrá acierto de
+caché**: cada entrada es distinta.
+
+`key_func` te deja decidir qué partes cuentan.
+
+#%%py
+import hashlib
+import json
+
+
+class EstadoConRuido(TypedDict):
+    consulta: str
+    id_peticion: str        # cambia en cada llamada: envenenaría la caché
+    marca_tiempo: float     # idem
+    resultado: str
+
+
+EJEC2 = {"n": 0}
+
+
+def clave_solo_consulta(entrada: dict) -> str:
+    """Solo la consulta determina el resultado. Lo demás es ruido de la petición."""
+    return hashlib.sha256(json.dumps({"consulta": entrada["consulta"]},
+                                     sort_keys=True).encode()).hexdigest()
+
+
+def consultar_ruidoso(estado: EstadoConRuido) -> dict:
+    EJEC2["n"] += 1
+    return {"resultado": f"{estado['consulta']} -> ejecución real #{EJEC2['n']}"}
+
+
+g_ruido = (
+    StateGraph(EstadoConRuido)
+    .add_node("consultar", consultar_ruidoso,
+              cache_policy=CachePolicy(key_func=clave_solo_consulta, ttl=300))
+    .add_edge(START, "consultar")
+    .compile(cache=InMemoryCache())
+)
+
+for i in range(4):
+    r = g_ruido.invoke({"consulta": "informe mensual", "id_peticion": f"req-{i}",
+                        "marca_tiempo": time.time(), "resultado": ""})
+    print(f"  petición req-{i}: {r['resultado']}")
+print(f"\n4 peticiones con id y marca distintos, {EJEC2['n']} ejecución(es) real(es)")
+
+#%%md
+**Cuándo cachear y cuándo no:**
+
+| Cachear | No cachear |
+|---|---|
+| Recuperación sobre un corpus estático | Cualquier cosa con efectos laterales |
+| Llamadas a APIs de referencia (catálogos, tipos de cambio) | Datos que cambian rápido, salvo con TTL corto |
+| Nodos deterministas y caros | Nodos con `temperature > 0` si quieres variedad |
+| Reejecuciones durante el desarrollo | Cuando lo que pruebas es precisamente la variabilidad |
+
+Un aviso: `InMemoryCache` vive en el proceso. Si tienes varios trabajadores, cada uno tendrá
+la suya. Para caché compartida hace falta un backend externo, implementando `BaseCache`.
+
+#%%md
+## 5. Tiempos de espera por nodo
+
+`timeout` en `add_node` corta un nodo que se ha quedado colgado. Y aquí está la restricción
+que hay que conocer:
+
+> **Los tiempos de espera por nodo SOLO funcionan con nodos `async def`.** Con un nodo
+> síncrono, `compile()` falla con un `ValueError` explícito: Python no puede cancelar de forma
+> segura una función síncrona en ejecución.
+
+#%%py
+import asyncio
+
+
+class EstadoT(TypedDict):
+    n: Annotated[int, operator.add]
+
+
+def nodo_sincrono_lento(estado: EstadoT) -> dict:
+    time.sleep(1)
+    return {"n": 1}
+
+
+try:
+    StateGraph(EstadoT).add_node("lento", nodo_sincrono_lento, timeout=0.1) \
+        .add_edge(START, "lento").compile()
+except ValueError as exc:
+    print(f"nodo síncrono con timeout -> ValueError:\n  {exc}")
+
+#%%py
+async def nodo_asincrono_lento(estado: EstadoT) -> dict:
+    await asyncio.sleep(1)
+    return {"n": 1}
+
+
+g_timeout = (
+    StateGraph(EstadoT)
+    .add_node("lento", nodo_asincrono_lento, timeout=0.1)
+    .add_edge(START, "lento")
+    .compile()
+)
+
+try:
+    asyncio.run(g_timeout.ainvoke({"n": 0}))
+except Exception as exc:
+    print(f"nodo asíncrono con timeout -> {type(exc).__name__}: {exc}")
+
+#%%md
+Esto es una razón de peso, muy concreta, para escribir como `async def` todo nodo que haga
+E/S: **sin async no puedes ponerle un tiempo máximo**. Y un nodo sin tiempo máximo puede
+bloquear una ejecución indefinidamente.
+
+`timeout` y `retry_policy` se combinan: el tiempo de espera dispara la excepción y la política
+de reintentos decide si se vuelve a intentar.
+
+#%%py
+INTENTOS_T = {"n": 0}
+
+
+async def api_lenta_a_veces(estado: EstadoT) -> dict:
+    INTENTOS_T["n"] += 1
+    await asyncio.sleep(0.5 if INTENTOS_T["n"] < 3 else 0.0)   # las dos primeras, lentas
+    return {"n": 1}
+
+
+g_combo = (
+    StateGraph(EstadoT)
+    .add_node("api", api_lenta_a_veces, timeout=0.1,
+              retry_policy=RetryPolicy(max_attempts=4, initial_interval=0.02, retry_on=Exception))
+    .add_edge(START, "api")
+    .compile()
+)
+
+print("resultado:", asyncio.run(g_combo.ainvoke({"n": 0})), f"tras {INTENTOS_T['n']} intentos")
+print("(los dos primeros intentos se cortaron por timeout y se reintentaron)")
+
+#%%md
+## 6. Modelos de respaldo
+
+Si el proveedor cae o devuelve 429, tener un plan B evita que tu producto caiga con él.
+`ModelFallbackMiddleware` lo resuelve para agentes; para grafos, `with_fallbacks`.
+
+#%%py
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelFallbackMiddleware
+from langchain.messages import HumanMessage
+
+agente_resistente = create_agent(
+    model=llm("gpt-4o-mini"),
+    tools=[],
+    system_prompt="Responde en español y en una frase.",
+    middleware=[
+        # Si el primero falla, se prueban los siguientes en orden.
+        ModelFallbackMiddleware("openai:gpt-4o-mini", "openai:gpt-4o"),
+    ],
+)
+
+print(agente_resistente.invoke({"messages": [HumanMessage("¿Qué es un super-paso?")]},
+                               {"recursion_limit": 10})["messages"][-1].text)
+
+#%%md
+```python
+# Para un grafo, el respaldo se pone en el propio runnable:
+modelo_con_respaldo = llm("gpt-4o-mini").with_fallbacks([llm("gpt-4o")])
+```
+
+Un matiz de diseño que se olvida: **el respaldo tiene que ser de otro proveedor para cubrir
+una caída del proveedor**. Dos modelos de OpenAI se caen juntos. Si la disponibilidad es un
+requisito real, el plan B vive en otra empresa.
+
+#%%md
+## 7. Rendimiento: el catálogo de decisiones
+
+Cinco palancas, ordenadas por relación beneficio/esfuerzo.
+
+#%%py
+print("""
+1. PARALELIZAR lo independiente        (notebook 03)
+   Dos llamadas al modelo que no dependen entre sí deben estar en el mismo super-paso.
+   Coste: el mismo. Latencia: la mitad. Es la optimización más barata que existe.
+
+2. CACHEAR lo determinista y caro      (sección 4)
+   Recuperación, catálogos, cálculos. Coste: casi cero. Ahorro: proporcional a la repetición.
+
+3. RECORTAR el contexto                (notebook 04)
+   El coste crece de forma cuadrática con la longitud de la conversación. Recortar o resumir
+   es lo que evita que la factura se dispare en agentes largos.
+
+4. ELEGIR el modelo por dificultad     (notebook 07)
+   Un enrutador en wrap_model_call que mande lo fácil al modelo barato. En cargas mixtas,
+   ahorros del 60-80 % sin pérdida medible de calidad.
+
+5. AJUSTAR la durabilidad              (notebook 08)
+   durability="exit" en trabajos por lotes cortos y reejecutables: una escritura en vez de N.
+   Nunca con interrupt().
+""")
+
+#%%md
+### Medir antes de optimizar
+
+Un perfilador de nodos en 15 líneas, con `stream_mode="tasks"`. Es la respuesta a "el agente
+va lento", y casi nunca el culpable es el nodo que uno habría apostado.
+
+#%%py
+from collections import defaultdict
+
+
+def perfilar(grafo, entrada, config=None) -> None:
+    inicios, stats = {}, defaultdict(lambda: {"veces": 0, "segundos": 0.0})
+
+    for evento in grafo.stream(entrada, config or {"recursion_limit": 25}, stream_mode="tasks"):
+        if "result" not in evento:
+            inicios[evento["id"]] = (evento["name"], time.perf_counter())
+        else:
+            nombre, t0 = inicios.pop(evento["id"], (evento["name"], time.perf_counter()))
+            stats[nombre]["veces"] += 1
+            stats[nombre]["segundos"] += time.perf_counter() - t0
+
+    total = sum(s["segundos"] for s in stats.values()) or 1.0
+    print(f"  {'nodo':<16} {'veces':>6} {'segundos':>9} {'% del total':>12}")
+    print("  " + "-" * 46)
+    for nombre, s in sorted(stats.items(), key=lambda kv: -kv[1]["segundos"]):
+        barra = "#" * round(s["segundos"] / total * 20)
+        print(f"  {nombre:<16} {s['veces']:>6} {s['segundos']:>9.2f} {s['segundos'] / total:>11.0%} {barra}")
+
+
+class EstadoPerfil(TypedDict):
+    n: Annotated[int, operator.add]
+
+
+def tarea(nombre: str, segundos: float):
+    def nodo(estado: EstadoPerfil) -> dict:
+        time.sleep(segundos)
+        return {"n": 1}
+    return nodo
+
+
+g_perfil = (
+    StateGraph(EstadoPerfil)
+    .add_node("rapido", tarea("rapido", 0.05))
+    .add_node("medio", tarea("medio", 0.2))
+    .add_node("lento", tarea("lento", 0.6))
+    .add_edge(START, "rapido").add_edge("rapido", "medio").add_edge("medio", "lento")
+    .compile()
+)
+
+perfilar(g_perfil, {"n": 0})
+
+#%%md
+## 8. Ejercicios
+
+> **EJERCICIO 15.1 — Un cortacircuitos**
+>
+> El patrón *circuit breaker*: si un servicio externo falla N veces seguidas, deja de
+> llamarlo durante T segundos y devuelve la respuesta degradada directamente. Así no gastas
+> reintentos ni latencia en algo que sabes que está caído.
+>
+> Impleméntalo como un objeto con estado (`cerrado`, `abierto`, `semiabierto`) y úsalo desde
+> un nodo. Demuestra los tres estados.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 15.1</b></summary>
+
+El estado <b>semiabierto</b> es la parte que se olvida y la que hace útil el patrón: pasado
+el tiempo de espera se deja pasar <b>una</b> petición de prueba. Si funciona, el circuito se
+cierra; si falla, se vuelve a abrir el reloj. Sin ese estado, o te quedas abierto para siempre
+o vuelves a inundar el servicio caído en cuanto vence el temporizador.
+
+Fíjate en la diferencia con <code>RetryPolicy</code>: los reintentos son <b>por llamada</b>,
+el cortacircuitos es <b>global y con memoria</b>. Se complementan — reintentas dentro de una
+llamada y cortas si el patrón de fallo se repite entre llamadas.
+</details>
+
+#%%py
+class Cortacircuitos:
+    """Deja de llamar a un servicio que falla repetidamente, y lo reintenta más tarde."""
+
+    def __init__(self, umbral_fallos: int = 3, espera_segundos: float = 2.0):
+        self.umbral = umbral_fallos
+        self.espera = espera_segundos
+        self.fallos = 0
+        self.abierto_desde: float | None = None
+
+    @property
+    def estado(self) -> str:
+        if self.abierto_desde is None:
+            return "cerrado"
+        if time.time() - self.abierto_desde >= self.espera:
+            return "semiabierto"        # toca dejar pasar una petición de prueba
+        return "abierto"
+
+    def llamar(self, funcion, *args, **kwargs):
+        if self.estado == "abierto":
+            raise RuntimeError(f"cortacircuitos ABIERTO; faltan "
+                               f"{self.espera - (time.time() - self.abierto_desde):.1f} s")
+        try:
+            resultado = funcion(*args, **kwargs)
+        except Exception:
+            self.fallos += 1
+            if self.fallos >= self.umbral:
+                self.abierto_desde = time.time()
+            raise
+        # Éxito: se cierra el circuito y se reinicia el contador.
+        self.fallos, self.abierto_desde = 0, None
+        return resultado
+
+
+SERVICIO_CAIDO = {"activo": False}
+
+
+def servicio_externo() -> str:
+    if not SERVICIO_CAIDO["activo"]:
+        raise ConnectionError("servicio no disponible")
+    return "datos del servicio"
+
+
+breaker = Cortacircuitos(umbral_fallos=3, espera_segundos=1.0)
+
+
+class EstadoCB(TypedDict):
+    resultado: str
+    bitacora: Annotated[list[str], operator.add]
+
+
+def nodo_con_cortacircuitos(estado: EstadoCB) -> dict:
+    try:
+        return {"resultado": breaker.llamar(servicio_externo),
+                "bitacora": [f"[{breaker.estado}] llamada correcta"]}
+    except RuntimeError as exc:
+        # Circuito abierto: ni lo intentamos. Cero latencia, cero coste.
+        return {"resultado": "(degradado)", "bitacora": [f"[abierto] {exc}"]}
+    except ConnectionError:
+        return {"resultado": "(degradado)",
+                "bitacora": [f"[{breaker.estado}] fallo {breaker.fallos}/{breaker.umbral}"]}
+
+
+g_cb = StateGraph(EstadoCB).add_node("servicio", nodo_con_cortacircuitos) \
+    .add_edge(START, "servicio").compile()
+
+separador("fase 1: el servicio está caído")
+for _ in range(5):
+    r = g_cb.invoke({"resultado": "", "bitacora": []})
+    print("  ", r["bitacora"][0])
+
+separador("fase 2: esperamos a que el circuito pase a semiabierto")
+time.sleep(1.05)
+print("  estado del circuito:", breaker.estado)
+
+separador("fase 3: el servicio vuelve; la petición de prueba lo cierra")
+SERVICIO_CAIDO["activo"] = True
+for _ in range(2):
+    print("  ", g_cb.invoke({"resultado": "", "bitacora": []})["bitacora"][0])
+print("  estado final:", breaker.estado)
+
+#%%md
+> **EJERCICIO 15.2 — Presupuesto de coste por ejecución**
+>
+> Escribe un middleware que acumule el coste en euros de cada llamada al modelo y **corte la
+> ejecución** si supera un presupuesto, devolviendo lo que haya conseguido hasta ese momento.
+>
+> Es la protección que separa "el agente se desmadró" de "el agente se desmadró y nos costó
+> 400 €".
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 15.2</b></summary>
+
+La pieza importante es <code>jump_to="end"</code>: un <code>after_model</code> puede
+cortocircuitar el agente devolviendo ese salto en su actualización de estado. Termina de
+forma limpia, con el historial coherente, en vez de lanzar una excepción.
+
+Compáralo con <code>ModelCallLimitMiddleware</code>, que cuenta <b>llamadas</b>. Contar
+llamadas es más simple pero peor proxy del gasto: una llamada con 50 000 tokens de contexto
+cuesta cien veces más que una con 500. El presupuesto en euros es la magnitud que de verdad
+le importa a quien paga.
+</details>
+
+#%%py
+from langchain.agents.middleware import AgentMiddleware, AgentState
+from langchain.tools import tool
+
+# Precios por millón de tokens (entrada, salida). Ajústalos a los actuales de tu proveedor.
+PRECIOS = {"gpt-4o-mini": (0.15, 0.60), "gpt-4o": (2.50, 10.00)}
+
+
+class EstadoPresupuesto(AgentState):
+    coste_euros: Annotated[float, operator.add]
+    llamadas: Annotated[int, operator.add]
+    presupuesto_agotado: bool
+
+
+class PresupuestoMiddleware(AgentMiddleware):
+    """Acumula el coste real y corta la ejecución si se pasa del presupuesto."""
+
+    state_schema = EstadoPresupuesto
+
+    def __init__(self, presupuesto_euros: float, modelo: str = "gpt-4o-mini"):
+        super().__init__()
+        self.presupuesto = presupuesto_euros
+        self.precio_entrada, self.precio_salida = PRECIOS[modelo]
+
+    def after_model(self, state, runtime) -> dict | None:
+        uso = getattr(state["messages"][-1], "usage_metadata", None)
+        if not uso:
+            return None
+
+        coste = (uso.get("input_tokens", 0) * self.precio_entrada
+                 + uso.get("output_tokens", 0) * self.precio_salida) / 1_000_000
+        acumulado = state.get("coste_euros", 0.0) + coste
+
+        actualizacion = {"coste_euros": coste, "llamadas": 1}
+        if acumulado > self.presupuesto:
+            print(f"    [presupuesto] {acumulado:.6f} € supera el tope de {self.presupuesto:.6f} €; se corta")
+            actualizacion["presupuesto_agotado"] = True
+            actualizacion["jump_to"] = "end"        # cortocircuito limpio del agente
+        return actualizacion
+
+
+from utils.datos import tickets
+
+df = tickets()
+
+
+@tool(parse_docstring=True)
+def contar_tickets(categoria: str = "todas") -> str:
+    """Cuenta tickets de una categoría.
+
+    Args:
+        categoria: la categoría a contar, o 'todas'.
+    """
+    sel = df if categoria == "todas" else df[df.categoria == categoria]
+    return f"{len(sel)} tickets de {categoria}."
+
+
+def probar_presupuesto(presupuesto: float) -> None:
+    agente = create_agent(
+        model=llm(), tools=[contar_tickets],
+        system_prompt="Eres analista. Consulta cada categoría por separado con la herramienta.",
+        middleware=[PresupuestoMiddleware(presupuesto)],
+    )
+    salida = agente.invoke(
+        {"messages": [HumanMessage("Cuéntame cuántos tickets hay de cada una de las ocho "
+                                   "categorías, consultándolas una por una.")],
+         "coste_euros": 0.0, "llamadas": 0, "presupuesto_agotado": False},
+        {"recursion_limit": 40},
+    )
+    print(f"  presupuesto {presupuesto:.5f} €: {salida['llamadas']} llamadas, "
+          f"gastado {salida['coste_euros']:.6f} €, "
+          f"{'CORTADO' if salida['presupuesto_agotado'] else 'completado'}")
+
+
+separador("presupuesto amplio")
+probar_presupuesto(0.01)
+separador("presupuesto ajustado")
+probar_presupuesto(0.00005)
+
+#%%md
+## 9. Resumen
+
+- Clasifica el fallo antes de responder: **transitorio** se reintenta, **permanente** no.
+  Tratarlos igual es el error caro.
+- `RetryPolicy` con **`retry_on`** (tipo, tupla o función) es lo que evita reintentar un 401.
+  Deja el `jitter` activado.
+- `error_handler` permite **degradar con una nota** en vez de reventar. Sin la nota, la
+  degradación es silenciosa y eso es peor.
+- `CachePolicy` + `cache=` en `compile()` ahorra ejecuciones caras. Usa **`key_func`** o los
+  identificadores de petición envenenarán la caché.
+- **Los tiempos de espera por nodo solo funcionan en nodos `async def`**; con uno síncrono,
+  `compile()` falla. Es una razón concreta para escribir la E/S como asíncrona.
+- El respaldo de modelo debe ser de **otro proveedor** si lo que cubres es una caída.
+- Optimiza en este orden: paralelizar, cachear, recortar contexto, enrutar por dificultad,
+  ajustar durabilidad. Y **perfila antes**, con `stream_mode="tasks"`.
+- Un presupuesto en **euros** protege mejor que un tope de llamadas.
+
+**Siguiente:** [`16_functional_api.ipynb`](16_functional_api.ipynb) — la otra forma de
+escribir grafos, y cuándo conviene.

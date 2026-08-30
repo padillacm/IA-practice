@@ -7,3 +7,5 @@ __pycache__/
 *.db
 .langgraph_api/
 checkpoints/
+data/evaluaciones.jsonl
+.pytest_cache/

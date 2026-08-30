@@ -1,0 +1,636 @@
+#%%md
+# 17 · Evaluación, pruebas y observabilidad
+
+**Módulo 6 · Producción** — *tiempo estimado: 1 h 45 min*
+
+Aquí está la frontera real entre quien hace demos y quien opera sistemas. No es saber más
+API: es poder responder a estas cuatro preguntas en cualquier momento.
+
+1. **¿Funciona?** — pruebas automáticas
+2. **¿Sigue funcionando después de mi último cambio?** — pruebas de regresión
+3. **¿Qué ha pasado exactamente en esta ejecución?** — trazas
+4. **¿Va mejor o peor que la semana pasada?** — evaluación
+
+Al terminar sabrás montar las cuatro.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m6")
+
+#%%md
+## 1. La pirámide de pruebas de un sistema con LLM
+
+```
+        ╱╲            EVALUACIÓN         lenta, cara, no determinista
+       ╱  ╲           (conjunto dorado, jueces)      decenas de casos
+      ╱────╲
+     ╱      ╲         INTEGRACIÓN        rápida, gratis, DETERMINISTA
+    ╱        ╲        (grafo con modelo falso)       decenas de pruebas
+   ╱──────────╲
+  ╱            ╲      UNITARIAS          instantánea, gratis, determinista
+ ╱──────────────╲     (nodos como funciones)        cientos de pruebas
+```
+
+La idea contraintuitiva y la más importante de este notebook:
+
+> **La mayor parte de un sistema con LLM se puede probar sin llamar a ningún LLM.**
+
+Los reducers, los routers, los ciclos, los límites, la persistencia, el manejo de errores, el
+formato de las herramientas... nada de eso necesita un modelo. Y es donde están casi todos
+los errores.
+
+El curso trae una batería de pruebas real en `langgraph/pruebas/`. Vamos a ejecutarla y a
+recorrer sus tres niveles.
+
+#%%py
+import subprocess
+
+RAIZ = next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents] if (p / "utils" / "curso.py").exists())
+resultado = subprocess.run([sys.executable, "-m", "pytest", "pruebas/", "-q"],
+                           cwd=RAIZ, capture_output=True, text=True)
+print(resultado.stdout[-1500:] or resultado.stderr[-1500:])
+
+#%%md
+## 2. Nivel 1: los nodos son funciones
+
+Un nodo es `(estado) -> dict`. Se prueba como cualquier función pura: sin grafo, sin modelo,
+sin red. En microsegundos.
+
+Las tres pruebas que **todo** nodo debería tener:
+
+#%%py
+import operator
+from typing import Annotated, TypedDict
+
+
+class EstadoTriaje(TypedDict):
+    mensaje: str
+    plan: str
+    prioridad: str
+    razones: Annotated[list[str], operator.add]
+
+
+ESCALA = ["baja", "media", "alta", "critica"]
+PALABRAS_URGENTES = ("caído", "parado", "bloquea", "urgente", "no autorizado")
+PESO_PLAN = {"free": -1, "pro": 0, "business": 1, "enterprise": 2}
+
+
+def nodo_prioridad(estado: EstadoTriaje) -> dict:
+    texto = estado["mensaje"].lower()
+    puntos = 1 + sum(p in texto for p in PALABRAS_URGENTES) + PESO_PLAN.get(estado["plan"], 0)
+    indice = max(0, min(len(ESCALA) - 1, puntos))
+    return {"prioridad": ESCALA[indice], "razones": [f"puntos={puntos}"]}
+
+
+# (a) Devuelve SOLO las claves que cambia.
+salida = nodo_prioridad({"mensaje": "hola", "plan": "pro", "prioridad": "", "razones": []})
+assert set(salida) == {"prioridad", "razones"}
+print("  a) devuelve solo lo que cambia:", set(salida))
+
+# (b) No muta la entrada.
+entrada = {"mensaje": "el servicio está caído", "plan": "pro", "prioridad": "", "razones": ["previa"]}
+copia = {**entrada, "razones": list(entrada["razones"])}
+nodo_prioridad(entrada)
+assert entrada == copia
+print("  b) no muta la entrada: ok")
+
+# (c) La lógica de negocio, caso por caso.
+casos = [("consulta general", "free", "baja"), ("el servicio está caído", "pro", "alta"),
+         ("caído y parado", "enterprise", "critica")]
+for mensaje, plan, esperado in casos:
+    obtenido = nodo_prioridad({"mensaje": mensaje, "plan": plan, "prioridad": "", "razones": []})["prioridad"]
+    print(f"  c) {mensaje[:24]:<26} {plan:<11} -> {obtenido:<8} {'ok' if obtenido == esperado else 'FALLA'}")
+
+#%%md
+> **Una prueba que falla te está diciendo algo.** Al escribir la batería de este curso, el
+> caso `("todo bien", "enterprise")` daba `critica`: un cliente enterprise sin ninguna señal
+> de urgencia acababa despertando a la guardia solo por su plan. La prueba no dice si eso está
+> bien o mal; **documenta que hoy es así**. Si mañana alguien lo cambia, la prueba falla y
+> obliga a hacerlo a conciencia en vez de por accidente.
+
+#%%md
+## 3. Nivel 2: el grafo, con un modelo falso
+
+Para probar la topología —aristas, ciclos, reducers— hace falta ejecutar el grafo, pero **no**
+hace falta un modelo real. Un modelo guionizado te da control total: decides exactamente qué
+contesta en cada turno.
+
+Es lo que hay en `pruebas/conftest.py`. La pieza central:
+
+#%%py
+sys.path.insert(0, str(RAIZ / "pruebas"))
+from conftest import con_herramientas, guionizar
+
+from langchain.messages import AIMessage, HumanMessage
+from langchain_core.tools import tool
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+
+
+@tool
+def contar(categoria: str) -> str:
+    """Cuenta elementos de una categoría."""
+    return f"42 elementos de {categoria}"
+
+
+def construir_agente(modelo):
+    return (
+        StateGraph(MessagesState)
+        .add_node("modelo", lambda e: {"messages": [modelo.bind_tools([contar]).invoke(e["messages"])]})
+        .add_node("tools", ToolNode([contar], handle_tool_errors=True))
+        .add_edge(START, "modelo")
+        .add_conditional_edges("modelo", tools_condition)
+        .add_edge("tools", "modelo")
+        .compile()
+    )
+
+
+# Guionizamos dos turnos: primero pide la herramienta, luego responde.
+modelo_falso = guionizar(
+    con_herramientas("contar", {"categoria": "bugs"}),
+    "He encontrado 42 elementos de bugs.",
+)
+
+salida = construir_agente(modelo_falso).invoke(
+    {"messages": [HumanMessage("¿cuántos bugs hay?")]}, {"recursion_limit": 10})
+
+print("secuencia de mensajes:", [m.type for m in salida["messages"]])
+print("respuesta final     :", salida["messages"][-1].text)
+print("\nDeterminista, gratis, en milisegundos. Y prueba el bucle completo del agente.")
+
+#%%md
+### Qué probar en este nivel
+
+| Qué | Por qué importa |
+|---|---|
+| **La secuencia de mensajes** | `["human","ai","tool","ai"]` es el contrato del protocolo |
+| **Un `ToolMessage` por cada `tool_call`** | Si falta uno, el proveedor rechaza la siguiente llamada |
+| **Cada rama del router** | `compile()` no detecta una rama a un nodo inexistente |
+| **Escrituras concurrentes** | Que el reducer acumula y que sin reducer hay error |
+| **Que los ciclos terminan** | Con el tope, y sin lanzar excepción |
+
+#%%py
+# La prueba que caza el fallo silencioso del notebook 01: destinos inexistentes.
+from typing import Literal, get_args, get_type_hints
+
+
+class EstadoRuta(TypedDict):
+    prioridad: str
+    destino: str
+
+
+def enrutar(estado: EstadoRuta) -> Literal["guardia", "cola", "auto"]:
+    if estado["prioridad"] == "critica":
+        return "guardia"
+    return "cola" if estado["prioridad"] in ("alta", "media") else "auto"
+
+
+constructor = StateGraph(EstadoRuta)
+for nombre in ("guardia", "cola", "auto"):
+    constructor.add_node(nombre, lambda e, n=nombre: {"destino": n})
+constructor.add_node("clasificar", lambda e: {})
+constructor.add_edge(START, "clasificar")
+constructor.add_conditional_edges("clasificar", enrutar,
+                                  {"guardia": "guardia", "cola": "cola", "auto": "auto"})
+grafo_ruta = constructor.compile()
+
+declarados = set(get_args(get_type_hints(enrutar)["return"]))
+existentes = {n for n in grafo_ruta.get_graph().nodes if not n.startswith("__")}
+huerfanos = declarados - existentes
+
+print("destinos que declara el router:", sorted(declarados))
+print("nodos que existen en el grafo :", sorted(existentes))
+print("destinos rotos                :", sorted(huerfanos) or "ninguno")
+print("\nEsta comprobación en una prueba te avisa el día que alguien renombre un nodo.")
+
+#%%md
+## 4. Nivel 3: evaluación end-to-end
+
+Aquí sí hace falta el modelo. Es lento, cuesta dinero y **no es determinista**, así que no
+puede vivir en la misma batería que las anteriores: se ejecuta aparte, con menos frecuencia,
+y su resultado es un **número que se compara**, no un aprobado o suspenso.
+
+El patrón lo has usado en los proyectos: conjunto dorado, métrica, comparación. Lo que falta
+es convertirlo en algo que se ejecute solo.
+
+#%%py
+import json
+import time
+from dataclasses import asdict, dataclass
+
+
+@dataclass
+class ResultadoEvaluacion:
+    """Una medición completa, con todo lo necesario para compararla después."""
+    version: str
+    fecha: str
+    n_casos: int
+    acierto: float
+    latencia_media_ms: float
+    tokens_totales: int
+    detalles: list[dict]
+
+
+def evaluar(nombre_version: str, sistema, casos: list[dict]) -> ResultadoEvaluacion:
+    detalles, tokens = [], 0
+    t0 = time.perf_counter()
+
+    for caso in casos:
+        salida = sistema(caso["entrada"])
+        correcto = caso["comprobar"](salida)
+        detalles.append({"entrada": str(caso["entrada"])[:60], "correcto": correcto,
+                         "salida": str(salida)[:80]})
+        tokens += caso.get("tokens", 0)
+
+    segundos = time.perf_counter() - t0
+    return ResultadoEvaluacion(
+        version=nombre_version,
+        fecha=time.strftime("%Y-%m-%d %H:%M"),
+        n_casos=len(casos),
+        acierto=sum(d["correcto"] for d in detalles) / len(detalles),
+        latencia_media_ms=segundos / len(detalles) * 1000,
+        tokens_totales=tokens,
+        detalles=detalles,
+    )
+
+
+# Un sistema de juguete para ver la mecánica sin gastar tokens.
+def clasificador_v1(texto: str) -> str:
+    return "urgente" if "caído" in texto.lower() else "normal"
+
+
+def clasificador_v2(texto: str) -> str:
+    señales = ("caído", "parado", "urgente", "bloquea")
+    return "urgente" if any(s in texto.lower() for s in señales) else "normal"
+
+
+CASOS = [
+    {"entrada": "el servicio está caído", "comprobar": lambda s: s == "urgente"},
+    {"entrada": "estamos parados desde ayer", "comprobar": lambda s: s == "urgente"},
+    {"entrada": "es urgente, por favor", "comprobar": lambda s: s == "urgente"},
+    {"entrada": "consulta sobre la factura", "comprobar": lambda s: s == "normal"},
+    {"entrada": "¿tenéis modo oscuro?", "comprobar": lambda s: s == "normal"},
+]
+
+for nombre, sistema in [("v1", clasificador_v1), ("v2", clasificador_v2)]:
+    r = evaluar(nombre, sistema, CASOS)
+    print(f"  {r.version}: acierto {r.acierto:.0%}, {r.latencia_media_ms:.3f} ms/caso")
+
+#%%md
+### Guardar los resultados: sin historial no hay comparación
+
+La parte que casi nadie hace, y la que convierte la evaluación en algo útil: **persistir cada
+medición** para poder ver la evolución y detectar regresiones.
+
+#%%py
+HISTORIAL = RAIZ / "data" / "evaluaciones.jsonl"
+
+
+def registrar(resultado: ResultadoEvaluacion) -> None:
+    with HISTORIAL.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(asdict(resultado), ensure_ascii=False) + "\n")
+
+
+def comparar_con_anterior(resultado: ResultadoEvaluacion, tolerancia: float = 0.05) -> str:
+    """Compara con la última medición registrada y decide si hay regresión."""
+    if not HISTORIAL.exists():
+        return "primera medición: no hay con qué comparar"
+    previas = [json.loads(l) for l in HISTORIAL.read_text(encoding="utf-8").splitlines() if l.strip()]
+    if not previas:
+        return "sin mediciones previas"
+
+    anterior = previas[-1]
+    delta = resultado.acierto - anterior["acierto"]
+    if delta < -tolerancia:
+        return (f"REGRESIÓN: {anterior['acierto']:.0%} -> {resultado.acierto:.0%} "
+                f"({delta:+.0%}, tolerancia {tolerancia:.0%})")
+    if delta > tolerancia:
+        return f"mejora: {anterior['acierto']:.0%} -> {resultado.acierto:.0%} ({delta:+.0%})"
+    return f"sin cambio significativo ({anterior['acierto']:.0%} -> {resultado.acierto:.0%})"
+
+
+HISTORIAL.unlink(missing_ok=True)      # empezamos limpio para la demostración
+
+r1 = evaluar("v1", clasificador_v1, CASOS)
+print(f"v1: {comparar_con_anterior(r1)}")
+registrar(r1)
+
+r2 = evaluar("v2", clasificador_v2, CASOS)
+print(f"v2: {comparar_con_anterior(r2)}")
+registrar(r2)
+
+# Y ahora simulamos que alguien "mejora" el sistema y lo rompe.
+def clasificador_v3_roto(texto: str) -> str:
+    return "normal"          # alguien invirtió una condición
+
+
+r3 = evaluar("v3", clasificador_v3_roto, CASOS)
+print(f"v3: {comparar_con_anterior(r3)}")
+registrar(r3)
+
+print(f"\n{len(HISTORIAL.read_text(encoding='utf-8').splitlines())} mediciones registradas en {HISTORIAL.name}")
+
+#%%md
+Ese `REGRESIÓN:` es lo que quieres que salga en tu integración continua y bloquee el
+despliegue. Sin él, un cambio de prompt que baja el acierto un 15 % llega a producción y os
+enteráis por los clientes.
+
+> **La tolerancia no es opcional.** Un sistema con LLM tiene varianza: la misma evaluación
+> repetida da resultados ligeramente distintos. Si pones tolerancia cero, la CI falla por
+> ruido y el equipo aprende a ignorarla, que es peor que no tenerla. Mide tu varianza
+> ejecutando la evaluación tres veces sin cambiar nada, y pon la tolerancia por encima.
+
+#%%md
+## 5. Observabilidad: LangSmith
+
+Las pruebas dicen si funciona **antes** de desplegar. Las trazas dicen qué pasó **después**.
+
+Un grafo de agentes es un sistema distribuido en miniatura: nodos concurrentes, llamadas
+anidadas, subgrafos, herramientas. Cuando algo va mal, `print()` no basta —con concurrencia,
+el orden de la salida ni siquiera es el orden de ejecución.
+
+**Activarlo son dos variables de entorno:**
+
+```bash
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=mi-proyecto
+```
+
+Y ya está: no hay que instrumentar nada. `init()` lo hace por ti si tienes la clave en `.env`.
+
+#%%py
+import os
+
+if os.environ.get("LANGSMITH_TRACING") == "true":
+    print(f"Trazado ACTIVO en el proyecto {os.environ.get('LANGSMITH_PROJECT')!r}.")
+    print("Cada ejecución de este notebook aparece en https://smith.langchain.com")
+else:
+    print("Trazado desactivado. Para activarlo, pon LANGSMITH_API_KEY en langgraph/.env")
+    print("y reinicia el kernel. Es gratis para uso personal y cambia por completo")
+    print("la experiencia de depurar un grafo.")
+
+#%%md
+### Qué te da una traza, y por qué no lo tienes sin ella
+
+| Pregunta | Sin trazas | Con trazas |
+|---|---|---|
+| ¿Qué nodos se ejecutaron y en qué orden? | reconstruirlo a mano | el árbol completo |
+| ¿Qué prompt **exacto** vio el modelo? | volver a montarlo | literal, con el sistema incluido |
+| ¿Qué herramienta se llamó y con qué argumentos? | logs si los pusiste | siempre |
+| ¿Cuántos tokens y cuánto costó **este** paso? | estimarlo | el número real |
+| ¿Por qué el router fue por ahí? | deducirlo | el estado en ese instante |
+| ¿Qué pasó en producción a las 3 de la mañana? | nada | la ejecución entera |
+
+Esa penúltima fila es la que más tiempo ahorra. "¿Por qué escaló este ticket?" se responde
+mirando el estado exacto en el momento de la decisión, no reproduciendo el caso.
+
+#%%md
+### Metadatos y etiquetas: hacer las trazas buscables
+
+Una traza sin contexto es un árbol bonito. Con metadatos, es una base de datos consultable:
+*"enséñame todas las ejecuciones del cliente X que acabaron en escalado la semana pasada"*.
+
+#%%py
+from langgraph.graph import StateGraph
+
+modelo = llm()
+
+
+class EstadoSimple(TypedDict):
+    pregunta: str
+    respuesta: str
+
+
+grafo_trazado = (
+    StateGraph(EstadoSimple)
+    .add_node("responder", lambda e: {"respuesta": modelo.invoke(e["pregunta"]).text})
+    .add_edge(START, "responder")
+    .compile()
+)
+
+salida = grafo_trazado.invoke(
+    {"pregunta": "¿Qué es un super-paso en LangGraph? Una frase.", "respuesta": ""},
+    config={
+        # Todo esto aparece en la traza y es filtrable.
+        "run_name": "consulta-documentacion",
+        "tags": ["produccion", "modulo-6", "v2"],
+        "metadata": {"id_cliente": "acme", "plan": "enterprise", "canal": "chat",
+                     "version_prompt": "2026-08-a"},
+    },
+)
+print(salida["respuesta"])
+print("\nEtiqueta siempre la versión del prompt: es lo que te deja responder a")
+print("'¿el acierto bajó cuando cambiamos el prompt?' sin adivinar.")
+
+#%%md
+## 6. Qué vigilar en producción
+
+Las cuatro señales que de verdad importan en un sistema de agentes, y ninguna es "el
+porcentaje de acierto" (que no puedes medir sin etiquetas nuevas).
+
+#%%py
+print("""
+1. TASA DE ERROR por nodo
+   Un nodo que empieza a fallar el 5 % de las veces es una API que se está degradando.
+   Se ve en la traza mucho antes de que nadie se queje.
+
+2. LATENCIA p95, NO la media
+   La media la arregla un caché. El p95 es lo que sufre el usuario que se va.
+
+3. TOKENS POR EJECUCIÓN, con su distribución
+   Si la mediana está estable y la cola se alarga, tienes agentes dando vueltas.
+   Es la señal más temprana de un bucle, y llega antes que la factura.
+
+4. TASA DE ABSTENCIÓN y de escalado a humano
+   Sube sola cuando cambian los datos de entrada, aunque el sistema no haya cambiado.
+   Es el detector de deriva más barato que existe: no necesita etiquetas.
+
+Y una que no es una métrica: MUESTREA Y LEE trazas reales cada semana. Veinte minutos
+leyendo diez ejecuciones al azar encuentra cosas que ningún panel enseña.
+""")
+
+#%%md
+## 7. Ejercicios
+
+> **EJERCICIO 17.1 — Una prueba que caza un fallo real**
+>
+> El agente de abajo tiene un fallo: cuando el modelo pide **dos** herramientas en el mismo
+> turno, solo ejecuta la primera. Eso deja un `tool_call` sin su `ToolMessage` y hace que la
+> siguiente llamada al proveedor falle con un error 400.
+>
+> Escribe la prueba que lo detecta **usando un modelo guionizado**, sin llamar a ningún LLM.
+> Después arregla el nodo y comprueba que la prueba pasa.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 17.1</b></summary>
+
+La prueba compara <b>el conjunto de ids pedidos con el conjunto de ids respondidos</b>. Es un
+invariante del protocolo de tool calling, y expresarlo como conjuntos hace que el mensaje de
+error diga exactamente qué id falta.
+
+Fíjate en lo que esta prueba <b>no</b> hace: no comprueba el texto de la respuesta ni pide un
+modelo real. Comprueba una propiedad estructural, que es determinista y siempre debe
+cumplirse. Las mejores pruebas de sistemas con LLM son así.
+</details>
+
+#%%py
+from langchain.messages import ToolMessage
+
+
+def nodo_herramientas_roto(estado: MessagesState) -> dict:
+    """FALLO: solo procesa la primera tool_call."""
+    llamada = estado["messages"][-1].tool_calls[0]
+    return {"messages": [ToolMessage(f"resultado de {llamada['name']}",
+                                     tool_call_id=llamada["id"], name=llamada["name"])]}
+
+
+def nodo_herramientas_correcto(estado: MessagesState) -> dict:
+    """Todas las tool_calls, cada una con su ToolMessage."""
+    return {"messages": [
+        ToolMessage(f"resultado de {tc['name']}", tool_call_id=tc["id"], name=tc["name"])
+        for tc in estado["messages"][-1].tool_calls
+    ]}
+
+
+def prueba_invariante_tool_calls(nodo_tools) -> tuple[bool, str]:
+    """La prueba: cada tool_call debe tener su ToolMessage con el mismo id."""
+    modelo = guionizar(
+        AIMessage("", tool_calls=[
+            {"name": "contar", "args": {"categoria": "a"}, "id": "c1"},
+            {"name": "contar", "args": {"categoria": "b"}, "id": "c2"},
+        ]),
+        "listo",
+    )
+    grafo = (
+        StateGraph(MessagesState)
+        .add_node("modelo", lambda e: {"messages": [modelo.bind_tools([contar]).invoke(e["messages"])]})
+        .add_node("tools", nodo_tools)
+        .add_edge(START, "modelo")
+        .add_conditional_edges("modelo", tools_condition)
+        .add_edge("tools", "modelo")
+        .compile()
+    )
+    salida = grafo.invoke({"messages": [HumanMessage("cuenta a y b")]}, {"recursion_limit": 10})
+
+    pedidos = {tc["id"] for m in salida["messages"] for tc in (getattr(m, "tool_calls", None) or [])}
+    respondidos = {m.tool_call_id for m in salida["messages"] if m.type == "tool"}
+    if pedidos == respondidos:
+        return True, f"ok: {len(pedidos)} llamadas, {len(respondidos)} respuestas"
+    return False, f"FALLA: pedidos={sorted(pedidos)} respondidos={sorted(respondidos)}"
+
+
+for etiqueta, nodo in [("versión rota    ", nodo_herramientas_roto),
+                       ("versión corregida", nodo_herramientas_correcto)]:
+    ok, mensaje = prueba_invariante_tool_calls(nodo)
+    print(f"  {etiqueta}: {mensaje}")
+
+#%%md
+> **EJERCICIO 17.2 — Detector de varianza**
+>
+> Un sistema con LLM no da el mismo resultado dos veces. Antes de poner una tolerancia de
+> regresión hay que **medir esa varianza**.
+>
+> Escribe una función que ejecute la misma evaluación N veces sobre un sistema con LLM y
+> devuelva media, desviación típica y rango. Úsala para decidir una tolerancia razonable.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 17.2</b></summary>
+
+La regla práctica que se suele usar: <b>tolerancia = 2 desviaciones típicas</b>. Con eso, una
+alarma significa "esto no es ruido" el 95 % de las veces.
+
+Y una observación que cambia la forma de trabajar: si tu desviación típica es del 8 %, una
+"mejora" del 5 % que celebraste el martes <b>no era una mejora</b>, era ruido. Medir la
+varianza es lo que te impide perseguir fantasmas durante semanas.
+
+Para bajar la varianza: <code>temperature=0</code>, conjuntos de evaluación más grandes, y
+métricas menos binarias (una rúbrica de 0 a 5 tiene menos varianza que un sí/no).
+</details>
+
+#%%py
+import statistics
+
+from typing import Literal as Lit
+
+from pydantic import BaseModel, Field
+
+
+class Clasificacion(BaseModel):
+    """Clasificación de urgencia de un mensaje de soporte."""
+    urgencia: Lit["urgente", "normal"] = Field(
+        description="urgente si el cliente no puede trabajar o menciona un plazo inminente"
+    )
+
+
+clasificador = llm(temperatura=0.0).with_structured_output(Clasificacion)
+
+CASOS_LLM = [
+    ("El servicio está caído y estamos parados", "urgente"),
+    ("Llevo dos días sin poder entrar, es urgente", "urgente"),
+    ("Tenemos un cierre mañana y no carga el panel", "urgente"),
+    ("¿Podríais añadir modo oscuro?", "normal"),
+    ("Duda sobre la factura del mes pasado", "normal"),
+    ("¿Cuál es vuestro horario de soporte?", "normal"),
+]
+
+
+def medir_una_vez() -> float:
+    aciertos = sum(clasificador.invoke(texto).urgencia == esperado for texto, esperado in CASOS_LLM)
+    return aciertos / len(CASOS_LLM)
+
+
+def medir_varianza(repeticiones: int = 5) -> dict:
+    valores = [medir_una_vez() for _ in range(repeticiones)]
+    desviacion = statistics.stdev(valores) if len(valores) > 1 else 0.0
+    return {"valores": valores, "media": statistics.mean(valores), "desviacion": desviacion,
+            "rango": max(valores) - min(valores), "tolerancia_sugerida": 2 * desviacion}
+
+
+v = medir_varianza(5)
+print(f"  mediciones          : {[f'{x:.0%}' for x in v['valores']]}")
+print(f"  media               : {v['media']:.1%}")
+print(f"  desviación típica   : {v['desviacion']:.1%}")
+print(f"  rango               : {v['rango']:.1%}")
+print(f"  tolerancia sugerida : {v['tolerancia_sugerida']:.1%}  (2 desviaciones típicas)")
+print(f"""
+Interpretación: con temperature=0 y una tarea sencilla, la varianza suele ser muy baja o
+nula. Repite el experimento con temperature=0.7, con una tarea ambigua o con un conjunto
+más pequeño y verás cómo se dispara.
+
+Una mejora que no supere {max(v['tolerancia_sugerida'], 0.01):.0%} no se puede distinguir del ruido.
+""")
+
+#%%md
+## 8. Resumen
+
+- **La mayor parte de un sistema con LLM se prueba sin LLM.** Nodos como funciones puras y
+  grafos con modelos guionizados cubren el 80 % de los errores, en milisegundos y gratis.
+- Todo nodo merece tres pruebas: **devuelve solo lo que cambia**, **no muta la entrada**, y la
+  tabla de casos de su lógica.
+- En el nivel de grafo, prueba **invariantes estructurales**: la secuencia de mensajes, que
+  cada `tool_call` tenga su `ToolMessage`, que las ramas del router existan, que los ciclos
+  terminen.
+- Una prueba que falla **documenta una decisión**. Si te sorprende, has encontrado algo.
+- La evaluación end-to-end es lenta y no determinista: va **aparte**, produce un **número
+  comparable** y se **guarda** para poder detectar regresiones.
+- **Mide tu varianza antes de poner una tolerancia.** Sin eso, la CI falla por ruido y el
+  equipo aprende a ignorarla.
+- LangSmith se activa con dos variables. Etiqueta con `metadata` (cliente, plan, versión del
+  prompt) o las trazas no serán consultables.
+- Vigila **error por nodo, latencia p95, distribución de tokens y tasa de abstención**. Y lee
+  trazas reales cada semana.
+
+**Siguiente:** [`18_despliegue.ipynb`](18_despliegue.ipynb) — de un notebook a un servicio.
