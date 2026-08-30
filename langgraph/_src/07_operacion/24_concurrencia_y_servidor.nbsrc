@@ -1,0 +1,709 @@
+#%%md
+# 24 · Concurrencia y servidor propio: qué pasa cuando llegan dos peticiones a la vez
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 30 min*
+
+Todo el curso ha invocado grafos desde una celda de notebook: una petición cada vez, en
+orden. En cuanto pones eso detrás de un servidor HTTP, esa suposición se cae — y con ella
+se cae una garantía que probablemente dabas por hecha.
+
+Este notebook responde a dos preguntas que aparecen constantemente en los foros:
+
+> *"¿Es seguro compartir un grafo compilado entre peticiones?"*
+> *"¿Qué pasa si el usuario manda dos mensajes seguidos sin esperar la respuesta?"*
+
+La primera tiene una respuesta tranquilizadora. La segunda no.
+
+Al terminar sabrás:
+
+1. Por qué el grafo compilado sí es seguro y el `thread_id` no.
+2. Ver, medido, cómo se **pierden escrituras** con dos ejecuciones concurrentes en el mismo hilo.
+3. Las cuatro estrategias de *double texting* y cómo implementarlas sin la plataforma.
+4. Montar un servidor propio con SSE, y qué deja escrito exactamente una desconexión.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+#%%md
+## 1. La buena noticia: el grafo compilado es seguro
+
+Un `CompiledStateGraph` **no guarda estado de ejecución**. Toda la ejecución vive en
+objetos creados por cada `invoke`/`astream`; el grafo es solo la topología. Por eso la
+respuesta oficial en el repositorio a *"¿es thread-safe?"* es que sí, y por eso el patrón
+correcto es **compilar una vez al arrancar el proceso** y reutilizar.
+
+Vamos a comprobarlo con 8 hilos de sistema y 8 `thread_id` distintos.
+
+#%%py
+import operator
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Annotated, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoContador(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+
+
+def trabajar(estado: EstadoContador) -> dict:
+    time.sleep(0.05)                       # simula una llamada al modelo
+    return {"pasos": ["trabajado"]}
+
+
+grafo_compartido = (
+    StateGraph(EstadoContador)
+    .add_node("trabajar", trabajar)
+    .add_edge(START, "trabajar")
+    .add_edge("trabajar", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+
+def peticion(n: int) -> list[str]:
+    """Cada petición usa SU PROPIO thread_id. Esto es lo correcto."""
+    return grafo_compartido.invoke(
+        {"pasos": [f"usuario-{n}"]}, {"configurable": {"thread_id": f"u-{n}"}})["pasos"]
+
+
+with ThreadPoolExecutor(max_workers=8) as pool:
+    resultados = list(pool.map(peticion, range(8)))
+
+print("8 peticiones concurrentes, 8 hilos distintos:")
+for r in resultados:
+    print("  ", r)
+print("\n¿alguna se contaminó con otra?",
+      any(len(r) != 2 or not r[0].startswith("usuario-") for r in resultados))
+
+#%%md
+Ninguna contaminación. El grafo se puede compartir sin miedo.
+
+> **El matiz que sí importa:** lo que es seguro es el **grafo**. El `checkpointer` y el
+> `store` son recursos compartidos con estado, y su seguridad depende de la
+> implementación (una `ConnectionPool` de Postgres sí, una conexión SQLite suelta no —
+> por eso en el curso usamos `check_same_thread=False` y una conexión por prueba).
+
+## 2. La mala noticia: el `thread_id` no está protegido
+
+Ahora el mismo experimento con **el mismo `thread_id`**. Es lo que ocurre cuando un usuario
+manda dos mensajes seguidos, o cuando hace doble clic en "enviar", o cuando el móvil
+reintenta la petición porque la red tardó.
+
+#%%py
+def nodo_lento(estado: EstadoContador) -> dict:
+    time.sleep(0.4)
+    return {"pasos": ["LENTO"]}
+
+
+grafo_lento = (
+    StateGraph(EstadoContador)
+    .add_node("lento", nodo_lento)
+    .add_edge(START, "lento")
+    .add_edge("lento", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+cfg_compartido = {"configurable": {"thread_id": "el-mismo-hilo"}}
+
+
+def enviar(mensaje: str) -> None:
+    grafo_lento.invoke({"pasos": [mensaje]}, cfg_compartido)
+
+
+h1 = threading.Thread(target=enviar, args=("mensaje-1",))
+h2 = threading.Thread(target=enviar, args=("mensaje-2",))
+h1.start()
+time.sleep(0.1)          # el usuario manda el segundo mensaje 100 ms después
+h2.start()
+h1.join()
+h2.join()
+
+final = grafo_lento.get_state(cfg_compartido).values["pasos"]
+print("estado final :", final)
+print("ejecuciones lanzadas :", 2)
+print("veces que el nodo 'lento' aparece en el estado :", final.count("LENTO"))
+
+#%%md
+Léelo dos veces: **el nodo se ejecutó dos veces y solo queda una en el estado**.
+
+Lo que ha pasado es la anomalía de manual de bases de datos, la *lost update*:
+
+1. La ejecución 1 lee el checkpoint, empieza a trabajar (0,4 s).
+2. La ejecución 2 lee **el mismo** checkpoint 100 ms después. No ve el trabajo de la 1
+   porque todavía no ha terminado.
+3. Las dos escriben. La última en escribir gana; el trabajo de la otra desaparece.
+
+En un chat esto se traduce en un síntoma que la gente reporta como *"a veces se pierde un
+mensaje"* o *"el bot ignora lo que le acabo de decir"*, y que es imposible de reproducir
+porque depende de la latencia.
+
+> **LangGraph no serializa las ejecuciones por `thread_id`.** No hay cerrojo, no hay
+> control de concurrencia optimista, no hay número de versión que rechace la escritura
+> vieja. El framework asume que tú garantizas una ejecución por hilo a la vez. La
+> plataforma lo hace por ti (sección 4); si sirves tú, es tuyo.
+
+#%%md
+## 3. El arreglo: un cerrojo por `thread_id`
+
+Dentro de un proceso, la solución es de tres líneas.
+
+#%%py
+import collections
+
+_cerrojos: dict[str, threading.Lock] = collections.defaultdict(threading.Lock)
+_cerrojo_maestro = threading.Lock()
+
+
+def cerrojo_de(thread_id: str) -> threading.Lock:
+    """Un cerrojo por hilo de conversación, creado bajo demanda.
+
+    El `_cerrojo_maestro` protege la creación: sin él, dos peticiones simultáneas para
+    un `thread_id` nuevo podrían crear dos cerrojos distintos y no excluirse.
+    """
+    with _cerrojo_maestro:
+        return _cerrojos[thread_id]
+
+
+grafo_seguro = (
+    StateGraph(EstadoContador)
+    .add_node("lento", nodo_lento)
+    .add_edge(START, "lento")
+    .add_edge("lento", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+
+def enviar_seguro(thread_id: str, mensaje: str) -> None:
+    with cerrojo_de(thread_id):
+        grafo_seguro.invoke({"pasos": [mensaje]}, {"configurable": {"thread_id": thread_id}})
+
+
+hs = [threading.Thread(target=enviar_seguro, args=("hilo-seguro", f"mensaje-{i}"))
+      for i in (1, 2)]
+hs[0].start()
+time.sleep(0.1)
+hs[1].start()
+for h in hs:
+    h.join()
+
+final_seguro = grafo_seguro.get_state({"configurable": {"thread_id": "hilo-seguro"}}).values["pasos"]
+print("estado final :", final_seguro)
+print("veces que aparece 'LENTO' :", final_seguro.count("LENTO"), "(esperado: 2)")
+
+#%%md
+Los dos mensajes y los dos trabajos, en orden. El coste es que el segundo usuario espera.
+
+### 3.1 Cuando hay más de un proceso
+
+Un `threading.Lock` solo protege dentro de un proceso. Con varios pods necesitas un cerrojo
+**distribuido**, y si ya tienes Postgres para el checkpointer, ya tienes uno: los
+*advisory locks*.
+
+```python
+import hashlib
+
+from contextlib import contextmanager
+
+@contextmanager
+def cerrojo_postgres(pool, thread_id: str, espera_max: float = 30.0):
+    """Cerrojo distribuido usando pg_advisory_lock.
+
+    La clave es un entero de 64 bits derivado del thread_id. El cerrojo se libera solo
+    si la sesión se cae, que es justo lo que quieres si un pod muere a mitad.
+    """
+    clave = int.from_bytes(hashlib.sha256(thread_id.encode()).digest()[:8],
+                           "big", signed=True)
+    with pool.connection() as con:
+        # pg_try_advisory_lock no bloquea: devuelve False si otro lo tiene.
+        limite = time.monotonic() + espera_max
+        while not con.execute("SELECT pg_try_advisory_lock(%s)", (clave,)).fetchone()[0]:
+            if time.monotonic() > limite:
+                raise TimeoutError(f"hilo {thread_id} ocupado")
+            time.sleep(0.1)
+        try:
+            yield
+        finally:
+            con.execute("SELECT pg_advisory_unlock(%s)", (clave,))
+```
+
+Con Redis, el equivalente es `SET clave valor NX PX ttl` (y su liberación con un script
+Lua que comprueba el valor). **Ponle siempre un TTL**: un cerrojo distribuido sin caducidad
+convierte la muerte de un pod en un hilo bloqueado para siempre.
+
+#%%md
+## 4. *Double texting*: las cuatro estrategias
+
+"Cerrar con un cerrojo" es solo una de las respuestas posibles, y no siempre la mejor. La
+plataforma de LangGraph formaliza cuatro políticas bajo el nombre **double texting**
+(parámetro `multitask_strategy` al crear un *run*). Merece la pena conocerlas aunque
+sirvas tú, porque son el catálogo completo de decisiones razonables:
+
+| Estrategia | Qué hace | Cuándo |
+|---|---|---|
+| **`enqueue`** (por defecto) | La segunda espera a que termine la primera | Trabajos donde ambos mensajes importan |
+| **`reject`** | Rechaza la segunda con un error | APIs donde el cliente debe reintentar |
+| **`interrupt`** | Para la primera **conservando su progreso** e inserta la nueva entrada | Chat: el usuario se ha corregido |
+| **`rollback`** | Para la primera y **deshace también su entrada** | Chat donde el segundo mensaje sustituye al primero |
+
+#%%py
+print("Valores admitidos, leídos del propio SDK:")
+from langgraph_sdk.auth.types import MultitaskStrategy
+print("  ", MultitaskStrategy)
+
+#%%md
+La diferencia entre `interrupt` y `rollback` es la que más confusión genera, y es sencilla:
+
+- `interrupt` conserva lo hecho. La conversación queda: *mensaje 1, media respuesta,
+  mensaje 2*.
+- `rollback` borra el primer mensaje también. La conversación queda: *mensaje 2*.
+
+Para un chat, `rollback` suele ser lo que el usuario espera cuando se corrige a sí mismo.
+Y hay un aviso importante en la documentación sobre `interrupt`: si cortas a mitad, puedes
+dejar un `AIMessage` con `tool_calls` **sin su `ToolMessage`**, que es exactamente el error
+400 del notebook 04. Si eliges `interrupt`, limpia las llamadas a herramientas sin
+respuesta antes de continuar.
+
+### 4.1 Implementarlas sin la plataforma
+
+Sin plataforma, necesitas dos piezas: un **registro de ejecuciones en curso** y una
+**política**. Aquí están `reject` y `enqueue`, que son las dos que se pueden hacer sin
+tocar el estado.
+
+#%%py
+class HiloOcupado(Exception):
+    """Equivalente a un 409 Conflict."""
+
+
+class Despachador:
+    """Registro de ejecuciones en curso + política de double texting.
+
+    Es deliberadamente pequeño: en producción el registro vive en Redis o en una tabla,
+    no en un diccionario de proceso. Pero la forma es esta.
+    """
+
+    def __init__(self, grafo, estrategia: str = "enqueue"):
+        self.grafo = grafo
+        self.estrategia = estrategia
+        self._en_curso: set[str] = set()
+        self._maestro = threading.Lock()
+        self._cerrojos: dict[str, threading.Lock] = {}
+
+    def _cerrojo(self, thread_id: str) -> threading.Lock:
+        with self._maestro:
+            return self._cerrojos.setdefault(thread_id, threading.Lock())
+
+    def invocar(self, thread_id: str, entrada: dict):
+        if self.estrategia == "reject":
+            with self._maestro:
+                if thread_id in self._en_curso:
+                    raise HiloOcupado(f"el hilo {thread_id} ya tiene una ejecución en curso")
+                self._en_curso.add(thread_id)
+            try:
+                return self.grafo.invoke(entrada, {"configurable": {"thread_id": thread_id}})
+            finally:
+                with self._maestro:
+                    self._en_curso.discard(thread_id)
+
+        # enqueue: el cerrojo ES la cola.
+        with self._cerrojo(thread_id):
+            return self.grafo.invoke(entrada, {"configurable": {"thread_id": thread_id}})
+
+
+def probar(estrategia: str):
+    grafo = (StateGraph(EstadoContador).add_node("lento", nodo_lento)
+             .add_edge(START, "lento").add_edge("lento", END)
+             .compile(checkpointer=InMemorySaver()))
+    desp = Despachador(grafo, estrategia)
+    errores, hilo_id = [], f"h-{estrategia}"
+
+    def lanzar(m):
+        try:
+            desp.invocar(hilo_id, {"pasos": [m]})
+        except HiloOcupado as e:
+            errores.append(str(e))
+
+    ts = [threading.Thread(target=lanzar, args=(f"m{i}",)) for i in (1, 2)]
+    ts[0].start(); time.sleep(0.1); ts[1].start()
+    for t in ts:
+        t.join()
+
+    estado = grafo.get_state({"configurable": {"thread_id": hilo_id}}).values["pasos"]
+    print(f"{estrategia:8s} -> estado {estado}")
+    print(f"{'':8s}    rechazos: {errores or 'ninguno'}")
+
+
+probar("enqueue")
+probar("reject")
+
+#%%md
+`enqueue` ejecuta las dos en serie; `reject` deja una fuera con un error explícito. Las dos
+son correctas — lo incorrecto es la tercera opción, que es no elegir y quedarse con la
+pérdida silenciosa de la sección 2.
+
+#%%md
+## 5. Tu propio servidor: SSE con Starlette
+
+La otra pregunta recurrente de los foros: *"¿puedo servir LangGraph sin la plataforma?"*.
+Sí. La plataforma te da mucho hecho (persistencia gestionada, double texting, assistants,
+crons, autenticación), pero el núcleo —exponer un grafo por HTTP con streaming— son unas
+50 líneas.
+
+Usamos **Starlette** porque es lo que hay debajo de FastAPI y ya viene instalado con las
+dependencias del curso. Con FastAPI el código es idéntico salvo los decoradores.
+
+#%%py
+import json
+
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse, StreamingResponse
+from starlette.routing import Route
+from starlette.testclient import TestClient
+
+
+class EstadoChat(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+
+
+async def pensar(estado: EstadoChat) -> dict:
+    return {"pasos": ["pensado"]}
+
+
+async def responder(estado: EstadoChat) -> dict:
+    return {"pasos": ["respondido"]}
+
+
+grafo_servido = (
+    StateGraph(EstadoChat)
+    .add_node("pensar", pensar)
+    .add_node("responder", responder)
+    .add_edge(START, "pensar")
+    .add_edge("pensar", "responder")
+    .add_edge("responder", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+
+async def ruta_stream(peticion):
+    cuerpo = await peticion.json()
+    config = {"configurable": {"thread_id": cuerpo["thread_id"]}}
+
+    async def eventos():
+        try:
+            async for modo, dato in grafo_servido.astream(
+                    {"pasos": [cuerpo["texto"]]}, config, stream_mode=["updates", "custom"]):
+                yield f"event: {modo}\ndata: {json.dumps(dato, default=str)}\n\n"
+            yield "event: fin\ndata: {}\n\n"
+        except Exception as e:                       # nunca dejes morir el generador en silencio
+            yield f"event: error\ndata: {json.dumps({'detalle': str(e)})}\n\n"
+
+    return StreamingResponse(
+        eventos(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Sin esto, Nginx acumula la respuesta y el streaming deja de serlo.
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def ruta_estado(peticion):
+    tid = peticion.path_params["thread_id"]
+    instantanea = grafo_servido.get_state({"configurable": {"thread_id": tid}})
+    return JSONResponse({"valores": instantanea.values, "siguiente": list(instantanea.next)})
+
+
+api = Starlette(routes=[
+    Route("/runs/stream", ruta_stream, methods=["POST"]),
+    Route("/threads/{thread_id}/state", ruta_estado, methods=["GET"]),
+])
+
+cliente = TestClient(api)
+
+with cliente.stream("POST", "/runs/stream",
+                    json={"thread_id": "web-1", "texto": "hola"}) as respuesta:
+    print("HTTP", respuesta.status_code, "|", respuesta.headers["content-type"])
+    for linea in respuesta.iter_lines():
+        if linea:
+            print("  ", linea)
+
+print("\nestado del hilo:", cliente.get("/threads/web-1/state").json())
+
+#%%md
+Cuatro detalles de esas 50 líneas que son la diferencia entre que funcione en tu portátil
+y que funcione detrás de un proxy:
+
+1. **`X-Accel-Buffering: no`** — Nginx (y muchos balanceadores) acumulan la respuesta por
+   defecto. Sin esta cabecera tu streaming llega de golpe al final y nadie entiende por qué.
+2. **Los errores dentro del generador** — si el grafo lanza una excepción a mitad del
+   stream, las cabeceras ya se enviaron con un 200. No puedes cambiar el código HTTP: la
+   única forma de contárselo al cliente es **un evento de error dentro del propio stream**.
+3. **Latidos** — si el grafo tarda más que el `read timeout` del proxy sin emitir nada, el
+   proxy corta. Emite un comentario SSE (`: latido\n\n`) cada pocos segundos.
+4. **Un `thread_id` por conversación, no por petición.** Es el error más común al montar
+   esto: generar un UUID nuevo en cada petición y preguntarse por qué el bot no recuerda nada.
+
+#%%md
+## 6. Qué deja escrito una desconexión
+
+Aquí está la pregunta que en los foros se responde mal la mitad de las veces: si el cliente
+cierra la pestaña a mitad de una ejecución, ¿qué queda?
+
+Starlette cancela la tarea cuando el cliente se va, así que la respuesta es la de asyncio:
+el `astream` recibe un `CancelledError`. Vamos a medir qué sobrevive.
+
+#%%py
+import asyncio
+
+
+class EstadoLargo(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+
+
+async def paso_rapido(estado):
+    return {"pasos": ["rapido"]}
+
+
+async def paso_largo(estado):
+    await asyncio.sleep(1.0)              # aquí es donde el usuario cierra la pestaña
+    return {"pasos": ["largo"]}
+
+
+async def paso_final(estado):
+    return {"pasos": ["final"]}
+
+
+constructor_largo = (
+    StateGraph(EstadoLargo)
+    .add_node("rapido", paso_rapido)
+    .add_node("largo", paso_largo)
+    .add_node("final", paso_final)
+    .add_edge(START, "rapido")
+    .add_edge("rapido", "largo")
+    .add_edge("largo", "final")
+    .add_edge("final", END)
+)
+
+
+async def experimento_desconexion():
+    app = constructor_largo.compile(checkpointer=InMemorySaver())
+    cfg = {"configurable": {"thread_id": "desconectado"}}
+
+    async def ejecutar():
+        async for _ in app.astream({"pasos": ["entrada"]}, cfg):
+            pass
+
+    tarea = asyncio.create_task(ejecutar())
+    await asyncio.sleep(0.3)              # el cliente aguanta 300 ms y se va
+    tarea.cancel()
+    try:
+        await tarea
+    except asyncio.CancelledError:
+        pass
+    await asyncio.sleep(0.05)
+
+    instantanea = app.get_state(cfg)
+    print("estado persistido tras la desconexión:", instantanea.values["pasos"])
+    print("nodo pendiente                       :", instantanea.next)
+
+    # Y lo importante: se puede retomar donde se quedó.
+    final = await app.ainvoke(None, cfg)
+    print("tras reanudar con ainvoke(None, cfg) :", final["pasos"])
+
+
+asyncio.run(experimento_desconexion())
+
+#%%md
+Tres conclusiones, y las tres son de operación:
+
+1. **Una desconexión no tira el trabajo hecho.** Los superpasos completados están
+   persistidos. El hilo queda a medias, con `next` apuntando al nodo que faltaba.
+2. **El hilo queda reanudable.** `ainvoke(None, config)` continúa exactamente donde se
+   quedó. Si tu producto tiene "reconectar", eso es todo lo que hace falta.
+3. **Y por lo tanto tienes hilos a medias que nadie reanuda.** Es la misma fuga que los
+   `interrupt` abandonados del notebook 23: necesitan barrido.
+
+Esa es la decisión que estás tomando aunque no lo sepas, y que la plataforma expone como
+parámetro `on_disconnect` (`cancel` o `continue`):
+
+- **cancelar** (lo que hace Starlette por defecto): ahorras cómputo, dejas trabajo a medias.
+- **continuar** (lanzando la ejecución en una tarea de fondo desacoplada de la petición):
+  la ejecución termina y queda registrada, aunque nadie la esté mirando.
+
+Si el trabajo tiene efectos externos —enviar un correo, cerrar un ticket— *cancelar* es
+peligroso: puedes dejar la mitad hecha. Si es solo generar texto, cancelar es lo correcto.
+
+#%%md
+## 7. Ejercicios
+
+### 7.1 Implementa `rollback`
+
+Añade al `Despachador` la estrategia `rollback`: si llega una segunda petición al mismo
+hilo, hay que **descartar la entrada de la primera** además de pararla.
+
+Pista: no hace falta cancelar hilos de sistema. Basta con volver el hilo a su checkpoint
+anterior antes de ejecutar la segunda. `get_state_history` te da los checkpoints y su
+`config` sirve como punto de partida.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+grafo_rb = (StateGraph(EstadoContador).add_node("lento", nodo_lento)
+            .add_edge(START, "lento").add_edge("lento", END)
+            .compile(checkpointer=InMemorySaver()))
+
+cfg_rb = {"configurable": {"thread_id": "rb"}}
+
+# Primer mensaje, completo.
+grafo_rb.invoke({"pasos": ["mensaje-1"]}, cfg_rb)
+print("tras el mensaje 1        :", grafo_rb.get_state(cfg_rb).values["pasos"])
+
+# Guardamos a dónde volver ANTES de aceptar el segundo mensaje: el checkpoint
+# anterior al arranque del primero.
+historial = list(grafo_rb.get_state_history(cfg_rb))
+punto_previo = historial[-1].config          # el más antiguo = antes de todo
+
+# rollback: retrocedemos y ejecutamos solo el segundo mensaje.
+estado_previo = grafo_rb.get_state(punto_previo)
+print("punto al que volvemos    :", estado_previo.values.get("pasos", []))
+
+resultado = grafo_rb.invoke({"pasos": ["mensaje-2"]}, punto_previo)
+print("tras el rollback         :", resultado["pasos"])
+print("\nEl 'mensaje-1' ya no está en la rama activa: eso es rollback.")
+print("El historial anterior sigue existiendo (es una bifurcación, no un borrado),")
+print("lo cual es bueno: puedes auditar qué se descartó.")
+
+#%%md
+Fíjate en el matiz: `rollback` en LangGraph **no borra**, bifurca. El checkpoint del
+primer mensaje sigue en la tabla. Eso es una ventaja para auditoría y un dato más para el
+presupuesto de retención del notebook 23.
+
+</details>
+
+### 7.2 Latidos en el stream
+
+El servidor de la sección 5 se queda mudo mientras un nodo tarda. Añade un latido SSE cada
+segundo para que ningún proxy corte la conexión.
+
+Pista: `asyncio.wait_for` sobre el `__anext__` del generador, o una cola con dos
+productores.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+async def con_latidos(generador, cada: float = 1.0):
+    """Envuelve un generador asíncrono y emite ': latido' si tarda más de `cada` segundos.
+
+    Un comentario SSE (línea que empieza por ':') es contenido válido que el cliente
+    ignora, pero que mantiene viva la conexión TCP y reinicia el temporizador del proxy.
+    """
+    iterador = generador.__aiter__()
+    while True:
+        siguiente = asyncio.ensure_future(iterador.__anext__())
+        while True:
+            try:
+                yield await asyncio.wait_for(asyncio.shield(siguiente), timeout=cada)
+                break
+            except asyncio.TimeoutError:
+                yield ": latido\n\n"
+            except StopAsyncIteration:
+                return
+
+
+async def generador_lento():
+    yield "event: inicio\ndata: {}\n\n"
+    await asyncio.sleep(2.5)             # un nodo que tarda
+    yield "event: fin\ndata: {}\n\n"
+
+
+async def probar_latidos():
+    salida = [trozo async for trozo in con_latidos(generador_lento(), cada=1.0)]
+    print("trozos emitidos:")
+    for t in salida:
+        print("  ", repr(t))
+    print(f"\n{sum(1 for t in salida if t.startswith(':'))} latidos en 2,5 s de silencio.")
+
+
+asyncio.run(probar_latidos())
+
+#%%md
+`asyncio.shield` es la pieza que no se puede omitir: sin él, el `wait_for` cancelaría la
+tarea que está esperando el siguiente elemento del grafo, y el latido acabaría matando la
+ejecución que pretendía proteger.
+
+</details>
+
+### 7.3 Diagnostica un caso real
+
+Un compañero te describe este síntoma:
+
+> *"Nuestro chat pierde mensajes de vez en cuando. Pasa más en móvil que en escritorio, y
+> más cuando el modelo tarda. No conseguimos reproducirlo en local."*
+
+Escribe, sin código, el diagnóstico y las dos preguntas que harías para confirmarlo.
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+**Diagnóstico:** *lost update* por double texting (sección 2). Cuadra pieza a pieza:
+
+- *"más en móvil"* → redes peores, más reintentos del cliente y más dobles envíos.
+- *"más cuando el modelo tarda"* → la ventana entre leer el checkpoint y escribirlo es más
+  larga, así que hay más ocasiones de solaparse.
+- *"no se reproduce en local"* → en local respondes rápido y haces una petición cada vez.
+
+**Las dos preguntas:**
+
+1. *¿El cliente reintenta las peticiones que dan timeout, y reutiliza el mismo `thread_id`?*
+   Si la respuesta es sí, ya está confirmado: el reintento y la petición original corren a
+   la vez sobre el mismo hilo.
+2. *¿Hay algo que impida dos ejecuciones simultáneas sobre el mismo `thread_id`?* Si la
+   respuesta es "el framework se encargará", ese es el bug.
+
+**El arreglo, por orden de coste:** cerrojo por `thread_id` (sección 3) → política explícita
+de double texting (sección 4) → idempotencia por identificador de mensaje, para que el
+reintento se reconozca como duplicado en vez de como mensaje nuevo.
+
+</details>
+
+## 8. Resumen
+
+- El **grafo compilado es thread-safe**: compílalo una vez al arrancar y compártelo. Lo que
+  no es seguro compartir a la ligera son el checkpointer y el store.
+- **LangGraph no serializa las ejecuciones de un mismo `thread_id`.** Dos ejecuciones
+  concurrentes provocan una *lost update* silenciosa: el nodo se ejecuta dos veces y solo
+  queda una en el estado.
+- El arreglo mínimo es un **cerrojo por `thread_id`**; con varios procesos, un advisory
+  lock de Postgres o un cerrojo en Redis **con TTL**.
+- El *double texting* tiene cuatro respuestas válidas: `enqueue`, `reject`, `interrupt`,
+  `rollback`. Lo que no es válido es no elegir. `interrupt` puede dejar `tool_calls` sin
+  respuesta: límpialas.
+- Servir un grafo por HTTP con SSE son ~50 líneas de Starlette. Lo que se olvida:
+  `X-Accel-Buffering: no`, errores **dentro** del stream, latidos y un `thread_id` por
+  conversación.
+- Una desconexión **no tira el trabajo hecho**: el hilo queda a medias y reanudable con
+  `ainvoke(None, config)`. Lo que sí necesitas es una política para los hilos que nadie
+  reanuda.
+
+**Siguiente:** [`25_auth_y_multitenencia.ipynb`](25_auth_y_multitenencia.ipynb) — quién
+puede ver qué hilo, y el fichero `langgraph.json` completo.

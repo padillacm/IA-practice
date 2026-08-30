@@ -1,0 +1,590 @@
+#%%md
+# P7 · Proyecto: auditoría de producción
+
+**Módulo 7 · Proyecto** — *tiempo estimado: 2 h · coste aproximado: 0 € (no llama al modelo)*
+
+## El encargo
+
+Has heredado un agente. Funciona, está en `staging`, y el viernes se abre al público. Tu
+trabajo es la **revisión de producción**: encontrar lo que va a fallar y arreglarlo antes,
+no después.
+
+Este proyecto no construye nada nuevo. Construye la **herramienta de auditoría** que aplica
+todo el módulo 7 —y parte del 6— a una aplicación concreta, y la ejecuta contra dos
+versiones del mismo agente: la que heredaste y la endurecida.
+
+Es deliberadamente el proyecto menos vistoso del curso. También es el que más veces vas a
+volver a usar.
+
+| Fase | Qué auditamos | Notebook |
+|---|---|---|
+| 1 | El esquema de estado: serialización y peso | 22 |
+| 2 | El presupuesto de persistencia y la retención | 23 |
+| 3 | La concurrencia por `thread_id` | 24 |
+| 4 | La configuración de despliegue y las reglas de acceso | 25 |
+| 5 | El informe, y el mismo informe sobre la versión arreglada | — |
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-P7")
+
+RAIZ = next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+            if (p / "despliegue").exists())
+
+#%%md
+## La aplicación que has heredado
+
+Un agente de investigación: recupera documentos, los resume y responde. Escrito por alguien
+con prisa. Tiene cuatro problemas de producción y ninguno se ve ejecutándolo.
+
+#%%py
+import operator
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Annotated, Any, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+
+
+from pydantic import BaseModel
+
+
+class DocumentoRecuperado(BaseModel):
+    """Objeto de dominio de la aplicación heredada. Serializa… por los pelos."""
+
+    id_doc: str
+    titulo: str
+
+
+class EstadoHeredado(TypedDict):
+    pregunta: str
+    coordenadas_origen: tuple[float, float]      # de dónde venía la consulta
+    documentos: list[str]                        # el texto completo, no la referencia
+    metadatos: dict[str, Any]                    # cajón de sastre
+    borrador: str
+    revisiones: Annotated[list[str], operator.add]
+    momento: datetime
+    respuesta: str
+
+
+def recuperar_heredado(estado: EstadoHeredado) -> dict:
+    documentos = [f"documento {i}: " + "contenido relevante " * 300 for i in range(5)]
+    return {"documentos": documentos,
+            "metadatos": {"fuente": DocumentoRecuperado(id_doc="d-1", titulo="Guía")},
+            "revisiones": ["recuperado"]}
+
+
+def redactar_heredado(estado: EstadoHeredado) -> dict:
+    return {"borrador": "borrador basado en 5 documentos", "revisiones": ["redactado"]}
+
+
+def revisar_heredado(estado: EstadoHeredado) -> dict:
+    return {"respuesta": estado["borrador"] + " (revisado)", "revisiones": ["revisado"]}
+
+
+def construir_heredado():
+    return (
+        StateGraph(EstadoHeredado)
+        .add_node("recuperar", recuperar_heredado)
+        .add_node("redactar", redactar_heredado)
+        .add_node("revisar", revisar_heredado)
+        .add_edge(START, "recuperar")
+        .add_edge("recuperar", "redactar")
+        .add_edge("redactar", "revisar")
+        .add_edge("revisar", END)
+    )
+
+
+ENTRADA_EJEMPLO = {
+    "pregunta": "¿cómo funciona la persistencia?",
+    "coordenadas_origen": (41.4, 2.2),
+    "documentos": [],
+    "metadatos": {},
+    "borrador": "",
+    "revisiones": [],
+    "momento": datetime(2026, 1, 1),
+    "respuesta": "",
+}
+
+app_heredada = construir_heredado().compile(checkpointer=InMemorySaver())
+resultado = app_heredada.invoke(ENTRADA_EJEMPLO, {"configurable": {"thread_id": "demo"}})
+print("funciona perfectamente:", resultado["respuesta"])
+print("revisiones            :", resultado["revisiones"])
+
+#%%md
+Funciona. Ese es exactamente el problema: los cuatro fallos son invisibles en la ejecución
+feliz. Vamos a construir los detectores.
+
+(Si has visto un aviso de *"Deserializing unregistered type …"*, guárdatelo: es el primer
+hilo del que vamos a tirar.)
+
+## Fase 1 · Auditoría del esquema de estado
+
+Primer detector: pasar el estado por el serializador y comparar tipos, como en el
+notebook 22, pero devolviendo un informe estructurado en vez de imprimirlo.
+
+#%%py
+from typing import get_args, get_type_hints
+
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+SERDE = JsonPlusSerializer()
+
+
+def auditar_esquema(esquema, ejemplo: dict) -> list[dict]:
+    """Informe de problemas de serialización del estado.
+
+    Cada hallazgo lleva `gravedad`: 'alta' si corrompe datos en silencio, 'media' si
+    solo es un riesgo, 'info' si conviene saberlo.
+    """
+    hallazgos = []
+    anotaciones = get_type_hints(esquema, include_extras=False)
+
+    for clave, valor in ejemplo.items():
+        anotacion = anotaciones.get(clave)
+
+        try:
+            vuelta = SERDE.loads_typed(SERDE.dumps_typed({"v": valor}))["v"]
+        except Exception as e:
+            hallazgos.append({"campo": clave, "gravedad": "alta",
+                              "problema": f"no serializable ({type(e).__name__})"})
+            continue
+
+        if type(vuelta) is not type(valor):
+            hallazgos.append({
+                "campo": clave, "gravedad": "alta",
+                "problema": f"cambia de tipo: {type(valor).__name__} -> {type(vuelta).__name__}"})
+
+        if anotacion is Any or Any in get_args(anotacion or int):
+            hallazgos.append({"campo": clave, "gravedad": "media",
+                              "problema": "usa Any: los objetos de dentro no están protegidos"})
+
+        peso = len(SERDE.dumps_typed(valor)[1])
+        if peso > 10_000:
+            hallazgos.append({"campo": clave, "gravedad": "media",
+                              "problema": f"pesa {peso:,d} bytes en cada checkpoint"})
+
+    return hallazgos
+
+
+def imprimir_hallazgos(titulo: str, hallazgos: list[dict]) -> None:
+    print(f"\n{titulo}")
+    print("-" * len(titulo))
+    if not hallazgos:
+        print("  sin hallazgos")
+        return
+    for h in sorted(hallazgos, key=lambda x: {"alta": 0, "media": 1, "info": 2}[x["gravedad"]]):
+        print(f"  [{h['gravedad']:5s}] {h['campo']:20s} {h['problema']}")
+
+
+# Auditamos el estado tal y como queda DESPUÉS de una ejecución: es el que se persiste.
+estado_real = app_heredada.get_state({"configurable": {"thread_id": "demo"}}).values
+imprimir_hallazgos("Fase 1 · esquema de estado (aplicación heredada)",
+                   auditar_esquema(EstadoHeredado, estado_real))
+
+#%%md
+Tres de los cuatro fallos ya están a la vista:
+
+1. `coordenadas_origen` es una tupla → vuelve como lista. Si algún día se usa como clave de
+   diccionario o se compara con `==`, falla tras reanudar.
+2. `metadatos` es `dict[str, Any]` y esconde ahí dentro un `DocumentoRecuperado`. Hoy
+   sobrevive con un aviso; el día que se active `LANGGRAPH_STRICT_MSGPACK=true` —o cuando
+   la librería lo bloquee por defecto, que es lo anunciado— volverá como `dict` y el
+   `fuente.titulo` de algún nodo se convertirá en un `AttributeError` en producción.
+3. `documentos` arrastra el texto completo en cada checkpoint.
+
+> **Ejercicio de la fase 1:** ¿por qué el informe no se queja del campo `momento`, que es
+> un `datetime`? Compruébalo antes de seguir.
+
+#%%py
+print("¿sobrevive un datetime?",
+      type(SERDE.loads_typed(SERDE.dumps_typed({"v": datetime(2026, 1, 1)}))["v"]).__name__)
+print("Está registrado en el serializador. No todo lo que parece exótico es un problema:")
+print("por eso se audita en vez de suponer.")
+
+#%%md
+## Fase 2 · Presupuesto de persistencia
+
+Segundo detector: cuánto va a escribir esto cuando lo usen de verdad.
+
+#%%py
+import sqlite3
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+
+def medir_persistencia(constructor, entrada: dict, durability: str = "async") -> dict:
+    """Ejecuta un turno contra SQLite y cuenta lo que ha escrito."""
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    app = constructor().compile(checkpointer=SqliteSaver(con))
+    app.invoke(entrada, {"configurable": {"thread_id": "medicion"}}, durability=durability)
+    checkpoints = con.execute("SELECT count(*) FROM checkpoints").fetchone()[0]
+    escrituras = con.execute("SELECT count(*) FROM writes").fetchone()[0]
+    bytes_totales = con.execute("SELECT sum(length(checkpoint)) FROM checkpoints").fetchone()[0]
+    return {"checkpoints": checkpoints, "writes": escrituras, "bytes": bytes_totales}
+
+
+def proyectar(medida: dict, turnos_dia: int, dias: int) -> dict:
+    return {
+        "filas/turno": medida["checkpoints"] + medida["writes"],
+        "KB/turno": medida["bytes"] / 1024,
+        "GB en el periodo": medida["bytes"] * turnos_dia * dias / 1e9,
+    }
+
+
+medida_heredada = medir_persistencia(construir_heredado, ENTRADA_EJEMPLO)
+print("un turno de la aplicación heredada escribe:", medida_heredada)
+
+proyeccion = proyectar(medida_heredada, turnos_dia=5_000, dias=90)
+print("\ncon 5.000 turnos/día y 90 días de retención:")
+for clave, valor in proyeccion.items():
+    print(f"  {clave:20s} {valor:>12,.1f}")
+
+#%%md
+Ese número de GB es el que hay que llevar a la conversación de infraestructura **antes**
+del viernes, no después.
+
+## Fase 3 · Concurrencia por `thread_id`
+
+Tercer detector, y el más importante porque el fallo es silencioso: ¿qué pasa si llegan
+dos peticiones al mismo hilo?
+
+#%%py
+import threading
+import time
+
+
+def probar_concurrencia(constructor, entrada: dict, campo_traza: str) -> dict:
+    """Lanza dos ejecuciones solapadas sobre el mismo hilo y comprueba si se pierde una.
+
+    El nodo lento fuerza el solape de forma determinista: 0,4 s de trabajo y 0,1 s de
+    separación entre peticiones garantizan que la segunda lea el checkpoint de antes de
+    que la primera escriba.
+    """
+    grafo = constructor()
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    app = grafo.compile(checkpointer=SqliteSaver(con))
+    cfg = {"configurable": {"thread_id": "concurrente"}}
+
+    def enviar():
+        time.sleep(0.0)
+        app.invoke({**entrada, "revisiones": []}, cfg)
+
+    hilos = [threading.Thread(target=enviar) for _ in range(2)]
+    hilos[0].start()
+    time.sleep(0.1)
+    hilos[1].start()
+    for h in hilos:
+        h.join()
+
+    traza = app.get_state(cfg).values[campo_traza]
+    return {"ejecuciones": 2,
+            "marcas_de_'revisado'_en_el_estado": traza.count("revisado"),
+            "se_pierden_escrituras": traza.count("revisado") < 2}
+
+
+# Hacemos lento un nodo para que el solape sea reproducible.
+def recuperar_lento(estado):
+    time.sleep(0.4)
+    return recuperar_heredado(estado)
+
+
+def construir_heredado_lento():
+    g = construir_heredado()
+    g.nodes.pop("recuperar")
+    g.add_node("recuperar", recuperar_lento)
+    return g
+
+
+print("Fase 3 · concurrencia sobre el mismo thread_id")
+print("-" * 46)
+for clave, valor in probar_concurrencia(construir_heredado_lento, ENTRADA_EJEMPLO,
+                                        "revisiones").items():
+    print(f"  {clave:36s} {valor}")
+
+#%%md
+`se_pierden_escrituras: True`. Ese es el cuarto fallo, y el que va a generar los tickets
+de *"a veces se pierden mensajes"* que nadie sabrá reproducir.
+
+Fíjate en que **no es un bug del código heredado**: el código es correcto. Es una garantía
+que hay que añadir por fuera, en la capa que sirve el grafo.
+
+## Fase 4 · Configuración de despliegue
+
+Cuarto detector: la configuración. Es el más fácil de automatizar y el que más a menudo se
+salta.
+
+#%%py
+import json
+
+
+def auditar_configuracion(ruta: pathlib.Path) -> list[dict]:
+    cfg = json.loads(ruta.read_text(encoding="utf-8"))
+    http = cfg.get("http", {})
+    cors = http.get("cors", {})
+
+    reglas = [
+        ("alta",  "sin `auth`: la API está abierta",
+         "auth" in cfg),
+        ("alta",  "CORS con comodín y credenciales",
+         not (cors.get("allow_origins") == ["*"] and cors.get("allow_credentials"))),
+        ("media", "`/docs` y `/openapi.json` publican la API entera",
+         http.get("disable_meta") is True),
+        ("media", "sin TTL de checkpoints: la base de datos crece sin límite",
+         "ttl" in cfg.get("checkpointer", {})),
+        ("media", "sin versión fijada del servidor (`base_image`)",
+         "base_image" in cfg),
+        ("info",  "el `.env` está dentro del repositorio",
+         str(cfg.get("env", "")).startswith("..") or isinstance(cfg.get("env"), dict)),
+    ]
+    return [{"campo": ruta.name, "gravedad": g, "problema": m}
+            for g, m, ok in reglas if not ok]
+
+
+for fichero in ("langgraph.json", "langgraph.produccion.json"):
+    imprimir_hallazgos(f"Fase 4 · {fichero}",
+                       auditar_configuracion(RAIZ / "despliegue" / fichero))
+
+#%%md
+La configuración de producción del curso pasa todo menos `base_image`, que es deliberado:
+fijar la imagen a una versión concreta depende de qué versión estés desplegando, y ponerla
+mal es peor que no ponerla. El auditor la marca como aviso, no como error, y esa es la
+decisión de diseño correcta para una herramienta así: **avisar de lo que hay que decidir,
+no fingir que hay una respuesta universal**.
+
+## Fase 5 · La versión endurecida
+
+Ahora arreglamos las cuatro cosas y volvemos a pasar exactamente los mismos detectores.
+
+#%%py
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass
+class FuenteDocumento:
+    """Lo mismo que DocumentoRecuperado, pero serializable y declarado en el esquema."""
+
+    id_doc: str
+    titulo: str
+
+
+class EstadoEndurecido(TypedDict):
+    pregunta: str
+    coordenadas_origen: list[float]              # (1) lista, no tupla
+    documentos_ids: list[str]                    # (2) referencias, no cargas útiles
+    fuente: FuenteDocumento | None               # (3) tipado y declarado, sin `Any`
+    borrador: str
+    revisiones: Annotated[list[str], operator.add]
+    momento: datetime
+    respuesta: str
+
+
+# El texto de los documentos vive fuera del estado. En producción, el Store o un bucket.
+ALMACEN_DOCS = {f"d-{i}": f"documento {i}: " + "contenido relevante " * 300 for i in range(5)}
+
+
+def recuperar_endurecido(estado: EstadoEndurecido) -> dict:
+    return {"documentos_ids": list(ALMACEN_DOCS),
+            "fuente": FuenteDocumento(id_doc="d-1", titulo="Guía de persistencia"),
+            "revisiones": ["recuperado"]}
+
+
+def redactar_endurecido(estado: EstadoEndurecido) -> dict:
+    textos = [ALMACEN_DOCS[i] for i in estado["documentos_ids"]]   # se leen, no se guardan
+    return {"borrador": f"borrador basado en {len(textos)} documentos",
+            "revisiones": ["redactado"]}
+
+
+def construir_endurecido():
+    return (
+        StateGraph(EstadoEndurecido)
+        .add_node("recuperar", recuperar_endurecido)
+        .add_node("redactar", redactar_endurecido)
+        .add_node("revisar", revisar_heredado)
+        .add_edge(START, "recuperar")
+        .add_edge("recuperar", "redactar")
+        .add_edge("redactar", "revisar")
+        .add_edge("revisar", END)
+    )
+
+
+ENTRADA_ENDURECIDA = {
+    "pregunta": "¿cómo funciona la persistencia?",
+    "coordenadas_origen": [41.4, 2.2],
+    "documentos_ids": [],
+    "fuente": None,
+    "borrador": "",
+    "revisiones": [],
+    "momento": datetime(2026, 1, 1),
+    "respuesta": "",
+}
+
+app_endurecida = construir_endurecido().compile(checkpointer=InMemorySaver())
+app_endurecida.invoke(ENTRADA_ENDURECIDA, {"configurable": {"thread_id": "demo2"}})
+estado_endurecido = app_endurecida.get_state({"configurable": {"thread_id": "demo2"}}).values
+
+imprimir_hallazgos("Fase 5 · esquema endurecido",
+                   auditar_esquema(EstadoEndurecido, estado_endurecido))
+
+#%%md
+Cero hallazgos.
+
+> **Sobre el aviso de `FuenteDocumento`.** Sigue apareciendo, y es esperable: la dataclass
+> no está en el registro *por defecto* del serializador. La diferencia con la versión
+> heredada es que ahora **está declarada en el esquema de estado**, así que `compile()` la
+> añade a la lista blanca y sobrevive con el modo estricto activado (lo comprobamos en el
+> notebook 22). El aviso te dice "esto no es un tipo estándar"; el esquema es lo que decide
+> si sobrevive.
+
+Ahora el presupuesto:
+
+#%%py
+medida_endurecida = medir_persistencia(construir_endurecido, ENTRADA_ENDURECIDA)
+medida_exit = medir_persistencia(construir_endurecido, ENTRADA_ENDURECIDA, durability="exit")
+
+print(f"{'versión':32s} {'filas':>7s} {'KB/turno':>10s} {'GB en 90 días':>15s}")
+print("-" * 68)
+for nombre, medida in [("heredada", medida_heredada),
+                       ("endurecida", medida_endurecida),
+                       ("endurecida + durability='exit'", medida_exit)]:
+    p = proyectar(medida, 5_000, 90)
+    print(f"{nombre:32s} {p['filas/turno']:7d} {p['KB/turno']:10.1f} {p['GB en el periodo']:15.1f}")
+
+reduccion = 1 - medida_endurecida["bytes"] / medida_heredada["bytes"]
+print(f"\nsolo con sacar los textos del estado: {100 * reduccion:.1f} % menos bytes escritos")
+
+#%%md
+Y la concurrencia, que no se arregla tocando el grafo sino envolviéndolo:
+
+#%%py
+import collections
+
+
+class ServidorSeguro:
+    """Envoltorio mínimo con la garantía que falta: una ejecución por hilo a la vez."""
+
+    def __init__(self, app):
+        self.app = app
+        self._cerrojos = collections.defaultdict(threading.Lock)
+        self._maestro = threading.Lock()
+
+    def _cerrojo(self, thread_id: str) -> threading.Lock:
+        with self._maestro:
+            return self._cerrojos[thread_id]
+
+    def invocar(self, thread_id: str, entrada: dict):
+        with self._cerrojo(thread_id):
+            return self.app.invoke(entrada, {"configurable": {"thread_id": thread_id}})
+
+
+def recuperar_endurecido_lento(estado):
+    time.sleep(0.4)
+    return recuperar_endurecido(estado)
+
+
+grafo_lento = construir_endurecido()
+grafo_lento.nodes.pop("recuperar")
+grafo_lento.add_node("recuperar", recuperar_endurecido_lento)
+
+con_seguro = sqlite3.connect(":memory:", check_same_thread=False)
+servidor = ServidorSeguro(grafo_lento.compile(checkpointer=SqliteSaver(con_seguro)))
+
+
+def enviar_por_el_servidor():
+    servidor.invocar("concurrente", {**ENTRADA_ENDURECIDA, "revisiones": []})
+
+
+hilos = [threading.Thread(target=enviar_por_el_servidor) for _ in range(2)]
+hilos[0].start()
+time.sleep(0.1)
+hilos[1].start()
+for h in hilos:
+    h.join()
+
+traza = servidor.app.get_state({"configurable": {"thread_id": "concurrente"}}).values["revisiones"]
+print("Fase 5 · concurrencia con el servidor seguro")
+print("-" * 44)
+print("  ejecuciones lanzadas         :", 2)
+print("  marcas de 'revisado'          :", traza.count("revisado"))
+print("  ¿se pierden escrituras?       :", traza.count("revisado") < 2)
+
+#%%md
+## El informe
+
+Todo junto, que es lo que entregas.
+
+#%%py
+def informe_completo(nombre: str, esquema, estado, constructor, entrada,
+                     config: str) -> dict:
+    hallazgos = auditar_esquema(esquema, estado)
+    hallazgos += auditar_configuracion(RAIZ / "despliegue" / config)
+    medida = medir_persistencia(constructor, entrada)
+    return {
+        "aplicación": nombre,
+        "hallazgos de gravedad alta": sum(1 for h in hallazgos if h["gravedad"] == "alta"),
+        "hallazgos de gravedad media": sum(1 for h in hallazgos if h["gravedad"] == "media"),
+        "KB escritos por turno": round(medida["bytes"] / 1024, 1),
+        "GB en 90 días a 5k/día": round(medida["bytes"] * 5_000 * 90 / 1e9, 1),
+    }
+
+
+izquierda = informe_completo("heredada", EstadoHeredado, estado_real, construir_heredado,
+                             ENTRADA_EJEMPLO, "langgraph.json")
+derecha = informe_completo("endurecida", EstadoEndurecido, estado_endurecido,
+                           construir_endurecido, ENTRADA_ENDURECIDA,
+                           "langgraph.produccion.json")
+
+print(f"{'métrica':30s} {'heredada':>14s} {'endurecida':>14s}")
+print("-" * 62)
+for clave in izquierda:
+    if clave == "aplicación":
+        continue
+    print(f"{clave:30s} {str(izquierda[clave]):>14s} {str(derecha[clave]):>14s}")
+
+print(f"\n{'concurrencia':30s} {'pierde escrituras':>14s} {'correcta':>14s}")
+
+#%%md
+## Retos para llevarlo más lejos
+
+1. **Convierte el auditor en una prueba de CI.** `auditar_esquema` y
+   `auditar_configuracion` devuelven listas; una prueba que falle si hay algún hallazgo de
+   gravedad alta cuesta cinco líneas y evita regresiones. Añádela a `pruebas/`.
+
+2. **Amplía `auditar_configuracion`.** Faltan reglas: `checkpointer.serde` con lista blanca
+   (notebook 22), `store.ttl` si guardas memorias, `webhooks.url.allowed_domains` si dejas
+   configurar webhooks, `disable_store`/`disable_mcp` si no los usas.
+
+3. **Audita las reglas de acceso.** Escribe una función que, dado un objeto `Auth`,
+   compruebe que **todo recurso tiene una regla** — es decir, que ninguna combinación
+   `(recurso, acción)` cae en un manejador global permisivo por accidente. La función
+   `resolver` del notebook 25 es el punto de partida.
+
+4. **Mide en lugar de estimar.** El presupuesto usa un turno sintético. Coge trazas reales
+   de `staging`, calcula el percentil 95 del tamaño del estado y rehaz el número. La
+   diferencia entre la media y el p95 suele ser de un orden de magnitud.
+
+5. **Aplícalo al capstone.** Pasa los cuatro detectores al sistema que construiste en `P6`.
+   Es la mejor forma de comprobar si el módulo se te ha quedado.
+
+## Lo que te llevas
+
+Un guion de revisión de producción que cabe en un fichero y que responde a las cuatro
+preguntas que de verdad importan antes de abrir al público:
+
+1. **¿El estado sobrevive a un reinicio tal y como lo escribiste?** (fase 1)
+2. **¿Cuánto va a costar esto en tres meses?** (fase 2)
+3. **¿Qué pasa si llegan dos peticiones a la vez?** (fase 3)
+4. **¿Está la puerta cerrada?** (fase 4)
+
+Y la observación que hace que merezca la pena automatizarlo: **ninguno de los cuatro fallos
+se ve ejecutando la aplicación**. Los cuatro pasan la prueba de humo, la demo y la revisión
+de código. Solo aparecen con reinicios, con volumen, con concurrencia y con usuarios
+malintencionados — es decir, en producción.
+
+**Siguiente:** vuelve al [`README.md`](../README.md) para el mapa completo del curso, o
+retoma el [capstone `P6`](../06_produccion/P6_capstone.ipynb) y pásale esta auditoría.

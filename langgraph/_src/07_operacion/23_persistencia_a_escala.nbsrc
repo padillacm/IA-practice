@@ -1,0 +1,668 @@
+#%%md
+# 23 · Persistencia a escala: cuántos checkpoints escribes de verdad
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 15 min*
+
+Hay un hilo que se repite en los foros con una regularidad casi cómica. Alguien pone un
+agente en producción, funciona, todo el mundo contento. Tres semanas después:
+
+> *"La tabla `checkpoints` tiene 40 GB y las consultas van lentas. ¿Esto es normal?"*
+
+Sí, es normal. Y es evitable. El checkpointer no borra nada nunca — es lo que le permite
+darte *time travel*, reanudación e historial. La consecuencia es que **el coste de tu
+persistencia crece de forma lineal con el uso, y nadie te avisa**.
+
+Este notebook lo mide en vez de estimarlo. Al terminar sabrás:
+
+1. La fórmula exacta de cuántas filas escribe un turno.
+2. Qué te ahorra `durability`, medido en filas, no en adjetivos.
+3. Cómo se poda un checkpointer sin romper los hilos vivos.
+4. Los parámetros de conexión de Postgres que nadie documenta y que todo el mundo acaba
+   descubriendo por el camino largo.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+#%%md
+## 1. La fórmula
+
+Un checkpointer con base de datos usa dos tablas: `checkpoints` (una fila por superpaso
+completado) y `writes` (las escrituras pendientes de cada tarea, que es lo que permite
+reanudar a mitad de un superpaso).
+
+Vamos a medirlo con `SqliteSaver`, que crea exactamente las mismas dos tablas que
+`PostgresSaver` y nos deja contar filas con SQL directo.
+
+#%%py
+import operator
+import sqlite3
+from typing import Annotated, TypedDict
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoCadena(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+
+
+def cadena_de(n: int) -> StateGraph:
+    """Una cadena lineal de `n` nodos: START -> n0 -> n1 -> ... -> END."""
+    g = StateGraph(EstadoCadena)
+    for i in range(n):
+        g.add_node(f"n{i}", lambda estado, i=i: {"pasos": [f"n{i}"]})
+    g.add_edge(START, "n0")
+    for i in range(n - 1):
+        g.add_edge(f"n{i}", f"n{i + 1}")
+    g.add_edge(f"n{n - 1}", END)
+    return g
+
+
+def contar(con: sqlite3.Connection) -> tuple[int, int]:
+    return (con.execute("SELECT count(*) FROM checkpoints").fetchone()[0],
+            con.execute("SELECT count(*) FROM writes").fetchone()[0])
+
+
+print(f"{'superpasos':>11s} {'checkpoints':>12s} {'writes':>8s}   ¿cuadra n+2?")
+print("-" * 52)
+for n in (1, 2, 3, 4, 6):
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    app = cadena_de(n).compile(checkpointer=SqliteSaver(con))
+    app.invoke({"pasos": []}, {"configurable": {"thread_id": "h"}})
+    cp, w = contar(con)
+    print(f"{n:11d} {cp:12d} {w:8d}   {cp == n + 2}")
+
+#%%md
+La primera columna da una ley exacta:
+
+> **`checkpoints = superpasos + 2`.** Los dos extra son el de entrada (antes de ejecutar
+> nada) y el final.
+
+Los `writes` no siguen una fórmula tan limpia, y merece la pena entender por qué: hay una
+fila **por cada canal que escribe cada tarea**. Es decir, no solo crecen con los superpasos
+— crecen también con **cuántas claves del estado toca cada nodo**.
+
+#%%py
+def cadena_multiclave(n_nodos: int, n_claves: int):
+    """Cadena de `n_nodos` donde cada nodo escribe `n_claves` claves del estado."""
+    campos = {f"c{i}": Annotated[list, operator.add] for i in range(n_claves)}
+    Esquema = TypedDict("Esquema", campos)
+
+    def nodo(estado):
+        return {f"c{i}": ["x"] for i in range(n_claves)}
+
+    g = StateGraph(Esquema)
+    for i in range(n_nodos):
+        g.add_node(f"n{i}", nodo)
+    g.add_edge(START, "n0")
+    for i in range(n_nodos - 1):
+        g.add_edge(f"n{i}", f"n{i + 1}")
+    g.add_edge(f"n{n_nodos - 1}", END)
+
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    app = g.compile(checkpointer=SqliteSaver(con))
+    app.invoke({f"c{i}": [] for i in range(n_claves)}, {"configurable": {"thread_id": "h"}})
+    return contar(con)
+
+
+print("2 superpasos, variando cuántas claves escribe cada nodo:")
+print(f"  {'claves':>7s} {'checkpoints':>12s} {'writes':>8s}")
+for k in (1, 2, 3, 4):
+    cp, w = cadena_multiclave(2, k)
+    print(f"  {k:7d} {cp:12d} {w:8d}")
+
+#%%md
+Los checkpoints no se mueven; los `writes` crecen en línea recta con el número de claves.
+
+De ahí sale una decisión de diseño con consecuencias de factura: **un estado con muchas
+claves pequeñas escribe más filas que uno con pocas claves agrupadas**. Si tienes ocho
+campos que siempre se actualizan juntos, agruparlos en un solo campo (un dict o un modelo
+Pydantic) divide las filas de `writes` por ocho.
+
+Ahora la parte que importa: todo esto es **por turno**, y no se borra. Un agente de 6
+superpasos en una conversación de 20 turnos deja 160 filas de `checkpoints` para *una sola
+conversación*. Multiplicado por el número de usuarios y de días, ahí tienes los 40 GB.
+
+Y no es solo el número de filas: cada fila de `checkpoints` guarda el **estado completo**
+serializado, no un diff. Si arrastras un documento en el estado (notebook 22), lo estás
+pagando `superpasos + 2` veces por turno.
+
+#%%md
+## 2. `durability`: el ajuste con mejor relación esfuerzo/ahorro
+
+`durability` controla **cuándo** se escribe el checkpoint. Lo vimos de pasada en el módulo 3;
+aquí lo medimos.
+
+| Valor | Cuándo escribe | Qué pierdes si el proceso muere |
+|---|---|---|
+| `"sync"` | Antes de continuar al siguiente superpaso | Nada |
+| `"async"` (por defecto) | En paralelo con el superpaso siguiente | Como mucho, el último superpaso |
+| `"exit"` | Solo al terminar la ejecución | **Todo el progreso de la ejecución** |
+
+#%%py
+resultados = {}
+for durabilidad in ("sync", "async", "exit"):
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    app = cadena_de(4).compile(checkpointer=SqliteSaver(con))
+    app.invoke({"pasos": []}, {"configurable": {"thread_id": "h"}}, durability=durabilidad)
+    resultados[durabilidad] = contar(con)
+
+print(f"{'durability':12s} {'checkpoints':>12s} {'writes':>8s}")
+print("-" * 34)
+for k, (cp, w) in resultados.items():
+    print(f"{k:12s} {cp:12d} {w:8d}")
+
+base = resultados["async"][0] + resultados["async"][1]
+salida = resultados["exit"][0] + resultados["exit"][1]
+print(f"\n`exit` escribe {base / salida:.0f}x menos filas que el modo por defecto.")
+
+#%%md
+Un grafo de 4 nodos pasa de **15 filas a 1**. No es un ajuste marginal.
+
+**Cuándo usar cada uno**, que es lo único que hay que recordar:
+
+- `"exit"` — flujos cortos y baratos de repetir: clasificar, extraer, enriquecer. Si el
+  proceso muere, relanzas y ya. **Ojo:** con `"exit"` no hay historial intermedio, así que
+  no hay *time travel* dentro de la ejecución.
+- `"async"` (por defecto) — casi todo lo demás. Buen equilibrio.
+- `"sync"` — cuando cada superpaso tiene efectos externos caros o irreversibles (cobros,
+  correos, escrituras en sistemas de terceros) y repetir uno no es aceptable.
+
+> **Matiz de foro que conviene conocer.** Hay un hilo abierto en el repositorio sobre el
+> orden de persistencia entre `put_writes` y `put` con `durability="sync"`: si el proceso
+> cae justo entre ambas, que la reanudación *repita* o *reejecute* el superpaso depende de
+> la implementación del checkpointer. Traducción práctica: `"sync"` reduce mucho la ventana,
+> pero **no sustituye a hacer idempotentes los efectos externos** (notebook 10).
+
+#%%md
+## 3. `interrupt` y el coste oculto de los hilos abandonados
+
+Hay una fuente de crecimiento que no aparece en la fórmula: los hilos que se quedan
+**parados en un `interrupt()` para siempre**.
+
+Un flujo con aprobación humana crea el hilo, ejecuta hasta la interrupción, escribe el
+checkpoint… y espera. Si el humano nunca contesta —y en producción, un porcentaje
+sorprendente nunca contesta— ese hilo se queda ahí, ocupando espacio y apareciendo en todas
+tus búsquedas de hilos pendientes.
+
+#%%py
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import interrupt
+
+con_hil = sqlite3.connect(":memory:", check_same_thread=False)
+
+
+class EstadoAprobacion(TypedDict):
+    peticion: str
+    decision: str
+
+
+def pedir_aprobacion(estado: EstadoAprobacion) -> dict:
+    return {"decision": interrupt({"pregunta": f"¿Apruebas '{estado['peticion']}'?"})}
+
+
+aprobacion = (
+    StateGraph(EstadoAprobacion)
+    .add_node("aprobar", pedir_aprobacion)
+    .add_edge(START, "aprobar")
+    .add_edge("aprobar", END)
+    .compile(checkpointer=SqliteSaver(con_hil))
+)
+
+# 10 peticiones; solo 3 se resuelven.
+for i in range(10):
+    aprobacion.invoke({"peticion": f"gasto-{i}"}, {"configurable": {"thread_id": f"ap-{i}"}})
+
+from langgraph.types import Command
+
+for i in range(3):
+    aprobacion.invoke(Command(resume="sí"), {"configurable": {"thread_id": f"ap-{i}"}})
+
+pendientes = [
+    tid for (tid,) in con_hil.execute("SELECT DISTINCT thread_id FROM checkpoints")
+    if aprobacion.get_state({"configurable": {"thread_id": tid}}).next
+]
+print("hilos totales    :", len(set(t for (t,) in con_hil.execute(
+    "SELECT DISTINCT thread_id FROM checkpoints"))))
+print("hilos pendientes :", len(pendientes), "->", sorted(pendientes))
+print("\nEsos 7 hilos no se van a resolver solos. Necesitan una política de caducidad.")
+
+#%%md
+**La política que funciona** es la misma que usarías con un carrito de la compra
+abandonado: un hilo interrumpido tiene una **fecha de caducidad**. Pasado ese plazo, o se
+cancela con una decisión por defecto (que queda registrada), o se borra.
+
+Lo importante es que la decisión sea explícita y esté en el código, no que el hilo se
+quede colgando "por si acaso".
+
+#%%md
+## 4. Podar el checkpointer sin romper nada
+
+La pregunta obvia: si borro checkpoints antiguos, ¿rompo los hilos vivos?
+
+No, siempre que conserves los últimos de cada hilo. Un hilo solo necesita su checkpoint más
+reciente para continuar; los anteriores son historial (time travel). Podar es renunciar al
+historial profundo, no a la continuidad.
+
+#%%py
+def podar_checkpointer(con: sqlite3.Connection, conservar: int = 4) -> int:
+    """Deja solo los `conservar` checkpoints más recientes de cada hilo.
+
+    Devuelve el número de checkpoints borrados. Los `writes` huérfanos se limpian
+    después: si borras un checkpoint y dejas sus writes, la tabla `writes` se queda
+    con basura que nunca se lee y que sí ocupa.
+    """
+    borrados = con.execute(
+        """
+        DELETE FROM checkpoints
+         WHERE (thread_id, checkpoint_id) NOT IN (
+               SELECT thread_id, checkpoint_id FROM (
+                      SELECT thread_id, checkpoint_id,
+                             ROW_NUMBER() OVER (PARTITION BY thread_id
+                                                ORDER BY checkpoint_id DESC) AS pos
+                        FROM checkpoints)
+                WHERE pos <= ?)
+        """,
+        (conservar,),
+    ).rowcount
+    con.execute(
+        """DELETE FROM writes
+            WHERE (thread_id, checkpoint_id) NOT IN
+                  (SELECT thread_id, checkpoint_id FROM checkpoints)"""
+    )
+    con.commit()
+    return borrados
+
+
+con_p = sqlite3.connect(":memory:", check_same_thread=False)
+app_p = cadena_de(2).compile(checkpointer=SqliteSaver(con_p))
+
+for hilo_id in ("h1", "h2"):
+    for turno in range(5):
+        app_p.invoke({"pasos": [f"t{turno}"]}, {"configurable": {"thread_id": hilo_id}})
+
+print("antes de podar :", contar(con_p), "(checkpoints, writes)")
+print("borrados       :", podar_checkpointer(con_p, conservar=4))
+print("después        :", contar(con_p))
+
+#%%md
+Y lo que de verdad hay que comprobar: que el hilo **sigue vivo** después de la poda.
+
+#%%py
+cfg_h1 = {"configurable": {"thread_id": "h1"}}
+resultado = app_p.invoke({"pasos": ["después-de-podar"]}, cfg_h1)
+
+print("el hilo sigue funcionando:", resultado["pasos"][-4:])
+print("estado acumulado intacto :", len(resultado["pasos"]), "pasos")
+print("historial disponible     :", len(list(app_p.get_state_history(cfg_h1))), "checkpoints")
+print("\nLo que se pierde es el time travel profundo, no la conversación.")
+
+#%%md
+### 4.1 Las tres políticas de retención
+
+| Política | Criterio | Cuándo |
+|---|---|---|
+| **Por profundidad** | Conservar los N últimos checkpoints de cada hilo | Chats largos donde solo importa el presente |
+| **Por antigüedad** | Borrar hilos sin actividad desde hace N días | Lo más común. Es lo que hace el TTL de la plataforma |
+| **Por estado** | Borrar hilos terminados; conservar los interrumpidos | Flujos de trabajo con principio y fin |
+
+La mayoría de sistemas acaban combinando dos: *"hilos sin tocar en 90 días se borran; en los
+vivos, conservo los 20 últimos checkpoints"*.
+
+### 4.2 Si usas la plataforma, no lo escribas tú
+
+LangSmith Deployment trae un barredor incorporado que se configura en `langgraph.json`
+(notebook 25 entra en el fichero completo):
+
+```json
+{
+  "checkpointer": {
+    "ttl": {
+      "strategy": "delete",
+      "sweep_interval_minutes": 60,
+      "default_ttl": 43200
+    }
+  },
+  "store": {
+    "ttl": {
+      "refresh_on_read": true,
+      "sweep_interval_minutes": 60,
+      "default_ttl": 10080
+    }
+  }
+}
+```
+
+Tres cosas que sorprenden y conviene tener claras:
+
+1. **`default_ttl` está en minutos**, no en días ni segundos. `43200` = 30 días.
+2. El borrado **no ocurre al caducar**, sino cuando pasa el barredor
+   (`sweep_interval_minutes`). Entre medias, el hilo caducado sigue ahí.
+3. `refresh_on_read` (solo en el `store`) reinicia el contador al leer. Con `true`, una
+   memoria que se consulta a menudo no caduca nunca — que suele ser lo que quieres, pero
+   significa que el TTL no te garantiza un techo de tamaño.
+
+#%%md
+## 5. Postgres: los parámetros que nadie documenta
+
+Aquí concentramos lo que más veces aparece preguntado. Nada de esto se ejecuta en el
+notebook (haría falta un Postgres), pero es la configuración que quieres tener copiada.
+
+### 5.1 La conexión
+
+```python
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg import Connection
+from psycopg.rows import dict_row
+
+DSN = "postgresql://usuario:clave@host:5432/bd"
+
+with Connection.connect(DSN, autocommit=True, row_factory=dict_row,
+                        prepare_threshold=0) as con:
+    saver = PostgresSaver(con)
+    saver.setup()                     # crea las tablas; solo la primera vez
+    grafo = constructor.compile(checkpointer=saver)
+```
+
+Los tres parámetros, y por qué:
+
+| Parámetro | Por qué |
+|---|---|
+| `autocommit=True` | `setup()` ejecuta DDL. Sin autocommit se queda en una transacción abierta y, si algo falla después, te encuentras el clásico *"current transaction is aborted"* en cada consulta posterior |
+| `row_factory=dict_row` | El checkpointer lee las columnas **por nombre**. Con el `tuple_row` por defecto obtienes `TypeError`/`KeyError` en sitios que no dicen nada |
+| `prepare_threshold=0` | Desactiva las *prepared statements*. Solo hace falta si tienes **PgBouncer en modo transaction** delante: las prepared statements viven en la sesión, y PgBouncer te cambia de sesión entre transacciones |
+
+Ese tercero es responsable de una cantidad desproporcionada de incidencias de tipo
+*"funciona en local y falla en producción"*: en local te conectas a Postgres directamente,
+en producción hay un pooler en medio.
+
+### 5.2 El pool
+
+`PostgresSaver` con una sola conexión no escala: cada nodo que lee o escribe estado la usa.
+
+```python
+from psycopg_pool import ConnectionPool
+
+pool = ConnectionPool(
+    conninfo=DSN,
+    max_size=20,
+    kwargs={"autocommit": True, "row_factory": dict_row, "prepare_threshold": 0},
+)
+saver = PostgresSaver(pool)
+saver.setup()
+```
+
+Regla de dimensionamiento: `max_size` ≈ (peticiones concurrentes que aceptas) × 2, y la
+suma de `max_size` **de todos tus procesos** por debajo de `max_connections` de Postgres.
+Con 4 pods × 20 conexiones ya vas por 80.
+
+> **Aviso reportado en el repositorio (issue #7259):** `AsyncPostgresSaver` usa un
+> `threading.Lock` a nivel de instancia. Bajo mucha concurrencia dentro de un mismo proceso
+> eso serializa el acceso y el pool no se aprovecha del todo. Si mides contención ahí, la
+> salida práctica es escalar con más procesos/pods en vez de con más tareas asyncio dentro
+> de uno.
+
+### 5.3 `setup()` y las migraciones
+
+`setup()` es idempotente y también aplica **migraciones de esquema** entre versiones de
+`langgraph-checkpoint-postgres`. De ahí sale otro clásico de los foros: actualizas la
+librería, no llamas a `setup()`, y te encuentras `UndefinedColumn: column "task_path" does
+not exist`.
+
+**Práctica correcta:** `setup()` es un paso de despliegue, no algo que hace tu aplicación
+al arrancar en cada pod. Ejecútalo una vez por despliegue, desde un job de migración.
+
+#%%md
+## 6. Diagnóstico: qué hilos te están costando dinero
+
+Cuando la tabla ya es grande, lo primero es saber **dónde** está el peso. Estas consultas
+funcionan igual en SQLite y (cambiando poco) en Postgres.
+
+#%%py
+con_d = sqlite3.connect(":memory:", check_same_thread=False)
+app_d = cadena_de(3).compile(checkpointer=SqliteSaver(con_d))
+
+# Un hilo "sano", uno "charlatán" y uno con estado gordo.
+for turno in range(3):
+    app_d.invoke({"pasos": ["x"]}, {"configurable": {"thread_id": "sano"}})
+for turno in range(30):
+    app_d.invoke({"pasos": ["x"]}, {"configurable": {"thread_id": "charlatan"}})
+# Un solo turno, pero arrastrando un documento entero en el estado.
+app_d.invoke({"pasos": ["y" * 120_000]}, {"configurable": {"thread_id": "gordo"}})
+
+print("Hilos por número de checkpoints:")
+for tid, n in con_d.execute(
+        "SELECT thread_id, count(*) c FROM checkpoints GROUP BY thread_id ORDER BY c DESC"):
+    print(f"  {tid:12s} {n:4d} checkpoints")
+
+print("\nHilos por bytes almacenados:")
+for tid, b in con_d.execute(
+        """SELECT thread_id, sum(length(checkpoint)) b FROM checkpoints
+            GROUP BY thread_id ORDER BY b DESC"""):
+    print(f"  {tid:12s} {b:8,d} bytes")
+
+#%%md
+Las dos consultas dicen cosas distintas y las dos importan:
+
+- **Muchos checkpoints** = hilo con muchos turnos o grafo con muchos superpasos. Se ataca
+  con retención por profundidad, o reduciendo superpasos.
+- **Muchos bytes por checkpoint** = estado gordo. Se ataca con el notebook 22: sacar las
+  cargas útiles del estado.
+
+Un hilo puede ser barato en filas y carísimo en bytes. Si solo miras `count(*)`, no lo ves.
+
+En Postgres el equivalente de la segunda consulta es:
+
+```sql
+SELECT thread_id,
+       count(*)                            AS checkpoints,
+       pg_size_pretty(sum(octet_length(checkpoint::text))::bigint) AS peso
+  FROM checkpoints
+ GROUP BY thread_id
+ ORDER BY sum(octet_length(checkpoint::text)) DESC
+ LIMIT 20;
+```
+
+#%%md
+## 7. Ejercicios
+
+### 7.1 Presupuesta tu persistencia
+
+Escribe una función `presupuesto(superpasos, bytes_estado, turnos_dia, dias)` que estime
+las filas y los bytes que tu sistema va a escribir, y úsala para comparar dos diseños:
+
+- **A**: 8 superpasos, 30 KB de estado (arrastra el documento).
+- **B**: 4 superpasos, 6 KB de estado (solo referencias) y `durability="exit"`.
+
+Con 5.000 turnos al día y 90 días de retención.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+def presupuesto(superpasos, bytes_estado, turnos_dia, dias, durabilidad="async", claves=1):
+    """Estima filas y bytes escritos. Con durability='exit' solo se escribe 1 checkpoint."""
+    checkpoints = 1 if durabilidad == "exit" else superpasos + 2
+    # Aproximación de writes: una fila por (tarea, canal escrito), más la entrada.
+    writes = 0 if durabilidad == "exit" else claves + superpasos * (claves + 1)
+    filas_turno = checkpoints + writes
+    bytes_turno = checkpoints * bytes_estado
+    return {
+        "filas/turno": filas_turno,
+        "filas totales": filas_turno * turnos_dia * dias,
+        "GB totales": bytes_turno * turnos_dia * dias / 1e9,
+    }
+
+
+a = presupuesto(8, 30_000, 5_000, 90)
+b = presupuesto(4, 6_000, 5_000, 90, durabilidad="exit")
+
+print(f"{'':16s} {'diseño A':>16s} {'diseño B':>16s}")
+for clave in a:
+    va, vb = a[clave], b[clave]
+    fmt = "{:>16,.1f}" if isinstance(va, float) else "{:>16,d}"
+    print(f"{clave:16s} " + fmt.format(va) + " " + fmt.format(vb))
+
+print(f"\nB escribe {a['GB totales'] / b['GB totales']:.0f}x menos datos.")
+print("Y el 90 % de esa diferencia viene de sacar el documento del estado,")
+print("no de tocar `durability`. Primero adelgaza el estado; luego afina la durabilidad.")
+
+#%%md
+</details>
+
+### 7.2 Retención por antigüedad
+
+`podar_checkpointer` poda por profundidad. Escribe la variante **por antigüedad**: borrar
+por completo los hilos cuyo último checkpoint sea anterior a una fecha.
+
+Pista: el `checkpoint_id` es un UUIDv6/v7 ordenable por tiempo, pero para el ejercicio es
+más claro leer la marca temporal de los metadatos vía `get_state_history`.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+import datetime as dt
+
+
+def hilos_inactivos(app, con, dias: int) -> list[str]:
+    """Hilos cuyo último checkpoint es anterior a `dias` días."""
+    limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=dias)
+    viejos = []
+    for (tid,) in con.execute("SELECT DISTINCT thread_id FROM checkpoints"):
+        snap = app.get_state({"configurable": {"thread_id": tid}})
+        creado = dt.datetime.fromisoformat(snap.created_at)
+        if creado < limite:
+            viejos.append(tid)
+    return viejos
+
+
+def borrar_hilos(con, hilos: list[str]) -> int:
+    if not hilos:
+        return 0
+    marcas = ",".join("?" * len(hilos))
+    n = con.execute(f"DELETE FROM checkpoints WHERE thread_id IN ({marcas})", hilos).rowcount
+    con.execute(f"DELETE FROM writes WHERE thread_id IN ({marcas})", hilos)
+    con.commit()
+    return n
+
+
+# Comprobación: con 0 días de gracia, todos los hilos son "viejos".
+todos = hilos_inactivos(app_d, con_d, dias=0)
+print("hilos que caducarían con retención de 0 días:", sorted(todos))
+print("con retención de 365 días                   :",
+      sorted(hilos_inactivos(app_d, con_d, dias=365)) or "ninguno")
+
+print("\nborrados:", borrar_hilos(con_d, hilos_inactivos(app_d, con_d, dias=0)))
+print("quedan  :", contar(con_d), "(checkpoints, writes)")
+
+#%%md
+En producción esto es un `cron` diario, no algo que ejecutes a mano. Y dos avisos que
+salen de escarmentados:
+
+- **Nunca borres un hilo que esté interrumpido** sin registrar la decisión. Un
+  `interrupt()` pendiente es trabajo humano a medias, no basura.
+- **Borra por lotes** (`LIMIT` en el `DELETE`) si la tabla es grande, o bloquearás la tabla
+  el tiempo que dure la transacción.
+
+</details>
+
+### 7.3 Mide tu propio grafo
+
+Coge cualquier grafo del curso con checkpointer —el asistente de `P3` es buen candidato— y
+mide sus superpasos reales y el tamaño de su estado. ¿Cuadra con la fórmula `n+2`? ¿Qué
+campo del estado pesa más?
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+
+class EstadoRealista(TypedDict):
+    """Un estado con la pinta que suelen tener los de verdad."""
+
+    pregunta: str
+    documentos: list[str]        # el sospechoso habitual
+    traza: Annotated[list[str], operator.add]
+    respuesta: str
+
+
+def recuperar(estado):
+    return {"documentos": ["párrafo de la base de conocimiento " * 200] * 4,
+            "traza": ["recuperar"]}
+
+
+def responder(estado):
+    return {"respuesta": "según los documentos…", "traza": ["responder"]}
+
+
+con_m = sqlite3.connect(":memory:", check_same_thread=False)
+app_m = (
+    StateGraph(EstadoRealista)
+    .add_node("recuperar", recuperar)
+    .add_node("responder", responder)
+    .add_edge(START, "recuperar")
+    .add_edge("recuperar", "responder")
+    .add_edge("responder", END)
+    .compile(checkpointer=SqliteSaver(con_m))
+)
+cfg_m = {"configurable": {"thread_id": "medido"}}
+app_m.invoke({"pregunta": "¿cómo funciona la persistencia?", "documentos": [],
+              "traza": [], "respuesta": ""}, cfg_m)
+
+cp, w = contar(con_m)
+print(f"checkpoints={cp}  writes={w}  ->  superpasos deducidos = {cp - 2}  (nodos: 2)")
+
+serde = JsonPlusSerializer()
+valores = app_m.get_state(cfg_m).values
+total = sum(len(serde.dumps_typed(v)[1]) for v in valores.values())
+print("\npeso por campo del estado:")
+for clave, valor in sorted(valores.items(),
+                           key=lambda kv: -len(serde.dumps_typed(kv[1])[1])):
+    peso = len(serde.dumps_typed(valor)[1])
+    print(f"  {clave:12s} {peso:8,d} bytes  ({100 * peso / total:5.1f} %)")
+
+#%%md
+Aplica esto mismo a tu grafo real. La sorpresa habitual es que un campo que creías
+auxiliar —una lista de documentos, una traza de depuración, la respuesta cruda de una
+API— es el 90 % del peso.
+
+</details>
+
+## 8. Resumen
+
+- **La ley exacta:** por invocación, `checkpoints = superpasos + 2`. Cada checkpoint
+  guarda el estado **completo**, no un diff.
+- Los `writes` crecen con los superpasos **y con cuántas claves escribe cada nodo**. Ocho
+  campos que siempre cambian juntos son ocho veces más filas que uno agrupado.
+- El checkpointer **no borra nada**. El crecimiento es lineal con el uso y no avisa.
+- `durability="exit"` reduce 15 filas a 1 en un grafo de 4 nodos. Úsalo en flujos cortos y
+  repetibles; `"sync"` cuando repetir un superpaso tiene coste externo.
+- `"sync"` reduce la ventana de reejecución, pero **no sustituye a la idempotencia**.
+- Los **hilos interrumpidos que nadie resuelve** son una fuga silenciosa. Dales caducidad
+  explícita.
+- Podar es seguro si conservas los últimos checkpoints de cada hilo: pierdes historial
+  profundo, no continuidad. Limpia también los `writes` huérfanos.
+- Postgres: `autocommit=True`, `row_factory=dict_row` y, **si hay PgBouncer en modo
+  transaction, `prepare_threshold=0`**. `setup()` es un paso de despliegue, no de arranque.
+- Diagnostica por **filas y por bytes**: son dos problemas distintos con dos soluciones
+  distintas.
+
+**Siguiente:** [`24_concurrencia_y_servidor.ipynb`](24_concurrencia_y_servidor.ipynb) — qué
+pasa cuando dos peticiones llegan al mismo hilo a la vez (spoiler: se pierden escrituras).

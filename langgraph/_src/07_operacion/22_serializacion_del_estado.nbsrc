@@ -1,0 +1,669 @@
+#%%md
+# 22 · Qué cabe en el estado: serialización, pérdidas silenciosas y seguridad
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 15 min*
+
+Este módulo nace de leer foros. Todo lo que hay aquí sale de problemas que la gente
+reporta **después** de poner un grafo en producción: hilos de GitHub Issues de
+`langchain-ai/langgraph`, del foro de LangChain y de post-mortems publicados. No son
+temas de tutorial; son las cosas que rompen a las tres semanas.
+
+Empezamos por la más traicionera de todas: **el estado no se guarda tal cual**. Pasa por un
+serializador, y ese viaje de ida y vuelta no siempre es la identidad.
+
+Mientras todo cabe en memoria no lo notas: el checkpointer devuelve el mismo objeto Python.
+En cuanto hay un proceso que se reinicia, un pod distinto o simplemente Postgres, el estado
+se escribe y se vuelve a leer — y ahí es donde aparece el `AttributeError` que en local nunca
+viste.
+
+Al terminar sabrás:
+
+1. Exactamente qué tipos sobreviven al checkpoint y cuáles vuelven cambiados.
+2. Por qué `tuple` es una trampa y cómo se detecta.
+3. Qué es CVE-2026-28277 y por qué el modo estricto de msgpack **degrada en silencio**.
+4. Cómo montar una prueba de ida y vuelta que atrape todo esto en CI, no en producción.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+#%%md
+## 1. El serializador que hay debajo de todo checkpointer
+
+Todos los checkpointers (`InMemorySaver`, `SqliteSaver`, `PostgresSaver`, el de Redis…)
+delegan la conversión objeto ↔ bytes en el mismo componente: `JsonPlusSerializer`.
+
+Su nombre lo dice: **JSON, más cosas**. Intenta primero un camino rápido con `msgpack` y
+tiene un puñado de extensiones registradas para tipos que JSON no conoce (`datetime`,
+`Decimal`, `UUID`, `set`, `bytes`, modelos Pydantic, dataclasses…).
+
+No es un detalle interno: su firma es parte de la API pública y la vas a necesitar.
+
+#%%py
+import inspect
+
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+print(inspect.signature(JsonPlusSerializer.__init__))
+
+#%%md
+Tres parámetros, y los tres importan:
+
+| Parámetro | Para qué | Recomendación |
+|---|---|---|
+| `pickle_fallback` | Si msgpack no sabe serializar algo, prueba con `pickle` | **Déjalo en `False`.** Un checkpoint con pickle es ejecución de código arbitraria al leerlo |
+| `allowed_json_modules` | Lista blanca del camino JSON | Lo gestiona `compile()` por ti |
+| `allowed_msgpack_modules` | Lista blanca del camino msgpack | El tema de la sección 4 |
+
+## 2. La tabla de la verdad: qué vuelve y cómo
+
+Nada de teoría. Metemos una docena de tipos por el serializador y miramos qué sale.
+
+#%%py
+import pathlib as _pathlib
+import uuid
+from dataclasses import dataclass
+from datetime import date, datetime
+from decimal import Decimal
+
+from pydantic import BaseModel
+
+
+class Perfil(BaseModel):
+    nombre: str
+    edad: int
+
+
+@dataclass
+class Caja:
+    x: int
+
+
+class Opaco:
+    """Una clase normal y corriente: ni Pydantic, ni dataclass, ni nada registrado."""
+
+    def __init__(self, v):
+        self.v = v
+
+
+serde = JsonPlusSerializer()
+
+casos = {
+    "str":            "hola",
+    "int":            42,
+    "list":           [1, 2, 3],
+    "dict":           {"a": 1},
+    "tuple":          (1, 2, 3),
+    "set":            {1, 2, 3},
+    "bytes":          b"hola",
+    "datetime":       datetime(2026, 1, 1, 12, 0),
+    "date":           date(2026, 1, 1),
+    "Decimal":        Decimal("1.5"),
+    "UUID":           uuid.UUID("12345678-1234-5678-1234-567812345678"),
+    "Path":           _pathlib.Path("/tmp/x"),
+    "BaseModel":      Perfil(nombre="ana", edad=30),
+    "dataclass":      Caja(x=1),
+    "clase normal":   Opaco(3),
+}
+
+print(f"{'tipo que metes':16s} {'tipo que sale':16s} {'¿idéntico?'}")
+print("-" * 50)
+for nombre, valor in casos.items():
+    try:
+        vuelta = serde.loads_typed(serde.dumps_typed({"v": valor}))["v"]
+        print(f"{nombre:16s} {type(vuelta).__name__:16s} {vuelta == valor}")
+    except Exception as e:
+        print(f"{nombre:16s} {'—':16s} {type(e).__name__}: {str(e)[:40]}")
+
+#%%md
+Lee la salida despacio, porque tiene dos sorpresas.
+
+**Sorpresa 1 — `tuple` vuelve como `list`.** No hay error, no hay aviso. Simplemente
+tu tupla ya no es una tupla. Si el código de un nodo hace `a, b = estado["par"]` seguirá
+funcionando; si hace `estado["clave"] in mi_dict` con una tupla como clave, o
+`isinstance(x, tuple)`, o usa la tupla como clave de un `dict`, **fallará solo después
+de reanudar**.
+
+Ese "solo después de reanudar" es la firma de todos los bugs de este notebook: en la
+ejecución que escribe el estado no pasa nada, porque el objeto en memoria sigue siendo el
+original. El fallo aparece en la ejecución *siguiente*, la que lo lee del checkpointer.
+
+**Sorpresa 2 — una clase normal directamente no se puede guardar.** `Opaco` no es
+serializable y lanza `TypeError`. Esto es bueno: falla fuerte y pronto.
+
+> **Aviso `msgpack` en modelos Pydantic y dataclasses.** Si has visto un mensaje del tipo
+> *"Deserializing unregistered type … This will be blocked in a future version"*, no es
+> ruido: es exactamente el tema de la sección 4. Sigue leyendo.
+
+#%%md
+## 3. La trampa de la tupla, en un grafo de verdad
+
+La tabla anterior usa el serializador a pelo. Vamos a verlo donde duele: con checkpointer,
+reanudando en otro "proceso".
+
+#%%py
+import sqlite3
+from typing import TypedDict
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoCoords(TypedDict):
+    origen: tuple[float, float]
+    visitados: dict
+
+
+def anotar(estado: EstadoCoords) -> dict:
+    # Uso perfectamente razonable: una tupla como clave de un diccionario.
+    visitados = dict(estado["visitados"])
+    visitados[estado["origen"]] = "visitado"
+    return {"visitados": visitados}
+
+
+con = sqlite3.connect(":memory:", check_same_thread=False)
+grafo_coords = (
+    StateGraph(EstadoCoords)
+    .add_node("anotar", anotar)
+    .add_edge(START, "anotar")
+    .add_edge("anotar", END)
+    .compile(checkpointer=SqliteSaver(con))
+)
+
+hilo = {"configurable": {"thread_id": "coords"}}
+
+# Primera ejecución: el objeto sigue en memoria, todo perfecto.
+r1 = grafo_coords.invoke({"origen": (41.4, 2.2), "visitados": {}}, hilo)
+print("1ª ejecución  · tipo de origen:", type(r1["origen"]).__name__)
+
+# Ahora leemos el estado como lo leería otro proceso: desde el checkpointer.
+recuperado = grafo_coords.get_state(hilo).values
+print("tras el viaje · tipo de origen:", type(recuperado["origen"]).__name__)
+print("¿son iguales? :", recuperado["origen"] == r1["origen"])
+
+#%%md
+Y ahora la segunda ejecución sobre el mismo hilo, que es la que revienta:
+
+#%%py
+try:
+    grafo_coords.invoke({"origen": None}, hilo)   # None = no toques la clave
+except TypeError as e:
+    print("TypeError:", e)
+    print("\nEl nodo es el mismo, el código es el mismo. Lo único que cambió es que")
+    print("`origen` pasó por el checkpointer y volvió como lista, que no es hashable.")
+
+#%%md
+**La regla.** Un esquema de estado que se persiste es un **contrato de datos**, no un
+type hint decorativo. Trátalo como tratarías el esquema de una tabla:
+
+- Tipos JSON-nativos siempre que puedas: `str`, `int`, `float`, `bool`, `list`, `dict`, `None`.
+- `tuple` → usa `list`, o normaliza al leer.
+- Objetos de dominio → modelos **Pydantic** o **dataclasses** (sobreviven, ver sección 4).
+- Nada de clientes, conexiones, sesiones HTTP, handles de fichero ni modelos de LangChain
+  instanciados. Eso va en el `context` (efímero, no se persiste) o en variables de módulo.
+
+#%%md
+## 4. CVE-2026-28277: por qué el modo estricto degrada en silencio
+
+En noviembre de 2025 se publicó un aviso de seguridad sobre LangGraph
+(`GHSA-g48c-2wqr-h844`, **CVE-2026-28277**, severidad moderada, CVSS 6.8, corregido en 1.0.10).
+
+El resumen: al cargar un checkpoint, el deserializador podía **reconstruir objetos Python
+arbitrarios**. No es explotable desde fuera — hace falta poder escribir bytes en el almacén
+de checkpoints — pero eso convierte "alguien tocó la base de datos" en "alguien ejecuta
+código en tu proceso, con tus variables de entorno y tus credenciales de nube delante".
+
+La mitigación es una **lista blanca de tipos deserializables**, que se activa así:
+
+| Cómo | Efecto |
+|---|---|
+| `LANGGRAPH_STRICT_MSGPACK=true` | Modo estricto global |
+| `JsonPlusSerializer(allowed_msgpack_modules=[...])` | Lista blanca explícita |
+| `checkpointer.serde` en `langgraph.json` | Lo mismo, en despliegue (notebook 25) |
+
+Y aquí viene lo que **no** cuenta el aviso, y que es lo que de verdad te va a morder.
+
+#%%py
+import subprocess
+import sys as _sys
+import textwrap
+
+PRUEBA = textwrap.dedent('''
+    from pydantic import BaseModel
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    class Perfil(BaseModel):
+        nombre: str
+
+    serde = JsonPlusSerializer()
+    guardado = serde.dumps_typed({"v": Perfil(nombre="ana")})
+    vuelta = serde.loads_typed(guardado)["v"]
+
+    print("  tipo recuperado:", type(vuelta).__name__)
+    print("  valor          :", vuelta)
+    print("  ¿lanzó excepción?  NO")
+''')
+
+
+def correr(entorno_extra):
+    import os
+    entorno = {**os.environ, **entorno_extra}
+    salida = subprocess.run([_sys.executable, "-c", PRUEBA], capture_output=True,
+                            text=True, env=entorno)
+    return salida.stdout + salida.stderr
+
+
+print("SIN modo estricto:")
+print(correr({}))
+print("CON LANGGRAPH_STRICT_MSGPACK=true:")
+print(correr({"LANGGRAPH_STRICT_MSGPACK": "true"}))
+
+#%%md
+Léelo otra vez. Con el modo estricto activado y `Perfil` fuera de la lista blanca:
+
+- **no se lanza ninguna excepción**;
+- se escribe un aviso por el log;
+- y el valor vuelve como **`dict`**.
+
+Es decir: el modo estricto no te protege convirtiendo el problema en un error, te lo
+convierte en **datos con la forma equivocada**. Tu nodo hará `perfil.nombre` y verás un
+`AttributeError: 'dict' object has no attribute 'nombre'` en una traza que no menciona ni
+seguridad, ni serialización, ni el checkpointer.
+
+Si activas el modo estricto (deberías) y no compruebas la ida y vuelta (sección 6), lo
+único que has hecho es cambiar un agujero de seguridad por un bug de datos intermitente.
+
+#%%md
+### 4.1 La buena noticia: `compile()` deriva la lista blanca del esquema
+
+LangGraph no te deja solo. Al compilar, recorre el **esquema de estado** y registra los
+tipos que encuentra. Si tu modelo Pydantic está declarado en el `TypedDict`, sobrevive al
+modo estricto sin que tengas que hacer nada.
+
+Lo que **no** puede derivar es lo que el esquema no menciona. Comparemos los dos casos, los
+dos con el modo estricto activado:
+
+#%%py
+PRUEBA_GRAFO = textwrap.dedent('''
+    from typing import Any, TypedDict
+    from pydantic import BaseModel
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    class Perfil(BaseModel):
+        nombre: str
+
+    class EstadoDeclarado(TypedDict):
+        perfil: Perfil | None          # el esquema SÍ menciona Perfil
+
+    class EstadoOculto(TypedDict):
+        caja: dict[str, Any]           # el esquema NO menciona Perfil
+
+    def construir(esquema, nodo):
+        return (StateGraph(esquema).add_node("n", nodo)
+                .add_edge(START, "n").add_edge("n", END)
+                .compile(checkpointer=InMemorySaver()))
+
+    a = construir(EstadoDeclarado, lambda e: {"perfil": Perfil(nombre="ana")})
+    b = construir(EstadoOculto,    lambda e: {"caja": {"p": Perfil(nombre="ana")}})
+
+    cfg = {"configurable": {"thread_id": "t"}}
+    a.invoke({"perfil": None}, cfg)
+    b.invoke({"caja": {}}, cfg)
+
+    print("  declarado en el esquema ->", type(a.get_state(cfg).values["perfil"]).__name__)
+    print("  escondido en dict[str, Any] ->", type(b.get_state(cfg).values["caja"]["p"]).__name__)
+''')
+
+import os
+print(subprocess.run([_sys.executable, "-c", PRUEBA_GRAFO], capture_output=True, text=True,
+                     env={**os.environ, "LANGGRAPH_STRICT_MSGPACK": "true"}).stdout)
+
+#%%md
+Ahí está la regla operativa, y es sencilla de recordar:
+
+> **Con el modo estricto, un tipo sobrevive si el esquema de estado lo declara.**
+> Todo lo que viaje dentro de un `dict[str, Any]`, de una `list[Any]` o de un campo sin
+> anotar vuelve como diccionario.
+
+Que es, dicho de otra forma, un argumento muy fuerte para **tipar el estado de verdad** en
+lugar de tirar de `Any`. No es estilo: es la diferencia entre que tus objetos sobrevivan o no.
+
+#%%md
+## 5. `pickle_fallback`: la puerta que no debes abrir
+
+Cuando alguien se topa con `TypeError: Type is not msgpack serializable`, la primera
+respuesta que encuentra en los foros suele ser "activa `pickle_fallback=True`". Funciona.
+Y es exactamente lo que el CVE te está pidiendo que no hagas.
+
+`pickle` reconstruye objetos **ejecutando código**. Un checkpointer con pickle convierte
+cualquier escritura en la base de datos en ejecución remota de código. Si tu respuesta al
+error de serialización es pickle, lo que has hecho es mover el problema de "no puedo
+guardar esto" a "cualquiera que escriba en mi Postgres es root en mi proceso".
+
+**Qué hacer en su lugar**, en orden de preferencia:
+
+1. **No guardarlo.** ¿De verdad ese objeto tiene que sobrevivir a un reinicio? Los clientes,
+   las conexiones y los modelos se reconstruyen; van en el `context` o a nivel de módulo.
+2. **Guardar su forma serializable** y reconstruir al leer: guarda `id_cliente`, no el cliente.
+3. **Convertirlo en Pydantic o dataclass**, y declararlo en el esquema.
+
+#%%py
+from dataclasses import dataclass as _dataclass
+
+
+class ClienteHTTP:
+    """Imagina aquí una sesión con conexiones abiertas. No es serializable."""
+
+    def __init__(self, base_url):
+        self.base_url = base_url
+
+
+@_dataclass
+class RefCliente:
+    """Lo que sí guardamos: los datos mínimos para reconstruirlo."""
+
+    base_url: str
+
+    def abrir(self) -> ClienteHTTP:
+        return ClienteHTTP(self.base_url)
+
+
+serde_seguro = JsonPlusSerializer(pickle_fallback=False)
+
+try:
+    serde_seguro.dumps_typed({"c": ClienteHTTP("https://api.ejemplo.com")})
+except TypeError as e:
+    print("guardar el cliente        ->", type(e).__name__, "(y está bien que falle)")
+
+ref = serde_seguro.loads_typed(serde_seguro.dumps_typed({"c": RefCliente("https://api.ejemplo.com")}))["c"]
+print("guardar la referencia     -> OK, vuelve como", type(ref).__name__)
+print("y se reconstruye          ->", type(ref.abrir()).__name__)
+
+#%%md
+## 6. La prueba que tienes que tener en CI
+
+Todo lo anterior se resume en una sola prueba, y es barata: **coge tu esquema de estado,
+constrúyele un valor de ejemplo, pásalo por el serializador y compara tipos**.
+
+Esta prueba atrapa la tupla, atrapa el objeto no declarado y atrapa la degradación del modo
+estricto. Y falla en tu portátil, no en producción a las tres semanas.
+
+#%%py
+from typing import Any, get_args, get_origin, get_type_hints
+
+
+def revisar_esquema(esquema, ejemplo: dict, serde=None) -> list[str]:
+    """Pasa `ejemplo` por el serializador y avisa de todo lo que vuelve distinto.
+
+    Devuelve la lista de problemas encontrados; vacía significa que el esquema es seguro
+    de persistir.
+    """
+    serde = serde or JsonPlusSerializer()
+    problemas = []
+
+    anotaciones = get_type_hints(esquema, include_extras=False)
+    for clave, valor in ejemplo.items():
+        if clave not in anotaciones:
+            problemas.append(f"{clave}: no está en el esquema")
+            continue
+
+        try:
+            vuelta = serde.loads_typed(serde.dumps_typed({"v": valor}))["v"]
+        except Exception as e:
+            problemas.append(f"{clave}: no se puede serializar ({type(e).__name__})")
+            continue
+
+        if type(vuelta) is not type(valor):
+            problemas.append(
+                f"{clave}: entra como {type(valor).__name__} y sale como {type(vuelta).__name__}")
+
+        # `Any` en cualquier posición de la anotación = el modo estricto no lo protege.
+        anotacion = anotaciones[clave]
+        if Any in get_args(anotacion) or anotacion is Any or (
+                get_origin(anotacion) and Any in get_args(anotacion)):
+            problemas.append(f"{clave}: usa `Any`; los objetos de dentro volverán como dict")
+
+    return problemas
+
+
+class EstadoMalo(TypedDict):
+    origen: tuple[float, float]
+    caja: dict[str, Any]
+    nombre: str
+
+
+print("Esquema con problemas:")
+for p in revisar_esquema(EstadoMalo,
+                         {"origen": (1.0, 2.0), "caja": {"p": Perfil(nombre="ana", edad=1)},
+                          "nombre": "ana"}):
+    print("  ·", p)
+
+
+class EstadoBueno(TypedDict):
+    origen: list[float]
+    perfil: Perfil
+    nombre: str
+
+
+print("\nEsquema saneado:")
+print("  ·", revisar_esquema(EstadoBueno,
+                             {"origen": [1.0, 2.0], "perfil": Perfil(nombre="ana", edad=1),
+                              "nombre": "ana"}) or "sin problemas")
+
+#%%md
+## 7. Cuánto ocupa un checkpoint (y por qué te va a importar)
+
+El otro coste del estado no es de corrección, es de factura. Cada superpaso escribe el
+estado **completo**, no un diff. Un campo grande que arrastres turno tras turno se paga
+en cada checkpoint.
+
+#%%py
+import json
+
+from langchain_core.messages import AIMessage, HumanMessage
+
+
+def tamano(valor) -> int:
+    return len(JsonPlusSerializer().dumps_typed(valor)[1])
+
+
+conversacion = [HumanMessage("hola"), AIMessage("¿en qué te ayudo?")] * 20
+documento = {"texto": "lorem ipsum " * 2000}
+
+print(f"{'campo':34s} {'bytes':>9s}")
+print("-" * 45)
+for nombre, valor in [
+    ("20 turnos de conversación", {"messages": conversacion}),
+    ("un documento recuperado", documento),
+    ("solo su referencia", {"doc_id": "kb/persistencia.md#seccion-3"}),
+    ("las dos cosas juntas", {"messages": conversacion, **documento}),
+]:
+    print(f"{nombre:34s} {tamano(valor):9,d}")
+
+print("\nSi ese estado se escribe en 6 checkpoints por turno (notebook 23),")
+print(f"multiplica por 6: {tamano({'messages': conversacion, **documento}) * 6:,d} bytes por turno.")
+
+#%%md
+De ahí sale una de las reglas más rentables del curso:
+
+> **En el estado van referencias, no cargas útiles.** El texto recuperado, el fichero
+> subido, la respuesta cruda de la API: van al `Store` o a un bucket, y en el estado va su
+> identificador. El estado es el índice, no el almacén.
+
+Y su corolario: si un campo solo lo necesita el nodo que lo produce y el siguiente, no
+tiene por qué estar en el esquema persistido — puedes usar un canal efímero
+(`EphemeralValue`, notebook 02) para que no llegue nunca al checkpoint.
+
+#%%md
+## 8. Ejercicios
+
+### 8.1 ¿Cuáles de estos campos fallan de verdad?
+
+El siguiente esquema tiene cinco campos sospechosos. Antes de ejecutar nada, **apunta cuáles
+crees que no sobreviven al checkpoint**. Luego compruébalo con `revisar_esquema` y propón el
+esquema saneado. La gracia del ejercicio está en las que aciertes por accidente.
+
+#%%py
+class EstadoEjercicio(TypedDict):
+    id_sesion: str
+    coordenadas: tuple[float, float]
+    metadatos: dict[str, Any]
+    momento: datetime
+    etiquetas: set[str]
+
+
+ejemplo_ejercicio = {
+    "id_sesion": "s-1",
+    "coordenadas": (41.4, 2.2),
+    "metadatos": {"perfil": Perfil(nombre="ana", edad=30)},
+    "momento": datetime(2026, 1, 1),
+    "etiquetas": {"vip", "es"},
+}
+
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+for p in revisar_esquema(EstadoEjercicio, ejemplo_ejercicio):
+    print("·", p)
+
+print("""
+Los tres problemas:
+
+1. `coordenadas: tuple` -> vuelve como list. Cámbialo a `list[float]`, o normaliza al
+   entrar. Es el único de los tres que rompe en silencio.
+2. `metadatos: dict[str, Any]` -> el Perfil de dentro no está declarado en el esquema.
+   Sin modo estricto funciona (con aviso); con modo estricto vuelve como dict.
+   Sácalo a un campo propio con su tipo: `perfil: Perfil`.
+3. `etiquetas: set` -> este NO es un problema: `set` está registrado y vuelve como set.
+   La sorpresa es al revés, y conviene comprobarlo en vez de suponerlo.
+
+`momento: datetime` también sobrevive. La lección: no adivines cuál falla, pásalo por
+`revisar_esquema`.
+""")
+
+
+class EstadoEjercicioSaneado(TypedDict):
+    id_sesion: str
+    coordenadas: list[float]
+    perfil: Perfil
+    momento: datetime
+    etiquetas: set[str]
+
+
+print("saneado:", revisar_esquema(
+    EstadoEjercicioSaneado,
+    {"id_sesion": "s-1", "coordenadas": [41.4, 2.2], "perfil": Perfil(nombre="ana", edad=30),
+     "momento": datetime(2026, 1, 1), "etiquetas": {"vip"}}) or "sin problemas")
+
+#%%md
+</details>
+
+### 8.2 Adelgaza un estado
+
+Este estado arrastra el documento completo en cada turno. Reescríbelo para que guarde solo
+la referencia, y **mide** cuánto ahorras por checkpoint.
+
+#%%py
+class EstadoGordo(TypedDict):
+    messages: list
+    documento_completo: str
+    resumen: str
+
+
+estado_gordo = {
+    "messages": conversacion,
+    "documento_completo": "lorem ipsum " * 2000,
+    "resumen": "El documento habla de persistencia.",
+}
+
+# TU CÓDIGO AQUÍ: define EstadoFino y mide la diferencia.
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+class EstadoFino(TypedDict):
+    messages: list
+    doc_id: str          # la referencia; el texto vive en el Store
+    resumen: str
+
+
+estado_fino = {
+    "messages": conversacion,
+    "doc_id": "kb/persistencia.md",
+    "resumen": "El documento habla de persistencia.",
+}
+
+gordo, fino = tamano(estado_gordo), tamano(estado_fino)
+print(f"estado gordo : {gordo:9,d} bytes")
+print(f"estado fino  : {fino:9,d} bytes")
+print(f"ahorro       : {100 * (1 - fino / gordo):.1f} % por checkpoint")
+print(f"a 6 checkpoints por turno y 1.000 turnos/día:")
+print(f"  {(gordo - fino) * 6 * 1000 / 1e6:.1f} MB/día que dejas de escribir")
+
+#%%md
+</details>
+
+### 8.3 Modo estricto en tu proyecto
+
+Coge el grafo del módulo de despliegue (`despliegue/mi_agente/grafo.py`) y responde, sin
+ejecutarlo: si activaras `LANGGRAPH_STRICT_MSGPACK=true`, ¿qué campos de su estado
+sobrevivirían y cuáles volverían como `dict`? Comprueba tu respuesta con `revisar_esquema`.
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "despliegue").exists()) / "despliegue"))
+from mi_agente.estado import EstadoSoporte
+
+print("campos del estado desplegado:")
+for clave, tipo in get_type_hints(EstadoSoporte, include_extras=True).items():
+    # Las anotaciones con reducer son larguísimas; nos basta con el tipo base.
+    resumen = str(tipo)
+    print(f"  {clave:12s} {resumen[:70]}{'…' if len(resumen) > 70 else ''}")
+
+print("""
+Lectura: los campos son `messages` (mensajes de LangChain, que están en la lista blanca
+por defecto) y tipos primitivos. Ninguno usa `Any`, así que el modo estricto no cambia
+nada — que es justo el objetivo. Un estado bien tipado es un estado que puedes endurecer
+sin miedo.
+""")
+
+#%%md
+</details>
+
+## 9. Resumen
+
+- Todo checkpointer serializa con `JsonPlusSerializer`. El viaje de ida y vuelta **no es la
+  identidad**: `tuple` vuelve como `list`, en silencio.
+- El bug de serialización nunca aparece en la ejecución que escribe; aparece en la que lee.
+  Por eso se cuela hasta producción.
+- Sobreviven: primitivos, `list`, `dict`, `set`, `bytes`, `datetime`, `date`, `Decimal`,
+  `UUID`, `Path`, modelos Pydantic y dataclasses. No sobreviven las clases normales — y está
+  bien, porque fallan ruidosamente.
+- **CVE-2026-28277**: deserializar un checkpoint podía reconstruir objetos arbitrarios.
+  Mitigación: `LANGGRAPH_STRICT_MSGPACK=true` o `allowed_msgpack_modules`.
+- El modo estricto **no lanza excepción**: degrada el objeto a `dict` y escribe un aviso.
+  Actívalo, pero acompáñalo de la prueba de ida y vuelta.
+- `compile()` deriva la lista blanca **del esquema de estado**. Lo que viaja dentro de
+  `Any` no está protegido. Tipar el estado deja de ser estilo y pasa a ser correctitud.
+- `pickle_fallback=True` es la respuesta fácil y equivocada: convierte una escritura en la
+  base de datos en ejecución de código.
+- En el estado van **referencias, no cargas útiles**. Cada superpaso escribe el estado
+  entero.
+
+**Siguiente:** [`23_persistencia_a_escala.ipynb`](23_persistencia_a_escala.ipynb) — cuántos
+checkpoints genera de verdad un turno, y qué hacer cuando la tabla no para de crecer.

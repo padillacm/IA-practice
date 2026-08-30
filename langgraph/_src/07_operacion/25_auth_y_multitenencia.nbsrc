@@ -1,0 +1,700 @@
+#%%md
+# 25 · Autenticación, multitenencia y el `langgraph.json` completo
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 30 min*
+
+En el notebook 18 desplegamos la aplicación y la abrimos por HTTP. Con eso, cualquiera que
+llegue al puerto puede crear hilos, leer los de los demás y lanzar ejecuciones. Está bien
+para desarrollo y es inaceptable para todo lo demás.
+
+Este notebook cierra ese hueco, que es el que más veces aparece en el foro de despliegue
+con la forma *"¿cómo hago que cada usuario vea solo sus conversaciones?"*.
+
+Al terminar sabrás:
+
+1. La diferencia entre autenticar y autorizar, y por qué en LangGraph son dos decoradores
+   distintos.
+2. Cómo el servidor elige **un solo manejador** por petición, y por qué eso sorprende.
+3. Los filtros de metadatos, que son lo que de verdad hace la multitenencia.
+4. Por qué el `store` se protege de otra forma (y es la trampa nº 1 de este tema).
+5. El fichero `langgraph.json` **entero**, no las cuatro claves del notebook 18.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+RAIZ = next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+            if (p / "despliegue").exists())
+
+#%%md
+## 1. Dos etapas que no hay que mezclar
+
+| | Pregunta | Decorador | Cuándo corre | Si falla |
+|---|---|---|---|---|
+| **Autenticación** (AuthN) | ¿Quién eres? | `@auth.authenticate` | Middleware, **en toda** petición | 401 |
+| **Autorización** (AuthZ) | ¿Puedes hacer esto con **este** recurso? | `@auth.on...` | Por recurso y acción | 403 |
+
+La autenticación devuelve un **usuario**; la autorización devuelve un **filtro**. Esa
+segunda parte es la que hace el trabajo pesado de la multitenencia y es la que cuesta
+entender, porque no se parece a un `if permiso: ...` normal.
+
+Todo esto vive en un fichero aparte que se referencia desde `langgraph.json`. El del
+curso está en `despliegue/mi_agente/auth.py`; vamos a leerlo por partes.
+
+#%%py
+FICHERO_AUTH = RAIZ / "despliegue" / "mi_agente" / "auth.py"
+codigo_auth = FICHERO_AUTH.read_text(encoding="utf-8")
+
+print(f"{FICHERO_AUTH.relative_to(RAIZ)}  ({len(codigo_auth.splitlines())} líneas)\n")
+inicio = codigo_auth.index("@auth.authenticate")
+print(codigo_auth[inicio:codigo_auth.index("# ---", inicio)])
+
+#%%md
+Tres detalles del bloque de autenticación que ahorran tiempo:
+
+1. **Los parámetros se piden por nombre.** El servidor mira la firma de tu función e
+   inyecta lo que hayas declarado. Están disponibles `request`, `path`, `method`,
+   `path_params`, `query_params`, `headers` y `authorization`. Pide solo lo que uses.
+2. **`identity` es lo único obligatorio.** Todo lo demás que devuelvas —`permissions`,
+   `org_id`, `role`, lo que quieras— viaja contigo hasta los manejadores de autorización
+   y hasta el propio grafo.
+3. **Se lanza `Auth.exceptions.HTTPException`**, no una excepción cualquiera. Una
+   `AssertionError` también se traduce a 401; cualquier otra cosa es un 500.
+
+#%%py
+from langgraph_sdk import Auth
+
+print("campos de MinimalUserDict:")
+for campo, tipo in Auth.types.MinimalUserDict.__annotations__.items():
+    obligatorio = "Required" in str(tipo)
+    print(f"  {campo:18s} {'obligatorio' if obligatorio else 'opcional'}")
+
+print("\nlo que ve un manejador de autorización (AuthContext):")
+print("  ", [c for c in dir(Auth.types.AuthContext) if not c.startswith("_")])
+
+#%%md
+## 2. Cómo elige el servidor el manejador: **solo uno**
+
+Aquí está la sorpresa que hace que la gente se pase media tarde depurando.
+
+Puedes registrar manejadores a tres niveles de especificidad:
+
+```
+@auth.on                     -> todos los recursos, todas las acciones
+@auth.on.threads             -> todas las acciones sobre threads
+@auth.on.threads.create      -> solo la creación de threads
+```
+
+Y el servidor **ejecuta exactamente uno**: el más específico que encaje. No es una cadena
+de middlewares, no se acumulan. Si tienes un `@auth.on` global que comprueba la
+organización y registras un `@auth.on.threads.create`, **la comprobación de organización
+deja de ejecutarse para crear hilos**.
+
+#%%py
+def resolver(auth_obj, recurso: str, accion: str) -> str:
+    """Reproduce la regla de precedencia del servidor: (r,a) -> (r,'*') -> global."""
+    tabla = auth_obj._handlers          # interno; aquí solo para enseñar la regla
+    for clave in ((recurso, accion), (recurso, "*")):
+        if clave in tabla:
+            return f"{tabla[clave][0].__name__}   [{clave[0]}.{clave[1]}]"
+    if auth_obj._global_handlers:
+        return f"{auth_obj._global_handlers[0].__name__}   [global]"
+    return "(ninguno -> se permite)"
+
+
+demo = Auth()
+
+
+@demo.on
+async def regla_global(ctx, value):
+    return {"owner": ctx.user.identity}
+
+
+@demo.on.threads
+async def regla_hilos(ctx, value):
+    return {"owner": ctx.user.identity}
+
+
+@demo.on.threads.create
+async def regla_crear_hilo(ctx, value):
+    return {"owner": ctx.user.identity}
+
+
+print(f"{'petición':28s} manejador que se ejecuta")
+print("-" * 70)
+for recurso, accion in [("threads", "create"), ("threads", "read"), ("threads", "search"),
+                        ("assistants", "create"), ("crons", "delete"), ("store", "put")]:
+    print(f"{recurso + '.' + accion:28s} {resolver(demo, recurso, accion)}")
+
+#%%md
+Léelo con atención: `threads.create` **no** pasa por `regla_hilos` ni por `regla_global`.
+
+> **La consecuencia de diseño.** Si tienes una comprobación que debe aplicarse *siempre*
+> (el `org_id`, un bloqueo por suspensión de cuenta), no la pongas solo en el manejador
+> global: extráela a una función y **llámala desde cada manejador específico**. Es
+> exactamente lo que hace `_marcar_propietario` en el fichero del curso.
+
+#%%md
+## 3. Los filtros: lo que de verdad hace la multitenencia
+
+Un manejador de autorización puede devolver tres cosas:
+
+| Devuelve | Significa |
+|---|---|
+| `None` o `True` | Acceso total al recurso |
+| `False` | Denegado (se traduce en 403) |
+| Un **diccionario de filtro** | Acceso restringido a los recursos cuyos metadatos encajen |
+
+El diccionario admite tres formas:
+
+- `{"owner": "u-ana"}` — igualdad exacta (atajo de `$eq`)
+- `{"owner": {"$eq": "u-ana"}}` — lo mismo, explícito
+- `{"colaboradores": {"$contains": "u-ana"}}` — pertenencia a una lista
+
+Varias claves se combinan con **AND**. Vamos a implementar la semántica para verla
+funcionar; te servirá además para escribir pruebas de tus propias reglas.
+
+#%%py
+def encaja(metadatos: dict, filtro: dict | bool | None) -> bool:
+    """Implementa la semántica de los filtros de autorización de LangGraph."""
+    if filtro is None or filtro is True:
+        return True
+    if filtro is False:
+        return False
+
+    for clave, esperado in filtro.items():
+        actual = metadatos.get(clave)
+        if isinstance(esperado, dict) and "$eq" in esperado:
+            if actual != esperado["$eq"]:
+                return False
+        elif isinstance(esperado, dict) and "$contains" in esperado:
+            quiere = esperado["$contains"]
+            contenedor = actual if isinstance(actual, (list, tuple, set)) else []
+            quiere = quiere if isinstance(quiere, list) else [quiere]
+            if not set(quiere).issubset(set(contenedor)):
+                return False
+        elif actual != esperado:
+            return False
+    return True
+
+
+hilos = [
+    {"id": "h1", "metadata": {"owner": "u-ana", "colaboradores": ["u-luis"]}},
+    {"id": "h2", "metadata": {"owner": "u-luis", "colaboradores": []}},
+    {"id": "h3", "metadata": {"owner": "u-ana", "colaboradores": ["u-luis", "u-eva"]}},
+    {"id": "h4", "metadata": {"owner": "u-eva", "colaboradores": ["u-ana"]}},
+]
+
+filtros = {
+    "solo míos (Ana)":            {"owner": "u-ana"},
+    "míos o compartidos conmigo": None,   # se resuelve aparte, ver abajo
+    "donde colaboro (Luis)":      {"colaboradores": {"$contains": "u-luis"}},
+    "de Ana Y con Eva dentro":    {"owner": "u-ana", "colaboradores": {"$contains": "u-eva"}},
+}
+
+for nombre, filtro in filtros.items():
+    if filtro is None:
+        continue
+    visibles = [h["id"] for h in hilos if encaja(h["metadata"], filtro)]
+    print(f"{nombre:28s} -> {visibles}")
+
+#%%md
+Fíjate en el caso que he dejado fuera a propósito: **"míos o compartidos conmigo"**.
+
+El filtro es un **AND** de condiciones; no hay `$or`. Si tu producto necesita "los que
+poseo *o* aquellos en los que colaboro", no lo puedes expresar en un solo filtro. La salida
+idiomática es meter al propietario en la lista de colaboradores al crear el recurso, y
+filtrar solo por ella:
+
+#%%py
+# Al crear el hilo, el propietario entra también en `colaboradores`.
+hilos_bien = [
+    {"id": "h1", "metadata": {"owner": "u-ana",  "colaboradores": ["u-ana", "u-luis"]}},
+    {"id": "h2", "metadata": {"owner": "u-luis", "colaboradores": ["u-luis"]}},
+    {"id": "h4", "metadata": {"owner": "u-eva",  "colaboradores": ["u-eva", "u-ana"]}},
+]
+
+for usuario in ("u-ana", "u-luis", "u-eva"):
+    filtro = {"colaboradores": {"$contains": usuario}}
+    print(f"{usuario:8s} ve -> {[h['id'] for h in hilos_bien if encaja(h['metadata'], filtro)]}")
+
+print("\nUn solo filtro, y cubre propiedad y colaboración. La decisión se toma al")
+print("ESCRIBIR los metadatos, no al leerlos: ese es el patrón.")
+
+#%%md
+### 3.1 El error de las dos mitades
+
+Un manejador de creación tiene que hacer **dos** cosas, y se olvida una con una frecuencia
+notable:
+
+```python
+def marcar(ctx, value):
+    value.setdefault("metadata", {})["owner"] = ctx.user.identity   # (1) ESCRIBIR
+    return {"owner": ctx.user.identity}                             # (2) FILTRAR
+```
+
+- Si olvidas **(1)**: el recurso nace sin dueño. El filtro de lectura no lo encuentra
+  nunca. Síntoma: *"creo un hilo, me responde 200, y luego no aparece en mi lista"*.
+- Si olvidas **(2)**: cualquiera lee los hilos de cualquiera. Síntoma: ninguno, hasta que
+  alguien lo nota.
+
+#%%md
+## 4. La trampa nº 1: el `store` no se filtra, se reescribe
+
+El `store` (memoria a largo plazo, notebook 09) es el único recurso que **no** se protege
+con filtros de metadatos. Sus manejadores tienen que **reescribir el `namespace`** que
+viene en la petición:
+
+#%%py
+inicio_store = codigo_auth.index("@auth.on.store")
+print(codigo_auth[inicio_store:])
+
+#%%md
+El motivo es que el `store` no tiene metadatos que filtrar: su unidad de aislamiento es la
+tupla del namespace. Anteponer la identidad del usuario convierte
+`("recuerdos",)` en `("u-ana", "recuerdos")`, y con eso dos usuarios que pidan
+literalmente la misma clave leen sitios distintos.
+
+#%%py
+def aislar(identidad: str, namespace_pedido: tuple) -> tuple:
+    return (identidad, *namespace_pedido)
+
+
+print("lo que pide el cliente      -> lo que se usa de verdad")
+for identidad in ("u-ana", "u-luis"):
+    for pedido in [("recuerdos",), ("preferencias", "idioma"), ()]:
+        print(f"  {identidad:7s} {str(pedido):26s} -> {aislar(identidad, pedido)}")
+
+print("\nDos usuarios pidiendo ('recuerdos',) leen namespaces distintos.")
+print("Y ojo: el agente NO tiene que saber nada de esto. El aislamiento vive")
+print("en la capa de auth, no repartido por las herramientas.")
+
+#%%md
+> **Recuerda la restricción del notebook 09:** las etiquetas de un namespace **no pueden
+> contener puntos**. Si usas correos electrónicos como identidad, `ana@ejemplo.com`
+> revienta con `InvalidNamespaceError`. Usa identificadores opacos (`u-ana`) y guarda el
+> correo como dato, no como clave.
+
+#%%md
+## 5. Lo que la autenticación **no** protege
+
+Esto es importante y se pasa por alto: `@auth.on` protege **los recursos de la API**
+(hilos, assistants, crons, store). No protege lo que hacen **las herramientas de tu
+agente**.
+
+Si tu agente tiene una herramienta `consultar_pedido(id_pedido)`, el sistema de auth no
+sabe nada de pedidos. Un usuario autenticado puede pedirle al modelo el pedido de otro, y
+la herramienta lo devolverá tan contenta — porque el permiso lo comprueba el modelo, que
+es exactamente donde no se comprueban los permisos.
+
+**La regla:** la identidad llega hasta el grafo; úsala **en el código de la herramienta**,
+nunca en el prompt.
+
+#%%py
+from dataclasses import dataclass
+
+from langchain.tools import tool
+from langgraph.runtime import Runtime
+
+
+@dataclass
+class ContextoUsuario:
+    """El contexto va como dataclass, igual que en el resto del curso.
+
+    Con `typing.TypedDict` en Python 3.11, `@tool` falla al construir el esquema
+    (`PydanticUserError`: hay que usar `typing_extensions.TypedDict`). Una dataclass
+    evita el problema y se lee mejor.
+    """
+
+    id_usuario: str
+
+
+PEDIDOS = {
+    "P-100": {"propietario": "u-ana", "total": 42.0},
+    "P-200": {"propietario": "u-luis", "total": 13.5},
+}
+
+
+@tool
+def consultar_pedido_mal(id_pedido: str) -> str:
+    """Consulta un pedido por su identificador."""
+    pedido = PEDIDOS.get(id_pedido)
+    return f"total {pedido['total']} €" if pedido else "no existe"
+
+
+@tool
+def consultar_pedido_bien(id_pedido: str, runtime: Runtime[ContextoUsuario]) -> str:
+    """Consulta un pedido por su identificador."""
+    pedido = PEDIDOS.get(id_pedido)
+    # El permiso se comprueba aquí, con la identidad autenticada. No en el prompt.
+    if pedido is None or pedido["propietario"] != runtime.context.id_usuario:
+        return "no existe"          # mismo mensaje que si no existiera: no filtres información
+    return f"total {pedido['total']} €"
+
+
+print("Luis pregunta por el pedido de Ana (P-100):")
+print("  herramienta ingenua :", consultar_pedido_mal.invoke({"id_pedido": "P-100"}))
+
+from langgraph.graph import END, START, StateGraph
+from typing import TypedDict
+
+
+class EstadoPedido(TypedDict):
+    respuesta: str
+
+
+def nodo_consulta(estado, runtime: Runtime[ContextoUsuario]) -> dict:
+    return {"respuesta": consultar_pedido_bien.invoke(
+        {"id_pedido": "P-100", "runtime": runtime})}
+
+
+grafo_pedidos = (
+    StateGraph(EstadoPedido, context_schema=ContextoUsuario)
+    .add_node("consulta", nodo_consulta)
+    .add_edge(START, "consulta")
+    .add_edge("consulta", END)
+    .compile()
+)
+
+print("  herramienta correcta:",
+      grafo_pedidos.invoke({}, context=ContextoUsuario(id_usuario="u-luis"))["respuesta"])
+print("  (y para Ana)        :",
+      grafo_pedidos.invoke({}, context=ContextoUsuario(id_usuario="u-ana"))["respuesta"])
+
+#%%md
+Dos matices que separan una comprobación buena de una regular:
+
+1. **Devuelve el mismo mensaje para "no existe" y "no es tuyo".** Si distingues, has
+   construido un oráculo que permite enumerar los identificadores ajenos.
+2. **La identidad va en el `context`, no en el estado.** El estado se persiste y se puede
+   editar con `update_state`; el `context` es de la ejecución y viene del servidor. En la
+   plataforma, el usuario autenticado llega al grafo en
+   `config["configurable"]["langgraph_auth_user"]`.
+
+#%%md
+## 6. Comprobado contra un servidor de verdad
+
+Todo lo anterior no es teoría: la configuración del curso se ha arrancado con
+`langgraph dev` usando `despliegue/langgraph.produccion.json` y se ha ejercitado por HTTP.
+Estos son los resultados, tal cual:
+
+| Petición | Token | Resultado |
+|---|---|---|
+| `POST /threads` | ninguno | **401** `{"detail":"Falta el token"}` |
+| `POST /threads` | inválido | **401** `{"detail":"Token no válido"}` |
+| `POST /threads` | Ana (`threads:write`) | **200**, `metadata: {"owner": "u-ana"}` |
+| `POST /threads` | Luis (solo `threads:read`) | **403** `{"detail":"Sin permiso de escritura"}` |
+| `POST /threads/search` | Ana | 1 hilo (el suyo) |
+| `POST /threads/search` | Luis | **0 hilos** |
+| `GET /threads/{de Ana}` | Luis | **404**, no 403 |
+
+Esa última fila merece un párrafo. El servidor devuelve **404 y no 403** cuando pides un
+recurso que existe pero no es tuyo. Es deliberado y es lo correcto: un 403 confirmaría que
+el identificador existe. Si estás escribiendo pruebas de tu capa de auth, **espera 404**.
+
+#%%md
+## 7. El `langgraph.json` completo
+
+En el notebook 18 usamos cuatro claves. El fichero real admite bastantes más, y las que
+faltaban son justo las de producción.
+
+#%%py
+import json
+
+produccion = json.loads((RAIZ / "despliegue" / "langgraph.produccion.json").read_text())
+print(json.dumps(produccion, indent=2, ensure_ascii=False))
+
+#%%md
+Clave por clave, lo que hay que saber:
+
+| Clave | Para qué | Trampa |
+|---|---|---|
+| `dependencies` | Paquetes y rutas locales | `["."]` instala tu paquete; el servidor carga el grafo **por ruta de fichero**, así que usa importaciones absolutas (notebook 18) |
+| `graphs` | `"nombre": "./fichero.py:variable"` | La variable debe ser el grafo **compilado sin checkpointer**: la plataforma inyecta el suyo |
+| `env` | Ruta a un `.env` o dict inline | No metas secretos inline en un fichero versionado |
+| `auth` | `"path": "./auth.py:auth"` | `disable_studio_auth: false` mantiene el acceso de Studio; ponlo a `true` para cerrar del todo |
+| `checkpointer.ttl` | Caducidad de checkpoints | `default_ttl` en **minutos**; el barrido es periódico, no instantáneo |
+| `checkpointer.serde` | `allowed_json_modules`, `pickle_fallback` | Es el modo estricto del notebook 22, en despliegue |
+| `store.index` | Búsqueda semántica | `embed`, `dims`, `fields` |
+| `store.ttl` | Caducidad de memorias | `refresh_on_read: true` hace que lo consultado no caduque nunca |
+| `http.cors` | Orígenes permitidos | `allow_origins: ["*"]` con `allow_credentials: true` es un fallo de seguridad clásico |
+| `http.disable_*` | Apagar familias de rutas | `/ok` **siempre** sigue viva, aunque pongas `disable_meta` |
+| `http.app` | Tu propia app Starlette/FastAPI montada | Con `enable_custom_route_auth` para que tus rutas también pasen por auth |
+| `http.middleware_order` | `auth_first` o `middleware_first` | Por defecto corre tu middleware **antes** que la auth |
+| `webhooks.url` | Lista blanca de destinos | Sin ella, un webhook configurable es un SSRF |
+| `base_image` | Fijar la versión del servidor | Sin fijarla, una actualización te cambia el runtime sin avisar |
+
+#%%md
+### 7.1 Reducir la superficie expuesta
+
+`http.disable_*` es la medida más barata que existe: **si no lo usas, apágalo**.
+
+Verificado contra el servidor arrancado con la configuración de arriba (`disable_meta`,
+`disable_store`, `disable_mcp`, `disable_a2a`):
+
+```
+con token válido:      /  404    /info  404    /docs  404
+                  /metrics  404  /openapi.json  404
+                       /ok  200      <- la sonda de salud sobrevive siempre
+             /store/items  404
+sin token:             todo 401     <- la auth corre ANTES que el enrutado
+```
+
+Ese último detalle importa para monitorización: **sin token todo devuelve 401, incluidas
+las rutas que no existen**. Si tu sistema de alertas distingue 404 de 401, ténlo en cuenta.
+
+#%%md
+## 8. Ejercicios
+
+### 8.1 Escribe las reglas de un caso real
+
+Un producto B2B con estas condiciones:
+
+- Cada usuario pertenece a **una organización** (`org_id`).
+- Un usuario ve los hilos de **su organización**, no solo los suyos.
+- Solo los `admin` pueden borrar hilos o crear assistants.
+- Nadie puede tocar los crons.
+
+Escribe los manejadores. Cuidado con la regla de precedencia de la sección 2.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+b2b = Auth()
+
+
+@b2b.authenticate
+async def autenticar_b2b(authorization: str | None):
+    directorio = {
+        "t-ana":  {"identity": "u-ana",  "permissions": ["admin"], "org_id": "acme"},
+        "t-luis": {"identity": "u-luis", "permissions": [],         "org_id": "acme"},
+        "t-eva":  {"identity": "u-eva",  "permissions": ["admin"], "org_id": "globex"},
+    }
+    usuario = directorio.get((authorization or "").removeprefix("Bearer "))
+    if usuario is None:
+        raise Auth.exceptions.HTTPException(status_code=401, detail="Token no válido")
+    return {**usuario, "is_authenticated": True}
+
+
+def _ambito_org(ctx, value: dict) -> dict:
+    """La comprobación que debe aplicarse SIEMPRE: se llama desde cada manejador.
+
+    Ponerla solo en `@auth.on` no basta: los manejadores específicos lo desplazan.
+    """
+    org = ctx.user.org_id
+    value.setdefault("metadata", {})["org_id"] = org
+    return {"org_id": org}
+
+
+@b2b.on
+async def denegar_resto(ctx, value):
+    raise Auth.exceptions.HTTPException(status_code=403, detail="No permitido")
+
+
+@b2b.on.threads.create
+async def b2b_crear(ctx, value):
+    return _ambito_org(ctx, value)
+
+
+@b2b.on.threads.create_run
+async def b2b_ejecutar(ctx, value):
+    return _ambito_org(ctx, value)
+
+
+@b2b.on.threads.read
+async def b2b_leer(ctx, value):
+    return {"org_id": ctx.user.org_id}
+
+
+@b2b.on.threads.search
+async def b2b_buscar(ctx, value):
+    return {"org_id": ctx.user.org_id}
+
+
+@b2b.on.threads.delete
+async def b2b_borrar(ctx, value):
+    if "admin" not in ctx.permissions:
+        raise Auth.exceptions.HTTPException(status_code=403, detail="Solo administradores")
+    return {"org_id": ctx.user.org_id}
+
+
+@b2b.on.assistants.create
+async def b2b_crear_assistant(ctx, value):
+    if "admin" not in ctx.permissions:
+        raise Auth.exceptions.HTTPException(status_code=403, detail="Solo administradores")
+    return _ambito_org(ctx, value)
+
+
+@b2b.on.assistants.read
+async def b2b_leer_assistant(ctx, value):
+    return {"org_id": ctx.user.org_id}
+
+
+# Los crons NO tienen manejador propio: caen en el global, que deniega. Correcto.
+print(f"{'petición':28s} manejador")
+print("-" * 62)
+for recurso, accion in [("threads", "create"), ("threads", "delete"), ("threads", "search"),
+                        ("assistants", "create"), ("assistants", "read"),
+                        ("crons", "create"), ("store", "put")]:
+    print(f"{recurso + '.' + accion:28s} {resolver(b2b, recurso, accion)}")
+
+print("\nComprobación del aislamiento entre organizaciones:")
+hilos_b2b = [
+    {"id": "h-acme-1",   "metadata": {"org_id": "acme"}},
+    {"id": "h-acme-2",   "metadata": {"org_id": "acme"}},
+    {"id": "h-globex-1", "metadata": {"org_id": "globex"}},
+]
+for org in ("acme", "globex"):
+    visibles = [h["id"] for h in hilos_b2b if encaja(h["metadata"], {"org_id": org})]
+    print(f"  {org:8s} ve {visibles}")
+
+#%%md
+</details>
+
+### 8.2 Encuentra el agujero
+
+Estas reglas tienen un fallo de seguridad. ¿Cuál?
+
+```python
+@auth.on
+async def por_organizacion(ctx, value):
+    value.setdefault("metadata", {})["org_id"] = ctx.user.org_id
+    return {"org_id": ctx.user.org_id}
+
+@auth.on.threads.create
+async def crear(ctx, value):
+    if "threads:write" not in ctx.permissions:
+        raise Auth.exceptions.HTTPException(status_code=403, detail="Sin permiso")
+    return {"owner": ctx.user.identity}
+```
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+**El agujero:** al crear un hilo, `por_organizacion` **no se ejecuta** (la precedencia de
+la sección 2), así que el hilo nace **sin `org_id` en los metadatos**.
+
+Y ahora el efecto en cadena: la lectura sí pasa por el manejador global, que filtra por
+`{"org_id": ...}`. Un hilo sin `org_id` no encaja con **ningún** filtro de organización…
+salvo que en tu backend un campo ausente se trate como comodín, en cuyo caso lo ve todo el
+mundo. En el mejor de los casos has creado hilos invisibles; en el peor, públicos.
+
+Además, `crear` devuelve un filtro por `owner` mientras que la lectura filtra por
+`org_id`: dos criterios distintos para el mismo recurso, que es la receta de "lo creo y no
+aparece".
+
+**El arreglo** es el de la solución anterior: extraer la lógica común a una función normal
+y llamarla desde cada manejador específico.
+
+#%%py
+roto = Auth()
+
+
+@roto.on
+async def por_organizacion(ctx, value):
+    value.setdefault("metadata", {})["org_id"] = ctx.user.org_id
+    return {"org_id": ctx.user.org_id}
+
+
+@roto.on.threads.create
+async def crear_roto(ctx, value):
+    return {"owner": ctx.user.identity}
+
+
+print("crear un hilo lo maneja :", resolver(roto, "threads", "create"))
+print("leerlo lo maneja        :", resolver(roto, "threads", "read"))
+print("\nSon manejadores distintos con criterios distintos. Ahí está el fallo.")
+
+hilo_creado = {"metadata": {"owner": "u-ana"}}          # sin org_id
+print("\n¿el filtro de lectura lo encuentra?",
+      encaja(hilo_creado["metadata"], {"org_id": "acme"}))
+
+#%%md
+</details>
+
+### 8.3 Endurece tu `langgraph.json`
+
+Coge `despliegue/langgraph.json` (el de desarrollo) y escribe la versión endurecida para
+un despliegue público. Compárala después con `langgraph.produccion.json`.
+
+#%%py
+print(json.dumps(json.loads((RAIZ / "despliegue" / "langgraph.json").read_text()),
+                 indent=2, ensure_ascii=False))
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+La lista de comprobación, y por qué cada punto:
+
+1. **`auth`** — sin esto, todo lo demás sobra.
+2. **`http.cors.allow_origins`** con tus dominios, nunca `["*"]` junto a
+   `allow_credentials: true`.
+3. **`http.disable_meta`** — `/docs` y `/openapi.json` publican tu API entera.
+4. **`http.disable_store`, `disable_mcp`, `disable_a2a`** si no los usas.
+5. **`checkpointer.ttl`** — la retención del notebook 23, para que la base de datos no
+   crezca sin límite.
+6. **`checkpointer.serde.allowed_json_modules`** — el modo estricto del notebook 22.
+7. **`store.ttl`** si guardas memorias de usuario (y encaja con tu política de datos).
+8. **`base_image`** fijado a una versión concreta.
+9. **`env`** apuntando a un fichero **fuera** del repositorio.
+10. **`webhooks.url.allowed_domains`** si dejas configurar webhooks: sin lista blanca es un
+    SSRF de manual.
+
+#%%py
+comprobaciones = {
+    "auth":                    lambda c: "auth" in c,
+    "CORS acotado":            lambda c: c.get("http", {}).get("cors", {}).get(
+                                   "allow_origins", ["*"]) != ["*"],
+    "rutas meta apagadas":     lambda c: c.get("http", {}).get("disable_meta") is True,
+    "TTL de checkpoints":      lambda c: "ttl" in c.get("checkpointer", {}),
+    "TTL del store":           lambda c: "ttl" in c.get("store", {}),
+    "env fuera del repo":      lambda c: str(c.get("env", "")).startswith(".."),
+}
+
+for nombre, fichero in [("desarrollo", "langgraph.json"),
+                        ("producción", "langgraph.produccion.json")]:
+    cfg = json.loads((RAIZ / "despliegue" / fichero).read_text())
+    print(f"\n{nombre} ({fichero}):")
+    for etiqueta, comprobar in comprobaciones.items():
+        print(f"   {'ok  ' if comprobar(cfg) else 'FALTA'} {etiqueta}")
+
+#%%md
+Esta misma función te sirve como prueba en CI: que nadie despliegue una configuración que
+haya perdido una de estas piezas.
+
+</details>
+
+## 9. Resumen
+
+- **Autenticar** (`@auth.authenticate`, 401) y **autorizar** (`@auth.on...`, 403) son dos
+  etapas distintas. La primera devuelve un usuario; la segunda, un filtro.
+- El servidor ejecuta **un solo manejador** por petición, el más específico. Los
+  manejadores **no se encadenan**: lo que deba aplicarse siempre, extráelo a una función y
+  llámala desde cada uno.
+- Los filtros admiten `$eq` y `$contains`, y se combinan con **AND**. **No hay `$or`**: si
+  necesitas "mío o compartido", mete al propietario en la lista de colaboradores al crear.
+- Un manejador de creación hace **dos** cosas: escribir la metadata *y* devolver el filtro.
+  Olvidar la primera da recursos invisibles; olvidar la segunda, recursos públicos.
+- El **`store` no se filtra: se reescribe el `namespace`**. Y sus etiquetas no admiten
+  puntos.
+- La auth protege **los recursos de la API, no tus herramientas**. El permiso de dominio se
+  comprueba en el código de la herramienta, con la identidad del `context`, y devolviendo
+  el mismo mensaje para "no existe" y "no es tuyo".
+- Un recurso ajeno responde **404, no 403**. Escribe tus pruebas esperando 404.
+- `langgraph.json` tiene mucho más que `dependencies`/`graphs`: `auth`, `checkpointer.ttl`,
+  `checkpointer.serde`, `store.ttl`, `http.cors`, `http.disable_*`, `webhooks`,
+  `base_image`. Si no usas una familia de rutas, **apágala**.
+
+**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — coger la
+aplicación del módulo 6 y dejarla lista para abrirla al público.
