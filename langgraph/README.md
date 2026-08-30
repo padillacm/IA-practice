@@ -1,6 +1,6 @@
 # Curso de LangGraph — de cero al p99
 
-Un curso completo de **LangGraph en español**, en 35 notebooks interactivos, construido y
+Un curso completo de **LangGraph en español**, en 36 notebooks interactivos, construido y
 verificado contra **LangGraph 1.2** y **LangChain 1.3**.
 
 No es una traducción de la documentación. Cada afirmación técnica del material se comprobó
@@ -14,13 +14,13 @@ persistencia, concurrencia por `thread_id` y control de acceso.
 
 | | |
 |---|---|
-| **Notebooks** | 35 (28 de contenido + 7 de proyecto) |
+| **Notebooks** | 36 (29 de contenido + 7 de proyecto) |
 | **Módulos** | 8 |
-| **Celdas** | 1250 (706 de teoría, 544 de código ejecutable) |
+| **Celdas** | 1290 (731 de teoría, 559 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
-| **Pruebas** | 66 pruebas automáticas que corren en 1,9 s sin llamar a ningún modelo |
-| **Dedicación estimada** | 50-57 horas |
+| **Pruebas** | 71 pruebas automáticas que corren en 2,3 s sin llamar a ningún modelo |
+| **Dedicación estimada** | 52-59 horas |
 | **Coste en API** | unos 2 € en total con `gpt-4o-mini` |
 
 ---
@@ -153,6 +153,7 @@ sale de contrastar el resto del curso con los problemas que la gente reporta en 
 | [`25_auth_y_multitenencia`](07_operacion/25_auth_y_multitenencia.ipynb) | `langgraph_sdk.Auth`, filtros de metadatos, aislamiento del `Store` y el `langgraph.json` completo |
 | [`26_exponer_el_agente`](07_operacion/26_exponer_el_agente.ipynb) | El agente como servicio para otros agentes: endpoint `/mcp`, protocolo A2A, rutas HTTP propias y el diseño del contrato que ve el otro modelo |
 | [`27_evaluar_trayectorias`](07_operacion/27_evaluar_trayectorias.ipynb) | Evaluar **cómo** llegó el agente a la respuesta: los cuatro modos de coincidencia de `agentevals`, la trampa de los argumentos en lenguaje natural, trayectorias de grafo con interrupciones y los límites del juez LLM |
+| [`28_ciclo_de_vida_del_despliegue`](07_operacion/28_ciclo_de_vida_del_despliegue.ipynb) | La **segunda** vez que despliegas: migración del esquema sobre hilos vivos, los hilos que un renombrado abandona en silencio, la comprobación previa, el apagado ordenado medido, el contenedor real y la CI |
 | **[`P7 · Auditoría de producción`](07_operacion/P7_proyecto_endurecer.ipynb)** | Un auditor que aplica los cuatro detectores a una aplicación heredada y a su versión endurecida |
 
 ---
@@ -189,6 +190,9 @@ uv.lock                    el árbol completo resuelto: lo que instala `uv sync`
 requirements.txt           GENERADO desde el lock, para la vía de pip
 _tools/nbgen.py            genera los .ipynb desde fuentes de texto plano en _src/
 _tools/exportar_requisitos.py  regenera requirements.txt desde uv.lock (--check en la CI)
+_tools/ejecutar_notebooks.py   ejecuta todos los notebooks con un modelo falso
+_tools/modelo_falso.py     BaseChatModel de mentira: bind_tools, structured output, tokens
+.github/workflows/         la integración continua del propio curso
 _tools/validar.py          valida estructura, compila cada celda y comprueba que todo
                            símbolo importado EXISTE en el entorno instalado
 _tools/preparar_kb.py      construye el corpus RAG desde la documentación oficial
@@ -197,7 +201,7 @@ ejemplos/                  servidores MCP de demostración (notebook 20)
 utils/curso.py             arranque, fábrica de modelos, visualización, impresión legible
 utils/datos.py             carga de los conjuntos de datos
 utils/rag.py               troceado, BM25 y fusión de rangos (del notebook 14)
-pruebas/                   66 pruebas automáticas, sin llamadas a modelos
+pruebas/                   71 pruebas automáticas, sin llamadas a modelos
 despliegue/                aplicación desplegable que genera el notebook 18, con su
                            versión endurecida (auth.py + langgraph.produccion.json)
 ```
@@ -211,6 +215,7 @@ uv run _tools/nbgen.py _src/01_fundamentos/*.nbsrc   # regenerar notebooks
 uv run _tools/validar.py                             # validar todos
 uv run pytest                                        # la batería de pruebas
 uv run _tools/exportar_requisitos.py --check         # ¿sigue el requirements.txt al día?
+uv run _tools/ejecutar_notebooks.py                  # ejecutarlos todos, sin gastar cuota
 ```
 
 ### Cómo se verificó el material
@@ -285,6 +290,9 @@ suele darse por supuesto:
 | Las rutas propias de `http.app` **no pasan por la autenticación** salvo que actives `enable_custom_route_auth` | 26 |
 | Comparar argumentos en modo `exact` sobre una consulta en lenguaje natural **garantiza** una evaluación siempre roja | 27 |
 | La trayectoria de grafo registra `__interrupt__` como un paso más: es la única forma de comprobar que **hubo aprobación humana** | 27 |
+| **Renombrar un nodo abandona en silencio los hilos parados en él**: no hay excepción, la aprobación se pierde y el hilo queda marcado como terminado | 28 |
+| Tras ese despliegue, los hilos abandonados **desaparecen de la bandeja de pendientes**: con el grafo nuevo tienen `next` vacío y cero interrupciones | 28 |
+| Quitar un campo del esquema lo hace **invisible** en `values`, aunque siga escrito en el checkpoint. Un `revert` lo resucita con el valor viejo | 28 |
 
 ---
 

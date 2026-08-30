@@ -1,0 +1,784 @@
+#%%md
+# 28 · Desplegar sobre un sistema vivo
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 45 min*
+
+El notebook 18 te enseñó a desplegar. Este va sobre la segunda vez que despliegas, que es
+otra cosa completamente distinta: ya hay **hilos vivos**, conversaciones a medias y humanos
+con una aprobación pendiente en la bandeja.
+
+Un servicio sin estado se despliega y ya. Un agente con checkpointer, no: el código nuevo se
+encuentra con estado escrito por el código viejo. Eso es una **migración de datos**, aunque
+nadie la haya llamado así, y tiene la propiedad más incómoda que puede tener una migración:
+
+> **Falla en silencio y marca el trabajo como terminado.**
+
+Al terminar sabrás:
+
+1. Qué le pasa a un hilo vivo cuando cambias el esquema de estado.
+2. El fallo grave: renombrar un nodo **abandona** todos los hilos parados en él, sin error.
+3. Cómo detectarlo **antes** de desplegar, y cómo rescatar los hilos que ya se rompieron.
+4. La regla de los dos despliegues (expandir y contraer).
+5. Apagado ordenado: qué te compra exactamente un periodo de gracia, medido.
+6. El contenedor real y la CI que impide que todo lo anterior se te olvide.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+RAIZ = next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+            if (p / "despliegue").exists())
+APP = RAIZ / "despliegue"
+
+#%%md
+## 1. Lo que hay al otro lado de un despliegue
+
+Antes de tocar nada, el inventario. Cuando despliegas una versión nueva, en la base de datos
+te esperan tres cosas:
+
+| Qué hay | Escrito por | Qué le pasa con el código nuevo |
+|---|---|---|
+| Hilos **terminados** | la versión vieja | Nada, salvo que alguien los relea |
+| Hilos **a medias** (`next` no vacío) | la versión vieja | Continúan… si el nodo pendiente sigue existiendo |
+| Hilos **parados en un `interrupt()`** | la versión vieja | Lo más frágil que tienes |
+
+Los dos últimos son los que importan, y en un sistema con aprobaciones humanas son muchos
+más de los que crees: el notebook 23 ya midió que un porcentaje notable de las aprobaciones
+no se resuelve nunca.
+
+## 2. Cambiar el esquema de estado
+
+Empecemos por lo suave. Despliegas una versión que **quita** un campo del estado y **añade**
+otro. ¿Qué pasa con los hilos que ya tienen el campo viejo escrito?
+
+#%%py
+import operator
+import sqlite3
+from typing import Annotated
+
+from typing_extensions import TypedDict
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+
+# Una única base de datos: la producción no se reinicia entre despliegues.
+bd = sqlite3.connect(":memory:", check_same_thread=False)
+almacen = SqliteSaver(bd)
+
+
+# ---------------- VERSIÓN 1: la que está en producción ----------------
+class EstadoV1(TypedDict):
+    mensaje: str
+    contador: Annotated[int, operator.add]
+    campo_viejo: str
+
+
+v1 = (
+    StateGraph(EstadoV1)
+    .add_node("paso", lambda estado: {"contador": 1, "campo_viejo": "dato importante"})
+    .add_edge(START, "paso")
+    .add_edge("paso", END)
+    .compile(checkpointer=almacen)
+)
+
+hilo = {"configurable": {"thread_id": "hilo-vivo"}}
+v1.invoke({"mensaje": "hola", "contador": 0, "campo_viejo": ""}, hilo)
+print("estado escrito por V1:", v1.get_state(hilo).values)
+
+#%%py
+# ---------------- VERSIÓN 2: se despliega encima ----------------
+class EstadoV2(TypedDict):
+    mensaje: str
+    contador: Annotated[int, operator.add]
+    campo_nuevo: str            # `campo_viejo` ya no está en el esquema
+
+
+v2 = (
+    StateGraph(EstadoV2)
+    .add_node("paso", lambda estado: {"contador": 1, "campo_nuevo": "dato nuevo"})
+    .add_edge(START, "paso")
+    .add_edge("paso", END)
+    .compile(checkpointer=almacen)
+)
+
+print("el mismo hilo, leído por V2:", v2.get_state(hilo).values)
+print("¿sigue ahí `campo_viejo`?  :", "campo_viejo" in v2.get_state(hilo).values)
+print("\ncontinuar el hilo con V2  :", v2.invoke({"mensaje": "otra vez"}, hilo))
+
+#%%md
+Dos lecturas, y las dos importan:
+
+1. **La ejecución continúa sin problemas.** El hilo viejo funciona con el código nuevo. Eso
+   es la buena noticia y es lo que hace que este tema pase desapercibido.
+2. **`campo_viejo` desaparece de `values`.** No da error, no queda `None`: simplemente ya no
+   está, porque el estado se reconstruye a partir de los **canales que declara el esquema
+   actual**. Los datos siguen en la tabla —el checkpoint es inmutable— pero tu código ya no
+   los ve.
+
+Eso convierte un `git revert` en una operación peligrosa: si vuelves a V1, `campo_viejo`
+reaparece con el valor que tenía **antes** del despliegue, no con el que debería tener ahora.
+Has creado una rama de datos sin darte cuenta.
+
+> **La regla, prestada de las migraciones de base de datos:** un despliegue no debe **quitar
+> y añadir** a la vez. Quitar un campo es una operación que se hace en un despliegue
+> posterior, cuando ya no queda ningún hilo vivo que lo use. Volvemos a esto en la sección 5.
+
+#%%md
+## 3. El fallo grave: renombrar un nodo
+
+Ahora el caso que de verdad hace daño, y que no está documentado en ningún sitio.
+
+Tienes un flujo de aprobación. Hay hilos **parados en un `interrupt()`**, esperando a que
+alguien decida. Despliegas una versión en la que ese nodo se llama distinto — porque lo
+renombraste al refactorizar, que es lo más normal del mundo.
+
+#%%py
+from langgraph.types import Command, interrupt
+
+
+class EstadoGasto(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+    decision: str
+
+
+def analizar(estado: EstadoGasto) -> dict:
+    return {"pasos": ["analizar"]}
+
+
+def pedir_aprobacion(estado: EstadoGasto) -> dict:
+    return {"decision": interrupt({"pregunta": "¿apruebas el gasto?"}), "pasos": ["aprobar"]}
+
+
+def ejecutar(estado: EstadoGasto) -> dict:
+    return {"pasos": ["ejecutar"]}
+
+
+def construir_flujo(almacen, nombre_del_nodo: str):
+    """El MISMO flujo; lo único que cambia entre versiones es el nombre del nodo."""
+    return (
+        StateGraph(EstadoGasto)
+        .add_node("analizar", analizar)
+        .add_node(nombre_del_nodo, pedir_aprobacion)
+        .add_node("ejecutar", ejecutar)
+        .add_edge(START, "analizar")
+        .add_edge("analizar", nombre_del_nodo)
+        .add_edge(nombre_del_nodo, "ejecutar")
+        .add_edge("ejecutar", END)
+        .compile(checkpointer=almacen)
+    )
+
+
+bd2 = sqlite3.connect(":memory:", check_same_thread=False)
+almacen2 = SqliteSaver(bd2)
+
+gasto_v1 = construir_flujo(almacen2, "aprobar")
+hilo_gasto = {"configurable": {"thread_id": "gasto-pendiente"}}
+gasto_v1.invoke({"pasos": [], "decision": ""}, hilo_gasto)
+
+instantanea = gasto_v1.get_state(hilo_gasto)
+print("ANTES del despliegue")
+print("  parado en   :", instantanea.next)
+print("  interrupción:", instantanea.interrupts[0].value if instantanea.interrupts else None)
+
+#%%py
+# --- se despliega V2: `aprobar` pasa a llamarse `aprobacion_humana` ---
+gasto_v2 = construir_flujo(almacen2, "aprobacion_humana")
+
+print("DESPUÉS del despliegue, un humano aprueba:")
+resultado = gasto_v2.invoke(Command(resume="sí, apruebo"), hilo_gasto)
+
+print("  ¿lanzó alguna excepción?  no")
+print("  resultado devuelto     :", resultado)
+print("  estado del hilo        :", gasto_v2.get_state(hilo_gasto).values)
+print("  siguiente              :", gasto_v2.get_state(hilo_gasto).next)
+
+#%%md
+Lee eso despacio, porque es peor de lo que parece a primera vista:
+
+- **No hay ninguna excepción.** La llamada devuelve normalmente.
+- **`decision` sigue vacía.** La aprobación del humano se perdió.
+- **`ejecutar` nunca corrió.** El gasto no se procesó.
+- **`next` está vacío**: para LangGraph, ese hilo está **terminado**.
+
+Es decir: el hilo no queda roto ni en cuarentena. Queda marcado como si hubiera acabado
+bien. No aparecerá en tu bandeja de pendientes, no saltará ninguna alerta y el humano que
+pulsó "aprobar" recibió una respuesta de éxito.
+
+> **Por qué pasa:** una tarea pendiente se guarda con el **nombre del nodo** al que
+> pertenece. Al reanudar, el runtime busca ese nombre en el grafo compilado; si no está, no
+> hay nada que ejecutar, y un superpaso sin tareas es un grafo terminado. Es coherente con
+> el modelo de Pregel — y es una trampa.
+
+La misma trampa se dispara con cualquier cambio que haga desaparecer un nombre de nodo:
+renombrar, fusionar dos nodos en uno, extraer un nodo a un subgrafo, o cambiar de
+`add_node("x", f)` a `add_node(f)` (que lo registra como `"f"`).
+
+#%%md
+## 4. La comprobación previa: qué nodos no puedes tocar hoy
+
+La buena noticia es que esto es **detectable antes de desplegar**, y con dos consultas.
+Necesitas dos cosas: los nodos donde hay hilos parados, y los nodos que desaparecen en la
+versión nueva.
+
+#%%py
+def nodos_con_hilos_parados(app, conexion) -> dict[str, list[str]]:
+    """Nodos pendientes agrupados por nombre -> hilos que esperan en cada uno.
+
+    En Postgres la consulta es la misma cambiando la tabla; lo que no cambia es la idea:
+    un hilo con `next` no vacío tiene trabajo atribuido a un nodo concreto.
+    """
+    ocupados: dict[str, list[str]] = {}
+    for (id_hilo,) in conexion.execute("SELECT DISTINCT thread_id FROM checkpoints"):
+        siguiente = app.get_state({"configurable": {"thread_id": id_hilo}}).next
+        for nodo in siguiente:
+            ocupados.setdefault(nodo, []).append(id_hilo)
+    return ocupados
+
+
+def nodos_de(app) -> set[str]:
+    return {n for n in app.nodes if not n.startswith("__")}
+
+
+def revisar_despliegue(app_actual, app_nueva, conexion) -> list[str]:
+    """Devuelve los problemas que impiden desplegar `app_nueva` ahora mismo."""
+    ocupados = nodos_con_hilos_parados(app_actual, conexion)
+    desaparecen = nodos_de(app_actual) - nodos_de(app_nueva)
+
+    return [
+        f"el nodo `{nodo}` desaparece y tiene {len(hilos)} hilo(s) parado(s): "
+        f"{', '.join(hilos[:3])}{'…' if len(hilos) > 3 else ''}"
+        for nodo, hilos in ocupados.items() if nodo in desaparecen
+    ]
+
+
+# Reconstruimos el escenario con varios hilos pendientes.
+bd3 = sqlite3.connect(":memory:", check_same_thread=False)
+almacen3 = SqliteSaver(bd3)
+produccion = construir_flujo(almacen3, "aprobar")
+
+for i in range(4):
+    produccion.invoke({"pasos": [], "decision": ""},
+                      {"configurable": {"thread_id": f"gasto-{i}"}})
+
+candidata = construir_flujo(almacen3, "aprobacion_humana")
+
+print("nodos con hilos parados:", {k: len(v) for k, v in
+                                   nodos_con_hilos_parados(produccion, bd3).items()})
+print("nodos que desaparecen  :", sorted(nodos_de(produccion) - nodos_de(candidata)))
+print()
+for problema in revisar_despliegue(produccion, candidata, bd3) or ["sin problemas"]:
+    print("  ⛔", problema)
+
+#%%md
+### 4.1 El detalle que invalida la comprobación si lo haces mal
+
+Hay una trampa dentro de la trampa, y es la razón por la que `revisar_despliegue` recibe
+**dos** grafos en vez de uno.
+
+#%%py
+def inventario(app, etiqueta: str) -> None:
+    parados = nodos_con_hilos_parados(app, bd3)
+    total_interrupciones = sum(
+        len(app.get_state({"configurable": {"thread_id": h}}).interrupts)
+        for hilos in parados.values() for h in hilos)
+    print(f"{etiqueta:38s} hilos parados={sum(len(v) for v in parados.values())}  "
+          f"interrupciones pendientes={total_interrupciones}")
+
+
+inventario(produccion, "con el grafo VIEJO (el desplegado)")
+inventario(candidata, "con el grafo NUEVO (el candidato)")
+
+#%%md
+**Cero.** Con el código nuevo, esos cuatro hilos no aparecen como parados, no tienen
+interrupciones y no tienen tareas pendientes. Han dejado de existir como trabajo.
+
+Las consecuencias son dos, y las dos son graves:
+
+1. **Tu bandeja de aprobaciones se vacía sola en el momento del despliegue.** No porque
+   alguien las resolviera: porque el código ya no las ve. Si tienes un panel que cuenta
+   pendientes, marcará cero y nadie sospechará nada.
+2. **Una comprobación previa escrita con el código nuevo siempre dice que todo está bien.**
+   Es el error natural: escribes el script en la rama del cambio, lo ejecutas ahí, sale
+   limpio, despliegas.
+
+Por eso `revisar_despliegue` cruza los dos: **los hilos parados se leen con el grafo que
+está en producción**, y los nodos que desaparecen se calculan comparando con el candidato.
+Hacerlo con uno solo no comprueba nada.
+
+Esa función es la que quieres en tu *pipeline*, como **paso previo al despliegue**. No hace
+falta que bloquee siempre: en un sistema sin aprobaciones humanas la lista suele estar
+vacía porque los hilos a medias duran segundos. Lo que no puede pasar es que nadie mire.
+
+Y si la lista **no** está vacía, tienes tres salidas, en orden de preferencia:
+
+| Salida | Cuándo |
+|---|---|
+| **Esperar a que se vacíen** | Los hilos duran segundos o minutos. Despliega en una ventana tranquila |
+| **Conservar el nodo viejo** como alias del nuevo | Hay hilos que pueden tardar días. Es la opción compatible |
+| **Migrar los hilos** con `update_state` | El nodo viejo ya no tiene sentido y hay que moverlos a mano |
+
+La segunda es casi siempre la correcta y cuesta una línea:
+
+```python
+g.add_node("aprobacion_humana", pedir_aprobacion)
+g.add_node("aprobar", pedir_aprobacion)          # alias, solo para los hilos vivos
+g.add_edge("aprobar", "ejecutar")
+```
+
+Se borra en un despliegue posterior, cuando la comprobación previa dice que ya no queda
+nadie esperando ahí. Es exactamente la regla de la sección 5.
+
+#%%md
+## 5. Rescatar los hilos que ya se rompieron
+
+Si el despliegue ya se hizo y tienes hilos abandonados, no está todo perdido: el checkpoint
+sigue ahí y `update_state(as_node=...)` permite **atribuir** la escritura a un nodo distinto
+del que la produjo. Es el equivalente a mover un registro de una tabla a otra.
+
+#%%py
+bd4 = sqlite3.connect(":memory:", check_same_thread=False)
+almacen4 = SqliteSaver(bd4)
+
+antigua = construir_flujo(almacen4, "aprobar")
+hilo_rescate = {"configurable": {"thread_id": "a-rescatar"}}
+antigua.invoke({"pasos": [], "decision": ""}, hilo_rescate)
+
+nueva = construir_flujo(almacen4, "aprobacion_humana")
+
+# `()` — con el código nuevo el hilo ya parece terminado (sección 4.1). Que aparezca
+# vacío no significa que no haya nada que rescatar: significa que el código nuevo no lo ve.
+print("antes del rescate · siguiente:", nueva.get_state(hilo_rescate).next)
+print("   (visto con el grafo viejo :", antigua.get_state(hilo_rescate).next, ")")
+
+# El rescate: escribimos lo que habría escrito el nodo, atribuido al NOMBRE NUEVO.
+nueva.update_state(
+    hilo_rescate,
+    {"decision": "aprobado durante la migración", "pasos": ["aprobar"]},
+    as_node="aprobacion_humana",
+)
+
+print("tras el rescate   · siguiente:", nueva.get_state(hilo_rescate).next)
+print("al continuar                 :", nueva.invoke(None, hilo_rescate))
+
+#%%md
+El hilo se recupera y termina el flujo completo. Tres advertencias sobre este rescate,
+porque es cirugía:
+
+1. **Estás decidiendo por el humano.** En el ejemplo escribimos `"aprobado durante la
+   migración"`, que en un sistema de gastos sería inaceptable. Lo correcto casi siempre es
+   lo contrario: dejar el hilo **pendiente otra vez** para que la persona vuelva a decidir,
+   o cancelarlo con una decisión conservadora y un aviso.
+2. **`as_node` no valida nada.** Si te equivocas de nombre, creas un estado incoherente sin
+   ningún error.
+3. **Hazlo con un script versionado**, no a mano en una consola. Es una migración de datos:
+   merece revisión, un ensayo sobre una copia y un registro de qué hilos se tocaron.
+
+#%%md
+### 5.1 La regla de los dos despliegues
+
+Todo lo anterior se resume en una regla que la gente de bases de datos lleva usando décadas:
+**expandir y contraer**.
+
+| Despliegue | Qué hace | Por qué es seguro |
+|---|---|---|
+| **1 · Expandir** | Añade lo nuevo. **No quita nada**. Nodos nuevos + alias de los viejos; campos nuevos junto a los viejos; el código sabe leer las dos formas | Los hilos viejos siguen siendo válidos |
+| *(esperar)* | Hasta que la comprobación previa diga que no queda ningún hilo usando lo viejo | El tiempo lo decide tu dato, no el calendario |
+| **2 · Contraer** | Quita lo viejo | Ya no hay nadie que lo use |
+
+La tentación de hacerlo en un solo despliegue es enorme, porque "el cambio es trivial y
+solo hay tres hilos abiertos". Esos tres hilos son tres aprobaciones de un humano que se
+perderán sin ningún error.
+
+#%%md
+## 6. Apagado ordenado: qué compra un periodo de gracia
+
+Segunda mitad del problema. Un despliegue no solo trae código nuevo: **mata los procesos
+viejos**. Kubernetes manda `SIGTERM`, espera `terminationGracePeriodSeconds` y luego
+`SIGKILL`.
+
+En el notebook 24 vimos que una desconexión del cliente deja el hilo a medias y reanudable.
+Aquí la pregunta es otra: **cuánto trabajo salvas si esperas un poco antes de cortar.**
+
+#%%py
+import asyncio
+
+from langgraph.checkpoint.memory import InMemorySaver
+
+
+def hacer_paso(i: int):
+    """Devuelve un nodo `async` de verdad.
+
+    Ojo con el atajo `lambda e: corutina(e)`: eso es un nodo SÍNCRONO que devuelve una
+    corrutina, y LangGraph lo rechaza con `InvalidUpdateError: Expected dict, got
+    coroutine`. El nodo tiene que ser la propia función `async def`.
+    """
+    async def paso(estado):
+        await asyncio.sleep(0.3)
+        return {"pasos": [f"p{i}"]}
+
+    return paso
+
+
+def construir_largo():
+    g = StateGraph(EstadoGasto)
+    for i in range(5):
+        g.add_node(f"p{i}", hacer_paso(i))
+    g.add_edge(START, "p0")
+    for i in range(4):
+        g.add_edge(f"p{i}", f"p{i + 1}")
+    g.add_edge("p4", END)
+    return g.compile(checkpointer=InMemorySaver())
+
+
+async def simular_apagado(politica: str, gracia: float | None = None):
+    """Lanza una ejecución de ~1,5 s y recibe el SIGTERM a los 0,5 s."""
+    app = construir_largo()
+    cfg = {"configurable": {"thread_id": "en-vuelo"}}
+    tarea = asyncio.create_task(app.ainvoke({"pasos": [], "decision": ""}, cfg))
+
+    await asyncio.sleep(0.5)                        # <- aquí llega el SIGTERM
+
+    if politica == "cortar":
+        tarea.cancel()
+    else:
+        # `shield` es imprescindible: sin él, el timeout cancelaría la ejecución que
+        # precisamente estamos intentando dejar terminar.
+        try:
+            await asyncio.wait_for(asyncio.shield(tarea), timeout=gracia)
+        except asyncio.TimeoutError:
+            tarea.cancel()
+
+    try:
+        await tarea
+    except asyncio.CancelledError:
+        pass
+    await asyncio.sleep(0.05)
+
+    estado = app.get_state(cfg)
+    return estado.values["pasos"], estado.next
+
+
+async def comparar_politicas():
+    print(f"{'política de apagado':30s} {'trabajo conservado':34s} pendiente")
+    print("-" * 84)
+    for etiqueta, politica, gracia in [
+        ("cortar en seco (por defecto)", "cortar", None),
+        ("drenar, gracia de 0,5 s", "drenar", 0.5),
+        ("drenar, gracia de 5 s", "drenar", 5.0),
+    ]:
+        pasos, siguiente = await simular_apagado(politica, gracia)
+        print(f"{etiqueta:30s} {str(pasos):34s} {siguiente or 'terminado'}")
+
+
+asyncio.run(comparar_politicas())
+
+#%%md
+La tabla dice exactamente lo que compra el dinero:
+
+- **Cortar en seco** salva un superpaso y deja el hilo a medias, con `next` apuntando al
+  siguiente nodo. No se pierde trabajo (el notebook 24 ya lo estableció), pero **alguien
+  tiene que reanudarlo**, y ese alguien no existe salvo que lo escribas.
+- **Una gracia insuficiente** avanza algo y sigue dejando el hilo a medias. Es la peor
+  opción si te crees que has drenado.
+- **Una gracia suficiente** deja el hilo **terminado**. Cero trabajo pendiente que rescatar.
+
+Y de ahí sale el número que hay que poner en el manifiesto: la gracia se dimensiona con el
+**p95 de la duración de una ejecución**, no con la media. Si tus ejecuciones tardan 4 s de
+mediana y 40 s en el p95, una gracia de 10 s deja a medias una de cada veinte.
+
+#%%md
+### 6.1 Cómo se conecta con el orquestador
+
+Las tres piezas, y la que casi todo el mundo olvida es la primera:
+
+```yaml
+spec:
+  terminationGracePeriodSeconds: 60        # > p95 de tus ejecuciones
+  containers:
+    - name: agente
+      lifecycle:
+        preStop:
+          exec:
+            # Da tiempo a que el balanceador deje de mandarte tráfico ANTES
+            # de que el proceso empiece a apagarse. Sin esto, recibes peticiones
+            # nuevas mientras drenas y no terminas nunca de drenar.
+            command: ["sleep", "10"]
+      readinessProbe:
+        httpGet: { path: /salud, port: 8000 }    # la tuya, del notebook 26
+      livenessProbe:
+        httpGet: { path: /ok, port: 8000 }       # la del servidor
+```
+
+El orden real de los acontecimientos, que es lo que hay que tener en la cabeza:
+
+1. Kubernetes marca el pod como *terminating* y **a la vez** ejecuta `preStop` y empieza a
+   quitarlo de los *endpoints* del servicio. Las dos cosas son asíncronas: por eso el
+   `sleep`.
+2. Cuando `preStop` termina, llega `SIGTERM`. Aquí empieza tu drenaje.
+3. Pasado `terminationGracePeriodSeconds` **desde el paso 1**, llega `SIGKILL`. No hay
+   negociación posible: el `sleep` del `preStop` sale del mismo presupuesto.
+
+> **La sonda de readiness es la que hace el drenaje.** Si tu `/salud` sigue diciendo que sí
+> mientras te apagas, el balanceador te sigue mandando trabajo. Un apagado ordenado empieza
+> por **fallar la readiness a propósito**.
+
+#%%md
+## 7. El contenedor de verdad
+
+El CLI genera el `Dockerfile` a partir de tu `langgraph.json`, y merece la pena mirar lo que
+sale en vez de tratarlo como una caja negra.
+
+```bash
+cd despliegue
+uv run langgraph dockerfile Dockerfile --add-docker-compose
+```
+
+Esto es lo que produjo con la configuración del curso:
+
+```dockerfile
+FROM langchain/langgraph-api:3.11
+
+# -- Adding local package . --
+ADD . /deps/despliegue
+
+# -- Installing all local dependencies --
+RUN for dep in /deps/*; do ... (cd "$dep" && uv pip install --system \
+        --no-cache-dir -c /api/constraints.txt -e .); ... done
+
+ENV LANGGRAPH_HTTP='{"app": "/deps/despliegue/mi_agente/rutas.py:app"}'
+ENV LANGSERVE_GRAPHS='{"soporte": "/deps/despliegue/mi_agente/grafo.py:grafo",
+                       "consultas": {"path": ".../consultas.py:grafo", "description": "..."}}'
+
+# -- Removing build deps from the final image --
+RUN pip uninstall -y pip setuptools wheel
+...
+WORKDIR /deps/despliegue
+```
+
+Cuatro cosas que se aprenden leyéndolo:
+
+| Lo que ves | Lo que significa |
+|---|---|
+| `FROM langchain/langgraph-api:3.11` | **Una etiqueta móvil.** Fija la versión con `base_image` (notebook 25) o un despliegue futuro te cambiará el runtime sin avisar |
+| `-c /api/constraints.txt` | La imagen **impone restricciones** sobre tus dependencias. Si tu lock pide una versión incompatible, se resuelve aquí, no en tu `uv.lock` |
+| `LANGSERVE_GRAPHS` con rutas absolutas | Confirma lo del notebook 18: los grafos se cargan **por ruta de fichero**. De ahí la regla de las importaciones absolutas |
+| `pip uninstall -y pip setuptools wheel` | La imagen final no tiene gestor de paquetes: no puedes instalar nada dentro en caliente. Es lo correcto, y conviene saberlo antes de un incidente |
+
+Ese `constraints.txt` es la fuente de la sorpresa más habitual al pasar de `langgraph dev`
+al contenedor: **en local mandas tú, en la imagen manda la imagen**. Si una versión te
+importa, fíjala y comprueba en el contenedor, no en tu portátil.
+
+#%%py
+import subprocess
+
+configuracion = APP / "langgraph.json"
+salida = subprocess.run([sys.executable, "-m", "langgraph_cli", "validate"],
+                        cwd=APP, capture_output=True, text=True)
+print((salida.stdout + salida.stderr).strip() or
+      "(langgraph-cli no está instalado: `uv sync --group despliegue`)")
+
+#%%md
+> Si ves un aviso sobre `$schema`, es esperado: el CLI no lo reconoce como clave de
+> configuración, pero lo dejamos porque es lo que da autocompletado en el editor. Un aviso
+> no es un error — y distinguir los dos es parte del oficio.
+
+#%%md
+## 8. La CI que impide que todo esto se olvide
+
+Nada de este notebook sirve si depende de que alguien se acuerde. Esto es lo que va en el
+*pipeline*, y el repositorio del curso lo trae escrito en
+[`.github/workflows/verificar.yml`](../../.github/workflows/verificar.yml).
+
+#%%py
+flujo = RAIZ.parent / ".github" / "workflows" / "verificar.yml"
+if flujo.exists():
+    print(flujo.read_text(encoding="utf-8"))
+else:
+    print("(el fichero se crea en el ejercicio 9.2)")
+
+#%%md
+La estructura tiene una lógica, y no es "poner todos los comandos":
+
+| Etapa | Qué corre | Por qué en ese orden |
+|---|---|---|
+| **1 · Estático** | `validar.py`, `exportar_requisitos.py --check` | Segundos. Detecta APIs inventadas y dependencias desincronizadas |
+| **2 · Pruebas** | `pytest` | Segundos, sin modelo. Incluye las invariantes de los notebooks 22-27 |
+| **3 · Notebooks** | Ejecución con modelo falso | Minutos. Detecta que un notebook dejó de correr |
+| **4 · Previo al despliegue** | La comprobación de la sección 4 | Se ejecuta **contra la base de datos real**, no en la CI de un PR |
+
+La cuarta es la que este notebook añade y la que no aparece en ninguna plantilla: **una
+comprobación que necesita mirar producción**. No puede vivir en el mismo sitio que las otras
+tres, y por eso se olvida.
+
+#%%md
+## 9. Ejercicios
+
+### 9.1 El alias que salva el despliegue
+
+Implementa la opción "conservar el nodo viejo como alias" de la sección 4 y demuestra que
+un hilo parado en el nombre antiguo **sí** se reanuda correctamente.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+def construir_con_alias(almacen, nombre_nuevo: str, alias: str | None = None):
+    """El grafo nuevo, más un alias que solo existe para los hilos vivos."""
+    g = (StateGraph(EstadoGasto)
+         .add_node("analizar", analizar)
+         .add_node(nombre_nuevo, pedir_aprobacion)
+         .add_node("ejecutar", ejecutar)
+         .add_edge(START, "analizar")
+         .add_edge("analizar", nombre_nuevo)
+         .add_edge(nombre_nuevo, "ejecutar")
+         .add_edge("ejecutar", END))
+    if alias:
+        # Mismo comportamiento, mismo destino. Los hilos nuevos no pasan por aquí:
+        # nada apunta a este nodo desde `analizar`.
+        g.add_node(alias, pedir_aprobacion)
+        g.add_edge(alias, "ejecutar")
+    return g.compile(checkpointer=almacen)
+
+
+bd5 = sqlite3.connect(":memory:", check_same_thread=False)
+almacen5 = SqliteSaver(bd5)
+
+vieja = construir_flujo(almacen5, "aprobar")
+h = {"configurable": {"thread_id": "con-alias"}}
+vieja.invoke({"pasos": [], "decision": ""}, h)
+print("hilo parado en:", vieja.get_state(h).next)
+
+con_alias = construir_con_alias(almacen5, "aprobacion_humana", alias="aprobar")
+resultado = con_alias.invoke(Command(resume="sí, apruebo"), h)
+
+print("tras aprobar  :", resultado)
+print("¿se ejecutó?  :", "ejecutar" in resultado["pasos"])
+print("¿decisión?    :", repr(resultado["decision"]))
+
+sin_alias = construir_flujo(almacen5, "aprobacion_humana")
+bd6 = sqlite3.connect(":memory:", check_same_thread=False)
+almacen6 = SqliteSaver(bd6)
+v_a = construir_flujo(almacen6, "aprobar")
+h2 = {"configurable": {"thread_id": "sin-alias"}}
+v_a.invoke({"pasos": [], "decision": ""}, h2)
+peor = construir_flujo(almacen6, "aprobacion_humana").invoke(Command(resume="sí"), h2)
+print("\nsin alias, el mismo caso:", peor, "<- la aprobación se perdió")
+
+#%%md
+El alias cuesta tres líneas y convierte un despliegue destructivo en uno inocuo. Se borra
+cuando `revisar_despliegue` confirme que ya no queda nadie esperando ahí.
+
+</details>
+
+### 9.2 Escribe el *pipeline*
+
+Escribe el fichero `.github/workflows/verificar.yml` con las tres primeras etapas de la
+sección 8, usando `uv`. Requisitos:
+
+- Instalar `uv` y usar la caché entre ejecuciones.
+- `uv sync --all-groups`, para que la etapa 3 pueda validar los módulos opcionales.
+- Que falle si `requirements.txt` no está al día con el lock.
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+Es el fichero que has impreso en la sección 8. Tres detalles que separan un *pipeline* que
+funciona de uno que da guerra:
+
+1. **`uv sync --frozen`** en la CI: falla si el lock no cuadra con `pyproject.toml`, en vez
+   de resolver por su cuenta. Un lock desactualizado se detecta ahí, no en producción.
+2. **La comprobación de `requirements.txt`** es una etapa propia y barata. Sin ella, la vía
+   de pip se desincroniza en silencio y nadie se entera hasta que alguien la usa.
+3. **Los notebooks se ejecutan con el modelo falso**, nunca con una clave real. Una CI que
+   gasta cuota se acaba desactivando.
+
+</details>
+
+### 9.3 Dimensiona tu periodo de gracia
+
+Con los datos de la sección 6: si tus ejecuciones tardan 2 s de mediana, 12 s en el p95 y
+45 s en el p99, y despliegas 5 veces al día con 3 réplicas, ¿cuántos hilos quedan a medias
+al mes con una gracia de 15 s? ¿Y con 60 s?
+
+Supón 200 ejecuciones en vuelo por réplica en el momento del apagado.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+def hilos_a_medias(gracia_s: float, p95: float, p99: float,
+                   en_vuelo_por_replica: int, replicas: int,
+                   despliegues_dia: int, dias: int = 30) -> float:
+    """Estimación tosca: la fracción de ejecuciones que NO cabe en la gracia.
+
+    Con p95 y p99 podemos acotar: por debajo del p95 no queda nada a medias; entre p95 y
+    p99 queda el 5 %; por encima del p99, el 1 %. Es una escalera, no una curva, y para
+    dimensionar sirve.
+    """
+    if gracia_s >= p99:
+        fraccion = 0.01
+    elif gracia_s >= p95:
+        fraccion = 0.05
+    else:
+        fraccion = 0.20            # por debajo del p95 no tenemos dato: cota prudente
+    return fraccion * en_vuelo_por_replica * replicas * despliegues_dia * dias
+
+
+for gracia in (15, 60):
+    n = hilos_a_medias(gracia, p95=12, p99=45,
+                       en_vuelo_por_replica=200, replicas=3, despliegues_dia=5)
+    print(f"gracia de {gracia:2d} s -> ~{n:,.0f} hilos a medias al mes")
+
+print("""
+Lectura: pasar de 15 s a 60 s divide el problema por cinco, y cuesta 45 s más por pod en
+cada despliegue. Es de las decisiones más baratas que vas a tomar.
+
+Y el matiz que importa: esos hilos a medias NO son trabajo perdido (notebook 24), son
+trabajo que alguien tiene que reanudar. Si no tienes un barredor que los retome, sí es
+trabajo perdido — y entonces el número de arriba es el de conversaciones que se quedaron
+sin respuesta.""")
+
+#%%md
+</details>
+
+## 10. Resumen
+
+- Un despliegue sobre un agente con checkpointer **es una migración de datos**. El código
+  nuevo se encuentra estado escrito por el viejo.
+- Quitar un campo del esquema **no da error**: el campo desaparece de `values` y los datos
+  quedan inaccesibles. Un `revert` los resucita con el valor viejo.
+- **Renombrar un nodo abandona en silencio todos los hilos parados en él.** No hay
+  excepción, la aprobación se pierde y el hilo queda marcado como **terminado**. Es el
+  fallo más grave de este módulo.
+- Se **detecta antes** cruzando los nodos que desaparecen con los nodos donde hay hilos
+  parados. Es una comprobación previa al despliegue que necesita mirar la base de datos real.
+- **Los hilos parados hay que leerlos con el grafo que está en producción.** Con el
+  candidato salen cero: tu bandeja de aprobaciones se vacía sola al desplegar, y una
+  comprobación escrita en la rama del cambio siempre dice que todo está bien.
+- Se **arregla** con un alias del nodo viejo (tres líneas) o, si ya ocurrió, con
+  `update_state(as_node=...)` — que es cirugía y decide por el humano.
+- **Expandir y contraer**: un despliegue añade, otro posterior quita. Nunca las dos en el
+  mismo.
+- Un **periodo de gracia suficiente** convierte hilos a medias en hilos terminados.
+  Dimensiónalo con el **p95**, no con la media, y recuerda que el `preStop` sale del mismo
+  presupuesto. El drenaje empieza por **fallar la readiness a propósito**.
+- El `Dockerfile` generado impone `constraints.txt` sobre tus dependencias y borra `pip` de
+  la imagen final. En local mandas tú; en la imagen, manda la imagen.
+- Un nodo `async` tiene que ser una función `async def`, no un `lambda` que devuelva una
+  corrutina.
+
+**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría de
+producción, ahora con la comprobación previa al despliegue en la lista.

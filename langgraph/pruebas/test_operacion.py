@@ -519,3 +519,164 @@ def test_la_trayectoria_de_grafo_registra_las_interrupciones():
     assert hubo_aprobacion(pasos_de(25_000, "carisimo"))
     assert not hubo_aprobacion(pasos_de(999, "justo-debajo"))
     assert not hubo_aprobacion(pasos_de(50, "barato"))
+
+
+# ======================================================================================
+# Notebook 28 · desplegar sobre un sistema vivo
+# ======================================================================================
+def _flujo_con_aprobacion(almacen, nombre_nodo: str):
+    """El mismo flujo; entre versiones solo cambia el nombre del nodo de aprobación."""
+    from langgraph.types import interrupt
+    from typing_extensions import TypedDict as TD
+
+    class EstadoGasto(TD):
+        pasos: Annotated[list[str], operator.add]
+        decision: str
+
+    def analizar(estado):
+        return {"pasos": ["analizar"]}
+
+    def aprobar(estado):
+        return {"decision": interrupt({"p": "?"}), "pasos": ["aprobar"]}
+
+    def ejecutar(estado):
+        return {"pasos": ["ejecutar"]}
+
+    return (StateGraph(EstadoGasto)
+            .add_node("analizar", analizar)
+            .add_node(nombre_nodo, aprobar)
+            .add_node("ejecutar", ejecutar)
+            .add_edge(START, "analizar")
+            .add_edge("analizar", nombre_nodo)
+            .add_edge(nombre_nodo, "ejecutar")
+            .add_edge("ejecutar", END)
+            .compile(checkpointer=almacen))
+
+
+def test_quitar_un_campo_del_esquema_lo_hace_invisible():
+    """El campo no da error ni queda a None: desaparece de `values`."""
+    from typing_extensions import TypedDict as TD
+
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    almacen = SqliteSaver(con)
+
+    class V1(TD):
+        contador: Annotated[int, operator.add]
+        campo_viejo: str
+
+    class V2(TD):
+        contador: Annotated[int, operator.add]
+        campo_nuevo: str
+
+    def construir(esquema, salida):
+        return (StateGraph(esquema).add_node("p", lambda e: salida)
+                .add_edge(START, "p").add_edge("p", END).compile(checkpointer=almacen))
+
+    cfg = {"configurable": {"thread_id": "h"}}
+    v1 = construir(V1, {"contador": 1, "campo_viejo": "dato"})
+    v1.invoke({"contador": 0, "campo_viejo": ""}, cfg)
+    assert v1.get_state(cfg).values["campo_viejo"] == "dato"
+
+    v2 = construir(V2, {"contador": 1, "campo_nuevo": "otro"})
+    assert "campo_viejo" not in v2.get_state(cfg).values
+    v2.invoke({}, cfg)                      # y la ejecución sigue funcionando
+
+
+def test_renombrar_un_nodo_abandona_los_hilos_parados_en_el():
+    """El fallo más grave del módulo 7, fijado como prueba.
+
+    Si algún día LangGraph empieza a lanzar una excepción aquí, es una gran noticia y hay
+    que reescribir la sección 3 del notebook 28.
+    """
+    from langgraph.types import Command
+
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    almacen = SqliteSaver(con)
+    cfg = {"configurable": {"thread_id": "gasto"}}
+
+    vieja = _flujo_con_aprobacion(almacen, "aprobar")
+    vieja.invoke({"pasos": [], "decision": ""}, cfg)
+    assert vieja.get_state(cfg).next == ("aprobar",)
+
+    nueva = _flujo_con_aprobacion(almacen, "aprobacion_humana")
+    resultado = nueva.invoke(Command(resume="sí"), cfg)      # no lanza nada
+
+    assert resultado["decision"] == "", "la aprobación debería haberse perdido"
+    assert "ejecutar" not in resultado["pasos"], "el flujo no debería haber continuado"
+    assert nueva.get_state(cfg).next == (), "el hilo queda marcado como terminado"
+
+
+def test_los_hilos_parados_solo_se_ven_con_el_grafo_desplegado():
+    """La trampa de la comprobación previa: con el candidato salen cero."""
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    almacen = SqliteSaver(con)
+
+    produccion = _flujo_con_aprobacion(almacen, "aprobar")
+    for i in range(3):
+        produccion.invoke({"pasos": [], "decision": ""},
+                          {"configurable": {"thread_id": f"g{i}"}})
+    candidata = _flujo_con_aprobacion(almacen, "aprobacion_humana")
+
+    def parados(app):
+        return {t for (t,) in con.execute("SELECT DISTINCT thread_id FROM checkpoints")
+                if app.get_state({"configurable": {"thread_id": t}}).next}
+
+    assert len(parados(produccion)) == 3, "con el grafo desplegado se ven los 3"
+    assert parados(candidata) == set(), "con el candidato no se ve ninguno"
+
+
+def test_un_alias_del_nodo_viejo_salva_los_hilos_parados():
+    """La solución barata: conservar el nombre antiguo durante un despliegue."""
+    from langgraph.types import Command, interrupt
+    from typing_extensions import TypedDict as TD
+
+    class EstadoGasto(TD):
+        pasos: Annotated[list[str], operator.add]
+        decision: str
+
+    def analizar(estado):
+        return {"pasos": ["analizar"]}
+
+    def aprobar(estado):
+        return {"decision": interrupt({"p": "?"}), "pasos": ["aprobar"]}
+
+    def ejecutar(estado):
+        return {"pasos": ["ejecutar"]}
+
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    almacen = SqliteSaver(con)
+    cfg = {"configurable": {"thread_id": "con-alias"}}
+
+    _flujo_con_aprobacion(almacen, "aprobar").invoke({"pasos": [], "decision": ""}, cfg)
+
+    con_alias = (StateGraph(EstadoGasto)
+                 .add_node("analizar", analizar)
+                 .add_node("aprobacion_humana", aprobar)
+                 .add_node("aprobar", aprobar)          # alias para los hilos vivos
+                 .add_node("ejecutar", ejecutar)
+                 .add_edge(START, "analizar")
+                 .add_edge("analizar", "aprobacion_humana")
+                 .add_edge("aprobacion_humana", "ejecutar")
+                 .add_edge("aprobar", "ejecutar")
+                 .add_edge("ejecutar", END)
+                 .compile(checkpointer=almacen))
+
+    resultado = con_alias.invoke(Command(resume="sí, apruebo"), cfg)
+    assert resultado["decision"] == "sí, apruebo"
+    assert "ejecutar" in resultado["pasos"]
+
+
+def test_update_state_as_node_rescata_un_hilo_abandonado():
+    from langgraph.types import Command
+
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    almacen = SqliteSaver(con)
+    cfg = {"configurable": {"thread_id": "rescate"}}
+
+    _flujo_con_aprobacion(almacen, "aprobar").invoke({"pasos": [], "decision": ""}, cfg)
+    nueva = _flujo_con_aprobacion(almacen, "aprobacion_humana")
+
+    nueva.update_state(cfg, {"decision": "migrado", "pasos": ["aprobar"]},
+                       as_node="aprobacion_humana")
+    assert nueva.get_state(cfg).next == ("ejecutar",)
+    assert "ejecutar" in nueva.invoke(None, cfg)["pasos"]

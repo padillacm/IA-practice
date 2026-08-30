@@ -24,9 +24,10 @@ volver a usar.
 | 4 | La configuración de despliegue y las reglas de acceso | 25 |
 | 5 | El informe, y el mismo informe sobre la versión arreglada | — |
 
-> **Un quinto detector, para cuando lo tengas montado:** los notebooks 26 y 27 aportan dos
-> comprobaciones más que encajan aquí — el contrato que expones (`input_schema`,
-> `description`) y las invariantes de trayectoria. Están como retos al final.
+> **Tres detectores más, para cuando los tengas montados:** los notebooks 26, 27 y 28
+> aportan comprobaciones que encajan aquí — el contrato que expones (`input_schema`,
+> `description`), las invariantes de trayectoria y la revisión previa al despliegue. Están
+> como retos al final.
 
 #%%py
 import sys, pathlib
@@ -581,7 +582,12 @@ print(f"\n{'concurrencia':30s} {'pierde escrituras':>14s} {'correcta':>14s}")
    siempre por `__interrupt__`"* es una invariante que se comprueba en 5 líneas y que
    ninguna evaluación de respuestas detecta.
 
-7. **Aplícalo al capstone.** Pasa los detectores al sistema que construiste en `P6`. Es la
+7. **Añade la comprobación previa al despliegue** del notebook 28: cruzar los nodos que
+   desaparecen en la versión candidata con los nodos donde hay hilos parados. Es la única
+   comprobación de esta lista que **no** puede vivir en la CI de un *pull request*, porque
+   necesita leer la base de datos real — y por eso es la que se olvida.
+
+8. **Aplícalo al capstone.** Pasa los detectores al sistema que construiste en `P6`. Es la
    mejor forma de comprobar si el módulo se te ha quedado.
 
 ## Lo que te llevas
