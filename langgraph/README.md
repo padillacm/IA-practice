@@ -171,6 +171,8 @@ Cada notebook pasó por tres filtros antes de darse por bueno:
    HTTP que carga el grafo, expone el assistant y responde en `/threads` y `/runs`. Fue ahí
    donde apareció el fallo de las importaciones relativas: ninguna comprobación estática lo
    detecta, y el material lo documenta precisamente por eso.
+5. **Todo lo anterior se repitió en un entorno virgen** creado solo desde `requirements.txt`,
+   para garantizar que el fichero de dependencias basta: 28/28 notebooks y 25/25 pruebas.
 
 ---
 
