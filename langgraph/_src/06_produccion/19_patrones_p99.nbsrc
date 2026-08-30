@@ -996,5 +996,5 @@ print("  Una CI que falle con cualquier hallazgo ALTA evita la clase de error m�
 - Los patrones avanzados **multiplican el coste**. Antes de añadir ninguno, comprueba que el
   problema no se arregla con mejores herramientas o mejor recuperación.
 
-**Siguiente:** [`P6_capstone.ipynb`](P6_capstone.ipynb) — el proyecto final, que integra todo
-el curso.
+**Siguiente:** [`20_mcp_e_integracion.ipynb`](20_mcp_e_integracion.ipynb) — MCP, límites de
+ritmo y grafos como herramienta.

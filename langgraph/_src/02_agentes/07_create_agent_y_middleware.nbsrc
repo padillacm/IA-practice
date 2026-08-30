@@ -505,13 +505,20 @@ salida = agente_informe.invoke(
     {"recursion_limit": 25},
 )
 
-informe = salida["structured_response"]
-print(f"titular      : {informe.titular}")
-print(f"urgencia     : {informe.urgencia}")
-print(f"recomendación: {informe.recomendacion}")
-print("cifras:")
-for c in informe.cifras:
-    print("  -", c)
+# `structured_response` puede FALTAR: si un tope de middleware corta la ejecución antes de
+# que el agente llegue a la respuesta final, la clave nunca se escribe. Acceder con [] lanza
+# un KeyError justo en el caso en que menos te apetece. En producción, siempre con .get().
+informe = salida.get("structured_response")
+if informe is None:
+    print("sin respuesta estructurada: algún tope cortó la ejecución antes de terminar")
+    print("texto libre:", salida["messages"][-1].text[:200])
+else:
+    print(f"titular      : {informe.titular}")
+    print(f"urgencia     : {informe.urgencia}")
+    print(f"recomendación: {informe.recomendacion}")
+    print("cifras:")
+    for c in informe.cifras:
+        print("  -", c)
 
 #%%md
 ## 8. Ejercicios
