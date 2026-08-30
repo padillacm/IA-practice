@@ -1,0 +1,563 @@
+#%%md
+# P3 · Proyecto: asistente de soporte persistente
+
+**Módulo 3 · Proyecto** — *tiempo estimado: 2 h · coste aproximado: 0,08 € con `gpt-4o-mini`*
+
+## El encargo
+
+El equipo de soporte quiere un asistente para sus agentes humanos. Requisitos:
+
+1. **Recuerda la conversación** aunque el agente cierre el navegador.
+2. **Recuerda a la persona** entre conversaciones: su rol, sus preferencias, su historial.
+3. **Pide permiso** antes de cualquier acción que toque datos o notifique al cliente.
+4. Tiene una **bandeja de aprobaciones pendientes** que puede ver un supervisor.
+5. Es **auditable**: quién pidió qué, quién lo aprobó y cuándo.
+
+Cada requisito es una pieza del módulo. Aquí las juntamos.
+
+| Requisito | Pieza | Notebook |
+|---|---|---|
+| 1 | checkpointer + `thread_id` | 08 |
+| 2 | `Store` con espacios de nombres | 09 |
+| 3 | `interrupt()` sobre herramientas destructivas | 10 |
+| 4 | `get_state` sobre varios hilos | 10 |
+| 5 | reducer acumulador + memoria episódica | 02, 09 |
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-P3")
+
+#%%md
+## Fase 1 · El dominio y las herramientas
+
+Dos clases de herramienta, y la distinción es el eje del proyecto: **las que leen** se
+ejecutan sin más; **las que escriben o notifican** pasan por aprobación.
+
+#%%py
+import datetime as dt
+import operator
+from dataclasses import dataclass
+from typing import Annotated, Literal, TypedDict
+
+from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain.tools import ToolRuntime, tool
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.runtime import Runtime
+from langgraph.store.memory import InMemoryStore
+from langgraph.types import Command, interrupt
+
+from utils.datos import tickets
+
+df = tickets()
+
+# "Base de datos" mutable del ejercicio: lo que cambian las herramientas de escritura.
+CAMBIOS: list[dict] = []
+
+
+# --- lectura: sin aprobación -----------------------------------------------------------
+@tool(parse_docstring=True)
+def buscar_tickets(categoria: str = "todas", prioridad: str = "todas", limite: int = 5) -> str:
+    """Busca tickets de soporte por categoría y prioridad. Solo lectura.
+
+    Args:
+        categoria: facturacion, acceso_cuenta, bug_producto, integraciones, rendimiento,
+            solicitud_funcionalidad, datos_privacidad, otros, o 'todas'.
+        prioridad: baja, media, alta, critica, o 'todas'.
+        limite: cuántos devolver, entre 1 y 10.
+    """
+    sel = df
+    if categoria != "todas":
+        sel = sel[sel.categoria == categoria]
+    if prioridad != "todas":
+        sel = sel[sel.prioridad == prioridad]
+    if sel.empty:
+        return (f"Sin resultados. Categorías válidas: {', '.join(sorted(df.categoria.unique()))}. "
+                f"Prioridades: baja, media, alta, critica.")
+    limite = max(1, min(10, limite))
+    filas = [f"{r.id_ticket} [{r.prioridad}/{r.plan_cliente}] {r.asunto}"
+             for r in sel.head(limite).itertuples()]
+    return f"{len(sel)} tickets encontrados; muestro {len(filas)}:\n" + "\n".join(f"- {f}" for f in filas)
+
+
+@tool(parse_docstring=True)
+def detalle_ticket(id_ticket: str) -> str:
+    """Devuelve el detalle completo de un ticket. Solo lectura.
+
+    Args:
+        id_ticket: identificador con formato TCK-0001.
+    """
+    fila = df[df.id_ticket == id_ticket]
+    if fila.empty:
+        return f"No existe {id_ticket}. Comprueba el formato (TCK-0001)."
+    r = fila.iloc[0]
+    return (f"{r.id_ticket} | {r.categoria}/{r.prioridad} | plan {r.plan_cliente} | "
+            f"{'resuelto' if r.resuelto else 'abierto'}\nAsunto: {r.asunto}\nMensaje: {r.mensaje}")
+
+
+# --- escritura: requieren aprobación humana --------------------------------------------
+@tool(parse_docstring=True)
+def cambiar_prioridad(id_ticket: str, nueva_prioridad: str, motivo: str, runtime: ToolRuntime) -> Command:
+    """ACCIÓN CON EFECTO: cambia la prioridad de un ticket y reordena la cola de soporte.
+
+    Args:
+        id_ticket: identificador del ticket.
+        nueva_prioridad: baja, media, alta o critica.
+        motivo: por qué se cambia. Queda registrado en la auditoría.
+    """
+    CAMBIOS.append({"accion": "cambiar_prioridad", "ticket": id_ticket,
+                    "valor": nueva_prioridad, "motivo": motivo,
+                    "cuando": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")})
+    return Command(update={
+        "acciones_realizadas": [f"prioridad de {id_ticket} -> {nueva_prioridad} ({motivo})"],
+        "messages": [ToolMessage(f"Prioridad de {id_ticket} cambiada a {nueva_prioridad}.",
+                                 tool_call_id=runtime.tool_call_id)],
+    })
+
+
+@tool(parse_docstring=True)
+def notificar_cliente(id_ticket: str, mensaje: str, runtime: ToolRuntime) -> Command:
+    """ACCIÓN IRREVERSIBLE: envía un correo al cliente. No se puede deshacer.
+
+    Args:
+        id_ticket: ticket al que pertenece la notificación.
+        mensaje: el texto que recibirá el cliente.
+    """
+    CAMBIOS.append({"accion": "notificar_cliente", "ticket": id_ticket,
+                    "valor": mensaje[:60], "motivo": "",
+                    "cuando": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")})
+    return Command(update={
+        "acciones_realizadas": [f"notificado el cliente de {id_ticket}"],
+        "messages": [ToolMessage(f"Correo enviado al cliente de {id_ticket}.",
+                                 tool_call_id=runtime.tool_call_id)],
+    })
+
+
+LECTURA = [buscar_tickets, detalle_ticket]
+ESCRITURA = [cambiar_prioridad, notificar_cliente]
+NOMBRES_ESCRITURA = {h.name for h in ESCRITURA}
+TODAS = LECTURA + ESCRITURA
+
+print("solo lectura      :", [h.name for h in LECTURA])
+print("requieren permiso :", sorted(NOMBRES_ESCRITURA))
+
+#%%md
+## Fase 2 · El grafo
+
+Cinco nodos. El interesante es `pedir_permiso`, que se coloca **entre** el modelo y la
+ejecución de herramientas y solo se activa si alguna de las llamadas es de escritura.
+
+#%%py
+from pydantic import BaseModel, Field
+
+modelo = llm()
+
+
+@dataclass
+class ContextoSesion:
+    id_agente: str          # quién usa el asistente
+    nombre_agente: str
+
+
+class EstadoAsistente(MessagesState):
+    acciones_realizadas: Annotated[list[str], operator.add]
+    auditoria: Annotated[list[str], operator.add]
+    memorias_aplicadas: Annotated[list[str], operator.add]
+
+
+def espacio_memoria(id_agente: str) -> tuple[str, ...]:
+    # Sin puntos en las etiquetas: usamos identificadores opacos, no correos.
+    return ("memorias", "agente", id_agente)
+
+
+INSTRUCCIONES = (
+    "Eres el copiloto de un agente de soporte técnico. Le ayudas a gestionar la cola de tickets.\n"
+    "- Consulta siempre antes de proponer un cambio.\n"
+    "- Las acciones que modifican datos o notifican al cliente requieren aprobación; propónlas "
+    "  con claridad y espera.\n"
+    "- Responde en español, conciso, sin florituras."
+)
+
+
+def recordar(estado: EstadoAsistente, runtime: Runtime[ContextoSesion]) -> dict:
+    """Carga la memoria de largo plazo del agente humano que está usando el asistente."""
+    ns = espacio_memoria(runtime.context.id_agente)
+    consulta = next((m.text for m in reversed(estado["messages"]) if m.type == "human"), "")
+
+    reglas = runtime.store.search(ns, filter={"tipo": "procedimental"}, limit=10)
+    contexto = [i for i in runtime.store.search(ns, query=consulta or "soporte", limit=4)
+                if i.value.get("tipo") != "procedimental"]
+
+    bloques = [f"Estás ayudando a {runtime.context.nombre_agente}."]
+    if reglas:
+        bloques.append("Reglas de trabajo suyas (respétalas):\n"
+                       + "\n".join(f"- {r.value['texto']}" for r in reglas))
+    if contexto:
+        bloques.append("Contexto que recuerdas de él:\n"
+                       + "\n".join(f"- {r.value['texto']}" for r in contexto))
+
+    return {"messages": [SystemMessage("\n\n".join(bloques))],
+            "memorias_aplicadas": [r.key for r in reglas + contexto]}
+
+
+def pensar(estado: EstadoAsistente) -> dict:
+    return {"messages": [modelo.bind_tools(TODAS).invoke([SystemMessage(INSTRUCCIONES), *estado["messages"]])]}
+
+
+def necesita_permiso(estado: EstadoAsistente) -> Literal["pedir_permiso", "herramientas", "guardar_memoria"]:
+    ultimo = estado["messages"][-1]
+    llamadas = getattr(ultimo, "tool_calls", None)
+    if not llamadas:
+        return "guardar_memoria"
+    return "pedir_permiso" if any(tc["name"] in NOMBRES_ESCRITURA for tc in llamadas) else "herramientas"
+
+
+def pedir_permiso(estado: EstadoAsistente, runtime: Runtime[ContextoSesion]) -> Command:
+    """Pausa antes de ejecutar. Este nodo NO tiene efectos laterales, así que reejecutarlo es seguro."""
+    ultimo = estado["messages"][-1]
+    peligrosas = [tc for tc in ultimo.tool_calls if tc["name"] in NOMBRES_ESCRITURA]
+
+    decision = interrupt({
+        "tipo": "aprobacion_acciones",
+        "solicitante": runtime.context.nombre_agente,
+        "acciones": [{"herramienta": tc["name"], "argumentos": tc["args"]} for tc in peligrosas],
+        "formato_respuesta": "{'decision': 'aprobar'|'rechazar', 'quien': '...', 'motivo': '...'}",
+    })
+
+    marca = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    if decision["decision"] == "aprobar":
+        return Command(
+            goto="herramientas",
+            update={"auditoria": [f"{marca} APROBADO por {decision['quien']}: "
+                                  f"{[tc['name'] for tc in peligrosas]}"]},
+        )
+
+    # Rechazo: hay que cerrar los tool_call pendientes o el historial queda inconsistente.
+    rechazos = [ToolMessage(
+        f"El supervisor ha RECHAZADO esta acción. Motivo: {decision.get('motivo', 'no indicado')}. "
+        "No reintentes; explícaselo al agente y propón una alternativa que no requiera permiso.",
+        tool_call_id=tc["id"], name=tc["name"], status="error") for tc in ultimo.tool_calls]
+
+    return Command(
+        goto="pensar",
+        update={"messages": rechazos,
+                "auditoria": [f"{marca} RECHAZADO por {decision['quien']}: {decision.get('motivo', '')}"]},
+    )
+
+
+class MemoriaAgente(BaseModel):
+    """Algo que merece recordarse del agente humano entre sesiones."""
+    tipo: Literal["semantica", "episodica", "procedimental"]
+    clave: str = Field(description="Identificador corto y estable en snake_case, sin puntos")
+    texto: str = Field(description="El hecho en una frase, en tercera persona")
+    confianza: float = Field(ge=0, le=1)
+
+
+class ExtraccionMemoria(BaseModel):
+    """Memorias extraídas de un fragmento de sesión."""
+    memorias: list[MemoriaAgente] = Field(
+        description="Solo lo que seguiría siendo cierto dentro de un mes. Vacía si no hay nada."
+    )
+
+
+extractor = modelo.with_structured_output(ExtraccionMemoria)
+
+
+def guardar_memoria(estado: EstadoAsistente, runtime: Runtime[ContextoSesion]) -> dict:
+    """Se ejecuta al final del turno, cuando el agente ya tiene su respuesta."""
+    recientes = [m for m in estado["messages"][-6:] if m.text]
+    transcripcion = "\n".join(f"{m.type.upper()}: {m.text[:300]}" for m in recientes)
+    if not transcripcion.strip():
+        return {}
+
+    extraido = extractor.invoke(
+        "Extrae lo memorable sobre el AGENTE HUMANO de soporte (no sobre los clientes ni los "
+        "tickets concretos): cómo trabaja, qué prefiere, en qué está especializado.\n\n" + transcripcion
+    )
+    ns = espacio_memoria(runtime.context.id_agente)
+    guardadas = []
+    for m in extraido.memorias:
+        if m.confianza < 0.7 or "." in m.clave:
+            continue
+        runtime.store.put(ns, m.clave, {"texto": m.texto, "tipo": m.tipo, "confianza": m.confianza})
+        guardadas.append(m.clave)
+    return {"memorias_aplicadas": [f"guardada:{k}" for k in guardadas]}
+
+
+store = InMemoryStore()
+checkpointer = InMemorySaver()
+
+asistente = (
+    StateGraph(EstadoAsistente, context_schema=ContextoSesion)
+    .add_node("recordar", recordar)
+    .add_node("pensar", pensar)
+    .add_node("pedir_permiso", pedir_permiso)
+    .add_node("herramientas", ToolNode(TODAS, handle_tool_errors=True))
+    .add_node("guardar_memoria", guardar_memoria)
+    .add_edge(START, "recordar")
+    .add_edge("recordar", "pensar")
+    .add_conditional_edges("pensar", necesita_permiso, {
+        "pedir_permiso": "pedir_permiso",
+        "herramientas": "herramientas",
+        "guardar_memoria": "guardar_memoria",
+    })
+    .add_edge("herramientas", "pensar")
+    .add_edge("guardar_memoria", END)
+    .compile(checkpointer=checkpointer, store=store)
+)
+
+mostrar_grafo(asistente)
+
+#%%md
+Fíjate en `pedir_permiso`: devuelve un `Command` con `goto`. Es el caso que justifica
+`Command` frente a una arista condicional — el nodo **hace** algo (pausa y recoge la
+decisión) y **decide** el destino en la misma operación. Y en el camino de rechazo escribe
+los `ToolMessage` de cierre, sin los cuales la siguiente llamada al proveedor fallaría.
+
+#%%md
+## Fase 3 · Una semana de trabajo
+
+Simulamos tres sesiones del mismo agente humano en **hilos distintos**, separadas en el
+tiempo. El checkpointer da continuidad dentro de cada sesión; el store, entre sesiones.
+
+#%%py
+CTX = ContextoSesion(id_agente="ag-marta", nombre_agente="Marta")
+LIMITE = {"recursion_limit": 25}
+
+ENTRADA_VACIA = {"acciones_realizadas": [], "auditoria": [], "memorias_aplicadas": []}
+
+
+def turno(hilo: str, texto: str, aprobaciones: list[dict] | None = None, mostrar: bool = True) -> dict:
+    """Ejecuta un turno completo, resolviendo las aprobaciones que hagan falta."""
+    conf = {"configurable": {"thread_id": hilo}, **LIMITE}
+    salida = asistente.invoke({"messages": [HumanMessage(texto)], **ENTRADA_VACIA}, conf, context=CTX)
+
+    pendientes = list(aprobaciones or [])
+    while "__interrupt__" in salida:
+        peticion = salida["__interrupt__"][0].value
+        if mostrar:
+            print("    [PAUSA] pide aprobación para:")
+            for a in peticion["acciones"]:
+                print(f"        {a['herramienta']}({a['argumentos']})")
+        respuesta = pendientes.pop(0) if pendientes else {"decision": "rechazar", "quien": "sistema",
+                                                          "motivo": "nadie disponible para aprobar"}
+        salida = asistente.invoke(Command(resume=respuesta), conf, context=CTX)
+
+    if mostrar:
+        print(f"  > {salida['messages'][-1].text}\n")
+    return salida
+
+
+separador("SESIÓN 1 — lunes")
+r = turno("marta-lunes", "Soy Marta, llevo la cola de integraciones. ¿Qué tickets críticos "
+                         "de integraciones hay ahora mismo?")
+print("  memorias:", r["memorias_aplicadas"])
+
+#%%py
+separador("SESIÓN 1 — continúa (mismo hilo, el asistente recuerda el contexto)")
+r = turno("marta-lunes", "Del primero que me has dicho, dame el detalle completo.")
+
+separador("SESIÓN 1 — una acción que requiere permiso")
+r = turno("marta-lunes",
+          "Ese ticket es más grave de lo que parece. Súbelo a prioridad crítica, motivo: "
+          "afecta a la integración de un cliente enterprise.",
+          aprobaciones=[{"decision": "aprobar", "quien": "supervisor-luis"}])
+print("  acciones :", r["acciones_realizadas"])
+print("  auditoría:", r["auditoria"])
+
+#%%py
+separador("SESIÓN 2 — miércoles, hilo NUEVO")
+r = turno("marta-miercoles", "Buenos días. ¿Cómo está hoy la cola?")
+print("  memorias aplicadas de sesiones anteriores:", r["memorias_aplicadas"])
+
+#%%md
+Si el extractor de memoria hizo su trabajo el lunes, el asistente ya sabe el miércoles que
+Marta lleva integraciones — **sin que ella lo repita y en un hilo completamente nuevo**. Esa
+es la diferencia entre un chat y un asistente.
+
+#%%py
+separador("memoria acumulada de Marta")
+for i in store.search(espacio_memoria(CTX.id_agente)):
+    print(f"  [{i.value['tipo']:<14}] {i.key:<28} {i.value['texto']}")
+
+#%%md
+## Fase 4 · La bandeja de aprobaciones
+
+Un supervisor necesita ver todo lo pendiente, sin importar de qué conversación venga.
+`get_state` sobre cada hilo es todo lo que hace falta.
+
+#%%py
+separador("SESIÓN 3 — jueves: dos peticiones que quedan pendientes")
+
+for hilo, peticion in [
+    ("marta-jueves-a", "Notifica al cliente del ticket TCK-0007 que ya está resuelto."),
+    ("marta-jueves-b", "Baja a prioridad baja el ticket TCK-0011, motivo: es una sugerencia, no un fallo."),
+]:
+    conf = {"configurable": {"thread_id": hilo}, **LIMITE}
+    asistente.invoke({"messages": [HumanMessage(peticion)], **ENTRADA_VACIA}, conf, context=CTX)
+    print(f"  {hilo}: lanzado y pendiente")
+
+
+def bandeja(hilos: list[str]) -> list[dict]:
+    """Todo lo que está esperando a una persona, en todos los hilos."""
+    pendientes = []
+    for h in hilos:
+        snap = asistente.get_state({"configurable": {"thread_id": h}})
+        if snap.next and snap.interrupts:
+            v = snap.interrupts[0].value
+            pendientes.append({
+                "hilo": h,
+                "solicitante": v.get("solicitante", "?"),
+                "acciones": v.get("acciones", []),
+                "esperando_en": snap.next[0],
+            })
+    return pendientes
+
+
+HILOS = ["marta-lunes", "marta-miercoles", "marta-jueves-a", "marta-jueves-b"]
+
+separador("BANDEJA DEL SUPERVISOR")
+for p in bandeja(HILOS):
+    print(f"  hilo {p['hilo']} (pide {p['solicitante']}, nodo {p['esperando_en']}):")
+    for a in p["acciones"]:
+        print(f"      {a['herramienta']}({a['argumentos']})")
+
+#%%py
+separador("el supervisor resuelve: una sí, una no")
+
+conf_a = {"configurable": {"thread_id": "marta-jueves-a"}, **LIMITE}
+res_a = asistente.invoke(Command(resume={"decision": "aprobar", "quien": "supervisor-luis"}),
+                         conf_a, context=CTX)
+print("  jueves-a:", res_a["messages"][-1].text[:150])
+print("  auditoría:", res_a["auditoria"])
+
+conf_b = {"configurable": {"thread_id": "marta-jueves-b"}, **LIMITE}
+res_b = asistente.invoke(
+    Command(resume={"decision": "rechazar", "quien": "supervisor-luis",
+                    "motivo": "las sugerencias no se reclasifican sin pasar por producto"}),
+    conf_b, context=CTX)
+print("\n  jueves-b:", res_b["messages"][-1].text[:250])
+print("  auditoría:", res_b["auditoria"])
+
+print("\n  bandeja tras resolver:", bandeja(HILOS) or "vacía")
+
+#%%md
+Mira la respuesta de `jueves-b`: el asistente **no reintentó**. Recibió el rechazo como
+resultado de la herramienta, con el motivo, y reaccionó explicándoselo a Marta. Eso pasa
+porque el mensaje de rechazo incluye la instrucción "no reintentes". Sin ella, muchos modelos
+lo vuelven a intentar con otros argumentos.
+
+#%%md
+## Fase 5 · La auditoría
+
+Todo lo que ha ocurrido, reconstruido desde el estado persistido. Sin sistema de logs aparte.
+
+#%%py
+separador("REGISTRO DE CAMBIOS EFECTIVOS")
+for c in CAMBIOS:
+    print(f"  {c['cuando']}  {c['accion']:<20} {c['ticket']:<10} {str(c['valor'])[:45]}")
+
+separador("TRAZA DE DECISIONES, POR HILO")
+for h in HILOS:
+    snap = asistente.get_state({"configurable": {"thread_id": h}})
+    auditoria = snap.values.get("auditoria", [])
+    acciones = snap.values.get("acciones_realizadas", [])
+    if auditoria or acciones:
+        print(f"\n  {h}:")
+        for a in auditoria:
+            print(f"      {a}")
+        for a in acciones:
+            print(f"      efecto: {a}")
+
+separador("PROFUNDIDAD DE HISTORIAL POR HILO")
+for h in HILOS:
+    n = len(list(asistente.get_state_history({"configurable": {"thread_id": h}})))
+    mensajes = len(asistente.get_state({"configurable": {"thread_id": h}}).values.get("messages", []))
+    print(f"  {h:<20} {n:>3} checkpoints, {mensajes:>2} mensajes")
+
+#%%md
+## Fase 6 · ¿La memoria sirve para algo? Mídelo
+
+Es fácil enamorarse de la memoria de largo plazo y no comprobar nunca si aporta. Hagamos la
+comparación: la misma pregunta, con memoria y sin ella.
+
+#%%py
+asistente_sin_memoria = (
+    StateGraph(EstadoAsistente, context_schema=ContextoSesion)
+    .add_node("pensar", pensar)
+    .add_node("herramientas", ToolNode(TODAS, handle_tool_errors=True))
+    .add_edge(START, "pensar")
+    .add_conditional_edges("pensar", tools_condition, {"tools": "herramientas", END: END})
+    .add_edge("herramientas", "pensar")
+    .compile(checkpointer=InMemorySaver())
+)
+
+PREGUNTA = "¿Qué debería mirar primero hoy?"
+
+separador("SIN memoria (hilo nuevo, sin store)")
+sin = asistente_sin_memoria.invoke(
+    {"messages": [HumanMessage(PREGUNTA)], **ENTRADA_VACIA},
+    {"configurable": {"thread_id": "sin-memoria"}, **LIMITE}, context=CTX)
+print(sin["messages"][-1].text)
+
+separador("CON memoria (hilo nuevo, mismo store)")
+con = turno("con-memoria", PREGUNTA, mostrar=False)
+print(con["messages"][-1].text)
+print("\nmemorias que se aplicaron:", con["memorias_aplicadas"])
+
+#%%md
+La versión con memoria debería mencionar las integraciones sin que nadie las nombre. Si no lo
+hace, hay tres sitios donde mirar, y en este orden:
+
+1. **¿Se guardó algo?** Imprime el store. Un extractor con el umbral de confianza demasiado
+   alto no guarda nada.
+2. **¿Se recuperó?** Mira `memorias_aplicadas`. La búsqueda semántica sobre una consulta muy
+   genérica ("¿qué miro hoy?") puede no traer nada relevante.
+3. **¿Se usó?** Aunque esté en el prompt, el modelo puede ignorarla. Ponla en un
+   `SystemMessage` con una instrucción explícita de tenerla en cuenta.
+
+Los tres puntos fallan en silencio, y por eso `memorias_aplicadas` está en el estado: sin
+esa instrumentación, "la memoria no funciona" es indistinguible de "la memoria no se
+recuperó".
+
+#%%md
+## Retos para llevarlo más lejos
+
+1. **Persistencia real.** Cambia `InMemorySaver` por `SqliteSaver` y `InMemoryStore` por uno
+   con índice semántico. Reinicia el kernel y comprueba que el jueves sigue sabiendo lo del
+   lunes. Es el paso que convierte esto en algo usable.
+
+2. **Caducidad de aprobaciones.** Aplica el ejercicio 10.2: una petición que lleve más de
+   4 horas en la bandeja se rechaza sola y se lo notifica al solicitante.
+
+3. **Aprobación según el riesgo, no según la herramienta.** Ahora `cambiar_prioridad` siempre
+   pide permiso. Haz que solo lo pida si **sube** la prioridad o si el cliente es enterprise.
+   Pista: el `when` de `InterruptOnConfig`, o una condición en `necesita_permiso`.
+
+4. **Aislamiento multiempresa.** Añade `id_org` al contexto y mete la organización en el
+   namespace y en el `thread_id`. Después intenta, a propósito, leer la memoria de otra
+   organización: deberías comprobar que es imposible por construcción, no por un `if`.
+
+5. **Memoria compartida del equipo.** Además de la memoria por agente, añade una de equipo
+   que se escriba solo cuando **dos agentes distintos** confirmen el mismo hecho. Es una
+   defensa sencilla contra el envenenamiento de memoria.
+
+## Lo que te llevas
+
+- **Checkpointer y store resuelven problemas distintos** y se usan juntos: el primero da
+  continuidad dentro de una conversación, el segundo entre conversaciones.
+- Un nodo que **solo pausa** es un nodo seguro de reejecutar. Los efectos van después.
+- El camino de **rechazo tiene que cerrar los `tool_call` pendientes**, y el mensaje debe
+  decir "no reintentes".
+- La **bandeja de tareas** es `get_state` sobre una lista de hilos. Nada más.
+- La **auditoría** sale de un reducer acumulador, no de un sistema de logs.
+- **Instrumenta la memoria** (`memorias_aplicadas`): sin eso no puedes distinguir "no se
+  guardó" de "no se recuperó" de "el modelo la ignoró".
+
+**Siguiente módulo:** [`../04_composicion/11_streaming.ipynb`](../04_composicion/11_streaming.ipynb)
+— streaming, subgrafos y sistemas multiagente.

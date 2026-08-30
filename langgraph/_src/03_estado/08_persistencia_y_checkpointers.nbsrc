@@ -1,0 +1,610 @@
+#%%md
+# 08 · Persistencia, hilos y viaje en el tiempo
+
+**Módulo 3 · Estado duradero** — *tiempo estimado: 1 h 30 min*
+
+Aquí es donde LangGraph deja de ser "una forma bonita de organizar llamadas al LLM" y pasa a
+ser una infraestructura difícil de replicar a mano.
+
+Una sola línea —`compile(checkpointer=...)`— te da cinco cosas que normalmente son cinco
+proyectos:
+
+1. **Memoria conversacional**: retomar una conversación días después.
+2. **Tolerancia a fallos**: si el proceso muere en el paso 7 de 9, reanudas en el 7.
+3. **Human-in-the-loop**: pausar a mitad de ejecución y continuar cuando alguien apruebe.
+4. **Viaje en el tiempo**: volver a un estado anterior y probar otra rama.
+5. **Auditoría**: la traza completa de cómo llegó el sistema a donde está.
+
+No son cinco funcionalidades: son **la misma**, mirada desde cinco ángulos.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador, resumen_estado
+
+init(proyecto="curso-langgraph-m3")
+
+#%%md
+## 1. El modelo: checkpoints e hilos
+
+Con un checkpointer, LangGraph guarda una instantánea **después de cada super-paso**. Cada
+instantánea contiene:
+
+- el **valor** de todos los canales del estado,
+- qué nodos van **a continuación** (`next`),
+- **metadatos**: número de paso, origen de la escritura, padres,
+- las **interrupciones** pendientes, si las hay.
+
+Todos los checkpoints de una misma conversación forman un **hilo** (*thread*), identificado
+por `thread_id`. Es la unidad de aislamiento: dos hilos no se ven entre sí.
+
+```
+config = {"configurable": {"thread_id": "conversacion-42"}}
+```
+
+Sin `thread_id`, un grafo con checkpointer da error. Es a propósito: obliga a que sepas
+siempre a qué conversación pertenece cada ejecución.
+
+#%%py
+import operator
+from typing import Annotated, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoContador(TypedDict):
+    pasos: Annotated[int, operator.add]
+    ultimo: str
+
+
+def trabajar(estado: EstadoContador) -> dict:
+    return {"pasos": 1, "ultimo": f"ejecución número {estado['pasos'] + 1}"}
+
+
+grafo = (
+    StateGraph(EstadoContador)
+    .add_node("trabajar", trabajar)
+    .add_edge(START, "trabajar")
+    .compile(checkpointer=InMemorySaver())
+)
+
+hilo_a = {"configurable": {"thread_id": "usuario-ana"}}
+hilo_b = {"configurable": {"thread_id": "usuario-luis"}}
+
+for _ in range(3):
+    grafo.invoke({"pasos": 0, "ultimo": ""}, hilo_a)
+grafo.invoke({"pasos": 0, "ultimo": ""}, hilo_b)
+
+print("hilo de Ana :", grafo.get_state(hilo_a).values)
+print("hilo de Luis:", grafo.get_state(hilo_b).values)
+
+#%%md
+Ana lleva 3 ejecuciones y Luis 1: **el estado se acumula por hilo entre invocaciones**. Esa
+es toda la memoria conversacional que necesitas, y no has escrito ni una línea para
+conseguirla.
+
+#%%md
+### La anatomía de un `StateSnapshot`
+
+#%%py
+snap = grafo.get_state(hilo_a)
+
+print("values       :", snap.values)
+print("next         :", snap.next, "  <- vacío = la ejecución terminó")
+print("checkpoint_id:", snap.config["configurable"]["checkpoint_id"])
+print("metadata     :", snap.metadata)
+print("tasks        :", snap.tasks)
+print("interrupts   :", snap.interrupts)
+
+#%%md
+`next` es el campo que más se usa en la práctica: si **no** está vacío, el grafo está pausado
+esperando a que ejecutes esos nodos. Es como sabrás, en el notebook 10, que hay una
+aprobación humana pendiente.
+
+#%%md
+## 2. Qué checkpointer usar
+
+| Checkpointer | Dónde guarda | Cuándo usarlo |
+|---|---|---|
+| `InMemorySaver` | memoria del proceso | Notebooks y pruebas. **Se pierde al reiniciar** |
+| `SqliteSaver` | un fichero `.sqlite` | Desarrollo, apps de escritorio, un solo proceso |
+| `PostgresSaver` | PostgreSQL | **Producción**: varios procesos, concurrencia, respaldos |
+| propio | lo que quieras | Hereda de `BaseCheckpointSaver` |
+
+Los tres primeros tienen variante asíncrona (`AsyncSqliteSaver`, `AsyncPostgresSaver`). Si tu
+servidor es async, usa esas: la síncrona bloquea el bucle de eventos en cada super-paso.
+
+#%%py
+import tempfile
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+ruta_bd = pathlib.Path(tempfile.gettempdir()) / "curso_langgraph_demo.sqlite"
+ruta_bd.unlink(missing_ok=True)
+
+# Primera "sesión" del programa.
+with SqliteSaver.from_conn_string(str(ruta_bd)) as saver:
+    g = StateGraph(EstadoContador).add_node("trabajar", trabajar).add_edge(START, "trabajar") \
+        .compile(checkpointer=saver)
+    g.invoke({"pasos": 0, "ultimo": ""}, {"configurable": {"thread_id": "persistente"}})
+    print("sesión 1:", g.get_state({"configurable": {"thread_id": "persistente"}}).values)
+
+print(f"\n(el proceso 'muere'; solo queda el fichero de {ruta_bd.stat().st_size} bytes)\n")
+
+# Segunda "sesión": otro objeto, otro grafo, mismo fichero.
+with SqliteSaver.from_conn_string(str(ruta_bd)) as saver:
+    g2 = StateGraph(EstadoContador).add_node("trabajar", trabajar).add_edge(START, "trabajar") \
+        .compile(checkpointer=saver)
+    print("sesión 2, estado recuperado:", g2.get_state({"configurable": {"thread_id": "persistente"}}).values)
+    g2.invoke({"pasos": 0, "ultimo": ""}, {"configurable": {"thread_id": "persistente"}})
+    print("sesión 2, tras continuar :", g2.get_state({"configurable": {"thread_id": "persistente"}}).values)
+
+ruta_bd.unlink(missing_ok=True)
+
+#%%md
+> **Para Postgres**, la API es la misma con `PostgresSaver.from_conn_string(...)`, del paquete
+> `langgraph-checkpoint-postgres`. Un detalle que cuesta media hora la primera vez:
+> **hay que llamar a `saver.setup()` una vez** para crear las tablas. Con Sqlite se hace solo.
+>
+> ```python
+> from langgraph.checkpoint.postgres import PostgresSaver
+>
+> with PostgresSaver.from_conn_string("postgresql://usuario:clave@host:5432/bd") as saver:
+>     saver.setup()                       # solo la primera vez
+>     grafo = constructor.compile(checkpointer=saver)
+> ```
+
+#%%md
+## 3. Un chat con memoria, en 20 líneas
+
+El caso de uso más común, y ahora es trivial.
+
+#%%py
+from langchain.messages import HumanMessage
+from langgraph.graph import MessagesState
+
+modelo = llm()
+
+chat = (
+    StateGraph(MessagesState)
+    .add_node("responder", lambda e: {"messages": [modelo.invoke(e["messages"])]})
+    .add_edge(START, "responder")
+    .compile(checkpointer=InMemorySaver())
+)
+
+conversacion = {"configurable": {"thread_id": "demo-memoria"}}
+
+for turno in ["Hola, me llamo Ana y trabajo en soporte técnico.",
+              "Estoy analizando tickets de facturación.",
+              "¿Cómo me llamo y en qué estoy trabajando?"]:
+    salida = chat.invoke({"messages": [HumanMessage(turno)]}, conversacion)
+    print(f"USUARIO: {turno}")
+    print(f"IA     : {salida['messages'][-1].text}\n")
+
+#%%md
+Fíjate en lo que **no** hemos hecho: no hemos pasado el historial en cada llamada, ni lo
+hemos guardado en una lista, ni hemos gestionado sesiones. Solo hemos enviado el mensaje
+nuevo con el mismo `thread_id`. El checkpointer hizo el resto.
+
+Y ahora el contraste, que es la parte que importa:
+
+#%%py
+otro_hilo = {"configurable": {"thread_id": "demo-memoria-2"}}
+salida = chat.invoke({"messages": [HumanMessage("¿Cómo me llamo?")]}, otro_hilo)
+print("en un hilo nuevo:", salida["messages"][-1].text)
+
+#%%md
+Aislamiento total. Un `thread_id` por conversación, o por usuario, o por caso de soporte —
+como tenga sentido en tu producto. Y una advertencia que vale su peso en incidentes de
+seguridad: **el `thread_id` es la frontera de privacidad de tu aplicación**. Si lo derivas de
+algo que un usuario controla, un usuario puede leer la conversación de otro. Derívalo de tu
+sesión autenticada, siempre.
+
+#%%md
+## 4. Inspeccionar el pasado: `get_state_history`
+
+Cada super-paso deja su instantánea. `get_state_history` las devuelve **de la más reciente a
+la más antigua**.
+
+#%%py
+historial = list(chat.get_state_history(conversacion))
+print(f"{len(historial)} checkpoints en el hilo\n")
+print(f"{'paso':>5} {'origen':<12} {'mensajes':>9} {'siguiente':<14} último mensaje")
+print("-" * 84)
+for h in reversed(historial):
+    ultimo = h.values.get("messages", [])
+    texto = ultimo[-1].text[:34].replace("\n", " ") if ultimo else "(vacío)"
+    print(f"{h.metadata.get('step', '?'):>5} {h.metadata.get('source', '?'):<12} "
+          f"{len(ultimo):>9} {str(h.next):<14} {texto}")
+
+#%%md
+El campo `source` de los metadatos dice de dónde vino cada escritura:
+
+| `source` | Significado |
+|---|---|
+| `"input"` | Lo que pasaste a `invoke()` |
+| `"loop"` | Una escritura normal de un nodo |
+| `"update"` | Una edición manual con `update_state()` |
+| `"fork"` | Una bifurcación creada al reanudar desde un checkpoint pasado |
+
+Esto **es** tu registro de auditoría, y viene gratis.
+
+#%%md
+## 5. Editar el estado a mano: `update_state`
+
+Puedes escribir en el estado desde fuera del grafo. Suena a truco sucio y es una herramienta
+de primera categoría:
+
+- **Corregir** algo que el modelo entendió mal, sin reiniciar la conversación.
+- **Inyectar** la respuesta de un humano (base del notebook 10).
+- **Rehacer** un paso con otros datos.
+
+#%%py
+class EstadoPedido(TypedDict):
+    articulo: str
+    cantidad: int
+    estado: str
+    notas: Annotated[list[str], operator.add]
+
+
+def confirmar(estado: EstadoPedido) -> dict:
+    return {"estado": "confirmado",
+            "notas": [f"confirmadas {estado['cantidad']} unidades de {estado['articulo']}"]}
+
+
+pedidos = StateGraph(EstadoPedido).add_node("confirmar", confirmar) \
+    .add_edge(START, "confirmar").compile(checkpointer=InMemorySaver())
+
+hilo = {"configurable": {"thread_id": "pedido-1"}}
+pedidos.invoke({"articulo": "teclado", "cantidad": 2, "estado": "nuevo", "notas": []}, hilo)
+print("tras ejecutar :", pedidos.get_state(hilo).values)
+
+# Corrección desde fuera. Los reducers se aplican igual: 'notas' acumula, 'cantidad' sobrescribe.
+pedidos.update_state(hilo, {"cantidad": 5, "notas": ["corregido por el agente humano"]})
+print("tras corregir :", pedidos.get_state(hilo).values)
+print("origen        :", pedidos.get_state(hilo).metadata["source"])
+
+#%%md
+> **`update_state` respeta los reducers.** `notas` tenía `operator.add`, así que la nota se
+> **añadió**; `cantidad` no tenía reducer, así que se **sobrescribió**. Es coherente con todo
+> lo del notebook 02, y es justo lo que la gente no espera la primera vez.
+>
+> El parámetro `as_node="nombre"` te deja además decir *quién* hizo la escritura, lo que
+> cambia qué nodos se ejecutan a continuación. Lo usaremos en el notebook 10 para hacer que
+> una respuesta humana entre en el grafo como si la hubiera producido un nodo.
+
+#%%md
+## 6. Viaje en el tiempo
+
+Aquí está la funcionalidad que no tiene ningún otro framework y que, una vez la usas, no
+sabes vivir sin ella: **reanudar desde cualquier checkpoint del pasado**.
+
+Se hace pasando la `config` de ese checkpoint (que incluye su `checkpoint_id`) en vez de la
+del hilo. El grafo se reanuda desde ahí, y todo lo que ocurra después es una **rama nueva**,
+sin destruir la original.
+
+#%%py
+from typing import Literal
+
+
+class EstadoRuta(TypedDict):
+    peticion: str
+    decision: str
+    resultado: str
+
+
+def analizar(estado: EstadoRuta) -> dict:
+    urgente = "urgente" in estado["peticion"].lower()
+    return {"decision": "escalar" if urgente else "automatico"}
+
+
+def enrutar(estado: EstadoRuta) -> Literal["escalar", "automatico"]:
+    return estado["decision"]
+
+
+rutas = (
+    StateGraph(EstadoRuta)
+    .add_node("analizar", analizar)
+    .add_node("escalar", lambda e: {"resultado": "asignado a un ingeniero de guardia"})
+    .add_node("automatico", lambda e: {"resultado": "respondido con un artículo del centro de ayuda"})
+    .add_edge(START, "analizar")
+    .add_conditional_edges("analizar", enrutar, {"escalar": "escalar", "automatico": "automatico"})
+    .compile(checkpointer=InMemorySaver())
+)
+
+hilo_rt = {"configurable": {"thread_id": "viaje-1"}}
+original = rutas.invoke({"peticion": "No me carga el panel", "decision": "", "resultado": ""}, hilo_rt)
+print("ejecución original:", original)
+
+#%%py
+# 1. Buscamos el checkpoint JUSTO ANTES de que se tomara la decisión.
+historial = list(rutas.get_state_history(hilo_rt))
+print("checkpoints del hilo:")
+for h in reversed(historial):
+    print(f"  paso {h.metadata.get('step'):>2}  next={str(h.next):<16} {h.values}")
+
+antes_de_decidir = next(h for h in historial if h.next == ("analizar",))
+print(f"\nvolvemos al paso {antes_de_decidir.metadata.get('step')}, justo antes de 'analizar'")
+
+#%%py
+# 2. Cambiamos el estado en ESE punto del pasado. update_state sobre un checkpoint concreto
+#    crea una bifurcación: la historia original queda intacta.
+bifurcacion = rutas.update_state(
+    antes_de_decidir.config,
+    {"peticion": "El panel no carga y es URGENTE, tenemos una demo en una hora"},
+)
+
+# 3. Reanudamos desde la bifurcación. `None` como entrada significa "sigue desde aquí".
+alternativa = rutas.invoke(None, bifurcacion)
+print("rama alternativa  :", alternativa)
+print("rama original     :", rutas.get_state(hilo_rt).values, "  <- ojo: el hilo apunta ahora a la rama nueva")
+
+#%%py
+# La historia original sigue ahí: basta con pedir su checkpoint.
+print("estado original recuperado:", rutas.get_state(original_cfg := historial[0].config).values)
+print(f"\ntotal de checkpoints tras la bifurcación: {len(list(rutas.get_state_history(hilo_rt)))}")
+
+#%%md
+Para qué sirve esto de verdad:
+
+| Uso | Cómo |
+|---|---|
+| **Depurar** un fallo | Vuelve al paso anterior y reejecuta con logs, sin repetir toda la conversación |
+| **Probar prompts** | Bifurca en el mismo punto con dos instrucciones y compara |
+| **Deshacer** | El usuario se arrepiente: vuelve al checkpoint anterior |
+| **Reintentar barato** | Un nodo falló por red: reanuda desde ahí, no desde el principio |
+| **Explicar** | "¿Por qué escaló este ticket?" -> aquí está el estado exacto en el momento |
+
+Ese "reintentar barato" es dinero contante: si el paso 8 de 10 falla porque una API dio
+timeout, reanudar desde el 8 evita repetir siete llamadas a un LLM que ya pagaste.
+
+#%%md
+## 7. Durabilidad: cuándo se escribe el checkpoint
+
+Guardar en cada super-paso es seguro y cuesta E/S. `durability` te deja elegir el punto del
+compromiso.
+
+| Valor | Cuándo escribe | Coste | Riesgo si el proceso muere |
+|---|---|---|---|
+| `"sync"` | tras cada super-paso, **bloqueando** | el mayor | ninguno |
+| `"async"` | tras cada super-paso, en segundo plano | medio | puedes perder el último paso |
+| `"exit"` | **solo al terminar** | el menor | lo pierdes todo si peta a media |
+
+#%%py
+import time
+
+
+class EstadoLento(TypedDict):
+    n: Annotated[int, operator.add]
+
+
+def paso_lento(estado: EstadoLento) -> dict:
+    time.sleep(0.02)
+    return {"n": 1}
+
+
+constructor = StateGraph(EstadoLento)
+for i in range(8):
+    constructor.add_node(f"p{i}", paso_lento)
+constructor.add_edge(START, "p0")
+for i in range(7):
+    constructor.add_edge(f"p{i}", f"p{i + 1}")
+
+for modo in ("sync", "async", "exit"):
+    g = constructor.compile(checkpointer=InMemorySaver())
+    conf = {"configurable": {"thread_id": f"dur-{modo}"}}
+    t0 = time.perf_counter()
+    g.invoke({"n": 0}, conf, durability=modo)
+    seg = time.perf_counter() - t0
+    print(f"  durability={modo:<6} {seg * 1000:>6.0f} ms   "
+          f"{len(list(g.get_state_history(conf))):>2} checkpoints guardados")
+
+#%%md
+Con `InMemorySaver` la diferencia de tiempo es ruido, porque escribir en un diccionario es
+gratis. La cifra que importa es **el número de checkpoints**: con `"exit"` solo hay uno, y
+eso contra Postgres es la diferencia entre 9 escrituras y 1.
+
+**Cómo elegir:**
+
+- `"sync"` (el valor por defecto) siempre que haya **human-in-the-loop**, dinero de por medio
+  o pasos caros que no quieras repetir.
+- `"async"` para chats interactivos donde perder el último turno es un inconveniente y no un
+  desastre.
+- `"exit"` para trabajos por lotes cortos y reejecutables. **Nunca** con `interrupt()`:
+  necesitas el checkpoint intermedio precisamente para poder pausar.
+
+#%%md
+## 8. Higiene del estado persistido
+
+Tres reglas que se aprenden por las malas:
+
+1. **Nada de recursos vivos.** Conexiones, sockets, clientes HTTP: no se serializan. En el
+   estado van datos; los recursos, en el `context`.
+2. **Nada de secretos.** Todo lo del estado acaba escrito en tu base de datos. Tokens y
+   claves van en `context` o en un canal `EphemeralValue` (notebook 02).
+3. **Acota el tamaño.** El estado se guarda **entero** en cada super-paso. Un `DataFrame` de
+   100 MB en el estado son 100 MB por checkpoint. Guarda referencias, no cargas.
+
+#%%py
+from langgraph.channels import EphemeralValue
+
+
+class EstadoLimpio(TypedDict):
+    # persistido: datos pequeños y serializables
+    id_cliente: str
+    id_documento: str                                   # una referencia, no el documento
+    resumen: str
+    # no persistido: se ve durante la ejecución y no llega al checkpoint
+    token_sesion: Annotated[str, EphemeralValue]
+
+
+def usar(estado: EstadoLimpio) -> dict:
+    print(f"  el nodo tiene el token: {estado.get('token_sesion')!r}")
+    return {"resumen": f"documento {estado['id_documento']} procesado"}
+
+
+g = StateGraph(EstadoLimpio).add_node("usar", usar).add_edge(START, "usar") \
+    .compile(checkpointer=InMemorySaver())
+conf = {"configurable": {"thread_id": "limpio"}}
+g.invoke({"id_cliente": "C-1", "id_documento": "DOC-9", "resumen": "", "token_sesion": "tok_secreto"}, conf)
+print("  lo que queda escrito :", g.get_state(conf).values)
+
+#%%md
+## 9. Ejercicios
+
+> **EJERCICIO 8.1 — Un agente que sobrevive a un fallo**
+>
+> Construye una tubería de cuatro nodos donde el tercero falle la primera vez que se ejecuta
+> (usa una variable global como interruptor) y funcione a partir de la segunda.
+>
+> Demuestra que, al reanudar el hilo con `invoke(None, config)`, **solo se reejecuta desde el
+> nodo que falló**, y que los dos primeros no repiten su trabajo. Cuenta las ejecuciones de
+> cada nodo para probarlo.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 8.1</b></summary>
+
+El contador es la prueba: <code>paso_1</code> y <code>paso_2</code> se ejecutan <b>una sola
+vez</b> pese a haber dos invocaciones. Si esos pasos fueran llamadas a un LLM, acabas de
+ahorrarte pagarlas dos veces.
+
+El detalle que hay que retener es <code>invoke(None, config)</code>: pasar <code>None</code>
+como entrada significa "no hay entrada nueva, continúa desde donde te quedaste". Pasar el
+diccionario original en su lugar habría empezado una ejecución nueva sobre el mismo hilo.
+</details>
+
+#%%py
+EJECUCIONES: dict[str, int] = {}
+FALLAR_LA_PRIMERA = {"activo": True}
+
+
+class EstadoTuberia(TypedDict):
+    datos: Annotated[list[str], operator.add]
+
+
+def contar(nombre: str):
+    def nodo(estado: EstadoTuberia) -> dict:
+        EJECUCIONES[nombre] = EJECUCIONES.get(nombre, 0) + 1
+        if nombre == "paso_3" and FALLAR_LA_PRIMERA["activo"]:
+            FALLAR_LA_PRIMERA["activo"] = False
+            raise ConnectionError("la API externa no responde")
+        return {"datos": [nombre]}
+    return nodo
+
+
+tuberia = (
+    StateGraph(EstadoTuberia)
+    .add_node("paso_1", contar("paso_1")).add_node("paso_2", contar("paso_2"))
+    .add_node("paso_3", contar("paso_3")).add_node("paso_4", contar("paso_4"))
+    .add_edge(START, "paso_1").add_edge("paso_1", "paso_2")
+    .add_edge("paso_2", "paso_3").add_edge("paso_3", "paso_4").add_edge("paso_4", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+hilo_t = {"configurable": {"thread_id": "tuberia-1"}}
+
+print("-- primer intento --")
+try:
+    tuberia.invoke({"datos": []}, hilo_t)
+except ConnectionError as exc:
+    print(f"  falló: {exc}")
+    snap = tuberia.get_state(hilo_t)
+    print(f"  estado guardado: {snap.values}")
+    print(f"  next: {snap.next}   <- el grafo sabe exactamente dónde retomar")
+
+print("\n-- reanudación: invoke(None, config) --")
+final = tuberia.invoke(None, hilo_t)
+print(f"  resultado: {final}")
+
+print("\nejecuciones por nodo:")
+for nombre, veces in sorted(EJECUCIONES.items()):
+    marca = "  <- solo se reintentó este" if veces > 1 else ""
+    print(f"  {nombre}: {veces}{marca}")
+
+#%%md
+> **EJERCICIO 8.2 — Comparar dos ramas del mismo punto**
+>
+> Con el grafo de chat de la sección 3, haz esto: mantén una conversación de dos turnos,
+> luego **bifurca** en el punto anterior al último turno y haz **dos preguntas distintas**
+> desde el mismo estado. Comprueba que las dos ramas coexisten y que puedes leer el estado de
+> cada una.
+>
+> Es el mecanismo detrás de "regenerar respuesta" y de cualquier prueba A/B sobre
+> conversaciones reales.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 8.2</b></summary>
+
+Lo importante: <b>el hilo no es lineal, es un árbol</b>. <code>get_state(config_del_hilo)</code>
+te da la punta de la rama activa, mientras que <code>get_state(config_de_un_checkpoint)</code>
+te da ese nodo concreto del árbol y no lo que venga después.
+
+De ahí sale el error que casi todo el mundo comete la primera vez: tras invocar desde el punto
+de bifurcación, leer <code>get_state(punto_bifurcacion)</code> devuelve otra vez el punto de
+bifurcación, no la rama recién creada. La punta de la rama nueva es
+<code>get_state(config_del_hilo)</code> justo después de invocar — guárdala si quieres poder
+volver a ella.
+
+Esto es exactamente lo que hace el botón "regenerar" de un chat: bifurca en el turno anterior
+y genera otra rama, conservando la primera por si quieres volver.
+</details>
+
+#%%py
+hilo_ab = {"configurable": {"thread_id": "prueba-ab"}}
+
+chat.invoke({"messages": [HumanMessage(
+    "Trabajo en soporte y tengo 400 tickets sin clasificar."
+)]}, hilo_ab)
+chat.invoke({"messages": [HumanMessage(
+    "El 22 % son de facturación y el 18 % de rendimiento."
+)]}, hilo_ab)
+
+punto_bifurcacion = chat.get_state(hilo_ab).config
+print(f"punto de bifurcación: {len(chat.get_state(hilo_ab).values['messages'])} mensajes\n")
+
+ramas = {}
+for etiqueta, pregunta in [
+    ("A · consejo", "Dame un consejo concreto para reducir la carga."),
+    ("B · datos", "¿Qué métrica debería vigilar cada semana?"),
+]:
+    salida = chat.invoke({"messages": [HumanMessage(pregunta)]}, punto_bifurcacion)
+    # OJO: get_state(punto_bifurcacion) devolvería el estado EN el punto de bifurcación,
+    # no la punta de la rama nueva. La punta es lo que apunta el hilo tras invocar.
+    ramas[etiqueta] = chat.get_state(hilo_ab).config
+    print(f"[{etiqueta}] {salida['messages'][-1].text[:220]}\n")
+
+print("las dos ramas siguen existiendo:")
+for etiqueta, cfg in ramas.items():
+    mensajes = chat.get_state(cfg).values["messages"]
+    print(f"  {etiqueta}: {len(mensajes)} mensajes, última pregunta = "
+          f"{[m for m in mensajes if m.type == 'human'][-1].text[:45]!r}")
+
+#%%md
+## 10. Resumen
+
+- `compile(checkpointer=...)` guarda una instantánea tras cada super-paso. Con eso tienes
+  memoria, tolerancia a fallos, HIL, viaje en el tiempo y auditoría.
+- El `thread_id` aísla conversaciones y **es la frontera de privacidad**: dedúcelo de tu
+  sesión autenticada, nunca de datos que controle el usuario.
+- `InMemorySaver` para probar, `SqliteSaver` para un proceso, `PostgresSaver` (con
+  `setup()`) para producción. Usa las variantes async si tu servidor lo es.
+- `get_state` da el presente, `get_state_history` el pasado, `update_state` te deja escribir
+  desde fuera **respetando los reducers**.
+- Reanudar desde un checkpoint antiguo crea una **bifurcación**; el hilo es un árbol, no una
+  lista.
+- `invoke(None, config)` = "continúa desde donde te quedaste".
+- `durability`: `"sync"` por defecto y obligatorio con `interrupt()`; `"exit"` solo para
+  lotes reejecutables.
+
+**Siguiente:** [`09_memoria_largo_plazo.ipynb`](09_memoria_largo_plazo.ipynb) — memoria que
+sobrevive **entre** hilos: el `Store`, los espacios de nombres y la búsqueda semántica.

@@ -1,0 +1,825 @@
+#%%md
+# 10 · Human-in-the-loop: pausar, preguntar, continuar
+
+**Módulo 3 · Estado duradero** — *tiempo estimado: 1 h 30 min*
+
+Hay acciones que un agente no debería hacer solo: emitir un reembolso, borrar datos, enviar
+un correo a un cliente, publicar algo. Y hay decisiones donde el modelo necesita información
+que solo tiene una persona.
+
+`interrupt()` pausa el grafo **a mitad de un nodo**, guarda todo, y devuelve el control a
+quien llamó. Puede pasar un segundo o tres días: al reanudar con `Command(resume=...)`, la
+ejecución continúa como si nunca se hubiera detenido.
+
+Esto **solo funciona porque hay persistencia**. Es el notebook 08 puesto a trabajar.
+
+Al terminar sabrás:
+
+1. `interrupt()` y `Command(resume=...)`, y la trampa de la reejecución que pilla a todo el mundo.
+2. Los cuatro patrones canónicos: aprobar, editar, elegir y preguntar.
+3. `HumanInTheLoopMiddleware` para agentes.
+4. Los puntos de interrupción estáticos y cuándo son mejores.
+5. Cómo se ve esto desde un servidor web de verdad.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m3")
+
+#%%md
+## 1. `interrupt()` en su forma más simple
+
+#%%py
+import operator
+from typing import Annotated, Literal, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
+
+
+class EstadoReembolso(TypedDict):
+    id_factura: str
+    importe: float
+    decision: str
+    bitacora: Annotated[list[str], operator.add]
+
+
+def preparar(estado: EstadoReembolso) -> dict:
+    return {"bitacora": [f"preparado reembolso de {estado['importe']} € para {estado['id_factura']}"]}
+
+
+def pedir_aprobacion(estado: EstadoReembolso) -> dict:
+    """Aquí se detiene todo. `interrupt` lanza una excepción especial que LangGraph captura."""
+    respuesta = interrupt({
+        "tipo": "aprobacion_reembolso",
+        "pregunta": f"¿Apruebas un reembolso de {estado['importe']} € sobre {estado['id_factura']}?",
+        "importe": estado["importe"],
+        "opciones": ["aprobar", "rechazar"],
+    })
+    return {"decision": respuesta["decision"],
+            "bitacora": [f"decisión humana: {respuesta['decision']} ({respuesta.get('quien', 'anónimo')})"]}
+
+
+def ejecutar(estado: EstadoReembolso) -> dict:
+    return {"bitacora": [f"REEMBOLSO EJECUTADO: {estado['importe']} €"]}
+
+
+def rechazar(estado: EstadoReembolso) -> dict:
+    return {"bitacora": ["reembolso rechazado; se notifica al cliente"]}
+
+
+def enrutar(estado: EstadoReembolso) -> Literal["ejecutar", "rechazar"]:
+    return "ejecutar" if estado["decision"] == "aprobar" else "rechazar"
+
+
+reembolsos = (
+    StateGraph(EstadoReembolso)
+    .add_node("preparar", preparar)
+    .add_node("pedir_aprobacion", pedir_aprobacion)
+    .add_node("ejecutar", ejecutar)
+    .add_node("rechazar", rechazar)
+    .add_edge(START, "preparar")
+    .add_edge("preparar", "pedir_aprobacion")
+    .add_conditional_edges("pedir_aprobacion", enrutar, {"ejecutar": "ejecutar", "rechazar": "rechazar"})
+    .add_edge("ejecutar", END).add_edge("rechazar", END)
+    .compile(checkpointer=InMemorySaver())      # <- SIN checkpointer, interrupt() falla
+)
+
+mostrar_grafo(reembolsos)
+
+#%%py
+hilo = {"configurable": {"thread_id": "reembolso-001"}}
+
+salida = reembolsos.invoke(
+    {"id_factura": "F-2026-0512", "importe": 249.90, "decision": "", "bitacora": []},
+    hilo,
+)
+
+print("el grafo se ha DETENIDO. Lo que devolvió invoke():\n")
+for clave, valor in salida.items():
+    print(f"  {clave}: {valor}")
+
+#%%md
+Fíjate en la clave `__interrupt__` de la salida: ahí viene lo que el nodo le está preguntando
+al humano. Es lo que tu interfaz tiene que renderizar.
+
+Y el estado del grafo también lo sabe:
+
+#%%py
+snapshot = reembolsos.get_state(hilo)
+print("next        :", snapshot.next, "  <- pendiente de ejecutar")
+print("interrupts  :", snapshot.interrupts)
+print("\nel valor que hay que enseñarle a la persona:")
+for clave, valor in snapshot.interrupts[0].value.items():
+    print(f"  {clave}: {valor}")
+
+#%%md
+## 2. Reanudar
+
+`Command(resume=<valor>)` como **entrada** de `invoke()`. El valor que pases es exactamente
+lo que devuelve la llamada a `interrupt()` dentro del nodo.
+
+#%%py
+salida = reembolsos.invoke(
+    Command(resume={"decision": "aprobar", "quien": "marta.gomez"}),
+    hilo,
+)
+
+print("bitácora completa:")
+for linea in salida["bitacora"]:
+    print("  -", linea)
+
+#%%md
+Fíjate en que la bitácora conserva **todo**: lo que se hizo antes de la pausa, la decisión
+humana con su autor, y lo que vino después. Ese registro completo, sin escribir un sistema de
+logs, es lo que hace que esto sea auditable de fábrica.
+
+#%%md
+## 3. La trampa: el nodo se reejecuta entero
+
+Esto es lo más importante del notebook y donde se estrella todo el mundo la primera vez.
+
+> **Al reanudar, LangGraph vuelve a ejecutar el nodo DESDE EL PRINCIPIO.** No continúa desde
+> la línea del `interrupt()`. Lo que hace es guardar la respuesta y, en la reejecución, la
+> llamada a `interrupt()` la devuelve inmediatamente en vez de pausar.
+
+Consecuencia directa: **todo lo que haya antes del `interrupt()` en ese nodo se ejecuta dos
+veces**. Si es una llamada a la API de pagos, cobras dos veces.
+
+#%%py
+COBROS_REALIZADOS = []
+
+
+class EstadoPeligroso(TypedDict):
+    resultado: str
+
+
+def nodo_peligroso(estado: EstadoPeligroso) -> dict:
+    # MAL: un efecto lateral ANTES del interrupt.
+    COBROS_REALIZADOS.append("cargo a la tarjeta")
+    respuesta = interrupt("¿Confirmas el cargo?")
+    return {"resultado": f"confirmado: {respuesta}"}
+
+
+g = StateGraph(EstadoPeligroso).add_node("n", nodo_peligroso).add_edge(START, "n") \
+    .compile(checkpointer=InMemorySaver())
+conf = {"configurable": {"thread_id": "peligro"}}
+
+g.invoke({"resultado": ""}, conf)
+print(f"cobros tras la pausa    : {len(COBROS_REALIZADOS)}")
+g.invoke(Command(resume="sí"), conf)
+print(f"cobros tras reanudar    : {len(COBROS_REALIZADOS)}   <- ¡se ha cobrado dos veces!")
+
+#%%md
+**Las tres reglas para no pisar esta mina:**
+
+1. **Pon el `interrupt()` lo primero del nodo.** Idealmente el nodo *solo* interrumpe y
+   devuelve la respuesta al estado.
+2. **Los efectos laterales van en el nodo SIGUIENTE**, después de la decisión.
+3. Si de verdad no puedes separarlo, haz la operación **idempotente**: una clave de
+   idempotencia que la pasarela reconozca, o comprobar en el estado si ya se hizo.
+
+#%%py
+COBROS_SEGUROS = []
+
+
+class EstadoSeguro(TypedDict):
+    confirmado: bool
+    resultado: str
+
+
+def solo_preguntar(estado: EstadoSeguro) -> dict:
+    """Este nodo NO hace nada más que preguntar. Reejecutarlo es inofensivo."""
+    respuesta = interrupt("¿Confirmas el cargo de 50 €?")
+    return {"confirmado": respuesta == "sí"}
+
+
+def hacer_el_cargo(estado: EstadoSeguro) -> dict:
+    """El efecto lateral vive en su propio nodo, después de la decisión."""
+    if not estado["confirmado"]:
+        return {"resultado": "cancelado por el usuario"}
+    COBROS_SEGUROS.append("cargo a la tarjeta")
+    return {"resultado": "cargo realizado"}
+
+
+g_seguro = (
+    StateGraph(EstadoSeguro)
+    .add_sequence([("solo_preguntar", solo_preguntar), ("hacer_el_cargo", hacer_el_cargo)])
+    .add_edge(START, "solo_preguntar")
+    .compile(checkpointer=InMemorySaver())
+)
+
+conf = {"configurable": {"thread_id": "seguro"}}
+g_seguro.invoke({"confirmado": False, "resultado": ""}, conf)
+print(f"cobros tras la pausa : {len(COBROS_SEGUROS)}")
+print("resultado            :", g_seguro.invoke(Command(resume="sí"), conf)["resultado"])
+print(f"cobros tras reanudar : {len(COBROS_SEGUROS)}   <- exactamente uno")
+
+#%%md
+## 4. Los cuatro patrones canónicos
+
+#%%md
+### 4.1 Aprobar o rechazar
+
+El de la sección 1. La forma más simple y la más frecuente.
+
+### 4.2 Editar antes de actuar
+
+El humano no solo aprueba: **corrige**. Es lo que quieres para borradores de correo,
+consultas SQL generadas o cualquier cosa que el modelo redacte y una persona firme.
+
+#%%py
+from langchain.messages import HumanMessage
+
+modelo = llm()
+
+
+class EstadoCorreo(TypedDict):
+    ticket: str
+    borrador: str
+    final: str
+    ediciones: Annotated[list[str], operator.add]
+
+
+def redactar(estado: EstadoCorreo) -> dict:
+    respuesta = modelo.invoke(
+        "Redacta la respuesta a este ticket de soporte. En español, 3 frases, tono profesional. "
+        "No prometas plazos ni reembolsos.\n\n" + estado["ticket"]
+    )
+    return {"borrador": respuesta.text}
+
+
+def revisar_humano(estado: EstadoCorreo) -> dict:
+    """Presenta el borrador y acepta una versión editada."""
+    revision = interrupt({
+        "tipo": "revision_correo",
+        "borrador": estado["borrador"],
+        "instruccion": "Devuelve {'accion': 'enviar'} o {'accion': 'editar', 'texto': '...'}",
+    })
+    if revision["accion"] == "editar":
+        return {"final": revision["texto"], "ediciones": ["editado por una persona"]}
+    return {"final": estado["borrador"], "ediciones": ["enviado sin cambios"]}
+
+
+def enviar(estado: EstadoCorreo) -> dict:
+    return {"ediciones": [f"enviado ({len(estado['final'])} caracteres)"]}
+
+
+correos = (
+    StateGraph(EstadoCorreo)
+    .add_sequence([("redactar", redactar), ("revisar_humano", revisar_humano), ("enviar", enviar)])
+    .add_edge(START, "redactar")
+    .compile(checkpointer=InMemorySaver())
+)
+
+hilo_c = {"configurable": {"thread_id": "correo-1"}}
+salida = correos.invoke(
+    {"ticket": "Llevo dos días sin poder entrar en mi cuenta y nadie me contesta. Es urgente.",
+     "borrador": "", "final": "", "ediciones": []},
+    hilo_c,
+)
+
+print("BORRADOR PROPUESTO:\n")
+print(salida["__interrupt__"][0].value["borrador"])
+
+#%%py
+# La persona corrige el borrador y lo devuelve.
+texto_editado = (
+    "Hola: lamento la espera. He localizado tu cuenta y he lanzado un restablecimiento de "
+    "acceso; recibirás un correo en unos minutos. Si no llega, respóndeme a este mismo hilo."
+)
+
+final = correos.invoke(
+    Command(resume={"accion": "editar", "texto": texto_editado}),
+    hilo_c,
+)
+print("TEXTO FINAL ENVIADO:\n")
+print(final["final"])
+print("\nbitácora:", final["ediciones"])
+
+#%%md
+### 4.3 Elegir entre opciones
+
+El grafo genera alternativas y el humano escoge. Es el patrón para planes de acción,
+consultas ambiguas o cualquier bifurcación con criterio de negocio.
+
+#%%py
+class EstadoPlan(TypedDict):
+    problema: str
+    opciones: list[str]
+    elegida: str
+
+
+def proponer(estado: EstadoPlan) -> dict:
+    return {"opciones": [
+        "A) Reiniciar el servicio de sincronización (2 min de corte, arregla el 80 % de los casos)",
+        "B) Regenerar las credenciales de la integración (sin corte, requiere avisar al cliente)",
+        "C) Escalar a ingeniería y esperar diagnóstico (sin riesgo, 4 h de espera)",
+    ]}
+
+
+def elegir(estado: EstadoPlan) -> dict:
+    eleccion = interrupt({"tipo": "eleccion_plan", "problema": estado["problema"],
+                          "opciones": estado["opciones"]})
+    return {"elegida": eleccion}
+
+
+planes = StateGraph(EstadoPlan).add_sequence([("proponer", proponer), ("elegir", elegir)]) \
+    .add_edge(START, "proponer").compile(checkpointer=InMemorySaver())
+
+hilo_p = {"configurable": {"thread_id": "plan-1"}}
+salida = planes.invoke({"problema": "webhook caído", "opciones": [], "elegida": ""}, hilo_p)
+for o in salida["__interrupt__"][0].value["opciones"]:
+    print(" ", o)
+print("\nelegida:", planes.invoke(Command(resume="B"), hilo_p)["elegida"])
+
+#%%md
+### 4.4 Preguntar información que el agente no tiene
+
+El modelo se atasca y necesita un dato. En vez de inventárselo, pregunta.
+
+#%%py
+class EstadoConsulta(TypedDict):
+    peticion: str
+    dato_faltante: str
+    respuesta_humana: str
+
+
+def analizar(estado: EstadoConsulta) -> dict:
+    if "cuenta" in estado["peticion"] and "@" not in estado["peticion"]:
+        return {"dato_faltante": "el correo de la cuenta afectada"}
+    return {"dato_faltante": ""}
+
+
+def preguntar_si_falta(estado: EstadoConsulta) -> Literal["preguntar", "__end__"]:
+    return "preguntar" if estado["dato_faltante"] else END
+
+
+def preguntar(estado: EstadoConsulta) -> dict:
+    dato = interrupt({"tipo": "peticion_dato", "necesito": estado["dato_faltante"]})
+    return {"respuesta_humana": dato}
+
+
+consultas = (
+    StateGraph(EstadoConsulta)
+    .add_node("analizar", analizar).add_node("preguntar", preguntar)
+    .add_edge(START, "analizar")
+    .add_conditional_edges("analizar", preguntar_si_falta, {"preguntar": "preguntar", END: END})
+    .compile(checkpointer=InMemorySaver())
+)
+
+hilo_q = {"configurable": {"thread_id": "consulta-1"}}
+salida = consultas.invoke({"peticion": "no puedo entrar en la cuenta", "dato_faltante": "",
+                           "respuesta_humana": ""}, hilo_q)
+print("el agente pregunta:", salida["__interrupt__"][0].value)
+print("con la respuesta  :", consultas.invoke(Command(resume="marta@delta.example"), hilo_q))
+
+#%%md
+## 5. Varios `interrupt()` en el mismo nodo
+
+Un nodo puede interrumpir varias veces. LangGraph empareja cada respuesta con su interrupción
+**por orden de aparición**, y en cada reanudación avanza una.
+
+#%%py
+class EstadoFormulario(TypedDict):
+    nombre: str
+    motivo: str
+
+
+def formulario(estado: EstadoFormulario) -> dict:
+    nombre = interrupt("¿Cuál es tu nombre?")
+    motivo = interrupt("¿Cuál es el motivo del contacto?")
+    return {"nombre": nombre, "motivo": motivo}
+
+
+form = StateGraph(EstadoFormulario).add_node("formulario", formulario) \
+    .add_edge(START, "formulario").compile(checkpointer=InMemorySaver())
+
+hilo_f = {"configurable": {"thread_id": "form-1"}}
+r = form.invoke({"nombre": "", "motivo": ""}, hilo_f)
+print("pregunta 1:", r["__interrupt__"][0].value)
+r = form.invoke(Command(resume="Marta"), hilo_f)
+print("pregunta 2:", r["__interrupt__"][0].value)
+print("resultado :", form.invoke(Command(resume="problema con el webhook"), hilo_f))
+
+#%%md
+> **El emparejamiento es por posición, no por identidad.** Si tu nodo tiene `interrupt()`
+> dentro de un `if`, el orden puede cambiar entre la primera ejecución y la reanudación, y las
+> respuestas se cruzan. **No pongas `interrupt()` dentro de condicionales cuyo resultado pueda
+> cambiar.** Si necesitas preguntas condicionales, usa nodos distintos con aristas
+> condicionales — que además se ve en el diagrama.
+
+#%%md
+## 6. `HumanInTheLoopMiddleware`: aprobación de herramientas
+
+Para agentes con `create_agent`, no hace falta cablear nada: un middleware pone la aprobación
+sobre las herramientas que elijas.
+
+#%%py
+from langchain.agents import create_agent
+from langchain.agents.middleware import HumanInTheLoopMiddleware
+from langchain.tools import tool
+
+from utils.datos import tickets
+
+df = tickets()
+
+
+@tool(parse_docstring=True)
+def consultar_ticket(id_ticket: str) -> str:
+    """Consulta un ticket. Operación de solo lectura.
+
+    Args:
+        id_ticket: Identificador con formato TCK-0001.
+    """
+    fila = df[df.id_ticket == id_ticket]
+    if fila.empty:
+        return f"No existe {id_ticket}."
+    r = fila.iloc[0]
+    return f"{r.id_ticket} [{r.prioridad}] {r.asunto} — plan {r.plan_cliente}"
+
+
+@tool(parse_docstring=True)
+def cerrar_ticket(id_ticket: str, motivo: str) -> str:
+    """ACCIÓN IRREVERSIBLE: cierra un ticket y notifica al cliente.
+
+    Args:
+        id_ticket: Identificador del ticket a cerrar.
+        motivo: Explicación que verá el cliente.
+    """
+    return f"{id_ticket} cerrado. Motivo notificado al cliente: {motivo}"
+
+
+agente = create_agent(
+    model=llm(),
+    tools=[consultar_ticket, cerrar_ticket],
+    system_prompt="Eres un agente de soporte. Consulta antes de actuar. Responde en español.",
+    middleware=[HumanInTheLoopMiddleware(
+        interrupt_on={
+            "consultar_ticket": False,                       # solo lectura: sin aprobación
+            "cerrar_ticket": {                               # destructiva: requiere aprobación
+                "allowed_decisions": ["approve", "edit", "reject"],
+                "description": "Cerrar un ticket notifica al cliente y no se puede deshacer.",
+            },
+        }
+    )],
+    checkpointer=InMemorySaver(),
+)
+
+hilo_a = {"configurable": {"thread_id": "agente-hil-1"}}
+salida = agente.invoke(
+    {"messages": [HumanMessage("Consulta el ticket TCK-0004 y, si está resuelto, ciérralo "
+                               "explicando que se solucionó con la actualización.")]},
+    {**hilo_a, "recursion_limit": 25},
+)
+
+print("¿se ha detenido?:", "__interrupt__" in salida)
+if "__interrupt__" in salida:
+    for peticion in salida["__interrupt__"][0].value:
+        print("\nSOLICITUD DE APROBACIÓN:")
+        for clave, valor in peticion.items():
+            print(f"  {clave}: {valor}")
+
+#%%py
+# El humano aprueba. El formato de resume lo define el middleware: una decisión por petición.
+final = agente.invoke(Command(resume=[{"type": "approve"}]), {**hilo_a, "recursion_limit": 25})
+print(final["messages"][-1].text)
+
+#%%md
+Las tres decisiones que admite `HumanInTheLoopMiddleware`:
+
+| Decisión | Qué hace |
+|---|---|
+| `{"type": "approve"}` | Ejecuta la herramienta tal cual |
+| `{"type": "edit", "args": {...}}` | Ejecuta con los argumentos corregidos |
+| `{"type": "reject", "message": "..."}` | No ejecuta; devuelve tu mensaje al modelo |
+
+`reject` es más útil de lo que parece: el mensaje va al modelo como resultado de la
+herramienta, así que puedes decirle *por qué* no y qué hacer en su lugar. El agente rectifica
+en el mismo turno.
+
+#%%md
+## 7. Puntos de interrupción estáticos
+
+`interrupt_before` e `interrupt_after` en `compile()` pausan **antes o después de un nodo
+entero**, sin tocar su código.
+
+| | `interrupt()` (dinámico) | `interrupt_before` (estático) |
+|---|---|---|
+| Dónde se decide | dentro del nodo, según el estado | al compilar, siempre |
+| Puede pasar datos al humano | **sí**, cualquier valor | no |
+| Requiere tocar el código del nodo | sí | **no** |
+| Uso típico | aprobaciones condicionales, formularios | **depurar**, revisar antes de un paso caro |
+
+#%%py
+depurable = (
+    StateGraph(EstadoReembolso)
+    .add_node("preparar", preparar)
+    .add_node("ejecutar", ejecutar)
+    .add_edge(START, "preparar").add_edge("preparar", "ejecutar").add_edge("ejecutar", END)
+    .compile(checkpointer=InMemorySaver(), interrupt_before=["ejecutar"])
+)
+
+hilo_d = {"configurable": {"thread_id": "depuracion-1"}}
+depurable.invoke({"id_factura": "F-1", "importe": 10.0, "decision": "", "bitacora": []}, hilo_d)
+
+snap = depurable.get_state(hilo_d)
+print("pausado antes de :", snap.next)
+print("estado en la pausa:", snap.values["bitacora"])
+
+# Puedes inspeccionar, editar el estado y luego continuar con invoke(None, ...).
+depurable.update_state(hilo_d, {"importe": 5.0, "bitacora": ["importe corregido a mano"]})
+print("\ntras continuar:", depurable.invoke(None, hilo_d)["bitacora"])
+
+#%%md
+## 8. Cómo se ve esto desde un servidor de verdad
+
+En un notebook todo pasa en el mismo proceso. En producción son **dos peticiones HTTP
+distintas**, posiblemente con días de diferencia y en máquinas distintas. Que funcione
+depende solo del checkpointer compartido.
+
+#%%py
+def iniciar_flujo(grafo, entrada: dict, id_hilo: str) -> dict:
+    """POST /flujos — arranca y devuelve, o el resultado, o la petición al humano."""
+    conf = {"configurable": {"thread_id": id_hilo}}
+    salida = grafo.invoke(entrada, conf)
+
+    if "__interrupt__" in salida:
+        return {"estado": "esperando_humano", "id_hilo": id_hilo,
+                "peticion": salida["__interrupt__"][0].value}
+    return {"estado": "completado", "id_hilo": id_hilo, "resultado": salida}
+
+
+def responder_flujo(grafo, id_hilo: str, respuesta) -> dict:
+    """POST /flujos/{id}/respuesta — reanuda. Puede ser días después, otro proceso, otra máquina."""
+    conf = {"configurable": {"thread_id": id_hilo}}
+    snap = grafo.get_state(conf)
+    if not snap.next:
+        return {"estado": "error", "detalle": "este flujo no está esperando nada"}
+
+    salida = grafo.invoke(Command(resume=respuesta), conf)
+    if "__interrupt__" in salida:
+        return {"estado": "esperando_humano", "id_hilo": id_hilo,
+                "peticion": salida["__interrupt__"][0].value}
+    return {"estado": "completado", "resultado": salida}
+
+
+def listar_pendientes(grafo, ids_hilo: list[str]) -> list[dict]:
+    """GET /pendientes — la bandeja de tareas del equipo."""
+    pendientes = []
+    for h in ids_hilo:
+        snap = grafo.get_state({"configurable": {"thread_id": h}})
+        if snap.next and snap.interrupts:
+            pendientes.append({"id_hilo": h, "esperando": snap.next[0],
+                               "peticion": snap.interrupts[0].value})
+    return pendientes
+
+
+separador("simulación de dos peticiones HTTP separadas en el tiempo")
+p1 = iniciar_flujo(reembolsos, {"id_factura": "F-2026-0777", "importe": 89.0,
+                                "decision": "", "bitacora": []}, "web-001")
+print("respuesta al POST inicial:", p1["estado"], "|", p1["peticion"]["pregunta"])
+
+print("\n--- pasan tres días; otro proceso consulta la bandeja ---")
+print("pendientes:", [(x["id_hilo"], x["esperando"]) for x in listar_pendientes(reembolsos, ["web-001", "reembolso-001"])])
+
+print("\n--- alguien decide ---")
+p2 = responder_flujo(reembolsos, "web-001", {"decision": "rechazar", "quien": "jefe.equipo"})
+print("estado:", p2["estado"])
+for linea in p2["resultado"]["bitacora"]:
+    print("  -", linea)
+
+#%%md
+Ese `listar_pendientes` es la pieza que convierte esto en un producto: la **bandeja de
+tareas** del equipo. En LangGraph Platform viene resuelta, pero como ves, hacértela con
+`get_state` es media tarde de trabajo.
+
+#%%md
+## 9. Ejercicios
+
+> **EJERCICIO 10.1 — Aprobación escalonada por importe**
+>
+> Construye un flujo de reembolsos donde el nivel de aprobación dependa del importe:
+>
+> - menos de 50 € -> automático, sin preguntar;
+> - de 50 a 500 € -> aprueba un agente de soporte;
+> - más de 500 € -> aprueba un agente **y luego** un responsable (dos interrupciones, en
+>   nodos distintos).
+>
+> Registra quién aprobó cada nivel. Comprueba los tres caminos.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 10.1</b></summary>
+
+Dos decisiones de diseño que merece la pena señalar:
+
+<ol>
+<li><b>Cada nivel de aprobación es su propio nodo</b>, no dos <code>interrupt()</code> dentro
+de uno. Así el emparejamiento por posición del que avisábamos en la sección 5 no puede
+cruzarse, y además el diagrama muestra la escalera de aprobación, que es justo lo que querrá
+ver quien audite el proceso.</li>
+<li><b>El rechazo cortocircuita.</b> Si el agente rechaza, no se molesta al responsable. Es
+obvio al leerlo y se olvida al escribirlo.</li>
+</ol>
+</details>
+
+#%%py
+class EstadoEscalonado(TypedDict):
+    id_factura: str
+    importe: float
+    aprobaciones: Annotated[list[str], operator.add]
+    resultado: str
+
+
+UMBRAL_AGENTE, UMBRAL_RESPONSABLE = 50.0, 500.0
+
+
+def clasificar_importe(estado: EstadoEscalonado) -> Literal["ejecutar", "aprobar_agente"]:
+    if estado["importe"] < UMBRAL_AGENTE:
+        return "ejecutar"
+    return "aprobar_agente"
+
+
+def aprobar_agente(estado: EstadoEscalonado) -> dict:
+    r = interrupt({"nivel": "agente de soporte", "importe": estado["importe"],
+                   "factura": estado["id_factura"]})
+    return {"aprobaciones": [f"agente:{r['decision']} ({r['quien']})"]}
+
+
+def tras_agente(estado: EstadoEscalonado) -> Literal["aprobar_responsable", "ejecutar", "rechazar"]:
+    if not estado["aprobaciones"][-1].startswith("agente:aprobar"):
+        return "rechazar"                              # rechazo: no molestamos al responsable
+    return "aprobar_responsable" if estado["importe"] > UMBRAL_RESPONSABLE else "ejecutar"
+
+
+def aprobar_responsable(estado: EstadoEscalonado) -> dict:
+    r = interrupt({"nivel": "responsable de equipo", "importe": estado["importe"],
+                   "factura": estado["id_factura"],
+                   "aprobado_previamente_por": estado["aprobaciones"][-1]})
+    return {"aprobaciones": [f"responsable:{r['decision']} ({r['quien']})"]}
+
+
+def tras_responsable(estado: EstadoEscalonado) -> Literal["ejecutar", "rechazar"]:
+    return "ejecutar" if estado["aprobaciones"][-1].startswith("responsable:aprobar") else "rechazar"
+
+
+escalonado = (
+    StateGraph(EstadoEscalonado)
+    .add_node("recibir", lambda e: {"aprobaciones": [f"solicitud de {e['importe']} €"]})
+    .add_node("aprobar_agente", aprobar_agente)
+    .add_node("aprobar_responsable", aprobar_responsable)
+    .add_node("ejecutar", lambda e: {"resultado": f"REEMBOLSADOS {e['importe']} €"})
+    .add_node("rechazar", lambda e: {"resultado": "rechazado"})
+    .add_edge(START, "recibir")
+    .add_conditional_edges("recibir", clasificar_importe,
+                           {"ejecutar": "ejecutar", "aprobar_agente": "aprobar_agente"})
+    .add_conditional_edges("aprobar_agente", tras_agente,
+                           {"aprobar_responsable": "aprobar_responsable",
+                            "ejecutar": "ejecutar", "rechazar": "rechazar"})
+    .add_conditional_edges("aprobar_responsable", tras_responsable,
+                           {"ejecutar": "ejecutar", "rechazar": "rechazar"})
+    .add_edge("ejecutar", END).add_edge("rechazar", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+mostrar_grafo(escalonado)
+
+#%%py
+def probar_reembolso(importe: float, decisiones: list[dict], etiqueta: str) -> None:
+    conf = {"configurable": {"thread_id": f"esc-{etiqueta}"}}
+    salida = escalonado.invoke({"id_factura": f"F-{etiqueta}", "importe": importe,
+                                "aprobaciones": [], "resultado": ""}, conf)
+    ronda = 0
+    while "__interrupt__" in salida:
+        peticion = salida["__interrupt__"][0].value
+        print(f"    pausa: pide aprobación de {peticion['nivel']}")
+        salida = escalonado.invoke(Command(resume=decisiones[ronda]), conf)
+        ronda += 1
+    print(f"  {etiqueta} ({importe} €): {salida['resultado']}")
+    for a in salida["aprobaciones"]:
+        print(f"      {a}")
+    print()
+
+
+probar_reembolso(29.90, [], "pequeno")
+probar_reembolso(240.00, [{"decision": "aprobar", "quien": "ana"}], "mediano")
+probar_reembolso(1500.00, [{"decision": "aprobar", "quien": "ana"},
+                           {"decision": "aprobar", "quien": "director"}], "grande")
+probar_reembolso(1500.00, [{"decision": "rechazar", "quien": "ana"}], "rechazado")
+
+#%%md
+> **EJERCICIO 10.2 — Caducidad de la aprobación**
+>
+> Una aprobación pendiente no puede quedarse ahí para siempre. Añade al flujo la marca de
+> tiempo del momento en que se pidió, y un nodo que, al reanudar, **rechace automáticamente**
+> si han pasado más de N horas desde la petición.
+>
+> Simula el paso del tiempo escribiendo la marca en el pasado con `update_state`.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 10.2</b></summary>
+
+La idea es que <b>la caducidad se comprueba al reanudar, no mientras se espera</b>. Un grafo
+pausado no consume nada ni ejecuta nada: no hay ningún reloj corriendo dentro. La comprobación
+tiene que hacerla quien reanuda.
+
+Si necesitas que la caducidad ocurra <i>por sí sola</i> —notificar al cliente, liberar un
+recurso— hace falta un disparador externo: un trabajo programado que recorra los hilos
+pendientes y los reanude con un rechazo. LangGraph Platform lo ofrece con crones; sin él, es
+un <code>cron</code> tuyo que llama a <code>listar_pendientes</code> y decide.
+</details>
+
+#%%py
+import datetime as dt
+
+HORAS_VALIDEZ = 24
+
+
+class EstadoCaducable(TypedDict):
+    importe: float
+    pedida_en: str
+    decision: str
+    resultado: str
+
+
+def pedir_con_marca(estado: EstadoCaducable) -> dict:
+    """El interrupt va PRIMERO; la marca de tiempo se escribe en el estado al reanudar."""
+    respuesta = interrupt({"importe": estado["importe"],
+                           "caduca_en_horas": HORAS_VALIDEZ})
+    return {"decision": respuesta["decision"]}
+
+
+def marcar_peticion(estado: EstadoCaducable) -> dict:
+    return {"pedida_en": dt.datetime.now(dt.timezone.utc).isoformat()}
+
+
+def resolver(estado: EstadoCaducable) -> dict:
+    pedida = dt.datetime.fromisoformat(estado["pedida_en"])
+    horas = (dt.datetime.now(dt.timezone.utc) - pedida).total_seconds() / 3600
+
+    if horas > HORAS_VALIDEZ:
+        return {"resultado": f"CADUCADA: la aprobación se pidió hace {horas:.0f} h "
+                             f"(máximo {HORAS_VALIDEZ} h). Rechazada automáticamente."}
+    if estado["decision"] != "aprobar":
+        return {"resultado": "rechazada por la persona"}
+    return {"resultado": f"aprobada y ejecutada ({horas:.1f} h de espera)"}
+
+
+caducable = (
+    StateGraph(EstadoCaducable)
+    .add_sequence([("marcar_peticion", marcar_peticion),
+                   ("pedir_con_marca", pedir_con_marca),
+                   ("resolver", resolver)])
+    .add_edge(START, "marcar_peticion")
+    .compile(checkpointer=InMemorySaver())
+)
+
+separador("caso A: se responde enseguida")
+conf_a = {"configurable": {"thread_id": "cad-a"}}
+caducable.invoke({"importe": 300.0, "pedida_en": "", "decision": "", "resultado": ""}, conf_a)
+print(" ", caducable.invoke(Command(resume={"decision": "aprobar"}), conf_a)["resultado"])
+
+separador("caso B: se responde tres días tarde")
+conf_b = {"configurable": {"thread_id": "cad-b"}}
+caducable.invoke({"importe": 300.0, "pedida_en": "", "decision": "", "resultado": ""}, conf_b)
+
+# Simulamos el paso del tiempo reescribiendo la marca en el pasado.
+hace_tres_dias = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=3)).isoformat()
+caducable.update_state(conf_b, {"pedida_en": hace_tres_dias})
+
+print(" ", caducable.invoke(Command(resume={"decision": "aprobar"}), conf_b)["resultado"])
+
+#%%md
+## 10. Resumen
+
+- `interrupt(valor)` pausa el grafo dentro de un nodo; `Command(resume=respuesta)` lo
+  reanuda. **Requiere checkpointer.**
+- Lo que devuelve `invoke()` trae `__interrupt__` con lo que hay que enseñarle a la persona;
+  `get_state().next` te dice que hay algo pendiente.
+- **Al reanudar, el nodo se reejecuta desde el principio.** Efectos laterales antes del
+  `interrupt()` se ejecutan dos veces. Pon el `interrupt()` primero, o los efectos en el
+  nodo siguiente.
+- Cuatro patrones: aprobar, editar, elegir y preguntar. Cada uno es una forma distinta de
+  lo mismo.
+- Varios `interrupt()` en un nodo se emparejan **por posición**: nunca los pongas dentro de
+  condicionales variables.
+- `HumanInTheLoopMiddleware` da aprobación de herramientas para `create_agent`, con
+  `approve` / `edit` / `reject`.
+- Los puntos estáticos (`interrupt_before`) son para depurar sin tocar el código.
+- Entre pausa y reanudación **no corre ningún reloj**: la caducidad se comprueba al reanudar
+  o la fuerza un proceso externo.
+
+**Siguiente:** [`P3_proyecto_asistente_persistente.ipynb`](P3_proyecto_asistente_persistente.ipynb)
+— un asistente de soporte con memoria, aprobaciones y bandeja de tareas.
