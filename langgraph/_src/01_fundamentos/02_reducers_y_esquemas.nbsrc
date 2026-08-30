@@ -1,0 +1,673 @@
+#%%md
+# 02 · Reducers, concurrencia y esquemas
+
+**Módulo 1 · Fundamentos** — *tiempo estimado: 1 h 15 min*
+
+Los *reducers* son, con diferencia, el concepto de LangGraph que más gente usa sin
+entender. Y es una lástima, porque un reducer no es un detalle de implementación: es
+**la política de concurrencia de tu sistema**, escrita en una línea.
+
+Al terminar sabrás:
+
+1. Qué es exactamente un reducer y por qué existe `InvalidUpdateError`.
+2. Escribir reducers propios (deduplicación, top-k, fusión de diccionarios, ventana).
+3. Dominar `add_messages`, el reducer del que depende todo agente conversacional.
+4. Separar los esquemas de **entrada**, **salida** y **privado** del estado interno.
+5. Los **canales** que hay debajo, incluido `EphemeralValue` — que es truco de profesional.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init()
+
+#%%md
+## 1. Qué es un reducer
+
+Cuando un nodo devuelve `{"clave": valor}`, LangGraph **no** hace `estado["clave"] = valor`.
+Llama al reducer de esa clave:
+
+```python
+nuevo_valor = reducer(valor_actual_en_el_estado, valor_devuelto_por_el_nodo)
+#                     ^^^ izquierda                ^^^ derecha
+```
+
+- **Izquierda**: lo que ya había acumulado en el estado.
+- **Derecha**: la actualización que acaba de llegar del nodo.
+
+El reducer **por defecto** ignora la izquierda y se queda con la derecha:
+
+```python
+def reducer_por_defecto(izquierda, derecha):
+    return derecha        # el último que escribe, gana
+```
+
+Por eso en el notebook 01 la clave `trazas` acababa con un único elemento aunque tres nodos
+escribieran en ella. No se perdía nada por error: es el comportamiento declarado.
+
+Un reducer se asigna con `Annotated[tipo, funcion_reducer]`.
+
+#%%py
+import operator
+from typing import Annotated, TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoComparativa(TypedDict):
+    sobrescribe: str                              # reducer por defecto
+    acumula: Annotated[list[str], operator.add]   # concatena listas
+    suma: Annotated[int, operator.add]            # suma enteros
+
+
+def paso_1(estado: EstadoComparativa) -> dict:
+    return {"sobrescribe": "del paso 1", "acumula": ["paso 1"], "suma": 10}
+
+
+def paso_2(estado: EstadoComparativa) -> dict:
+    return {"sobrescribe": "del paso 2", "acumula": ["paso 2"], "suma": 5}
+
+
+g = StateGraph(EstadoComparativa).add_sequence([paso_1, paso_2]).add_edge(START, "paso_1").compile()
+resultado = g.invoke({"sobrescribe": "inicial", "acumula": ["inicial"], "suma": 100})
+
+for clave, valor in resultado.items():
+    print(f"  {clave:<14} = {valor}")
+
+#%%md
+## 2. La razón de ser de los reducers: la concurrencia
+
+Aquí es donde deja de ser una curiosidad y pasa a ser imprescindible.
+
+Recuerda el modelo Pregel: **los nodos del mismo super-paso corren a la vez**. Si dos nodos
+concurrentes escriben en la misma clave, ¿cuál gana?
+
+LangGraph no elige por ti. Se niega, y lanza `InvalidUpdateError`.
+
+#%%py
+class EstadoConflicto(TypedDict):
+    ganador: str
+
+
+def investigador_a(estado: EstadoConflicto) -> dict:
+    return {"ganador": "conclusión de A"}
+
+
+def investigador_b(estado: EstadoConflicto) -> dict:
+    return {"ganador": "conclusión de B"}
+
+
+# Los dos salen de START, así que corren en el MISMO super-paso.
+conflictivo = (
+    StateGraph(EstadoConflicto)
+    .add_node("investigador_a", investigador_a)
+    .add_node("investigador_b", investigador_b)
+    .add_edge(START, "investigador_a")
+    .add_edge(START, "investigador_b")
+    .compile()
+)
+
+try:
+    conflictivo.invoke({"ganador": ""})
+except Exception as exc:
+    print(f"{type(exc).__name__}:\n  {exc}")
+
+#%%md
+**Esto es una buena noticia, no un obstáculo.** La alternativa —quedarse con uno al azar—
+produciría un sistema que da resultados distintos en cada ejecución sin que nadie se entere.
+LangGraph te obliga a declarar tu política de concurrencia.
+
+Y declararla es una línea:
+
+#%%py
+class EstadoResuelto(TypedDict):
+    hallazgos: Annotated[list[str], operator.add]   # la política: nos quedamos con todo
+
+
+def inv_a(estado: EstadoResuelto) -> dict:
+    return {"hallazgos": ["A: el 40 % de los tickets son bugs"]}
+
+
+def inv_b(estado: EstadoResuelto) -> dict:
+    return {"hallazgos": ["B: los clientes enterprise escalan el doble"]}
+
+
+def sintetizar(estado: EstadoResuelto) -> dict:
+    print(f"  el sintetizador ve {len(estado['hallazgos'])} hallazgos, ninguno perdido")
+    return {}
+
+
+resuelto = (
+    StateGraph(EstadoResuelto)
+    .add_node("inv_a", inv_a)
+    .add_node("inv_b", inv_b)
+    .add_node("sintetizar", sintetizar)
+    .add_edge(START, "inv_a")
+    .add_edge(START, "inv_b")
+    .add_edge("inv_a", "sintetizar")     # fan-in: 'sintetizar' espera a los dos
+    .add_edge("inv_b", "sintetizar")
+    .compile()
+)
+
+print(resuelto.invoke({"hallazgos": []})["hallazgos"])
+
+#%%md
+Ese patrón —abanico de salida, trabajo en paralelo, abanico de entrada— es el esqueleto de
+casi todo sistema multiagente serio. Y lo único que hace falta para que funcione es el
+reducer correcto en la clave compartida. Volveremos a él en el notebook 03 y lo llevaremos
+al límite en el módulo 4.
+
+#%%md
+## 3. Reducers propios
+
+`operator.add` cubre el 70 % de los casos. El otro 30 % lo escribes tú. Un reducer es
+cualquier función binaria pura; la única regla es que sea **asociativa en la práctica**
+(el orden de llegada de las actualizaciones concurrentes no está garantizado).
+
+Cuatro que vas a necesitar tarde o temprano:
+
+#%%py
+from typing import Any
+
+
+def unir_sin_duplicados(izquierda: list[str], derecha: list[str]) -> list[str]:
+    """Concatena conservando el orden de primera aparición y sin repetir.
+
+    Imprescindible cuando varios recuperadores devuelven las mismas fuentes: sin esto,
+    el contexto del modelo se llena de documentos duplicados y pagas los tokens dos veces.
+    """
+    vistos = set(izquierda)
+    return izquierda + [x for x in derecha if x not in vistos and not vistos.add(x)]
+
+
+def fusionar_dict(izquierda: dict, derecha: dict) -> dict:
+    """Fusiona diccionarios sin mutar el de la izquierda. La derecha manda en los choques."""
+    return {**izquierda, **derecha}
+
+
+def ventana(n: int):
+    """Fábrica de reducers: acumula pero se queda solo con los N últimos elementos.
+
+    Una cota dura sobre el tamaño del estado. Sin algo así, un agente que corre 500 pasos
+    termina con un checkpoint de megabytes y una latencia que crece sola.
+    """
+    def reducer(izquierda: list, derecha: list) -> list:
+        return (izquierda + derecha)[-n:]
+    return reducer
+
+
+def mejores(k: int, clave: str = "puntuacion"):
+    """Mantiene solo los k elementos de mayor puntuación."""
+    def reducer(izquierda: list[dict], derecha: list[dict]) -> list[dict]:
+        return sorted(izquierda + derecha, key=lambda d: d[clave], reverse=True)[:k]
+    return reducer
+
+
+class EstadoRAG(TypedDict):
+    fuentes: Annotated[list[str], unir_sin_duplicados]
+    metricas: Annotated[dict[str, Any], fusionar_dict]
+    historial: Annotated[list[str], ventana(3)]
+    candidatos: Annotated[list[dict], mejores(2)]
+
+
+def buscador_vectorial(estado: EstadoRAG) -> dict:
+    return {
+        "fuentes": ["doc_a.md", "doc_b.md"],
+        "metricas": {"vectorial_ms": 42},
+        "historial": ["v1", "v2"],
+        "candidatos": [{"id": "x", "puntuacion": 0.9}, {"id": "y", "puntuacion": 0.4}],
+    }
+
+
+def buscador_lexico(estado: EstadoRAG) -> dict:
+    return {
+        "fuentes": ["doc_b.md", "doc_c.md"],          # doc_b se repite a propósito
+        "metricas": {"lexico_ms": 7},
+        "historial": ["l1", "l2"],
+        "candidatos": [{"id": "z", "puntuacion": 0.7}],
+    }
+
+
+rag = (
+    StateGraph(EstadoRAG)
+    .add_node("buscador_vectorial", buscador_vectorial)
+    .add_node("buscador_lexico", buscador_lexico)
+    .add_edge(START, "buscador_vectorial")
+    .add_edge(START, "buscador_lexico")
+    .compile()
+)
+
+salida = rag.invoke({"fuentes": [], "metricas": {}, "historial": ["antiguo"], "candidatos": []})
+for clave, valor in salida.items():
+    print(f"  {clave:<11} = {valor}")
+
+#%%md
+Léelo con calma, porque en esa única llamada pasaron cuatro cosas distintas y todas las
+decidiste tú al declarar el estado:
+
+- `fuentes`: `doc_b.md` aparece **una sola vez** aunque los dos buscadores la devolvieron.
+- `metricas`: los dos diccionarios se fusionaron en vez de pisarse.
+- `historial`: se quedó en 3 elementos, descartando el más antiguo.
+- `candidatos`: solo sobrevivieron los 2 de mayor puntuación, ordenados.
+
+**Esta es la idea de fondo del notebook**: gran parte de la lógica que la gente escribe a
+mano dentro de los nodos —deduplicar, ordenar, truncar, fusionar— pertenece en realidad al
+esquema del estado. Cuando vive en el reducer, se aplica *siempre*, incluso en las rutas de
+ejecución que se te olvidaron.
+
+> **Ejecútalo dos veces y compara el orden.** Los dos buscadores están en el mismo
+> super-paso, y LangGraph **no garantiza** en qué orden se aplican sus escrituras. Por eso
+> un reducer debe ser conmutativo siempre que pueda recibir escrituras concurrentes: si el
+> resultado depende de quién llegó primero, tienes un sistema no determinista y no lo sabes.
+> `unir_sin_duplicados` y `ventana` conservan *qué* hay pero no garantizan el orden entre
+> ramas paralelas; `fusionar_dict` y `mejores` sí son conmutativos del todo. Si necesitas un
+> orden estable, ordena explícitamente por una clave del propio dato (una marca de tiempo,
+> una puntuación), nunca por el orden de llegada.
+
+#%%md
+### 3.1 Saltarse el reducer con `Overwrite`
+
+A veces necesitas reiniciar una clave acumulada: limpiar el contexto entre reintentos,
+descartar los candidatos de una ronda fallida. Envolver el valor en `Overwrite` sustituye
+en vez de reducir, solo para esa escritura.
+
+#%%py
+from langgraph.types import Overwrite
+
+
+class EstadoReintento(TypedDict):
+    candidatos: Annotated[list[str], operator.add]
+
+
+def acumular(estado: EstadoReintento) -> dict:
+    return {"candidatos": ["c3", "c4"]}
+
+
+def descartar_ronda(estado: EstadoReintento) -> dict:
+    # Sin Overwrite esto AÑADIRÍA la lista vacía y no limpiaría nada.
+    return {"candidatos": Overwrite([])}
+
+
+g = StateGraph(EstadoReintento).add_sequence([acumular, descartar_ronda]).add_edge(START, "acumular").compile()
+print("con Overwrite   :", g.invoke({"candidatos": ["c1", "c2"]}))
+
+g2 = StateGraph(EstadoReintento).add_sequence([acumular]).add_edge(START, "acumular").compile()
+print("sin Overwrite   :", g2.invoke({"candidatos": ["c1", "c2"]}))
+
+#%%md
+## 4. `add_messages`: el reducer que hay que conocer de memoria
+
+Todo agente conversacional tiene una lista de mensajes en el estado. `add_messages` es su
+reducer, y hace **cuatro** cosas, no una:
+
+1. **Añade** los mensajes nuevos al final.
+2. **Actualiza en su sitio** un mensaje si llega otro con el mismo `id`.
+3. **Borra** un mensaje si llega un `RemoveMessage` con ese `id`.
+4. **Convierte** automáticamente lo que le pases (una cadena suelta, un dict con `role`)
+   al objeto `Message` correspondiente, y asigna `id` a los que no lo traen.
+
+El punto 2 es el que casi nadie conoce y el que resuelve problemas reales: permite
+**editar el historial** —redactar un dato personal, corregir un resultado de herramienta,
+recortar un mensaje larguísimo— sin reconstruir la lista entera.
+
+#%%py
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+from langgraph.graph import add_messages
+
+
+class EstadoChat(TypedDict):
+    messages: Annotated[list, add_messages]
+
+
+def responder(estado: EstadoChat) -> dict:
+    return {"messages": [AIMessage("Tu saldo es de 1234-5678-9012-3456 euros.", id="ai-1")]}
+
+
+def redactar_datos(estado: EstadoChat) -> dict:
+    # Mismo id -> add_messages SUSTITUYE el mensaje en su posición original.
+    original = estado["messages"][-1]
+    return {"messages": [AIMessage(original.text.replace("1234-5678-9012-3456", "[REDACTADO]"), id="ai-1")]}
+
+
+chat = (
+    StateGraph(EstadoChat)
+    .add_sequence([responder, redactar_datos])
+    .add_edge(START, "responder")
+    .compile()
+)
+
+final = chat.invoke({"messages": [HumanMessage("¿Cuál es mi saldo?", id="h-1")]})
+for m in final["messages"]:
+    print(f"  [{m.type:<5} id={m.id}] {m.text}")
+
+#%%md
+### 4.1 Borrar mensajes
+
+Dos herramientas, para dos necesidades distintas:
+
+- `RemoveMessage(id="...")` — quita **un** mensaje concreto.
+- `RemoveMessage(id=REMOVE_ALL_MESSAGES)` — vacía el historial entero. Es la base de la
+  compactación por resumen: borras todo y dejas un único mensaje con el resumen. Lo
+  usaremos de verdad en el módulo 3.
+
+#%%py
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
+
+
+def podar_antiguos(estado: EstadoChat) -> dict:
+    """Deja solo los 2 últimos mensajes, borrando los anteriores por id."""
+    a_borrar = estado["messages"][:-2]
+    return {"messages": [RemoveMessage(id=m.id) for m in a_borrar]}
+
+
+def compactar(estado: EstadoChat) -> dict:
+    """Sustituye todo el historial por un único mensaje de resumen."""
+    resumen = f"[resumen de {len(estado['messages'])} mensajes previos sobre facturación]"
+    return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), AIMessage(resumen)]}
+
+
+historial = [
+    HumanMessage("hola", id="1"), AIMessage("¿en qué te ayudo?", id="2"),
+    HumanMessage("tengo una duda de facturación", id="3"), AIMessage("cuéntame", id="4"),
+    HumanMessage("me han cobrado dos veces", id="5"),
+]
+
+g_podar = StateGraph(EstadoChat).add_node("podar", podar_antiguos).add_edge(START, "podar").compile()
+g_compactar = StateGraph(EstadoChat).add_node("compactar", compactar).add_edge(START, "compactar").compile()
+
+print("podar     ->", [m.text for m in g_podar.invoke({"messages": historial})["messages"]])
+print("compactar ->", [m.text for m in g_compactar.invoke({"messages": historial})["messages"]])
+
+#%%md
+### 4.2 `MessagesState`
+
+Como el 90 % de los estados conversacionales empiezan igual, LangGraph trae el atajo:
+
+```python
+class MessagesState(TypedDict):
+    messages: Annotated[list[AnyMessage], add_messages]
+```
+
+Hereda de él y añade tus claves. Es exactamente equivalente a escribirlo a mano.
+
+#%%py
+from langgraph.graph import MessagesState
+
+
+class EstadoAgente(MessagesState):
+    """MessagesState ya trae 'messages'; aquí solo añadimos lo nuestro."""
+    intentos: Annotated[int, operator.add]
+    fuentes: Annotated[list[str], unir_sin_duplicados]
+
+
+print("claves del estado:", list(EstadoAgente.__annotations__))
+
+#%%md
+## 5. Esquemas de entrada, salida y estado privado
+
+Por defecto, el esquema del estado hace de las tres cosas: lo que aceptas, lo que devuelves
+y lo que circula por dentro. Separarlos importa en cuanto el grafo es una **API** que
+consume alguien más:
+
+- **Entrada**: qué acepta el grafo. Todo lo demás lo ignora.
+- **Salida**: qué devuelve `invoke()`. Sin claves internas.
+- **Privado**: canales que solo usan algunos nodos para hablar entre ellos.
+
+#%%py
+class Entrada(TypedDict):
+    pregunta: str
+
+
+class Salida(TypedDict):
+    respuesta: str
+    confianza: float
+
+
+class Interno(TypedDict):
+    """Canal privado: ni entra ni sale, solo comunica dos nodos."""
+    documentos_crudos: list[str]
+
+
+class EstadoCompleto(TypedDict):
+    pregunta: str
+    documentos_crudos: list[str]
+    respuesta: str
+    confianza: float
+
+
+def recuperar(estado: Entrada) -> Interno:
+    return {"documentos_crudos": [f"doc sobre {estado['pregunta']}", "doc irrelevante"]}
+
+
+def generar(estado: EstadoCompleto) -> Salida:
+    return {"respuesta": f"Según {estado['documentos_crudos'][0]}: ...", "confianza": 0.82}
+
+
+api = (
+    StateGraph(EstadoCompleto, input_schema=Entrada, output_schema=Salida)
+    .add_sequence([("recuperar", recuperar), ("generar", generar)])
+    .add_edge(START, "recuperar")
+    .compile()
+)
+
+print("entrada :", {"pregunta": "¿qué es un reducer?"})
+print("salida  :", api.invoke({"pregunta": "¿qué es un reducer?"}))
+print("\nFíjate: 'documentos_crudos' existió durante la ejecución pero no sale en el resultado.")
+
+#%%md
+> **Trampa importante.** Los esquemas de entrada y salida filtran `invoke()`, **no**
+> `stream()`. Con `stream_mode="values"` se emiten *todos* los canales, incluidos los
+> privados. Si estás enviando eso a un frontend, estás filtrando tus datos internos.
+>
+> La solución es `output_keys=`.
+
+#%%py
+separador("stream sin output_keys: se ve el canal privado")
+for evento in api.stream({"pregunta": "¿qué es un reducer?"}, stream_mode="values"):
+    print(" ", list(evento))
+
+separador("stream con output_keys: solo lo que quieres exponer")
+for evento in api.stream({"pregunta": "¿qué es un reducer?"}, stream_mode="values",
+                         output_keys=["respuesta", "confianza"]):
+    print(" ", evento)
+
+#%%md
+Una nota de diseño: los nodos pueden escribir en **cualquier** canal del grafo, no solo en
+los de su esquema de entrada. El estado del grafo es la unión de todos los esquemas que
+aparecen en las anotaciones de sus nodos. Por eso `recuperar`, que declara `Entrada` como
+entrada, puede escribir en `documentos_crudos`.
+
+#%%md
+## 6. Debajo del capó: los canales
+
+Un reducer no es lo primitivo; el primitivo es el **canal**. Cada clave del estado es un
+canal, y `Annotated[T, reducer]` es azúcar para crear un canal de tipo
+`BinaryOperatorAggregate` con ese operador. Sin anotación, el canal es un `LastValue`.
+
+| Canal | Comportamiento | Cuándo lo quieres |
+|---|---|---|
+| `LastValue` | Guarda el último valor. **El de por defecto** | Casi siempre |
+| `BinaryOperatorAggregate` | Aplica una función binaria. Es lo que crea `Annotated` | Acumular |
+| `EphemeralValue` | Visible durante la ejecución, **no se guarda en el checkpoint** | Datos sensibles o voluminosos |
+| `Topic` | Cola de mensajes entre nodos | Patrones tipo pub/sub |
+| `LastValueAfterFinish` | Solo se hace visible cuando el paso termina del todo | Sincronización fina |
+
+De todos ellos, el que de verdad te va a cambiar la vida es `EphemeralValue`.
+
+#%%md
+### 6.1 `EphemeralValue`: lo que no debe quedar escrito
+
+Todo lo que metes en el estado se persiste en cada checkpoint. Eso incluye el PDF de 3 MB
+que subió el usuario, el token de sesión que pasaste al grafo y el volcado de la base de
+datos que recuperó un nodo. En un checkpointer de Postgres, eso es una fila enorme por cada
+super-paso, y en RGPD es un problema.
+
+`EphemeralValue` marca un canal como **de un solo uso**: los nodos lo ven durante la
+ejecución, pero no llega al checkpoint ni sobrevive a la siguiente invocación.
+
+#%%py
+from langgraph.channels import EphemeralValue
+from langgraph.checkpoint.memory import InMemorySaver
+
+
+class EstadoConSecreto(TypedDict):
+    consultas: Annotated[int, operator.add]
+    token_sesion: Annotated[str, EphemeralValue]   # nunca se persiste
+
+
+def usar_token(estado: EstadoConSecreto) -> dict:
+    print(f"  el nodo ve token_sesion = {estado.get('token_sesion')!r}")
+    return {"consultas": 1}
+
+
+g = StateGraph(EstadoConSecreto).add_node("usar_token", usar_token).add_edge(START, "usar_token")
+g = g.compile(checkpointer=InMemorySaver())
+conf = {"configurable": {"thread_id": "sesion-1"}}
+
+print("-- primera llamada, con token --")
+g.invoke({"consultas": 0, "token_sesion": "tok_secreto_abc123"}, conf)
+print("  estado persistido:", g.get_state(conf).values, "  <- el token NO está aquí")
+
+print("\n-- segunda llamada en el mismo hilo, sin pasar token --")
+g.invoke({"consultas": 0}, conf)
+print("  estado persistido:", g.get_state(conf).values)
+
+#%%md
+El contador acumula entre llamadas porque se persiste; el token desaparece porque es
+efímero. Este es el patrón correcto para credenciales de la petición, ficheros grandes y
+cualquier dato que no quieras que quede escrito en una base de datos para siempre.
+
+#%%md
+## 7. Ejercicios
+
+> **EJERCICIO 2.1 — Un reducer con política de negocio**
+>
+> Escribe un reducer `fusionar_prioridad(izq, der)` para una clave `prioridad: str` que
+> **solo permita subir**, nunca bajar, en la escala `baja < media < alta < critica`.
+>
+> Así, si tres clasificadores concurrentes proponen `media`, `alta` y `baja`, el estado
+> acaba en `alta`. Es la política correcta para el triaje de un ticket: ante la duda,
+> escalar.
+>
+> Pruébalo con tres nodos en paralelo.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 2.1</b></summary>
+
+Lo importante es que el reducer sea <b>conmutativo</b>: el orden en que lleguen las tres
+escrituras concurrentes no está garantizado, y <code>max</code> sobre un orden total lo
+garantiza. Un reducer del tipo "si la derecha es alta, gánale a la izquierda" que
+dependiera del orden produciría resultados distintos entre ejecuciones.
+</details>
+
+#%%py
+ESCALA = ["baja", "media", "alta", "critica"]
+
+
+def fusionar_prioridad(izquierda: str, derecha: str) -> str:
+    """Se queda con la prioridad más alta de las dos. Conmutativo y asociativo."""
+    return max([izquierda or "baja", derecha or "baja"], key=ESCALA.index)
+
+
+class EstadoTriaje(TypedDict):
+    prioridad: Annotated[str, fusionar_prioridad]
+    razones: Annotated[list[str], operator.add]
+
+
+def por_palabras_clave(estado: EstadoTriaje) -> dict:
+    return {"prioridad": "media", "razones": ["palabras clave: cobro duplicado"]}
+
+
+def por_plan(estado: EstadoTriaje) -> dict:
+    return {"prioridad": "alta", "razones": ["el cliente es enterprise"]}
+
+
+def por_sentimiento(estado: EstadoTriaje) -> dict:
+    return {"prioridad": "baja", "razones": ["tono neutro"]}
+
+
+triaje = StateGraph(EstadoTriaje)
+for nombre, fn in [("por_palabras_clave", por_palabras_clave), ("por_plan", por_plan),
+                   ("por_sentimiento", por_sentimiento)]:
+    triaje.add_node(nombre, fn)
+    triaje.add_edge(START, nombre)
+
+resultado = triaje.compile().invoke({"prioridad": "baja", "razones": []})
+print(f"prioridad final: {resultado['prioridad']}")
+for r in resultado["razones"]:
+    print(f"  - {r}")
+
+#%%md
+> **EJERCICIO 2.2 — Anonimizar sin reescribir el historial**
+>
+> Dado un estado con `messages: Annotated[list, add_messages]`, escribe un nodo
+> `anonimizar` que recorra el historial y sustituya cualquier dirección de correo por
+> `[CORREO]`, **sin borrar ni reordenar mensajes** y modificando únicamente los que de
+> verdad contienen un correo.
+>
+> Pista: la clave es reutilizar el `id` de cada mensaje y devolver solo los modificados.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 2.2</b></summary>
+
+Este es el punto 2 de <code>add_messages</code> en acción. Devolver solo los mensajes
+modificados, con su <code>id</code> original, hace que el reducer los sustituya en su sitio.
+Reconstruir la lista entera funcionaría también, pero mueve mucho más dato por el
+checkpoint y pierde cualquier metadato que no hayas copiado a mano.
+</details>
+
+#%%py
+import re
+
+PATRON_CORREO = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+
+
+def anonimizar(estado: EstadoChat) -> dict:
+    modificados = []
+    for m in estado["messages"]:
+        limpio = PATRON_CORREO.sub("[CORREO]", m.text)
+        if limpio != m.text:
+            # Mismo tipo y mismo id -> add_messages lo sustituye en su posición.
+            modificados.append(type(m)(limpio, id=m.id))
+    return {"messages": modificados}
+
+
+g_anon = StateGraph(EstadoChat).add_node("anonimizar", anonimizar).add_edge(START, "anonimizar").compile()
+
+entrada = {"messages": [
+    HumanMessage("Mi correo es ana@acme.example y no puedo entrar", id="1"),
+    AIMessage("Entendido, reviso la cuenta", id="2"),
+    HumanMessage("El de mi compañero es luis@acme.example", id="3"),
+]}
+
+for m in g_anon.invoke(entrada)["messages"]:
+    print(f"  [id={m.id}] {m.text}")
+
+#%%md
+## 8. Resumen
+
+- Un reducer es `f(valor_acumulado, actualización) -> nuevo_valor`. El de por defecto se
+  queda con la actualización.
+- `InvalidUpdateError` en escrituras concurrentes es **una protección**: te obliga a
+  declarar tu política de concurrencia en vez de dejarla al azar.
+- Lógica como deduplicar, truncar, fusionar o priorizar **pertenece al reducer**, no a los
+  nodos: así se aplica siempre, en todas las rutas.
+- `Overwrite` salta el reducer para una escritura concreta.
+- `add_messages` hace cuatro cosas: añade, **sustituye por `id`**, borra con `RemoveMessage`
+  y normaliza tipos. La sustitución por `id` es la clave para editar historiales.
+- `input_schema` / `output_schema` filtran `invoke()`, **no** `stream()`. Para eso está
+  `output_keys`.
+- `EphemeralValue` mantiene fuera del checkpoint lo que no debe quedar escrito.
+
+**Siguiente:** [`03_control_de_flujo.ipynb`](03_control_de_flujo.ipynb) — aristas
+condicionales, `Command`, paralelismo y `Send` para map-reduce dinámico.

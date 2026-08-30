@@ -1,0 +1,391 @@
+#%%md
+# 00 · Bienvenida, modelo mental y puesta a punto
+
+**Módulo 0 · Inicio** — *tiempo estimado: 45 minutos*
+
+Este es el punto de partida de un curso que va de "no he tocado LangGraph" a "diseño,
+depuro, evalúo y despliego sistemas de agentes en producción".
+
+Al terminar este notebook sabrás:
+
+1. **Qué problema resuelve LangGraph** y cuándo *no* deberías usarlo.
+2. El **modelo mental** correcto: no es un framework de agentes, es un *runtime* de
+   ejecución duradera sobre grafos.
+3. Tener el entorno **funcionando y verificado**.
+4. Haber escrito y ejecutado tu **primer grafo**.
+
+#%%md
+## 1. El problema: por qué una cadena no basta
+
+Una *cadena* (`prompt | modelo | parser`) es un grafo dirigido acíclico donde los datos
+fluyen en una dirección. Es perfecta mientras el trabajo sea lineal y previsible.
+
+Se rompe en cuanto aparece cualquiera de estas cinco cosas, que son exactamente las
+cinco cosas que aparecen en cualquier sistema real:
+
+| Necesidad | Por qué una cadena no puede |
+|---|---|
+| **Ciclos** — "sigue llamando a herramientas hasta que tengas la respuesta" | Un DAG no tiene bucles |
+| **Estado compartido** | Cada paso solo ve la salida del anterior |
+| **Pausar y reanudar** — pedir aprobación a un humano a mitad de ejecución | No hay dónde guardar "por dónde iba" |
+| **Tolerancia a fallos** — el proceso muere en el paso 7 de 9 | Habría que repetir los 7 pasos (y volver a pagarlos) |
+| **Control** — "aquí decide el modelo, aquí decido yo" | El control se delega entero al modelo |
+
+LangGraph existe para eso. Su tesis es sencilla y poco glamurosa:
+
+> Un sistema de agentes fiable no es un modelo muy listo suelto: es **una máquina de
+> estados cuyas transiciones a veces las decide un modelo**. Si modelas el sistema como
+> un grafo con estado explícito y persistente, puedes inspeccionarlo, pausarlo,
+> reanudarlo, versionarlo y probarlo. Si lo modelas como un bucle `while` alrededor de
+> un LLM, no puedes hacer nada de eso.
+
+#%%md
+## 2. El modelo mental correcto
+
+Tres ideas, y todo el curso cuelga de ellas.
+
+### 2.1 Tres piezas
+
+```
+Estado (State)  ─── la estructura de datos compartida. Un TypedDict, normalmente.
+Nodos (Nodes)   ─── funciones  estado -> actualización parcial del estado.
+Aristas (Edges) ─── qué nodo se ejecuta después. Fijas o condicionales.
+```
+
+Un eslogan que conviene memorizar: **los nodos hacen el trabajo, las aristas deciden
+qué viene después**. Un nodo *no* decide su sucesor (salvo que use `Command`, que
+veremos en el notebook 03); esa responsabilidad vive en las aristas. Esta separación es
+lo que hace que el grafo se pueda dibujar, razonar y probar.
+
+### 2.2 El runtime es Pregel, no un bucle `for`
+
+LangGraph no ejecuta tus nodos en el orden en que los declaraste. Implementa
+**[Pregel](https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/)**,
+el modelo de Google para cómputo sobre grafos, basado en *paso de mensajes* y
+**super-pasos** (*super-steps*):
+
+- La ejecución avanza en super-pasos discretos.
+- En cada super-paso se ejecutan **a la vez** todos los nodos que han recibido un mensaje.
+- Al terminar, sus actualizaciones se aplican al estado **de golpe**, usando un
+  *reducer* por cada clave.
+- Los nodos sin mensajes entrantes se declaran inactivos. Cuando todos lo están, se acaba.
+
+Dos consecuencias prácticas, que son la fuente del 80 % de la confusión de los principiantes:
+
+1. **Dos nodos en el mismo super-paso son concurrentes.** Si los dos escriben en la misma
+   clave del estado, hay un conflicto, y quien lo resuelve es el *reducer* de esa clave.
+   Sin reducer, LangGraph lanza `InvalidUpdateError` en vez de perder datos en silencio.
+2. **Un nodo nunca ve las escrituras de otro nodo del mismo super-paso.** Ve el estado tal
+   como quedó al final del super-paso anterior.
+
+### 2.3 La persistencia no es un extra: es la característica
+
+Al compilar el grafo puedes darle un *checkpointer*. A partir de ahí, **después de cada
+super-paso** se guarda una instantánea completa del estado. Eso, gratis, te da:
+
+- **memoria conversacional** (retomar un hilo),
+- **human-in-the-loop** (pausar en mitad del grafo y reanudar días después),
+- **tolerancia a fallos** (reintentar desde el último punto bueno, no desde el principio),
+- **viaje en el tiempo** (volver a un estado anterior y ejecutar una rama alternativa).
+
+Todo eso es *la misma característica* mirada desde cuatro ángulos. Es lo que separa un
+prototipo de un sistema de producción, y le dedicamos el módulo 3 entero.
+
+#%%md
+## 3. Cuándo NO usar LangGraph
+
+Un curso honesto empieza por aquí. No uses LangGraph si:
+
+- **Tu tarea es una sola llamada al modelo.** Usa el SDK del proveedor. Un grafo de un
+  nodo es ceremonia sin beneficio.
+- **Tu tarea es una cadena lineal sin estado ni reintentos.** LCEL (`prompt | modelo | parser`)
+  es más corto y más claro.
+- **Quieres un agente de herramientas estándar y nada más.** Usa `create_agent` de
+  `langchain` (módulo 2) — que por debajo *es* un grafo de LangGraph, pero no tienes
+  que verlo.
+
+Usa LangGraph cuando necesites **control explícito sobre el flujo**, **estado duradero** o
+**varios actores coordinados**. La pregunta que hay que hacerse es: *¿necesito poder parar
+esto a la mitad, mirarlo por dentro y continuar?* Si la respuesta es sí, es LangGraph.
+
+#%%md
+## 4. El mapa del curso
+
+| Módulo | Qué construyes | Con qué te quedas |
+|---|---|---|
+| **1 · Fundamentos** | Grafos, estado, reducers, ramificación, mensajes | Sabes *diseñar* el grafo antes de escribirlo |
+| **2 · Agentes** | Herramientas, ReAct a mano, `create_agent`, middleware | Sabes cuándo dejar decidir al modelo y cuándo no |
+| **3 · Estado duradero** | Checkpointers, memoria de largo plazo, human-in-the-loop | Tus agentes recuerdan, se pausan y se reanudan |
+| **4 · Composición** | Streaming, subgrafos, multiagente | Sistemas de varios actores que no se convierten en un plato de espaguetis |
+| **5 · RAG agéntico** | Recuperación con criterio, autocorrección | RAG que se da cuenta de que ha recuperado basura |
+| **6 · Producción** | Fiabilidad, Functional API, evaluación, despliegue | Lo que separa la demo del servicio |
+
+Cada módulo cierra con un **notebook de proyecto** (`P1`…`P6`) que integra lo aprendido
+sobre datos reales. Los proyectos son la parte importante: la teoría se olvida, el
+proyecto que depuraste a las once de la noche no.
+
+**Cómo trabajar el curso.** Ejecuta cada celda en orden, y cuando aparezca un bloque
+`EJERCICIO` **páralo e inténtalo antes de mirar la solución**. La solución siempre viene
+justo después, plegada en una celda aparte. Leer código de grafos es fácil; escribirlo
+es donde se aprende.
+
+#%%md
+## 5. Instalación
+
+Desde la carpeta `langgraph/` del repositorio, con un entorno virtual activado:
+
+```bash
+python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Después copia el fichero de ejemplo de variables de entorno y pon tu clave:
+
+```bash
+cp .env.example .env
+# edita .env y escribe tu OPENAI_API_KEY
+```
+
+`OPENAI_API_KEY` es **obligatoria**: los notebooks llaman a modelos de verdad.
+`LANGSMITH_API_KEY` es opcional pero muy recomendable — más sobre eso en un momento.
+
+#%%md
+### El arranque estándar de los notebooks
+
+Todos los notebooks del curso empiezan con estas cuatro líneas. Buscan hacia arriba la
+raíz del curso (la carpeta que contiene `utils/`), la ponen en el `sys.path` y cargan las
+utilidades compartidas. Así da igual desde qué subcarpeta abras Jupyter.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+info = init()
+
+#%%md
+Si arriba ves `OPENAI_API_KEY: AUSENTE`, para aquí y arregla el `.env`. Todo lo demás
+depende de eso.
+
+Si alguna versión sale como `ANTIGUA`, ejecuta `pip install -U -r requirements.txt`.
+Este curso está escrito contra **LangGraph 1.x** y **LangChain 1.x**, que cambiaron cosas
+importantes respecto a la serie 0.x (entre otras, `create_react_agent` quedó obsoleto en
+favor de `create_agent`, y apareció el sistema de *middleware*). Con versiones 0.x buena
+parte del código de este curso no funcionará.
+
+#%%md
+## 6. LangSmith: por qué deberías activarlo ahora
+
+Un grafo de agentes es un sistema distribuido en miniatura. Cuando falla, la pregunta
+nunca es "¿qué ha devuelto?", es "**¿por qué ha ido por ahí?**": qué nodos se ejecutaron,
+en qué orden, con qué estado, qué prompt exacto vio el modelo, qué herramienta llamó y
+con qué argumentos, cuántos tokens costó.
+
+LangSmith responde a todo eso automáticamente. Sin él, tu herramienta de depuración es
+`print()`, y con grafos concurrentes `print()` miente (el orden de la salida no es el
+orden de ejecución).
+
+Para activarlo: crea una cuenta gratuita en [smith.langchain.com](https://smith.langchain.com),
+copia la clave en `.env` como `LANGSMITH_API_KEY` y reinicia el kernel. `init()` hace el
+resto. Le dedicamos un notebook entero en el módulo 6.
+
+#%%md
+## 7. Tu primer grafo
+
+Vamos a construir el grafo más pequeño que sigue siendo interesante: **dos nodos en
+secuencia que acumulan estado**. Sin LLM todavía — quiero que veas el mecanismo desnudo,
+porque toda la potencia de LangGraph está en el mecanismo, no en el modelo.
+
+Fíjate en tres detalles al leerlo:
+
+1. El estado es un `TypedDict`. Es solo un contrato de tipos; en ejecución es un `dict`.
+2. Cada nodo recibe **el estado completo** y devuelve **solo las claves que cambia**.
+   Devolver el estado entero es el error número uno de los principiantes.
+3. `START` y `END` son nodos virtuales: marcan por dónde entra y por dónde sale la ejecución.
+
+#%%py
+from typing import TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
+
+# 1) El estado: el contrato de datos que comparten todos los nodos.
+class Estado(TypedDict):
+    tema: str
+    borrador: str
+    palabras: int
+
+
+# 2) Los nodos: funciones normales de Python. estado -> actualización parcial.
+def redactar(estado: Estado) -> dict:
+    print(f"  [nodo redactar] he recibido tema={estado['tema']!r}")
+    return {"borrador": f"Un texto breve sobre {estado['tema']}."}
+
+
+def contar(estado: Estado) -> dict:
+    print(f"  [nodo contar]   he recibido borrador={estado['borrador']!r}")
+    return {"palabras": len(estado["borrador"].split())}
+
+
+# 3) El grafo: nodos y aristas, y a compilar.
+constructor = StateGraph(Estado)
+constructor.add_node("redactar", redactar)
+constructor.add_node("contar", contar)
+constructor.add_edge(START, "redactar")
+constructor.add_edge("redactar", "contar")
+constructor.add_edge("contar", END)
+
+grafo = constructor.compile()
+print("Grafo compilado.\n")
+
+resultado = grafo.invoke({"tema": "los reducers"})
+print("\nEstado final:", resultado)
+
+#%%md
+Observa la salida: `redactar` recibió el estado con `tema` (y sin `borrador`), devolvió
+solo `{"borrador": ...}`, y en el siguiente super-paso `contar` ya vio ese `borrador`
+integrado en el estado. Nunca pasamos el estado de un nodo a otro a mano: **el estado es
+el canal de comunicación**.
+
+Ahora dibujémoslo. `mostrar_grafo` intenta un PNG y, si no hay red, imprime la fuente
+Mermaid, que dice exactamente lo mismo.
+
+#%%py
+mostrar_grafo(grafo)
+
+#%%md
+### Ver la ejecución paso a paso
+
+`invoke()` te da el resultado final. Para *entender* qué pasa dentro, usa `stream()`.
+Con `stream_mode="updates"` ves qué devolvió cada nodo en cada super-paso — es la forma
+más rápida de depurar un grafo, y la usaremos constantemente.
+
+#%%py
+for i, paso in enumerate(grafo.stream({"tema": "los super-pasos"}, stream_mode="updates"), 1):
+    print(f"super-paso {i}: {paso}")
+
+#%%md
+## 8. El mismo grafo, ahora con un modelo
+
+Un nodo puede hacer *cualquier cosa*: una consulta SQL, una llamada HTTP, una regla de
+negocio... o una llamada a un LLM. Para LangGraph no hay diferencia; un nodo es una
+función. Esa uniformidad es deliberada, y es lo que permite mezclar lógica determinista
+y lógica probabilística en el mismo sistema.
+
+Esta celda ya consume tu cuota de la API (unos céntimos, con `gpt-4o-mini` menos que eso).
+
+#%%py
+modelo = llm()  # gpt-4o-mini con temperature=0, definido en utils/curso.py
+
+
+class EstadoLLM(TypedDict):
+    tema: str
+    borrador: str
+    palabras: int
+
+
+def redactar_con_llm(estado: EstadoLLM) -> dict:
+    respuesta = modelo.invoke(
+        f"Escribe un párrafo de 40 palabras, en español, sobre: {estado['tema']}. "
+        "Responde solo con el párrafo."
+    )
+    return {"borrador": respuesta.text}
+
+
+def contar_llm(estado: EstadoLLM) -> dict:
+    return {"palabras": len(estado["borrador"].split())}
+
+
+grafo_llm = (
+    StateGraph(EstadoLLM)
+    .add_node("redactar", redactar_con_llm)
+    .add_node("contar", contar_llm)
+    .add_edge(START, "redactar")
+    .add_edge("redactar", "contar")
+    .add_edge("contar", END)
+    .compile()
+)
+
+salida = grafo_llm.invoke({"tema": "por qué un grafo es mejor que un bucle while para orquestar agentes"})
+print(salida["borrador"])
+print(f"\n({salida['palabras']} palabras)")
+
+#%%md
+Dos detalles de estilo que vamos a usar en todo el curso:
+
+- **Encadenamiento**: `add_node()` y `add_edge()` devuelven el propio constructor, así que
+  se pueden encadenar. Queda más compacto y se lee como la topología del grafo.
+- **`respuesta.text`**: la forma correcta de sacar el texto de un `AIMessage` en
+  LangChain 1.x. `.content` puede ser una lista de bloques de contenido (texto, imagen,
+  razonamiento...) según el modelo; `.text` siempre te da la cadena. Ojo: en LangChain 0.x
+  era el método `.text()`; ahora es una **propiedad** y llamarla como método está obsoleto.
+
+#%%md
+## 9. Ejercicio
+
+> **EJERCICIO 0.1**
+>
+> Amplía el primer grafo (el que no usa LLM) con un tercer nodo, `revisar`, que se ejecute
+> **después** de `contar` y añada al estado una clave `veredicto` con el texto
+> `"corto"` si `palabras < 10` y `"largo"` en caso contrario.
+>
+> Pistas: hay que tocar el `TypedDict`, añadir el nodo, y reconectar las aristas para que
+> `END` venga después de `revisar`.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución</b></summary>
+
+Lo único que tiene truco es acordarse de <b>quitar</b> la arista <code>contar -> END</code>
+y no solo añadir la nueva: si dejas las dos, <code>END</code> se alcanza por dos caminos y
+el grafo puede terminar antes de que <code>revisar</code> se ejecute.
+Aquí reconstruimos el grafo desde cero, que es lo más limpio.
+</details>
+
+#%%py
+class EstadoRevisado(TypedDict):
+    tema: str
+    borrador: str
+    palabras: int
+    veredicto: str
+
+
+def revisar(estado: EstadoRevisado) -> dict:
+    return {"veredicto": "corto" if estado["palabras"] < 10 else "largo"}
+
+
+grafo_revisado = (
+    StateGraph(EstadoRevisado)
+    .add_node("redactar", redactar)
+    .add_node("contar", contar)
+    .add_node("revisar", revisar)
+    .add_edge(START, "redactar")
+    .add_edge("redactar", "contar")
+    .add_edge("contar", "revisar")   # antes iba a END
+    .add_edge("revisar", END)
+    .compile()
+)
+
+print(grafo_revisado.invoke({"tema": "las aristas condicionales"}))
+
+#%%md
+## 10. Resumen y qué viene ahora
+
+Lo que te tienes que llevar de este notebook:
+
+- LangGraph es un **runtime de ejecución duradera sobre grafos con estado**, no un
+  framework de agentes. Los agentes son un caso de uso.
+- **Estado, nodos, aristas.** Los nodos hacen el trabajo y devuelven *actualizaciones
+  parciales*; las aristas deciden el orden.
+- El motor es **Pregel**: super-pasos, ejecución concurrente dentro de cada super-paso,
+  y las escrituras se aplican al final del super-paso mediante *reducers*.
+- Un nodo es **una función normal**. Con o sin LLM dentro, da igual.
+- La **persistencia** es la característica central, no un añadido.
+
+**Siguiente:** [`01_fundamentos/01_grafos_estado_y_nodos.ipynb`](../01_fundamentos/01_grafos_estado_y_nodos.ipynb),
+donde desmontamos el estado y los nodos hasta el detalle: firmas, actualizaciones parciales,
+concurrencia, y los cinco errores que todo el mundo comete al empezar.

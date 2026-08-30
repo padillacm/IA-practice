@@ -1,0 +1,798 @@
+#%%md
+# P1 · Proyecto: sistema de triaje de tickets
+
+**Módulo 1 · Proyecto** — *tiempo estimado: 2 h · coste aproximado: 0,05 € con `gpt-4o-mini`*
+
+Este es el primer proyecto del curso y marca el tono de todos los demás: **no construimos
+algo que "parece que funciona", construimos algo que sabemos cuánto acierta**.
+
+## El encargo
+
+Una empresa de software recibe unos 400 tickets de soporte al mes. Hoy los clasifica una
+persona a mano, y el 30 % acaba en la cola equivocada. Quieren un sistema que:
+
+1. **Clasifique** cada ticket por categoría y prioridad.
+2. **Enrute** al destino correcto: guardia, cola humana o respuesta automática.
+3. Aplique las **reglas de negocio** que el modelo no puede saber (contratos, SLA por plan).
+4. Sea **auditable**: hay que poder explicar cada decisión.
+5. Procese **lotes** y produzca un informe.
+
+Y sobre todo: quieren saber **si es mejor que lo que ya tienen**.
+
+## Cómo lo vamos a hacer
+
+| Fase | Qué construimos | Qué aprendemos |
+|---|---|---|
+| 0 | Partición de datos y una **línea base sin IA** | Sin línea base, ningún número significa nada |
+| 1 | Triaje v1: un nodo, salida estructurada | El patrón mínimo que funciona |
+| 2 | **Evaluación** con métricas por clase | Dónde falla exactamente |
+| 3 | Triaje v2: ramas paralelas, few-shot y reglas duras | Cómo se sube el acierto de verdad |
+| 4 | Procesamiento por lotes con `Send` + informe | Llevarlo a escala |
+| 5 | Comparativa y decisión | Cerrar el bucle |
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-P1")
+
+#%%md
+## Fase 0 · Los datos y la línea base
+
+Lo primero, siempre: mirar los datos y partirlos. La partición no es burocracia — si eliges
+los ejemplos few-shot del mismo conjunto con el que mides, tu número está inflado y no lo
+sabrás hasta producción.
+
+#%%py
+from utils.datos import tickets
+
+df = tickets()
+
+print(f"{len(df)} tickets, de {df.fecha.min():%Y-%m-%d} a {df.fecha.max():%Y-%m-%d}\n")
+print("distribución por categoría:")
+print(df.categoria.value_counts().to_string())
+print("\ndistribución por prioridad:")
+print(df.prioridad.value_counts().to_string())
+print("\nprioridad media por plan (una regla de negocio escondida en los datos):")
+orden = {"baja": 0, "media": 1, "alta": 2, "critica": 3}
+print(df.assign(p=df.prioridad.map(orden)).groupby("plan_cliente").p.mean().sort_values().to_string())
+
+#%%md
+Esa última tabla es importante: **la prioridad depende del plan del cliente**, no solo del
+contenido del ticket. Un modelo que solo lee el texto nunca podrá acertar del todo. Eso no es
+un fallo del modelo, es una regla de negocio, y la vamos a codificar nosotros en la fase 3.
+Es la lección central del proyecto: *no le pidas al LLM lo que puedes calcular*.
+
+#%%py
+# Partición estratificada por categoría: entrenamiento (de donde salen los ejemplos few-shot)
+# y prueba (con la que medimos). Estratificamos para que las clases raras aparezcan en las dos.
+entrena = (
+    df.groupby("categoria", group_keys=False)[df.columns]
+      .apply(lambda g: g.sample(frac=0.75, random_state=42))
+)
+prueba = df.drop(entrena.index)
+
+print(f"entrenamiento: {len(entrena)}   prueba: {len(prueba)}\n")
+print("proporción por categoría (entrenamiento vs prueba):")
+for cat in sorted(df.categoria.unique()):
+    print(f"  {cat:<26} {(entrena.categoria == cat).mean():.2%}  {(prueba.categoria == cat).mean():.2%}")
+
+#%%md
+> **Por qué estratificar.** `datos_privacidad` y `otros` son clases raras. Con una partición
+> aleatoria simple podrías quedarte con dos ejemplos de `datos_privacidad` en el conjunto de
+> prueba y entonces su porcentaje de acierto sería 0 % o 50 %, sin nada en medio y sin
+> significado. Estratificar mantiene las proporciones en los dos lados.
+
+#%%md
+### La línea base: reglas, sin IA
+
+Antes de gastar un euro en tokens hay que saber a qué nos enfrentamos. Una regla de palabras
+clave de 20 líneas es sorprendentemente competitiva, y es el listón que el LLM tiene que
+superar para justificar su coste.
+
+#%%py
+PALABRAS_CATEGORIA = {
+    "facturacion": ["factura", "cobro", "cobrad", "pago", "importe", "cif", "renovación", "€"],
+    "acceso_cuenta": ["sesión", "contraseña", "acceso", "bloquead", "doble factor", "sms", "usuario", "revocar"],
+    "bug_producto": ["error 500", "error", "no carga", "se cierra", "vacío", "0 bytes", "falla", "pierden"],
+    "integraciones": ["webhook", "api", "salesforce", "sheets", "401", "429", "sincroniza", "integra"],
+    "rendimiento": ["lent", "tarda", "timeout", "minuto", "no termina", "cargando"],
+    "solicitud_funcionalidad": ["sugerencia", "añadir", "sería genial", "echamos de menos", "hoja de ruta",
+                                "petición:", "vendría bien", "modo oscuro"],
+    "datos_privacidad": ["rgpd", "supresión", "dpa", "datos personales", "auditoría", "no autorizado",
+                         "portabilidad", "almacenan"],
+}
+
+PALABRAS_URGENCIA = ["urgente", "bloqueando", "parados", "cancelar el contrato", "crítico", "hoy mismo",
+                     "todo el día", "no reconocemos"]
+
+PESO_PLAN = {"free": -1, "pro": 0, "business": 0, "enterprise": 1}
+ESCALA = ["baja", "media", "alta", "critica"]
+
+
+def linea_base(asunto: str, mensaje: str, plan: str) -> tuple[str, str]:
+    """Clasifica por conteo de palabras clave. Sin IA, sin coste, en microsegundos."""
+    texto = f"{asunto} {mensaje}".lower()
+
+    puntuaciones = {cat: sum(p in texto for p in palabras) for cat, palabras in PALABRAS_CATEGORIA.items()}
+    mejor = max(puntuaciones, key=puntuaciones.get)
+    categoria = mejor if puntuaciones[mejor] > 0 else "otros"
+
+    base = {"rendimiento": 2, "bug_producto": 2, "acceso_cuenta": 2, "integraciones": 2,
+            "datos_privacidad": 1, "facturacion": 1, "otros": 0, "solicitud_funcionalidad": 0}[categoria]
+    base += sum(p in texto for p in PALABRAS_URGENCIA) and 1 or 0
+    base += PESO_PLAN.get(plan, 0)
+    prioridad = ESCALA[max(0, min(3, base))]
+
+    return categoria, prioridad
+
+
+aciertos_cat = aciertos_pri = 0
+for t in prueba.itertuples():
+    cat, pri = linea_base(t.asunto, t.mensaje, t.plan_cliente)
+    aciertos_cat += cat == t.categoria
+    aciertos_pri += pri == t.prioridad
+
+n = len(prueba)
+BASE_CAT, BASE_PRI = aciertos_cat / n, aciertos_pri / n
+print(f"LÍNEA BASE sobre {n} tickets de prueba")
+print(f"  categoría : {BASE_CAT:.1%}")
+print(f"  prioridad : {BASE_PRI:.1%}")
+print(f"  coste     : 0 €    latencia: ~0 ms")
+
+#%%md
+Ahí tienes tu listón. Cualquier sistema con LLM que no lo supere claramente **no merece
+existir**: cuesta dinero, añade latencia y puede fallar de formas nuevas.
+
+> **Y ahora la letra pequeña, que es la parte más instructiva de esta fase.**
+>
+> Es muy probable que veas un acierto de categoría altísimo — por encima del 85 %. **No te
+> lo creas.** Este conjunto de datos es sintético: se generó a partir de un puñado de
+> plantillas, y las listas de `PALABRAS_CATEGORIA` las escribimos mirando esas mismas
+> plantillas. La línea base está, de hecho, sobreajustada al generador.
+>
+> Eso hace que aquí el listón sea injustamente alto y que el LLM parezca peor de lo que
+> sería sobre tickets reales, donde la gente escribe con faltas, mezcla dos problemas en un
+> mismo correo y no usa nunca el vocabulario que tú previste.
+>
+> Se queda así **a propósito**, porque enseña tres cosas que no se olvidan:
+>
+> 1. **Una línea base fácil de batir no demuestra nada.** Si construyes tu comparación para
+>    ganarla, ganas.
+> 2. **Toda métrica arrastra el sesgo de cómo se construyeron sus datos.** La pregunta antes
+>    de celebrar un número siempre es: *¿de dónde salieron estas etiquetas y quién eligió
+>    estos ejemplos?*
+> 3. **Con datos limpios y un dominio cerrado, las reglas ganan.** El LLM se gana el sueldo
+>    en la ambigüedad y la variedad, no en textos de plantilla. Si tu problema de verdad es
+>    tan regular como este, no necesitas un LLM.
+>
+> Al final del notebook volveremos sobre esto para leer la comparativa con honestidad.
+
+#%%md
+## Fase 1 · Triaje v1
+
+El grafo mínimo que hace el trabajo: un nodo que clasifica con salida estructurada y una
+arista condicional que enruta.
+
+#%%py
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field
+
+CATEGORIAS = ("facturacion", "acceso_cuenta", "bug_producto", "integraciones",
+              "rendimiento", "solicitud_funcionalidad", "datos_privacidad", "otros")
+
+
+class Clasificacion(BaseModel):
+    """Clasificación de un ticket de soporte de una plataforma SaaS B2B."""
+
+    razonamiento: str = Field(
+        description="Piensa primero: qué pide el cliente y qué tan bloqueado está. Máximo 2 frases."
+    )
+    categoria: Literal[CATEGORIAS] = Field(
+        description="El problema PRINCIPAL. Si el ticket menciona varios, el que impide trabajar al cliente."
+    )
+    prioridad: Literal["baja", "media", "alta", "critica"] = Field(
+        description=(
+            "critica = servicio caído, brecha de seguridad o el cliente no puede operar. "
+            "alta = funcionalidad importante rota o plazo inminente. "
+            "media = problema real con alternativa temporal. "
+            "baja = consulta, sugerencia o trámite sin urgencia."
+        )
+    )
+    requiere_humano: bool = Field(description="False solo si un artículo del centro de ayuda lo resuelve")
+
+
+print("campos que verá el modelo:", list(Clasificacion.model_fields))
+
+#%%md
+> El campo `razonamiento` va **el primero** a propósito. Los modelos generan los campos en
+> orden, así que poner el razonamiento delante hace que "piense" antes de comprometerse con
+> la categoría. Si lo pones al final, es una racionalización a posteriori: el modelo ya
+> decidió. Es un truco de una línea que sube el acierto de forma medible.
+
+#%%py
+import operator
+from typing import TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
+modelo = llm()
+clasificador = modelo.with_structured_output(Clasificacion)
+
+
+class EstadoTriaje(TypedDict):
+    # entrada
+    id_ticket: str
+    asunto: str
+    mensaje: str
+    plan_cliente: str
+    # producido por el grafo
+    clasificacion: Clasificacion | None
+    destino: str
+    sla_horas: int
+    explicacion: list[str]
+
+
+def clasificar(estado: EstadoTriaje) -> dict:
+    resultado = clasificador.invoke(
+        "Eres el sistema de triaje de una plataforma SaaS B2B. Clasifica este ticket.\n\n"
+        f"Asunto: {estado['asunto']}\n"
+        f"Mensaje: {estado['mensaje']}\n"
+        f"Plan del cliente: {estado['plan_cliente']}"
+    )
+    return {
+        "clasificacion": resultado,
+        "explicacion": [f"modelo: {resultado.categoria}/{resultado.prioridad} — {resultado.razonamiento}"],
+    }
+
+
+def enrutar(estado: EstadoTriaje) -> Literal["guardia", "cola_humana", "respuesta_automatica"]:
+    c = estado["clasificacion"]
+    if c.prioridad == "critica":
+        return "guardia"
+    return "cola_humana" if c.requiere_humano else "respuesta_automatica"
+
+
+SLA = {"critica": 1, "alta": 4, "media": 8, "baja": 48}
+
+triaje_v1 = (
+    StateGraph(EstadoTriaje)
+    .add_node("clasificar", clasificar)
+    .add_node("guardia", lambda e: {"destino": "guardia", "sla_horas": SLA["critica"],
+                                    "explicacion": ["ruta: prioridad crítica -> ingeniero de guardia"]})
+    .add_node("cola_humana", lambda e: {"destino": "cola_humana",
+                                        "sla_horas": SLA[e["clasificacion"].prioridad],
+                                        "explicacion": ["ruta: requiere intervención humana"]})
+    .add_node("respuesta_automatica", lambda e: {"destino": "respuesta_automatica", "sla_horas": 0,
+                                                 "explicacion": ["ruta: resoluble con el centro de ayuda"]})
+    .add_edge(START, "clasificar")
+    .add_conditional_edges("clasificar", enrutar, {
+        "guardia": "guardia", "cola_humana": "cola_humana",
+        "respuesta_automatica": "respuesta_automatica",
+    })
+    .add_edge("guardia", END).add_edge("cola_humana", END).add_edge("respuesta_automatica", END)
+    .compile()
+)
+
+mostrar_grafo(triaje_v1)
+
+#%%py
+def entrada_desde_fila(fila) -> dict:
+    return {
+        "id_ticket": fila.id_ticket, "asunto": fila.asunto, "mensaje": fila.mensaje,
+        "plan_cliente": fila.plan_cliente, "clasificacion": None, "destino": "",
+        "sla_horas": 0, "explicacion": [],
+    }
+
+
+demo = triaje_v1.invoke(entrada_desde_fila(prueba.iloc[0]))
+c = demo["clasificacion"]
+print(f"ticket   : {demo['id_ticket']}  [{demo['plan_cliente']}]")
+print(f"asunto   : {demo['asunto']}")
+print(f"predicho : {c.categoria} / {c.prioridad}   -> {demo['destino']} (SLA {demo['sla_horas']} h)")
+print(f"real     : {prueba.iloc[0].categoria} / {prueba.iloc[0].prioridad}")
+print("\ntraza de auditoría:")
+for linea in demo["explicacion"]:
+    print("  -", linea)
+
+#%%md
+## Fase 2 · Evaluación
+
+Un porcentaje de acierto global esconde casi todo lo interesante. Lo que necesitas saber es
+**en qué clases falla** y **hacia dónde falla**, porque confundir `bug_producto` con
+`rendimiento` es barato y confundir `datos_privacidad` con `otros` te cuesta una multa.
+
+#%%py
+import time
+from collections import Counter, defaultdict
+
+
+def evaluar(grafo, muestra, nombre: str, mostrar_errores: int = 4) -> dict:
+    """Ejecuta el grafo sobre una muestra y devuelve métricas comparables entre versiones."""
+    entradas = [entrada_desde_fila(f) for f in muestra.itertuples()]
+
+    t0 = time.perf_counter()
+    salidas = grafo.batch(entradas)                 # en paralelo
+    segundos = time.perf_counter() - t0
+
+    filas = list(muestra.itertuples())
+    ok_cat = sum(s["clasificacion"].categoria == f.categoria for s, f in zip(salidas, filas))
+    ok_pri = sum(s["clasificacion"].prioridad == f.prioridad for s, f in zip(salidas, filas))
+
+    # ¿La prioridad se equivoca por encima o por debajo? Subestimar es mucho peor.
+    orden = {"baja": 0, "media": 1, "alta": 2, "critica": 3}
+    desvios = [orden[s["clasificacion"].prioridad] - orden[f.prioridad] for s, f in zip(salidas, filas)]
+    subestima = sum(d < 0 for d in desvios)
+    sobrestima = sum(d > 0 for d in desvios)
+
+    por_clase = defaultdict(lambda: [0, 0])
+    confusion = Counter()
+    for s, f in zip(salidas, filas):
+        por_clase[f.categoria][1] += 1
+        if s["clasificacion"].categoria == f.categoria:
+            por_clase[f.categoria][0] += 1
+        else:
+            confusion[(f.categoria, s["clasificacion"].categoria)] += 1
+
+    n = len(filas)
+    separador(f"{nombre}  ({n} tickets, {segundos:.1f} s, {segundos / n * 1000:.0f} ms/ticket)")
+    print(f"  categoría : {ok_cat / n:>6.1%}   (línea base {BASE_CAT:.1%})")
+    print(f"  prioridad : {ok_pri / n:>6.1%}   (línea base {BASE_PRI:.1%})")
+    print(f"              subestimada en {subestima} tickets, sobrestimada en {sobrestima}")
+
+    print("\n  acierto por categoría real:")
+    for cat, (ok, tot) in sorted(por_clase.items(), key=lambda kv: kv[1][0] / kv[1][1]):
+        barra = "#" * round(ok / tot * 20)
+        print(f"    {cat:<26} {ok:>3}/{tot:<3} {ok / tot:>6.0%} {barra}")
+
+    if confusion:
+        print("\n  confusiones más frecuentes (real -> predicho):")
+        for (real, pred), veces in confusion.most_common(mostrar_errores):
+            print(f"    {real:<26} -> {pred:<26} {veces}")
+
+    return {"nombre": nombre, "categoria": ok_cat / n, "prioridad": ok_pri / n,
+            "subestima": subestima, "ms_por_ticket": segundos / n * 1000, "salidas": salidas}
+
+
+# Ajusta N_EVAL si quieres gastar más o menos. 60 tickets con gpt-4o-mini cuesta unos 0,01 €.
+N_EVAL = 60
+muestra_eval = prueba.sample(N_EVAL, random_state=1)
+
+res_v1 = evaluar(triaje_v1, muestra_eval, "TRIAJE v1 — un nodo, sin ejemplos")
+
+#%%md
+Mira los números antes de seguir. Lo típico que vas a encontrar:
+
+- **La categoría sube bastante** respecto a la línea base. Es lo que un LLM hace bien: leer
+  texto y entender de qué va.
+- **La prioridad sube poco, o baja.** Y tiene sentido: la prioridad depende del plan del
+  cliente y de reglas contractuales que no están en el texto del ticket. El modelo está
+  adivinando.
+- **`otros` acierta fatal.** Es una clase cajón de sastre sin definición positiva; ni el
+  modelo ni tú sabéis exactamente qué va ahí.
+
+Las tres observaciones apuntan al mismo sitio, y es donde vamos en la fase 3.
+
+#%%md
+## Fase 3 · Triaje v2
+
+Cuatro cambios, cada uno atacando un problema concreto que hemos **medido**:
+
+| Cambio | Problema que ataca |
+|---|---|
+| **Categoría y prioridad en nodos separados y paralelos** | Una tarea por llamada se hace mejor que dos mezcladas |
+| **Few-shot dinámico**: ejemplos parecidos del conjunto de entrenamiento | El modelo no conoce nuestra taxonomía |
+| **Reglas duras** que ajustan la prioridad tras el modelo | El plan y los SLA son datos, no opiniones |
+| **Traza de auditoría** de cada decisión | El requisito 4 del encargo |
+
+#%%py
+# --- Few-shot dinámico: los k ejemplos de entrenamiento más parecidos, por solapamiento de palabras.
+import re
+from functools import lru_cache
+
+VACIAS = {"de", "la", "el", "en", "y", "a", "que", "no", "un", "una", "los", "las", "por", "con",
+          "para", "me", "mi", "se", "es", "al", "del", "lo", "hace", "hola", "buenas"}
+
+
+def fichas(texto: str) -> set[str]:
+    return {p for p in re.findall(r"[a-záéíóúñ]+", texto.lower()) if len(p) > 3 and p not in VACIAS}
+
+
+EJEMPLOS = [
+    {"texto": f"{f.asunto} {f.mensaje}", "fichas": fichas(f"{f.asunto} {f.mensaje}"),
+     "categoria": f.categoria, "prioridad": f.prioridad, "plan": f.plan_cliente}
+    for f in entrena.itertuples()
+]
+
+
+def ejemplos_similares(asunto: str, mensaje: str, k: int = 4) -> list[dict]:
+    """Recupera los k ejemplos etiquetados más parecidos (Jaccard sobre palabras)."""
+    objetivo = fichas(f"{asunto} {mensaje}")
+    if not objetivo:
+        return EJEMPLOS[:k]
+    puntuados = sorted(
+        EJEMPLOS,
+        key=lambda e: len(objetivo & e["fichas"]) / len(objetivo | e["fichas"]) if e["fichas"] else 0,
+        reverse=True,
+    )
+    return puntuados[:k]
+
+
+def bloque_ejemplos(asunto: str, mensaje: str) -> str:
+    lineas = []
+    for e in ejemplos_similares(asunto, mensaje):
+        lineas.append(f"- Ticket: {e['texto'][:160]}\n  -> categoria={e['categoria']}, prioridad={e['prioridad']}")
+    return "\n".join(lineas)
+
+
+print("ejemplos recuperados para un ticket de rendimiento:\n")
+print(bloque_ejemplos("La plataforma va lenta", "Todo tarda un minuto y estamos parados")[:600])
+
+#%%py
+# --- Esquemas separados: una responsabilidad por llamada.
+class SoloCategoria(BaseModel):
+    """Categoría de un ticket de soporte."""
+    razonamiento: str = Field(description="En una frase: de qué trata el ticket")
+    categoria: Literal[CATEGORIAS] = Field(
+        description="Usa 'otros' SOLO para consultas comerciales, precios o descuentos; nunca como cajón de sastre."
+    )
+
+
+class SenalesUrgencia(BaseModel):
+    """Señales de urgencia observables en el texto del ticket, sin juzgar la prioridad final."""
+    servicio_no_operativo: bool = Field(description="El cliente no puede usar el producto en absoluto")
+    afecta_a_varios_usuarios: bool = Field(description="Menciona a un equipo o a varias personas afectadas")
+    plazo_inminente: bool = Field(description="Menciona un cierre, auditoría, demo o fecha límite cercana")
+    riesgo_seguridad: bool = Field(description="Accesos no autorizados, brechas o exposición de datos")
+    amenaza_cancelacion: bool = Field(description="Insinúa cancelar el contrato o escalar comercialmente")
+    tono_molesto: bool = Field(description="El cliente muestra frustración explícita")
+
+
+clasificador_cat = modelo.with_structured_output(SoloCategoria)
+clasificador_urg = modelo.with_structured_output(SenalesUrgencia)
+
+#%%md
+Fíjate en `SenalesUrgencia`: **no le pedimos al modelo la prioridad**. Le pedimos hechos
+observables en el texto —"¿está caído?", "¿hay una fecha límite?"— y la prioridad la
+calculamos nosotros combinándolos con el plan del cliente.
+
+Esta es la técnica más útil de todo el proyecto y funciona en casi cualquier dominio:
+**pide al LLM percepción, no juicio**. Percibir es lo que hace bien. Juzgar según reglas de
+negocio es lo que hace bien tu código, de forma determinista, auditable y modificable sin
+volver a probar el prompt.
+
+#%%py
+PESO_SENAL = {
+    "servicio_no_operativo": 3,
+    "riesgo_seguridad": 3,
+    "afecta_a_varios_usuarios": 1,
+    "plazo_inminente": 1,
+    "amenaza_cancelacion": 1,
+    "tono_molesto": 0,          # medido: no predice prioridad; lo dejamos visible en 0
+}
+PESO_PLAN_V2 = {"free": -1, "pro": 0, "business": 1, "enterprise": 2}
+TOPE_PLAN = {"free": "alta", "pro": "critica", "business": "critica", "enterprise": "critica"}
+
+
+class EstadoTriajeV2(TypedDict):
+    id_ticket: str
+    asunto: str
+    mensaje: str
+    plan_cliente: str
+    categoria_pred: str
+    senales: SenalesUrgencia | None
+    prioridad_pred: str
+    destino: str
+    sla_horas: int
+    explicacion: Annotated[list[str], operator.add]
+
+
+def nodo_categoria(estado: EstadoTriajeV2) -> dict:
+    r = clasificador_cat.invoke(
+        "Clasifica el ticket en una de las categorías. Aquí tienes tickets similares ya "
+        "clasificados por nuestro equipo, úsalos como referencia de nuestra taxonomía:\n\n"
+        f"{bloque_ejemplos(estado['asunto'], estado['mensaje'])}\n\n"
+        f"--- Ticket a clasificar ---\nAsunto: {estado['asunto']}\nMensaje: {estado['mensaje']}"
+    )
+    return {"categoria_pred": r.categoria, "explicacion": [f"categoría: {r.categoria} — {r.razonamiento}"]}
+
+
+def nodo_senales(estado: EstadoTriajeV2) -> dict:
+    r = clasificador_urg.invoke(
+        "Extrae las señales de urgencia observables en este ticket. Responde solo sobre lo que "
+        "el texto dice, no sobre lo que supongas.\n\n"
+        f"Asunto: {estado['asunto']}\nMensaje: {estado['mensaje']}"
+    )
+    activas = [k for k, v in r.model_dump().items() if v]
+    return {"senales": r, "explicacion": [f"señales: {', '.join(activas) if activas else 'ninguna'}"]}
+
+
+def nodo_prioridad(estado: EstadoTriajeV2) -> dict:
+    """Reglas de negocio. Deterministas, auditables y modificables sin tocar ningún prompt."""
+    s = estado["senales"].model_dump()
+    puntos = sum(PESO_SENAL[k] for k, v in s.items() if v)
+    puntos += PESO_PLAN_V2.get(estado["plan_cliente"], 0)
+
+    if estado["categoria_pred"] == "solicitud_funcionalidad":
+        puntos -= 2                                   # una sugerencia nunca es urgente
+    if estado["categoria_pred"] == "datos_privacidad":
+        puntos += 1                                   # obligación legal: nunca en el fondo de la cola
+
+    indice = max(0, min(3, 1 + puntos // 2))
+    prioridad = ESCALA[indice]
+    tope = TOPE_PLAN[estado["plan_cliente"]]
+    if ESCALA.index(prioridad) > ESCALA.index(tope):
+        prioridad = tope                              # el plan free no genera avisos de guardia
+
+    return {
+        "prioridad_pred": prioridad,
+        "explicacion": [f"prioridad: {prioridad} (puntos={puntos}, plan={estado['plan_cliente']}, tope={tope})"],
+    }
+
+
+def enrutar_v2(estado: EstadoTriajeV2) -> Literal["guardia", "cola_humana", "respuesta_automatica"]:
+    if estado["prioridad_pred"] == "critica":
+        return "guardia"
+    if estado["categoria_pred"] == "solicitud_funcionalidad" and estado["prioridad_pred"] == "baja":
+        return "respuesta_automatica"
+    return "cola_humana"
+
+
+triaje_v2 = (
+    StateGraph(EstadoTriajeV2)
+    .add_node("categoria", nodo_categoria)
+    .add_node("senales", nodo_senales)
+    .add_node("prioridad", nodo_prioridad, defer=True)     # espera a las dos ramas
+    .add_node("guardia", lambda e: {"destino": "guardia", "sla_horas": 1,
+                                    "explicacion": ["ruta: guardia"]})
+    .add_node("cola_humana", lambda e: {"destino": "cola_humana", "sla_horas": SLA[e["prioridad_pred"]],
+                                        "explicacion": ["ruta: cola humana"]})
+    .add_node("respuesta_automatica", lambda e: {"destino": "respuesta_automatica", "sla_horas": 0,
+                                                 "explicacion": ["ruta: respuesta automática"]})
+    # las dos llamadas al modelo salen a la vez: misma latencia que una sola
+    .add_edge(START, "categoria")
+    .add_edge(START, "senales")
+    .add_edge("categoria", "prioridad")
+    .add_edge("senales", "prioridad")
+    .add_conditional_edges("prioridad", enrutar_v2, {
+        "guardia": "guardia", "cola_humana": "cola_humana",
+        "respuesta_automatica": "respuesta_automatica",
+    })
+    .add_edge("guardia", END).add_edge("cola_humana", END).add_edge("respuesta_automatica", END)
+    .compile()
+)
+
+mostrar_grafo(triaje_v2)
+
+#%%py
+def entrada_v2(fila) -> dict:
+    return {"id_ticket": fila.id_ticket, "asunto": fila.asunto, "mensaje": fila.mensaje,
+            "plan_cliente": fila.plan_cliente, "categoria_pred": "", "senales": None,
+            "prioridad_pred": "", "destino": "", "sla_horas": 0, "explicacion": []}
+
+
+ejemplo = triaje_v2.invoke(entrada_v2(prueba.iloc[0]))
+print(f"{ejemplo['id_ticket']} [{ejemplo['plan_cliente']}] {ejemplo['asunto']}")
+print(f"  predicho: {ejemplo['categoria_pred']} / {ejemplo['prioridad_pred']} -> {ejemplo['destino']}")
+print(f"  real    : {prueba.iloc[0].categoria} / {prueba.iloc[0].prioridad}")
+print("\n  auditoría:")
+for linea in ejemplo["explicacion"]:
+    print("   -", linea)
+
+#%%md
+Esa traza de auditoría es el requisito 4 del encargo, y sale gratis por haber usado un
+reducer acumulador en `explicacion`. Cuando un cliente pregunte "¿por qué mi ticket tardó
+8 horas?", tienes la respuesta exacta y reproducible.
+
+#%%py
+# Adaptamos el evaluador a los nombres de campo de la v2.
+def evaluar_v2(grafo, muestra, nombre: str) -> dict:
+    entradas = [entrada_v2(f) for f in muestra.itertuples()]
+    t0 = time.perf_counter()
+    salidas = grafo.batch(entradas)
+    segundos = time.perf_counter() - t0
+
+    filas = list(muestra.itertuples())
+    ok_cat = sum(s["categoria_pred"] == f.categoria for s, f in zip(salidas, filas))
+    ok_pri = sum(s["prioridad_pred"] == f.prioridad for s, f in zip(salidas, filas))
+    orden = {"baja": 0, "media": 1, "alta": 2, "critica": 3}
+    desvios = [orden[s["prioridad_pred"]] - orden[f.prioridad] for s, f in zip(salidas, filas)]
+
+    por_clase = defaultdict(lambda: [0, 0])
+    confusion = Counter()
+    for s, f in zip(salidas, filas):
+        por_clase[f.categoria][1] += 1
+        if s["categoria_pred"] == f.categoria:
+            por_clase[f.categoria][0] += 1
+        else:
+            confusion[(f.categoria, s["categoria_pred"])] += 1
+
+    n = len(filas)
+    separador(f"{nombre}  ({n} tickets, {segundos:.1f} s, {segundos / n * 1000:.0f} ms/ticket)")
+    print(f"  categoría : {ok_cat / n:>6.1%}   (v1 {res_v1['categoria']:.1%}, base {BASE_CAT:.1%})")
+    print(f"  prioridad : {ok_pri / n:>6.1%}   (v1 {res_v1['prioridad']:.1%}, base {BASE_PRI:.1%})")
+    print(f"              subestimada en {sum(d < 0 for d in desvios)}, sobrestimada en {sum(d > 0 for d in desvios)}")
+    print("\n  acierto por categoría real:")
+    for cat, (ok, tot) in sorted(por_clase.items(), key=lambda kv: kv[1][0] / kv[1][1]):
+        print(f"    {cat:<26} {ok:>3}/{tot:<3} {ok / tot:>6.0%} {'#' * round(ok / tot * 20)}")
+    if confusion:
+        print("\n  confusiones más frecuentes:")
+        for (real, pred), veces in confusion.most_common(4):
+            print(f"    {real:<26} -> {pred:<26} {veces}")
+
+    return {"nombre": nombre, "categoria": ok_cat / n, "prioridad": ok_pri / n,
+            "subestima": sum(d < 0 for d in desvios), "ms_por_ticket": segundos / n * 1000,
+            "salidas": salidas}
+
+
+res_v2 = evaluar_v2(triaje_v2, muestra_eval, "TRIAJE v2 — paralelo + few-shot + reglas")
+
+#%%md
+## Fase 4 · Lotes y el informe de guardia
+
+El encargo pedía procesar lotes. Con `Send` montamos el map-reduce: N tickets en paralelo,
+agregación de estadísticas y un informe redactado.
+
+#%%py
+from types import SimpleNamespace
+
+from langgraph.types import Send
+
+
+def sumar_conteos(izq: dict, der: dict) -> dict:
+    return dict(Counter(izq) + Counter(der))
+
+
+class EstadoLote(TypedDict):
+    entrantes: list[dict]
+    por_destino: Annotated[dict, sumar_conteos]
+    por_prioridad: Annotated[dict, sumar_conteos]
+    criticos: Annotated[list[str], operator.add]
+    informe: str
+
+
+def repartir(estado: EstadoLote) -> list[Send]:
+    return [Send("triar_uno", t) for t in estado["entrantes"]]
+
+
+def triar_uno(tarea: dict) -> dict:
+    """Ejecuta el grafo v2 como un paso más. Un grafo compilado es invocable en cualquier sitio,
+    también dentro de un nodo de otro grafo — eso es un subgrafo, y tiene módulo propio (el 12)."""
+    r = triaje_v2.invoke(entrada_v2(SimpleNamespace(**tarea)))
+    return {
+        "por_destino": {r["destino"]: 1},
+        "por_prioridad": {r["prioridad_pred"]: 1},
+        "criticos": ([f"{r['id_ticket']} [{tarea['plan_cliente']}] {tarea['asunto']}"]
+                     if r["prioridad_pred"] == "critica" else []),
+    }
+
+
+def redactar_informe(estado: EstadoLote) -> dict:
+    total = sum(estado["por_destino"].values())
+    lineas = [
+        f"INFORME DE TRIAJE — {total} tickets procesados",
+        "",
+        "Por destino:   " + ", ".join(f"{k}={v}" for k, v in sorted(estado["por_destino"].items())),
+        "Por prioridad: " + ", ".join(f"{k}={v}" for k, v in sorted(estado["por_prioridad"].items())),
+        "",
+        f"Escalados a guardia ({len(estado['criticos'])}):",
+    ]
+    lineas += [f"  - {c}" for c in estado["criticos"]] or ["  (ninguno)"]
+    return {"informe": "\n".join(lineas)}
+
+
+lote = (
+    StateGraph(EstadoLote)
+    .add_node("recibir", lambda e: {})
+    .add_node("triar_uno", triar_uno)
+    .add_node("informar", redactar_informe, defer=True)
+    .add_edge(START, "recibir")
+    .add_conditional_edges("recibir", repartir, ["triar_uno"])
+    .add_edge("triar_uno", "informar")
+    .add_edge("informar", END)
+    .compile()
+)
+
+entrantes = prueba.head(25)[["id_ticket", "asunto", "mensaje", "plan_cliente"]].to_dict("records")
+
+t0 = time.perf_counter()
+salida_lote = lote.invoke({"entrantes": entrantes, "por_destino": {}, "por_prioridad": {},
+                           "criticos": [], "informe": ""},
+                          {"recursion_limit": 50})
+print(f"({time.perf_counter() - t0:.1f} s para {len(entrantes)} tickets)\n")
+print(salida_lote["informe"])
+
+#%%md
+## Fase 5 · La decisión
+
+#%%py
+filas = [
+    {"version": "línea base (reglas)", "categoria": BASE_CAT, "prioridad": BASE_PRI,
+     "subestima": None, "ms": 0.0, "llamadas": 0},
+    {"version": res_v1["nombre"], "categoria": res_v1["categoria"], "prioridad": res_v1["prioridad"],
+     "subestima": res_v1["subestima"], "ms": res_v1["ms_por_ticket"], "llamadas": 1},
+    {"version": res_v2["nombre"], "categoria": res_v2["categoria"], "prioridad": res_v2["prioridad"],
+     "subestima": res_v2["subestima"], "ms": res_v2["ms_por_ticket"], "llamadas": 2},
+]
+
+print(f"{'versión':<44} {'categ.':>7} {'prior.':>7} {'subest.':>8} {'ms/tk':>7} {'llam.':>6}")
+print("-" * 84)
+for f in filas:
+    sub = "-" if f["subestima"] is None else str(f["subestima"])
+    print(f"{f['version']:<44} {f['categoria']:>6.1%} {f['prioridad']:>7.1%} {sub:>8} {f['ms']:>7.0f} {f['llamadas']:>6}")
+
+def delta(a: float, b: float) -> str:
+    d = (a - b) * 100
+    return f"{d:+.1f} pp"
+
+
+print(f"""
+Lectura de los números que TÚ acabas de obtener:
+
+  categoría   v1 vs base: {delta(res_v1['categoria'], BASE_CAT)}    v2 vs v1: {delta(res_v2['categoria'], res_v1['categoria'])}
+  prioridad   v1 vs base: {delta(res_v1['prioridad'], BASE_PRI)}    v2 vs v1: {delta(res_v2['prioridad'], res_v1['prioridad'])}
+  prioridad subestimada   v1: {res_v1['subestima']}   ->   v2: {res_v2['subestima']}
+
+Tres preguntas para interpretarlos, en este orden:
+
+1. ¿Batió el LLM a las reglas en categoría? Sobre ESTOS datos, probablemente no, y ya
+   explicamos por qué en la fase 0: la línea base está sobreajustada al generador de los
+   tickets. Sobre correos reales, la relación se invierte casi siempre.
+
+2. ¿Mejoró la v2 la prioridad respecto a la v1? Esa mejora, si la hay, no viene del modelo:
+   viene de las REGLAS de la fase 3. El plan del cliente y los topes por contrato no están
+   escritos en el texto del ticket, así que ningún modelo podía deducirlos.
+
+3. ¿Bajó la prioridad subestimada? Es la métrica que le importa al negocio. Sobrestimar
+   cuesta el tiempo de un ingeniero; subestimar cuesta un cliente. Si tuvieras que vigilar
+   un solo número en producción, sería este, y no el acierto global.
+
+Y una observación de arquitectura que sí es independiente de los datos: la v2 hace el doble
+de llamadas al modelo pero, al lanzarlas en paralelo, la latencia por ticket apenas cambia.
+Paralelizar convierte "el doble de coste" en "el doble de coste y la misma espera".
+""")
+
+#%%md
+## Retos para llevarlo más lejos
+
+Ninguno tiene solución en el notebook. Son el trabajo real.
+
+1. **Ajusta `PESO_SENAL` con los datos, no a ojo.** Tienes 300 tickets de entrenamiento con
+   la prioridad real: haz una búsqueda en rejilla sobre los pesos maximizando el acierto de
+   prioridad en entrenamiento, y luego mídelo en prueba. Verás que el peso óptimo de
+   `tono_molesto` no es el que habrías puesto por intuición.
+
+2. **Mide el coste en euros.** Los objetos `AIMessage` traen `usage_metadata` con los tokens
+   de entrada y salida. Acumúlalos en el estado con un reducer y calcula el coste por ticket.
+   Compáralo con lo que cuesta un minuto de un agente humano.
+
+3. **Umbral de abstención.** Añade una regla: si la categoría del modelo no coincide con la
+   de la línea base por reglas, marca el ticket como "dudoso" y mándalo a revisión humana.
+   Mide qué porcentaje de tickets acabas mandando a revisión y cuánto sube el acierto de los
+   que no. Es la curva de precisión-cobertura, y es la conversación que vas a tener con
+   negocio.
+
+4. **Añade una salvaguarda de contenido.** Un ticket que mencione autolesiones o una amenaza
+   legal grave debe ir a un canal aparte, siempre, se diga lo que se diga en la categoría.
+   Un nodo previo con una arista condicional que cortocircuite todo lo demás.
+
+5. **Deriva de datos.** Las categorías cambian con el tiempo. Diseña cómo detectarías que el
+   acierto está bajando en producción **sin** tener etiquetas nuevas. (Pista: mira la
+   distribución de las señales de urgencia y de la confianza del modelo, no del acierto.)
+
+## Lo que te llevas de este proyecto
+
+- **Línea base primero.** Sin ella, "el 78 % de acierto" no significa nada.
+- **Pide percepción, no juicio.** El LLM extrae hechos del texto; tus reglas deciden. Esa
+  frontera es la decisión de diseño más importante de un sistema con LLM.
+- **Paraleliza lo independiente.** Dos llamadas concurrentes cuestan el doble y tardan lo
+  mismo.
+- **La traza de auditoría es un reducer acumulador**, no un sistema de logs aparte.
+- **Elige la métrica que le importa al negocio.** Aquí es la prioridad subestimada, no el
+  acierto global.
+
+**Siguiente módulo:** [`../02_agentes/05_tools_y_toolnode.ipynb`](../02_agentes/05_tools_y_toolnode.ipynb)
+— herramientas, `ToolNode` y el bucle del agente.

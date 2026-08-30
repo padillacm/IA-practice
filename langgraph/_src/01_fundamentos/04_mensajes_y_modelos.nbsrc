@@ -1,0 +1,668 @@
+#%%md
+# 04 · Mensajes, modelos y salida estructurada
+
+**Módulo 1 · Fundamentos** — *tiempo estimado: 1 h 15 min*
+
+Ya sabes mover estado por un grafo. Ahora metemos modelos de lenguaje dentro, que es donde
+aparecen los problemas de verdad: el historial crece, el coste crece con él, y la salida del
+modelo es texto libre cuando tú necesitas datos.
+
+Al terminar sabrás:
+
+1. Los tipos de mensaje y qué papel juega cada uno.
+2. Gestionar el historial: recortar, resumir, podar — y **cuánto cuesta no hacerlo**.
+3. Obtener **salida estructurada** fiable y validada, en vez de parsear texto.
+4. Elegir el modelo en tiempo de ejecución en lugar de fijarlo en el código.
+5. Emitir tokens en streaming desde un grafo.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init()
+
+#%%md
+## 1. Los mensajes
+
+Un modelo de chat recibe una **lista de mensajes** y devuelve **un mensaje**. Los cinco tipos
+que vas a manejar:
+
+| Tipo | Quién lo escribe | Para qué |
+|---|---|---|
+| `SystemMessage` | tú | Instrucciones, personalidad, reglas. Va el primero |
+| `HumanMessage` | el usuario | La entrada |
+| `AIMessage` | el modelo | La respuesta. Puede traer `tool_calls` en vez de texto |
+| `ToolMessage` | tu código | El resultado de ejecutar una herramienta |
+| `RemoveMessage` | tú | Una señal para `add_messages`: borra este mensaje |
+
+Dos propiedades del `AIMessage` a las que vas a volver mil veces:
+
+- **`.text`** — el texto. Es una **propiedad**, no un método (en LangChain 0.x era `.text()`).
+- **`.tool_calls`** — la lista de herramientas que el modelo quiere llamar. Si no está
+  vacía, **el turno no ha terminado**: el modelo espera resultados, no una respuesta.
+
+#%%py
+from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+
+conversacion = [
+    SystemMessage("Eres un agente de soporte técnico. Sé conciso."),
+    HumanMessage("No me llega la factura de mayo"),
+    AIMessage(
+        "",  # cuando el modelo llama a una herramienta, el texto suele ir vacío
+        tool_calls=[{"name": "buscar_factura", "args": {"mes": "2026-05"}, "id": "call_1"}],
+    ),
+    ToolMessage("factura F-2026-0512, estado: enviada el 03/06", tool_call_id="call_1"),
+    AIMessage("Tu factura de mayo (F-2026-0512) se envió el 3 de junio. Revisa la carpeta de spam."),
+]
+
+mostrar_mensajes(conversacion)
+
+#%%md
+Ese patrón —`AIMessage` con `tool_calls`, seguido de un `ToolMessage` por cada llamada, y
+luego el `AIMessage` final— **es** el bucle de un agente. En el módulo 2 lo construimos a
+mano antes de usar ningún atajo, porque quien no ha escrito ese bucle nunca sabe depurarlo.
+
+Una regla que causa muchos errores 400: **cada `tool_call` tiene que tener su `ToolMessage`
+con el mismo `tool_call_id`**, antes del siguiente turno del modelo. Si podas el historial
+y te llevas por delante un `ToolMessage` dejando huérfano su `AIMessage`, el proveedor
+rechaza la petición.
+
+#%%md
+## 2. El problema del historial: por qué crece la factura
+
+Cada llamada al modelo reenvía **todo** el historial. Un agente de 20 turnos hace 20
+llamadas, y la número 20 paga por los 19 turnos anteriores. El coste crece de forma
+**cuadrática** con la longitud de la conversación.
+
+Vamos a medirlo con números en vez de con intuiciones.
+
+#%%py
+from langchain_core.messages.utils import count_tokens_approximately
+
+historial = [SystemMessage("Eres un asistente de soporte técnico útil y conciso.")]
+acumulado = 0
+filas = []
+
+for turno in range(1, 21):
+    historial.append(HumanMessage(f"Pregunta {turno}: " + "detalle del problema " * 15))
+    historial.append(AIMessage(f"Respuesta {turno}: " + "explicación de la solución " * 20))
+    tokens_de_esta_llamada = count_tokens_approximately(historial)
+    acumulado += tokens_de_esta_llamada
+    if turno in (1, 5, 10, 15, 20):
+        filas.append((turno, tokens_de_esta_llamada, acumulado))
+
+print(f"{'turno':>6} {'tokens enviados':>16} {'tokens acumulados':>19}")
+for turno, envio, total in filas:
+    print(f"{turno:>6} {envio:>16,} {total:>19,}")
+
+print(f"\nEl turno 20 envía {filas[-1][1] / filas[0][1]:.0f} veces más tokens que el turno 1.")
+print(f"Sin gestionar el historial, la conversación cuesta {acumulado:,} tokens de entrada.")
+
+#%%md
+Y esto con respuestas cortas y sin herramientas. Un agente real que recupera documentos y
+devuelve resultados de herramientas llega a la ventana de contexto en muchos menos turnos.
+
+Hay **tres** estrategias, y no son excluyentes:
+
+| Estrategia | Qué hace | Qué pierdes | Coste |
+|---|---|---|---|
+| **Recortar** (`trim_messages`) | Se queda con los N últimos tokens | El principio de la conversación | cero |
+| **Podar** (`RemoveMessage`) | Borra mensajes concretos del estado | Lo que decidas | cero |
+| **Resumir** | Sustituye lo antiguo por un resumen del LLM | Detalle, no el hilo | una llamada extra |
+
+#%%md
+### 2.1 Recortar con `trim_messages`
+
+Es la más barata: cero llamadas al modelo, puramente local. Las opciones que importan:
+
+- `strategy="last"` — conserva el **final** de la conversación. Es casi siempre lo que quieres.
+- `include_system=True` — no tires el `SystemMessage`; son tus instrucciones.
+- `start_on="human"` — arranca el recorte en un `HumanMessage`, para no dejar un `ToolMessage`
+  huérfano al principio. **Esta es la opción que evita el error 400 del que hablábamos.**
+- `token_counter` — `count_tokens_approximately` es rápido y no cuesta nada; pasarle el
+  propio modelo es exacto pero llama al tokenizador.
+
+#%%py
+from langchain.messages import trim_messages
+
+print(f"antes  : {len(historial)} mensajes, {count_tokens_approximately(historial):,} tokens")
+
+recortado = trim_messages(
+    historial,
+    max_tokens=800,
+    token_counter=count_tokens_approximately,
+    strategy="last",
+    include_system=True,
+    start_on="human",
+)
+
+print(f"después: {len(recortado)} mensajes, {count_tokens_approximately(recortado):,} tokens")
+print(f"\nprimero: [{recortado[0].type}] {recortado[0].text[:60]}")
+print(f"segundo: [{recortado[1].type}] {recortado[1].text[:60]}")
+print(f"último : [{recortado[-1].type}] {recortado[-1].text[:60]}")
+
+#%%md
+### 2.2 Recortar dentro de un grafo, sin destruir el historial
+
+Aquí hay una decisión de diseño que importa más de lo que parece:
+
+- **Recortar solo para la llamada** — el estado conserva todo y el modelo ve una ventana.
+  El historial completo sigue disponible para auditar, para la interfaz y para un resumen
+  posterior. **Esta es la opción por defecto.**
+- **Podar el estado** con `RemoveMessage` — se borra de verdad. Solo si el tamaño del
+  checkpoint es un problema real, o si hay que borrar datos por obligación legal.
+
+#%%py
+import operator
+from typing import Annotated
+
+from langgraph.graph import END, START, MessagesState, StateGraph
+
+modelo = llm()
+
+
+class EstadoChat(MessagesState):
+    tokens_enviados: Annotated[int, operator.add]
+
+
+def responder(estado: EstadoChat) -> dict:
+    """Recorta para la llamada; el estado se queda con todo."""
+    ventana = trim_messages(
+        estado["messages"],
+        max_tokens=500,
+        token_counter=count_tokens_approximately,
+        strategy="last",
+        include_system=True,
+        start_on="human",
+    )
+    respuesta = modelo.invoke(ventana)
+    return {"messages": [respuesta], "tokens_enviados": count_tokens_approximately(ventana)}
+
+
+chat = StateGraph(EstadoChat).add_node("responder", responder).add_edge(START, "responder").compile()
+
+largo = [SystemMessage("Eres un asistente conciso. Responde en una frase.")]
+for i in range(1, 9):
+    largo += [HumanMessage(f"Dato {i}: el ticket TCK-{i:03d} es de categoría facturación." * 6),
+              AIMessage(f"Anotado el dato {i}.")]
+largo.append(HumanMessage("¿Cuántos datos te he dado en total? Responde solo con el número."))
+
+salida = chat.invoke({"messages": largo, "tokens_enviados": 0})
+print(f"historial completo en el estado : {len(salida['messages'])} mensajes")
+print(f"tokens que vio realmente el modelo: {salida['tokens_enviados']}")
+print(f"respuesta: {salida['messages'][-1].text}")
+
+#%%md
+La respuesta probablemente sea incorrecta, y **eso es exactamente lo que hay que ver**: el
+modelo no vio los primeros datos porque los recortamos. Recortar no es gratis, es un
+intercambio. Cuando la información antigua importa, hay que **resumir** en lugar de recortar,
+o sacarla del historial y meterla en memoria de largo plazo (módulo 3).
+
+#%%md
+### 2.3 Resumir: compactar sin perder el hilo
+
+El patrón: cuando el historial pase de un umbral, pide al modelo un resumen, borra todo con
+`RemoveMessage(id=REMOVE_ALL_MESSAGES)` y deja el resumen como único mensaje. Le cuesta una
+llamada extra, pero conserva el sentido de la conversación.
+
+#%%py
+from langchain.messages import RemoveMessage
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
+
+UMBRAL_TOKENS = 400
+
+
+class EstadoResumen(MessagesState):
+    resumen: str
+    compactaciones: Annotated[int, operator.add]
+
+
+def compactar(estado: EstadoResumen) -> dict:
+    mensajes = estado["messages"]
+    if count_tokens_approximately(mensajes) < UMBRAL_TOKENS:
+        return {}
+
+    peticion = mensajes + [HumanMessage(
+        "Resume la conversación anterior en 3 frases, conservando los datos concretos "
+        "(identificadores, cifras, decisiones). No añadas nada que no esté."
+    )]
+    resumen = modelo.invoke(peticion).text
+
+    sistema = next((m for m in mensajes if m.type == "system"), None)
+    conservados = ([sistema] if sistema else []) + [AIMessage(f"[Resumen de lo anterior] {resumen}")]
+    return {
+        "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *conservados],
+        "resumen": resumen,
+        "compactaciones": 1,
+    }
+
+
+def responder_simple(estado: EstadoResumen) -> dict:
+    return {"messages": [modelo.invoke(estado["messages"])]}
+
+
+con_resumen = (
+    StateGraph(EstadoResumen)
+    .add_sequence([("compactar", compactar), ("responder", responder_simple)])
+    .add_edge(START, "compactar")
+    .compile()
+)
+
+salida = con_resumen.invoke({"messages": largo, "resumen": "", "compactaciones": 0})
+print(f"compactaciones: {salida['compactaciones']}")
+print(f"mensajes tras compactar: {len(salida['messages'])}\n")
+print("resumen generado:\n ", salida["resumen"])
+print("\nrespuesta final:\n ", salida["messages"][-1].text)
+
+#%%md
+> LangChain trae esto de fábrica como `SummarizationMiddleware` para agentes, con umbrales
+> por fracción de contexto, por tokens o por número de mensajes. Lo veremos en el notebook 07.
+> Lo hemos escrito a mano aquí porque conviene entender qué hace antes de delegarlo.
+
+#%%md
+## 3. Salida estructurada
+
+Pedirle al modelo "responde solo con la categoría" y luego hacer `.strip().lower()` funciona
+hasta que un día responde `"Categoría: facturación"` y te rompe el `dict`. Un sistema serio
+no parsea texto libre: pide **datos**.
+
+`with_structured_output(Esquema)` usa el mecanismo de tool-calling del proveedor para
+garantizar la forma, y devuelve una instancia de tu modelo Pydantic ya validada.
+
+#%%py
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class Triaje(BaseModel):
+    """Resultado del triaje de un ticket de soporte."""
+
+    categoria: Literal[
+        "facturacion", "acceso_cuenta", "bug_producto", "integraciones",
+        "rendimiento", "solicitud_funcionalidad", "datos_privacidad", "otros",
+    ] = Field(description="La categoría que mejor describe el problema principal del ticket")
+    prioridad: Literal["baja", "media", "alta", "critica"] = Field(
+        description="critica solo si hay servicio caído, brecha de seguridad o bloqueo total del cliente"
+    )
+    requiere_humano: bool = Field(description="True si no se puede resolver con una respuesta automática")
+    confianza: float = Field(ge=0.0, le=1.0, description="Confianza en la clasificación, de 0 a 1")
+    justificacion: str = Field(description="Una frase explicando la decisión")
+
+
+clasificador = modelo.with_structured_output(Triaje)
+
+resultado = clasificador.invoke(
+    "Clasifica este ticket de soporte.\n\n"
+    "Asunto: La plataforma va extremadamente lenta\n"
+    "Mensaje: Desde hace 5 horas cualquier consulta tarda más de un minuto. Somos 25 personas "
+    "y está parado todo el equipo. Es urgente, tenemos un cierre mañana.\n"
+    "Plan del cliente: enterprise"
+)
+
+print(type(resultado).__name__, "\n")
+for campo, valor in resultado.model_dump().items():
+    print(f"  {campo:<16} = {valor!r}")
+
+#%%md
+Lo que acabas de conseguir, y no es poco:
+
+- `resultado.categoria` está **garantizado** dentro del `Literal`. No hay que normalizar nada.
+- `confianza` está validada en `[0, 1]` por Pydantic.
+- Las descripciones de los `Field` **son parte del prompt**: viajan al modelo dentro del
+  esquema de la herramienta. Escribirlas bien es prompt engineering, no documentación.
+  Fíjate en la de `prioridad`: define el criterio en vez de dejarlo a la interpretación.
+
+**Tres consejos que marcan la diferencia:**
+
+1. **`Literal` antes que `str`** siempre que el dominio sea cerrado.
+2. **El docstring de la clase también viaja** al modelo. Úsalo.
+3. Pide la **justificación después** de los campos de decisión, no antes: no es cadena de
+   pensamiento (el modelo ya decidió), es una explicación para tus logs y tu auditoría. Si
+   quieres que el modelo razone *antes* de decidir, pon un campo `razonamiento: str` como
+   **primer** campo del esquema; el orden de generación importa.
+
+#%%md
+### 3.1 Salida estructurada dentro de un grafo
+
+El patrón normal: un nodo produce el objeto estructurado y lo escribe en el estado; las
+aristas condicionales enrutan leyendo campos de ese objeto. Toda la ambigüedad del texto
+libre queda encerrada en un solo nodo.
+
+#%%py
+from utils.datos import tickets
+
+
+class EstadoTriaje(MessagesState):
+    ticket: dict
+    triaje: Triaje | None
+    destino: str
+
+
+def clasificar_ticket(estado: EstadoTriaje) -> dict:
+    t = estado["ticket"]
+    resultado = clasificador.invoke(
+        "Clasifica este ticket de soporte.\n\n"
+        f"Asunto: {t['asunto']}\nMensaje: {t['mensaje']}\nPlan del cliente: {t['plan_cliente']}"
+    )
+    return {"triaje": resultado}
+
+
+def enrutar(estado: EstadoTriaje) -> Literal["guardia", "cola_humana", "respuesta_automatica"]:
+    t = estado["triaje"]
+    if t.prioridad == "critica":
+        return "guardia"
+    return "cola_humana" if t.requiere_humano or t.confianza < 0.7 else "respuesta_automatica"
+
+
+grafo_triaje = (
+    StateGraph(EstadoTriaje)
+    .add_node("clasificar", clasificar_ticket)
+    .add_node("guardia", lambda e: {"destino": "ingeniero de guardia"})
+    .add_node("cola_humana", lambda e: {"destino": "cola de agentes humanos"})
+    .add_node("respuesta_automatica", lambda e: {"destino": "respuesta automática"})
+    .add_edge(START, "clasificar")
+    .add_conditional_edges("clasificar", enrutar, {
+        "guardia": "guardia", "cola_humana": "cola_humana",
+        "respuesta_automatica": "respuesta_automatica",
+    })
+    .compile()
+)
+
+df = tickets()
+muestra = df.sample(5, random_state=11)
+
+for fila in muestra.itertuples():
+    r = grafo_triaje.invoke({
+        "messages": [],
+        "ticket": {"asunto": fila.asunto, "mensaje": fila.mensaje, "plan_cliente": fila.plan_cliente},
+        "triaje": None,
+        "destino": "",
+    })
+    t = r["triaje"]
+    print(f"  {fila.id_ticket}  {t.categoria:<24} {t.prioridad:<8} conf={t.confianza:.2f}  -> {r['destino']}")
+    print(f"            real: {fila.categoria}/{fila.prioridad}")
+
+#%%md
+> **`confianza` es un número del modelo, no una probabilidad.** Los LLM están mal calibrados:
+> dicen 0.9 con la misma alegría cuando aciertan y cuando se equivocan. Sirve como señal
+> *relativa* para ordenar casos dudosos, y como umbral para escalar a un humano, pero no la
+> trates como una probabilidad real. En el módulo 6 veremos cómo medir de verdad si tu
+> clasificador está calibrado.
+
+#%%md
+## 4. Elegir el modelo en tiempo de ejecución
+
+Fijar `ChatOpenAI(model="gpt-4o-mini")` en el cuerpo de un nodo es cómodo y es una mala idea
+en cuanto quieras: usar un modelo barato para clasificar y uno caro para redactar, cambiar de
+proveedor, o hacer un test A/B.
+
+`init_chat_model` acepta una cadena `"proveedor:modelo"`, y combinándolo con el `context`
+del notebook 01 tienes selección de modelo por petición sin recompilar nada.
+
+#%%py
+from dataclasses import dataclass
+
+from langchain.chat_models import init_chat_model
+from langgraph.runtime import Runtime
+
+
+@dataclass
+class ContextoModelo:
+    modelo: str = "openai:gpt-4o-mini"
+    temperatura: float = 0.0
+
+
+class EstadoRedaccion(MessagesState):
+    pass
+
+
+def redactar(estado: EstadoRedaccion, runtime: Runtime[ContextoModelo]) -> dict:
+    m = init_chat_model(runtime.context.modelo, temperature=runtime.context.temperatura)
+    return {"messages": [m.invoke(estado["messages"])]}
+
+
+redactor = StateGraph(EstadoRedaccion, context_schema=ContextoModelo) \
+    .add_node("redactar", redactar).add_edge(START, "redactar").compile()
+
+pregunta = [HumanMessage("En una frase: ¿por qué un reducer es una política de concurrencia?")]
+
+for temp in (0.0, 0.9):
+    salida = redactor.invoke({"messages": pregunta},
+                             context=ContextoModelo(modelo="openai:gpt-4o-mini", temperatura=temp))
+    print(f"  temperatura={temp}: {salida['messages'][-1].text}\n")
+
+#%%md
+En producción, además, conviene **cachear** las instancias del modelo: crear un cliente en
+cada nodo abre conexiones nuevas sin necesidad. Un `functools.lru_cache` sobre una función
+`obtener_modelo(nombre, temperatura)` resuelve el problema en tres líneas.
+
+#%%py
+from functools import lru_cache
+
+
+@lru_cache(maxsize=8)
+def obtener_modelo(nombre: str, temperatura: float = 0.0):
+    """Un cliente por combinación de parámetros, reutilizado en todo el proceso."""
+    return init_chat_model(nombre, temperature=temperatura)
+
+
+a = obtener_modelo("openai:gpt-4o-mini")
+b = obtener_modelo("openai:gpt-4o-mini")
+print("¿la misma instancia?", a is b)
+
+#%%md
+## 5. Streaming de tokens desde un grafo
+
+Para el usuario, la diferencia entre "esperar 8 segundos mirando una ruedecita" y "ver
+aparecer el texto" es enorme. `stream_mode="messages"` emite los tokens de cualquier modelo
+que se llame dentro del grafo, junto con metadatos que dicen **de qué nodo** vienen.
+
+Cada evento es una tupla `(fragmento_de_mensaje, metadatos)`.
+
+#%%py
+grafo_stream = (
+    StateGraph(MessagesState)
+    .add_node("responder", lambda e: {"messages": [modelo.invoke(e["messages"])]})
+    .add_edge(START, "responder")
+    .compile()
+)
+
+entrada = {"messages": [HumanMessage("Explica en 3 frases qué es un super-paso en LangGraph.")]}
+
+print("token a token:\n")
+for fragmento, meta in grafo_stream.stream(entrada, stream_mode="messages"):
+    if fragmento.text:
+        print(fragmento.text, end="", flush=True)
+
+print("\n\n(los metadatos del último fragmento indican el nodo de origen:",
+      f"{meta.get('langgraph_node')!r})")
+
+#%%md
+Con varios nodos que llaman al modelo, `meta["langgraph_node"]` te deja filtrar: emitir al
+usuario solo los tokens del redactor final y no los del clasificador interno. Es el patrón
+estándar y lo desarrollamos en el módulo 4, junto con los otros cinco modos de stream.
+
+#%%md
+## 6. Ejercicios
+
+> **EJERCICIO 4.1 — Extractor estructurado y medido**
+>
+> Define un esquema Pydantic `DatosTicket` que extraiga de un ticket:
+> `sentimiento` (`negativo`/`neutro`/`positivo`), `menciona_incumplimiento_sla` (bool),
+> `entidades` (lista de identificadores, correos o importes que aparezcan) y
+> `resumen_una_linea`.
+>
+> Constrúyelo como grafo, pásalo por 15 tickets y **mide** el acierto del `sentimiento`
+> contra la columna real del conjunto de datos.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 4.1</b></summary>
+
+Fíjate en dos cosas. Primera, <code>batch()</code> procesa los 15 tickets en paralelo: en
+serie tardaría unas 15 veces más y no hay ninguna razón para ello.
+
+Segunda, y más importante: la matriz de confusión dice mucho más que el porcentaje de
+acierto. Casi siempre verás que el modelo apenas usa <code>neutro</code> — tiende a
+polarizar. Eso no se arregla con un modelo mejor, se arregla afinando la descripción del
+campo con el criterio exacto de qué cuenta como neutro.
+</details>
+
+#%%py
+from collections import Counter
+
+
+class DatosTicket(BaseModel):
+    """Datos extraídos de un ticket de soporte."""
+
+    sentimiento: Literal["negativo", "neutro", "positivo"] = Field(
+        description="El tono del cliente. 'neutro' si solo informa o pregunta sin mostrar "
+                    "molestia ni agradecimiento; 'negativo' si hay queja, urgencia o frustración."
+    )
+    menciona_incumplimiento_sla: bool = Field(
+        description="True si el cliente alude a plazos incumplidos, esperas excesivas o al contrato"
+    )
+    entidades: list[str] = Field(
+        description="Identificadores, correos, importes o fechas concretas mencionados. Vacía si no hay."
+    )
+    resumen_una_linea: str = Field(description="El problema en una sola frase, máximo 12 palabras")
+
+
+extractor = modelo.with_structured_output(DatosTicket)
+
+
+class EstadoExtraccion(MessagesState):
+    asunto: str
+    mensaje: str
+    datos: DatosTicket | None
+
+
+def extraer(estado: EstadoExtraccion) -> dict:
+    return {"datos": extractor.invoke(
+        f"Extrae los datos de este ticket.\n\nAsunto: {estado['asunto']}\nMensaje: {estado['mensaje']}"
+    )}
+
+
+grafo_extraccion = StateGraph(EstadoExtraccion) \
+    .add_node("extraer", extraer).add_edge(START, "extraer").compile()
+
+muestra = df.sample(15, random_state=3)
+entradas = [{"messages": [], "asunto": r.asunto, "mensaje": r.mensaje, "datos": None}
+            for r in muestra.itertuples()]
+salidas = grafo_extraccion.batch(entradas)
+
+confusion = Counter()
+aciertos = 0
+for fila, salida in zip(muestra.itertuples(), salidas):
+    d = salida["datos"]
+    confusion[(fila.sentimiento, d.sentimiento)] += 1
+    aciertos += d.sentimiento == fila.sentimiento
+
+print(f"acierto de sentimiento: {aciertos}/{len(salidas)} = {aciertos / len(salidas):.0%}\n")
+print("matriz de confusión (real -> predicho):")
+for (real, pred), n in sorted(confusion.items(), key=lambda kv: -kv[1]):
+    marca = " " if real == pred else "x"
+    print(f"  {marca} {real:<9} -> {pred:<9} {n}")
+
+print("\nejemplo de extracción completa:")
+for campo, valor in salidas[0]["datos"].model_dump().items():
+    print(f"  {campo:<28} = {valor!r}")
+
+#%%md
+> **EJERCICIO 4.2 — Compactación automática con umbral**
+>
+> Escribe un grafo conversacional que compacte el historial **solo cuando haga falta**:
+> mide los tokens antes de responder y, si superan un umbral, resume; si no, no gasta nada.
+> Registra en el estado cuántas veces compactó y cuántos tokens ahorró en total.
+>
+> Es exactamente lo que hace `SummarizationMiddleware` por dentro.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 4.2</b></summary>
+
+La estructura es una arista condicional que decide entre <code>compactar</code> y
+<code>responder</code>. Lo que hace útil esta versión no es el resumen —eso ya lo vimos— sino
+la <b>contabilidad</b>: sin medir tokens ahorrados no puedes saber si el umbral está bien
+puesto. Un umbral demasiado bajo resume constantemente y gasta más de lo que ahorra.
+</details>
+
+#%%py
+class EstadoAuto(MessagesState):
+    umbral: int
+    compactaciones: Annotated[int, operator.add]
+    tokens_ahorrados: Annotated[int, operator.add]
+
+
+def decidir_compactar(estado: EstadoAuto) -> Literal["compactar", "responder"]:
+    return "compactar" if count_tokens_approximately(estado["messages"]) > estado["umbral"] else "responder"
+
+
+def compactar_auto(estado: EstadoAuto) -> dict:
+    antes = count_tokens_approximately(estado["messages"])
+    resumen = modelo.invoke(estado["messages"] + [HumanMessage(
+        "Resume la conversación en 3 frases conservando datos concretos."
+    )]).text
+
+    sistema = next((m for m in estado["messages"] if m.type == "system"), None)
+    conservados = ([sistema] if sistema else []) + [AIMessage(f"[Resumen] {resumen}")]
+    despues = count_tokens_approximately(conservados)
+
+    return {
+        "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *conservados],
+        "compactaciones": 1,
+        "tokens_ahorrados": antes - despues,
+    }
+
+
+auto = (
+    StateGraph(EstadoAuto)
+    .add_node("compactar", compactar_auto)
+    .add_node("responder", responder_simple)
+    .add_conditional_edges(START, decidir_compactar, {"compactar": "compactar", "responder": "responder"})
+    .add_edge("compactar", "responder")
+    .add_edge("responder", END)
+    .compile()
+)
+
+separador("conversación corta: no debería compactar")
+corta = {"messages": [SystemMessage("Sé conciso."), HumanMessage("¿Qué es un checkpointer? Una frase.")],
+         "umbral": 400, "compactaciones": 0, "tokens_ahorrados": 0}
+r1 = auto.invoke(corta)
+print(f"  compactaciones={r1['compactaciones']}  ahorro={r1['tokens_ahorrados']}")
+print(f"  {r1['messages'][-1].text}")
+
+separador("conversación larga: debería compactar")
+r2 = auto.invoke({"messages": largo, "umbral": 400, "compactaciones": 0, "tokens_ahorrados": 0})
+print(f"  compactaciones={r2['compactaciones']}  tokens ahorrados={r2['tokens_ahorrados']:,}")
+print(f"  mensajes finales={len(r2['messages'])}")
+print(f"  {r2['messages'][-1].text}")
+
+#%%md
+## 7. Resumen
+
+- `AIMessage.text` es una **propiedad**; `AIMessage.tool_calls` no vacío significa que el
+  turno **no** ha terminado.
+- El historial crece y el coste con él, de forma cuadrática. Hay que gestionarlo desde el
+  principio, no cuando duela.
+- `trim_messages` con `include_system=True` y `start_on="human"` es la opción barata; recorta
+  **para la llamada**, no destruyas el estado sin motivo.
+- Resumir conserva el hilo a cambio de una llamada. `RemoveMessage(id=REMOVE_ALL_MESSAGES)`
+  es la herramienta para sustituir el historial entero.
+- **Salida estructurada siempre que la salida alimente lógica.** `Literal` para dominios
+  cerrados, y las descripciones de los `Field` son parte del prompt.
+- La `confianza` que declara un modelo no es una probabilidad. Úsala como señal relativa.
+- Elige el modelo desde el `context`, no lo fijes en el nodo. Y cachea las instancias.
+- `stream_mode="messages"` da tokens con metadatos de nodo.
+
+**Siguiente:** [`P1_proyecto_triaje_tickets.ipynb`](P1_proyecto_triaje_tickets.ipynb) — el
+primer proyecto: un sistema de triaje completo, medido contra 400 tickets etiquetados.

@@ -221,8 +221,10 @@ def mostrar_mensajes(mensajes: Any, *, maximo: int | None = None, ancho: int = 1
             cabecera += f" ({nombre})"
         print(f"\n[{cabecera}]")
 
+        # `.text` es una propiedad en LangChain 1.x; en 0.x era un método.
         contenido = getattr(m, "text", None)
-        contenido = contenido() if callable(contenido) else contenido
+        if callable(contenido):
+            contenido = contenido()
         if contenido is None:
             contenido = getattr(m, "content", "")
         if isinstance(contenido, list):  # bloques de contenido estructurado
