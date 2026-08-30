@@ -1,0 +1,727 @@
+#%%md
+# 06 · El agente ReAct, construido a mano
+
+**Módulo 2 · Agentes** — *tiempo estimado: 1 h 30 min*
+
+Existe `create_agent`, que hace todo esto en una línea. Vamos a escribirlo a mano de todas
+formas, por una razón muy concreta: **cuando un agente se comporta mal, el problema está casi
+siempre en una de las costuras que el atajo te esconde**. Quien ha escrito el bucle sabe
+dónde mirar; quien solo ha llamado a la función, no.
+
+Al terminar sabrás:
+
+1. Qué es ReAct de verdad, y por qué lo que hoy llamamos así ya no es lo del artículo original.
+2. Construir el bucle completo sin `ToolNode` ni `tools_condition`.
+3. Los cuatro controles que todo agente de producción necesita y que el bucle mínimo no tiene.
+4. Reconocer los tres anti-patrones que hacen que un agente dé vueltas.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m2")
+
+#%%md
+## 1. Qué es ReAct, y qué no
+
+ReAct viene de *Reasoning + Acting* ([Yao et al., 2022](https://arxiv.org/abs/2210.03629)).
+La idea original era un truco de *prompting*: hacer que el modelo escribiera en texto plano
+
+```
+Thought: necesito buscar cuántos tickets críticos hay
+Action: contar_tickets[prioridad=critica]
+Observation: 48 tickets
+Thought: ya tengo la respuesta
+Final Answer: hay 48 tickets críticos
+```
+
+y luego **parsear ese texto** con expresiones regulares para extraer la acción. Funcionaba,
+y fallaba constantemente: el modelo se saltaba el formato, escribía `Action :` con espacio,
+o metía la respuesta final dentro del `Thought`.
+
+**Hoy no se hace así, y conviene tenerlo claro.** Los modelos modernos tienen *tool calling*
+nativo: emiten la llamada como datos estructurados, garantizados por el proveedor. No hay
+nada que parsear. Lo que hoy llamamos "agente ReAct" conserva la *estructura* del ciclo
+—razonar, actuar, observar, repetir— pero no el formato de texto.
+
+Así que el bucle real es este, y es sorprendentemente corto:
+
+```
+1. Enviar los mensajes al modelo (con las herramientas enlazadas).
+2. ¿La respuesta trae tool_calls?
+   NO  -> es la respuesta final. Fin.
+   SÍ  -> ejecutar cada una, añadir un ToolMessage por cada una, volver al paso 1.
+```
+
+Eso es todo. Vamos a escribirlo.
+
+#%%md
+## 2. Las herramientas del ejemplo
+
+Un analista de soporte sobre los datos reales del curso. Tres herramientas con
+responsabilidades bien separadas, siguiendo los principios del notebook anterior.
+
+#%%py
+from langchain.tools import tool
+
+from utils.datos import tickets
+
+df = tickets()
+
+
+@tool(parse_docstring=True)
+def contar_tickets(categoria: str = "todas", prioridad: str = "todas", plan: str = "todos") -> str:
+    """Cuenta tickets de soporte aplicando filtros. Úsala para preguntas de "cuántos".
+
+    Args:
+        categoria: facturacion, acceso_cuenta, bug_producto, integraciones, rendimiento,
+            solicitud_funcionalidad, datos_privacidad, otros, o 'todas'.
+        prioridad: baja, media, alta, critica, o 'todas'.
+        plan: free, pro, business, enterprise, o 'todos'.
+    """
+    sel = df
+    for columna, valor, comodin in [("categoria", categoria, "todas"),
+                                    ("prioridad", prioridad, "todas"),
+                                    ("plan_cliente", plan, "todos")]:
+        if valor != comodin:
+            sel = sel[sel[columna] == valor]
+            if sel.empty:
+                validos = ", ".join(sorted(df[columna].unique()))
+                return f"0 tickets. Comprueba el filtro: valores válidos de {columna} son {validos}."
+    return f"{len(sel)} tickets (categoría={categoria}, prioridad={prioridad}, plan={plan})."
+
+
+@tool(parse_docstring=True)
+def estadistica_respuesta(agrupar_por: str = "prioridad") -> str:
+    """Devuelve la mediana de minutos hasta la primera respuesta, agrupada por una dimensión.
+
+    Args:
+        agrupar_por: prioridad, categoria, plan_cliente o canal.
+    """
+    if agrupar_por not in {"prioridad", "categoria", "plan_cliente", "canal"}:
+        return ("Error: agrupar_por debe ser uno de: prioridad, categoria, plan_cliente, canal. "
+                f"Recibí '{agrupar_por}'.")
+    serie = df.groupby(agrupar_por).minutos_primera_respuesta.median().sort_values()
+    return f"Mediana de minutos hasta la primera respuesta, por {agrupar_por}:\n" + \
+           "\n".join(f"  {k}: {v:.0f} min" for k, v in serie.items())
+
+
+@tool(parse_docstring=True)
+def ejemplos_de(categoria: str, limite: int = 3) -> str:
+    """Devuelve algunos asuntos de ejemplo de una categoría, para entender de qué tratan.
+
+    Args:
+        categoria: La categoría de la que ver ejemplos.
+        limite: Cuántos ejemplos, entre 1 y 5.
+    """
+    limite = max(1, min(5, limite))
+    sel = df[df.categoria == categoria]
+    if sel.empty:
+        return f"No hay tickets de '{categoria}'. Categorías: {', '.join(sorted(df.categoria.unique()))}."
+    muestras = sel.sample(min(limite, len(sel)), random_state=0)
+    return "\n".join(f"- [{r.prioridad}] {r.asunto}" for r in muestras.itertuples())
+
+
+HERRAMIENTAS = [contar_tickets, estadistica_respuesta, ejemplos_de]
+POR_NOMBRE = {h.name: h for h in HERRAMIENTAS}
+print("herramientas:", list(POR_NOMBRE))
+
+#%%md
+## 3. El bucle, escrito a mano
+
+Tres piezas: un nodo que llama al modelo, un nodo que ejecuta herramientas y un router.
+Nada de `ToolNode` ni `tools_condition` — los escribimos nosotros para ver qué hacen.
+
+#%%py
+from typing import Literal
+
+from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langgraph.graph import END, START, MessagesState, StateGraph
+
+INSTRUCCIONES = SystemMessage(
+    "Eres un analista de soporte técnico. Respondes preguntas sobre la cola de tickets "
+    "usando exclusivamente las herramientas disponibles.\n"
+    "Reglas:\n"
+    "- Nunca inventes cifras: si no tienes el dato, usa una herramienta o dilo.\n"
+    "- Puedes pedir varias herramientas a la vez si son independientes.\n"
+    "- Cuando tengas los datos, responde en español, en 3 frases como mucho, con las cifras exactas."
+)
+
+modelo_con_tools = llm().bind_tools(HERRAMIENTAS)
+
+
+def nodo_modelo(estado: MessagesState) -> dict:
+    """Paso 1 del bucle: pensar. El SystemMessage se antepone en cada llamada,
+    sin guardarlo en el estado, para poder cambiarlo sin reescribir el historial."""
+    respuesta = modelo_con_tools.invoke([INSTRUCCIONES, *estado["messages"]])
+    return {"messages": [respuesta]}
+
+
+def nodo_herramientas(estado: MessagesState) -> dict:
+    """Paso 2 del bucle: actuar. Esto es, en esencia, lo que hace ToolNode."""
+    ultimo = estado["messages"][-1]
+    salidas = []
+
+    for llamada in ultimo.tool_calls:
+        herramienta = POR_NOMBRE.get(llamada["name"])
+        if herramienta is None:
+            contenido = (f"Error: no existe la herramienta '{llamada['name']}'. "
+                         f"Las disponibles son: {', '.join(POR_NOMBRE)}.")
+        else:
+            try:
+                contenido = str(herramienta.invoke(llamada["args"]))
+            except Exception as exc:
+                contenido = f"Error al ejecutar {llamada['name']}: {exc}. Revisa los argumentos."
+
+        # Cada tool_call necesita SU ToolMessage, con el mismo id. Sin excepciones.
+        salidas.append(ToolMessage(contenido, tool_call_id=llamada["id"], name=llamada["name"]))
+
+    return {"messages": salidas}
+
+
+def hay_que_actuar(estado: MessagesState) -> Literal["herramientas", "__end__"]:
+    """Paso 3: el router. Esto es tools_condition."""
+    ultimo = estado["messages"][-1]
+    return "herramientas" if getattr(ultimo, "tool_calls", None) else END
+
+
+agente = (
+    StateGraph(MessagesState)
+    .add_node("modelo", nodo_modelo)
+    .add_node("herramientas", nodo_herramientas)
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", hay_que_actuar, {"herramientas": "herramientas", END: END})
+    .add_edge("herramientas", "modelo")
+    .compile()
+)
+
+mostrar_grafo(agente)
+
+#%%md
+Cuarenta líneas y ya tienes un agente. Fíjate en tres decisiones que hemos tomado sin decirlo:
+
+1. **El `SystemMessage` no se guarda en el estado**, se antepone en cada llamada. Así puedes
+   cambiar las instrucciones (por usuario, por idioma, por experimento) sin tocar el
+   historial persistido. Meterlo en el estado es cómodo hasta el día que quieres cambiarlo.
+2. **Ejecutamos todas las `tool_calls` del turno**, no solo la primera. Los modelos piden
+   varias a la vez y omitirlo deja `tool_call` sin respuesta, lo que provoca un error 400 en
+   la siguiente llamada.
+3. **Los errores se convierten en `ToolMessage`**, nunca en excepciones. El modelo se entera
+   y puede corregir.
+
+#%%py
+def ejecutar(pregunta: str, limite: int = 20) -> dict:
+    salida = agente.invoke({"messages": [HumanMessage(pregunta)]}, {"recursion_limit": limite})
+    return salida
+
+
+resultado = ejecutar(
+    "¿Cuántos tickets críticos hay de clientes enterprise, y cómo se compara la mediana "
+    "de tiempo de primera respuesta entre prioridades?"
+)
+mostrar_mensajes(resultado)
+
+#%%md
+### Ver el bucle girar
+
+`stream_mode="updates"` muestra cada vuelta del ciclo. Es la forma más rápida de ver
+*cuántas* veces piensa y actúa tu agente, que es la métrica que de verdad controla el coste.
+
+#%%py
+entrada = {"messages": [HumanMessage(
+    "Compara los tickets de rendimiento con los de facturación: cuántos hay de cada uno "
+    "y ponme un par de ejemplos de cada categoría."
+)]}
+
+for i, evento in enumerate(agente.stream(entrada, {"recursion_limit": 20}, stream_mode="updates"), 1):
+    for nodo, actualizacion in evento.items():
+        for m in actualizacion["messages"]:
+            if m.type == "ai" and m.tool_calls:
+                nombres = ", ".join(f"{tc['name']}({tc['args']})" for tc in m.tool_calls)
+                print(f"  paso {i} [{nodo}] pide: {nombres}")
+            elif m.type == "ai":
+                print(f"  paso {i} [{nodo}] responde: {m.text[:90]}...")
+            else:
+                print(f"  paso {i} [{nodo}] resultado de {m.name}: {m.content[:70].replace(chr(10), ' ')}...")
+
+#%%md
+## 4. Lo que le falta al bucle mínimo
+
+El agente de arriba funciona en la demo. En producción le faltan cuatro cosas, y cada una
+corresponde a un fallo real que verás.
+
+#%%md
+### 4.1 Un tope de turnos con degradación elegante
+
+`recursion_limit` corta con una excepción, y una excepción es un error 500 para tu usuario.
+Un agente de producción **se rinde con dignidad**: dice lo que sabe y escala.
+
+#%%py
+import operator
+from typing import Annotated
+
+MAX_TURNOS = 4
+
+
+class EstadoAgente(MessagesState):
+    turnos: Annotated[int, operator.add]
+    agotado: bool
+
+
+def nodo_modelo_contado(estado: EstadoAgente) -> dict:
+    respuesta = modelo_con_tools.invoke([INSTRUCCIONES, *estado["messages"]])
+    return {"messages": [respuesta], "turnos": 1}
+
+
+def enrutar_con_tope(estado: EstadoAgente) -> Literal["herramientas", "rendirse", "__end__"]:
+    ultimo = estado["messages"][-1]
+    if not getattr(ultimo, "tool_calls", None):
+        return END
+    if estado["turnos"] >= MAX_TURNOS:
+        return "rendirse"
+    return "herramientas"
+
+
+def rendirse(estado: EstadoAgente) -> dict:
+    """Cierra la conversación con lo que se tenga. Sin excepciones, sin tool_calls colgando."""
+    pendiente = estado["messages"][-1]
+    cierres = [ToolMessage("Presupuesto de herramientas agotado; no se ejecutó.",
+                           tool_call_id=tc["id"], name=tc["name"], status="error")
+               for tc in pendiente.tool_calls]
+    resumen = llm().invoke([
+        SystemMessage("Resume para el usuario, en español y en 2 frases, qué has averiguado "
+                      "hasta ahora y qué te ha quedado sin comprobar. No inventes datos."),
+        *estado["messages"],
+    ])
+    return {"messages": [*cierres, resumen], "agotado": True}
+
+
+agente_acotado = (
+    StateGraph(EstadoAgente)
+    .add_node("modelo", nodo_modelo_contado)
+    .add_node("herramientas", nodo_herramientas)
+    .add_node("rendirse", rendirse)
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", enrutar_con_tope,
+                           {"herramientas": "herramientas", "rendirse": "rendirse", END: END})
+    .add_edge("herramientas", "modelo")
+    .add_edge("rendirse", END)
+    .compile()
+)
+
+salida = agente_acotado.invoke(
+    {"messages": [HumanMessage(
+        "Dame el conteo de tickets de cada una de las ocho categorías, uno por uno, "
+        "y luego ejemplos de cada una."
+    )], "turnos": 0, "agotado": False},
+    {"recursion_limit": 30},
+)
+
+print(f"turnos usados: {salida['turnos']}   ¿agotado?: {salida['agotado']}\n")
+print(salida["messages"][-1].text)
+
+#%%md
+Fíjate en el detalle de `rendirse`: **cierra los `tool_call` pendientes** con un `ToolMessage`
+de estado `error` antes de añadir el resumen. Si no lo hicieras, el historial quedaría
+inconsistente y la siguiente llamada al proveedor fallaría — un error que aparece un turno
+más tarde, en otro sitio, y que cuesta mucho de diagnosticar.
+
+#%%md
+### 4.2 Una respuesta final estructurada
+
+"Devuelve texto" está bien para un chat. Si el agente alimenta a otro sistema, necesitas
+datos. El patrón: un nodo final que convierte la conversación en un objeto validado.
+
+#%%py
+from pydantic import BaseModel, Field
+
+
+class RespuestaAnalista(BaseModel):
+    """Respuesta estructurada del analista de soporte."""
+
+    respuesta: str = Field(description="La respuesta para la persona, en 2 o 3 frases")
+    cifras_citadas: list[str] = Field(
+        description="Cada cifra concreta usada, con su fuente. Ejemplo: '48 tickets críticos (contar_tickets)'"
+    )
+    herramientas_usadas: list[str] = Field(description="Nombres de las herramientas llamadas")
+    confianza: Literal["alta", "media", "baja"] = Field(
+        description="baja si tuviste que suponer algo o si alguna herramienta falló"
+    )
+
+
+class EstadoEstructurado(MessagesState):
+    resultado: RespuestaAnalista | None
+
+
+def nodo_modelo_est(estado: EstadoEstructurado) -> dict:
+    return {"messages": [modelo_con_tools.invoke([INSTRUCCIONES, *estado["messages"]])]}
+
+
+def formalizar(estado: EstadoEstructurado) -> dict:
+    """Un paso extra al final: convierte la conversación en datos."""
+    estructurador = llm().with_structured_output(RespuestaAnalista)
+    return {"resultado": estructurador.invoke([
+        SystemMessage("Convierte esta conversación de análisis en la estructura pedida. "
+                      "No añadas información que no aparezca en la conversación."),
+        *estado["messages"],
+    ])}
+
+
+agente_est = (
+    StateGraph(EstadoEstructurado)
+    .add_node("modelo", nodo_modelo_est)
+    .add_node("herramientas", nodo_herramientas)
+    .add_node("formalizar", formalizar)
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", lambda e: "herramientas" if getattr(e["messages"][-1], "tool_calls", None)
+                           else "formalizar",
+                           {"herramientas": "herramientas", "formalizar": "formalizar"})
+    .add_edge("herramientas", "modelo")
+    .add_edge("formalizar", END)
+    .compile()
+)
+
+salida = agente_est.invoke(
+    {"messages": [HumanMessage("¿Cuántos tickets de datos_privacidad hay y cuál es su prioridad típica?")],
+     "resultado": None},
+    {"recursion_limit": 20},
+)
+
+r = salida["resultado"]
+print(f"respuesta   : {r.respuesta}")
+print(f"confianza   : {r.confianza}")
+print(f"herramientas: {r.herramientas_usadas}")
+print("cifras:")
+for c in r.cifras_citadas:
+    print("  -", c)
+
+#%%md
+Ese campo `cifras_citadas` es más útil de lo que parece: te deja **verificar** después,
+automáticamente, que cada número de la respuesta salió de una herramienta y no de la
+imaginación del modelo. Es la base de un detector de alucinaciones barato, y volveremos a él
+en el módulo 6.
+
+#%%md
+### 4.3 y 4.4 · Observabilidad y control del contexto
+
+Las otras dos cosas que faltan tienen módulo propio:
+
+- **Observabilidad**: cada vuelta del bucle es una llamada al modelo con su coste y su
+  latencia. Sin trazas no sabes cuál se desmadró. Módulo 6.
+- **Control del contexto**: el historial crece con cada `ToolMessage`, y los resultados de
+  herramientas son largos. Un agente de 15 turnos revienta la ventana. Módulo 3 (memoria) y
+  notebook 07 (`SummarizationMiddleware`).
+
+#%%md
+## 5. Los tres anti-patrones
+
+#%%md
+### Anti-patrón 1 · El agente que da vueltas
+
+El modelo llama a la misma herramienta con los mismos argumentos una y otra vez. Ocurre
+cuando el resultado **no le acerca a la respuesta** y no tiene forma de saberlo: una búsqueda
+vacía que devuelve `"[]"`, un error genérico, un resultado ambiguo.
+
+**El diagnóstico es fácil**: mira si hay `tool_calls` repetidas en la traza.
+
+#%%py
+def detectar_bucle(mensajes) -> list[str]:
+    """Detecta llamadas repetidas idénticas. Una señal, no una prueba: a veces repetir es legítimo."""
+    from collections import Counter
+    vistas = Counter()
+    for m in mensajes:
+        for tc in getattr(m, "tool_calls", None) or []:
+            vistas[(tc["name"], repr(sorted(tc["args"].items())))] += 1
+    return [f"{nombre} con los mismos argumentos, {n} veces" for (nombre, _), n in vistas.items() if n > 1]
+
+
+salida = agente.invoke(
+    {"messages": [HumanMessage("¿Cuántos tickets hay de la categoría 'quejas'? Insiste hasta encontrarlo.")]},
+    {"recursion_limit": 12},
+)
+avisos = detectar_bucle(salida["messages"])
+print("repeticiones detectadas:", avisos or "ninguna")
+print(f"\nmensajes en total: {len(salida['messages'])}")
+print("respuesta:", salida["messages"][-1].text[:200])
+
+#%%md
+**Las tres curas**, por orden de eficacia:
+
+1. **Que la herramienta diga qué hacer.** `"0 tickets. Los valores válidos de categoria son:
+   ..."` corta el bucle en seco; `"[]"` lo alimenta. Nuestras herramientas ya lo hacen, y por
+   eso este ejemplo suele resolverse a la primera.
+2. **Presupuesto por herramienta** (el ejercicio 5.2 del notebook anterior).
+3. **Tope de turnos con degradación** (sección 4.1).
+
+#%%md
+### Anti-patrón 2 · Herramientas que se solapan
+
+Si tienes `buscar_tickets`, `buscar_tickets_por_fecha` y `consultar_tickets`, el modelo
+elegirá mal y además cambiará de opinión entre turnos. **Dos herramientas cuyas descripciones
+podrían intercambiarse son una sola herramienta con un parámetro más.**
+
+Una prueba de humo que se hace en un minuto: escribe las descripciones en una lista y
+pregúntate si tú sabrías elegir entre ellas leyendo solo eso. Si dudas, el modelo también.
+
+#%%py
+for h in HERRAMIENTAS:
+    print(f"  {h.name:<24} {h.description.splitlines()[0]}")
+print("\n¿Podrías elegir sin ambigüedad leyendo solo esto? Si no, refactoriza.")
+
+#%%md
+### Anti-patrón 3 · Herramientas que devuelven demasiado
+
+Cada resultado de herramienta entra en el contexto de **todas** las llamadas siguientes.
+Una herramienta que devuelve 5.000 tokens en el turno 2 los sigue pagando en el turno 10.
+
+#%%py
+from langchain_core.messages.utils import count_tokens_approximately
+
+salida = agente.invoke(
+    {"messages": [HumanMessage("Dame ejemplos de las categorías rendimiento, facturacion e integraciones.")]},
+    {"recursion_limit": 20},
+)
+
+acumulado = 0
+print(f"{'#':>3} {'tipo':<6} {'tokens':>7} {'coste acumulado en el contexto':>32}")
+for i, m in enumerate(salida["messages"], 1):
+    t = count_tokens_approximately([m])
+    acumulado += t
+    print(f"{i:>3} {m.type:<6} {t:>7} {acumulado:>32,}")
+
+print(f"\nEl último turno del modelo vio {acumulado:,} tokens de historial.")
+print("En un agente de 15 turnos, esa cifra se multiplica y luego se paga en CADA llamada.")
+
+#%%md
+## 6. Lo mismo con `create_agent`
+
+Todo lo que hemos escrito cabe en una llamada. La diferencia no es que `create_agent` haga
+magia: hace **exactamente esto**, con las esquinas mejor resueltas.
+
+#%%py
+from langchain.agents import create_agent
+
+agente_prefabricado = create_agent(
+    model=llm(),
+    tools=HERRAMIENTAS,
+    system_prompt=INSTRUCCIONES.text,
+)
+
+salida = agente_prefabricado.invoke(
+    {"messages": [HumanMessage("¿Cuántos tickets críticos hay y de qué categorías?")]},
+    {"recursion_limit": 20},
+)
+print(salida["messages"][-1].text)
+
+#%%py
+mostrar_grafo(agente_prefabricado)
+
+#%%md
+El diagrama es el mismo que dibujamos a mano: `model -> tools -> model`. Lo que añade
+`create_agent` sobre nuestra versión:
+
+| | El nuestro | `create_agent` |
+|---|---|---|
+| Bucle modelo/herramientas | sí | sí |
+| Manejo de errores de herramienta | a mano | configurable |
+| Salida estructurada | un nodo extra | `response_format=` |
+| Límite de turnos, resumen, aprobación humana, PII... | a mano | **middleware** |
+| Enganches antes/después del modelo y de cada herramienta | a mano | **middleware** |
+
+Ese **middleware** es el tema del próximo notebook, y es lo que convierte `create_agent` en
+algo más que un atajo.
+
+> **¿Y `create_react_agent`?** Sigue existiendo en `langgraph.prebuilt`, pero está
+> **obsoleto** en favor de `create_agent`. Si encuentras código o tutoriales con
+> `from langgraph.prebuilt import create_react_agent`, son de la era 0.x: funcionan todavía,
+> pero no tienen middleware y su API va a desaparecer. Usa `create_agent`.
+
+#%%md
+## 7. Ejercicios
+
+> **EJERCICIO 6.1 — Un agente que se autoevalúa**
+>
+> Añade al bucle un nodo `verificar` que se ejecute **antes** de terminar y compruebe que
+> cada cifra de la respuesta final aparece en algún `ToolMessage` del historial. Si encuentra
+> una cifra sin respaldo, devuelve el control al modelo con un mensaje pidiéndole que la
+> justifique o la quite.
+>
+> Limita a un solo reintento para no crear un bucle nuevo.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 6.1</b></summary>
+
+Este patrón —<b>reflexión con verificación determinista</b>— es mucho más fiable que pedirle
+al modelo "revisa tu respuesta". El verificador no es otro LLM: es una expresión regular que
+extrae números y comprueba su presencia en las observaciones. Rápido, gratis y sin opinión.
+
+El límite de un reintento es esencial: sin él, un modelo terco y un verificador estricto
+giran indefinidamente. La regla general para cualquier bucle de reflexión: <b>como mucho una
+o dos vueltas, y luego se sigue adelante marcando la duda</b>.
+</details>
+
+#%%py
+import re
+
+
+class EstadoVerificado(MessagesState):
+    intentos_verificacion: Annotated[int, operator.add]
+    cifras_sin_respaldo: list[str]
+
+
+def numeros(texto: str) -> set[str]:
+    """Extrae números 'significativos'. Ignoramos 0-10, que suelen ser conteos del lenguaje natural."""
+    encontrados = re.findall(r"\d[\d.,]*", texto)
+    limpios = {n.rstrip(".,") for n in encontrados}
+    return {n for n in limpios if n and not (n.isdigit() and int(n) <= 10)}
+
+
+def nodo_modelo_v(estado: EstadoVerificado) -> dict:
+    return {"messages": [modelo_con_tools.invoke([INSTRUCCIONES, *estado["messages"]])]}
+
+
+def verificar(estado: EstadoVerificado) -> dict:
+    """Comprueba que cada cifra de la respuesta aparece en alguna observación de herramienta."""
+    respuesta = estado["messages"][-1]
+    evidencia = " ".join(m.content for m in estado["messages"] if m.type == "tool")
+    respaldo = numeros(evidencia)
+    sin_respaldo = sorted(n for n in numeros(respuesta.text) if n not in respaldo)
+    return {"cifras_sin_respaldo": sin_respaldo, "intentos_verificacion": 1}
+
+
+def tras_verificar(estado: EstadoVerificado) -> Literal["corregir", "__end__"]:
+    if estado["cifras_sin_respaldo"] and estado["intentos_verificacion"] <= 1:
+        return "corregir"
+    return END
+
+
+def corregir(estado: EstadoVerificado) -> dict:
+    faltantes = ", ".join(estado["cifras_sin_respaldo"])
+    return {"messages": [HumanMessage(
+        f"VERIFICACIÓN AUTOMÁTICA: estas cifras de tu respuesta no aparecen en ningún resultado "
+        f"de herramienta: {faltantes}. Compruébalas con una herramienta o reescribe la respuesta "
+        "sin ellas. No añadas cifras nuevas."
+    )]}
+
+
+agente_verificado = (
+    StateGraph(EstadoVerificado)
+    .add_node("modelo", nodo_modelo_v)
+    .add_node("herramientas", nodo_herramientas)
+    .add_node("verificar", verificar)
+    .add_node("corregir", corregir)
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo",
+                           lambda e: "herramientas" if getattr(e["messages"][-1], "tool_calls", None) else "verificar",
+                           {"herramientas": "herramientas", "verificar": "verificar"})
+    .add_edge("herramientas", "modelo")
+    .add_conditional_edges("verificar", tras_verificar, {"corregir": "corregir", END: END})
+    .add_edge("corregir", "modelo")
+    .compile()
+)
+
+salida = agente_verificado.invoke(
+    {"messages": [HumanMessage(
+        "¿Cuántos tickets críticos hay? Dime también qué porcentaje del total representan."
+    )], "intentos_verificacion": 0, "cifras_sin_respaldo": []},
+    {"recursion_limit": 25},
+)
+
+print(f"verificaciones: {salida['intentos_verificacion']}")
+print(f"cifras sin respaldo tras la última pasada: {salida['cifras_sin_respaldo']}")
+print(f"\n{salida['messages'][-1].text}")
+
+#%%md
+> Fíjate en el porcentaje: es una cifra **derivada**, calculada por el modelo a partir de dos
+> conteos, así que el verificador la marca aunque sea correcta. Eso es un **falso positivo**,
+> y es información valiosa: te dice que un verificador puramente léxico no distingue entre
+> "inventado" y "calculado". Las soluciones posibles —darle al agente una calculadora, o
+> permitir cifras derivables de las observadas— son justo el tipo de decisión de diseño que
+> tienes que tomar tú. Un verificador que grita demasiado se acaba ignorando.
+
+#%%py
+mostrar_grafo(agente_verificado)
+
+#%%md
+> **EJERCICIO 6.2 — Mide tu agente**
+>
+> Escribe una función `perfilar(agente, preguntas)` que ejecute una lista de preguntas y
+> devuelva, por cada una: número de turnos del modelo, número de llamadas a herramientas,
+> tokens totales del historial final y segundos. Ejecútala sobre el agente a mano y sobre el
+> de `create_agent` con las mismas preguntas, y compara.
+>
+> Es el primer paso de la evaluación de agentes, y va mucho más allá de "¿respondió bien?".
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 6.2</b></summary>
+
+Estas cuatro cifras son el cuadro de mando mínimo de un agente. La que más sorprende siempre
+es <b>tokens del historial</b>: es la que decide la factura, y no la ves si solo miras la
+respuesta.
+
+Si los dos agentes dan números muy distintos con las mismas preguntas, la causa está casi
+siempre en el prompt del sistema, no en el bucle. Los bucles son idénticos.
+</details>
+
+#%%py
+import time
+
+
+def perfilar(agente_obj, preguntas: list[str], nombre: str, entrada_extra: dict | None = None) -> None:
+    print(f"\n{nombre}")
+    print(f"  {'pregunta':<44} {'turnos':>7} {'llam.':>6} {'tokens':>8} {'seg':>6}")
+    totales = [0, 0, 0, 0.0]
+
+    for p in preguntas:
+        entrada = {"messages": [HumanMessage(p)], **(entrada_extra or {})}
+        t0 = time.perf_counter()
+        salida = agente_obj.invoke(entrada, {"recursion_limit": 25})
+        seg = time.perf_counter() - t0
+
+        mensajes = salida["messages"]
+        turnos = sum(1 for m in mensajes if m.type == "ai")
+        llamadas = sum(len(getattr(m, "tool_calls", None) or []) for m in mensajes)
+        tokens = count_tokens_approximately(mensajes)
+
+        print(f"  {p[:42]:<44} {turnos:>7} {llamadas:>6} {tokens:>8,} {seg:>6.1f}")
+        totales = [totales[0] + turnos, totales[1] + llamadas, totales[2] + tokens, totales[3] + seg]
+
+    print(f"  {'TOTAL':<44} {totales[0]:>7} {totales[1]:>6} {totales[2]:>8,} {totales[3]:>6.1f}")
+
+
+PREGUNTAS = [
+    "¿Cuántos tickets críticos hay?",
+    "¿Qué categoría tiene peor tiempo de respuesta?",
+    "Compara el volumen de facturación y rendimiento, con ejemplos de cada una.",
+]
+
+perfilar(agente, PREGUNTAS, "AGENTE A MANO")
+perfilar(agente_prefabricado, PREGUNTAS, "create_agent")
+
+#%%md
+## 8. Resumen
+
+- ReAct hoy es **tool calling nativo**, no el formato de texto `Thought/Action/Observation`
+  del artículo original. Si ves código parseando ese texto, es de 2023.
+- El bucle son tres piezas: nodo del modelo, nodo de herramientas, router. Cuarenta líneas.
+- El `SystemMessage` va **antepuesto en cada llamada**, no guardado en el estado.
+- Ejecuta **todas** las `tool_calls` del turno y devuelve un `ToolMessage` por cada una, con
+  su `tool_call_id`. Siempre. Incluso al rendirte.
+- El bucle mínimo necesita cuatro añadidos para producción: tope de turnos con degradación,
+  salida estructurada, observabilidad y control del contexto.
+- Los tres anti-patrones: dar vueltas (cúralo desde el mensaje de la herramienta),
+  herramientas solapadas (fúndelas) y salidas enormes (acótalas).
+- `create_agent` hace esto mismo, mejor rematado, y añade **middleware**.
+
+**Siguiente:** [`07_create_agent_y_middleware.ipynb`](07_create_agent_y_middleware.ipynb) —
+el sistema de middleware, que es donde vive la ingeniería de verdad de un agente.

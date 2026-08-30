@@ -1,0 +1,679 @@
+#%%md
+# P2 · Proyecto: agente analista de datos
+
+**Módulo 2 · Proyecto** — *tiempo estimado: 2 h 30 min · coste aproximado: 0,10 € con `gpt-4o-mini`*
+
+## El encargo
+
+El equipo comercial de una cadena de supermercados pregunta cosas como "¿qué ciudad factura
+más?" o "¿los socios gastan más que los clientes ocasionales?". Hoy esas preguntas acaban en
+la cola de un analista y tardan un día.
+
+Quieren un agente que responda al momento. Con dos condiciones innegociables:
+
+1. **No puede inventarse cifras.** Un número inventado en un informe de dirección es peor que
+   no tener agente.
+2. **Tiene que ser barato y acotado.** Nada de agentes que dan veinte vueltas.
+
+## El plan
+
+| Fase | Qué construimos | La idea que se aprende |
+|---|---|---|
+| 0 | Los datos y un **conjunto dorado** de preguntas | Sin verdad de terreno no hay evaluación |
+| 1 | Herramientas de análisis con dominio cerrado | Cerrar el dominio elimina errores enteros |
+| 2 | El agente con middleware de producción | Topes, coste, auditoría y caché |
+| 3 | **Evaluación numérica** contra pandas | Medir alucinaciones, no intuirlas |
+| 4 | Verificación de cifras y respuesta estructurada | Que el agente demuestre lo que dice |
+| 5 | Comparativa de configuraciones y decisión | Qué merece la pena y qué no |
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-P2")
+
+#%%md
+## Fase 0 · Los datos y el conjunto dorado
+
+Datos **reales**: 1.000 líneas de venta de tres supermercados en Myanmar durante 2019.
+Nada sintético esta vez, así que la evaluación es honesta.
+
+#%%py
+from utils.datos import ventas
+
+df = ventas()
+print(f"{len(df)} ventas del {df.date.min():%Y-%m-%d} al {df.date.max():%Y-%m-%d}\n")
+print("columnas:", ", ".join(df.columns))
+print("\nciudades:", ", ".join(df.city.unique()))
+print("líneas de producto:", ", ".join(df.product_line.unique()))
+print()
+print(df[["city", "product_line", "customer_type", "quantity", "total", "gross_income"]].head(4).to_string(index=False))
+
+#%%md
+### El conjunto dorado
+
+Doce preguntas de negocio con la respuesta **calculada en pandas**. Esta es la pieza que
+convierte el proyecto en ingeniería: podemos comprobar si el agente acierta el número, no si
+la respuesta "suena bien".
+
+#%%py
+CONJUNTO_DORADO = [
+    {"pregunta": "¿Cuántas ventas hay registradas en total?",
+     "esperado": len(df), "tolerancia": 0, "unidad": "ventas"},
+
+    {"pregunta": "¿Cuál es el importe total facturado en Naypyitaw?",
+     "esperado": df[df.city == "Naypyitaw"].total.sum(), "tolerancia": 0.01, "unidad": "€"},
+
+    {"pregunta": "¿Cuál es el ticket medio de todas las ventas?",
+     "esperado": df.total.mean(), "tolerancia": 0.01, "unidad": "€"},
+
+    {"pregunta": "¿Cuántas unidades se vendieron de la línea Electronic accessories?",
+     "esperado": df[df.product_line == "Electronic accessories"].quantity.sum(), "tolerancia": 0, "unidad": "uds"},
+
+    {"pregunta": "¿Cuál es el margen bruto total de toda la cadena?",
+     "esperado": df.gross_income.sum(), "tolerancia": 0.01, "unidad": "€"},
+
+    {"pregunta": "¿Cuál es la valoración media de los clientes?",
+     "esperado": df.customer_stratification_rating.mean(), "tolerancia": 0.01, "unidad": "puntos"},
+
+    {"pregunta": "¿Cuántas ventas se pagaron con Ewallet?",
+     "esperado": int((df.payment == "Ewallet").sum()), "tolerancia": 0, "unidad": "ventas"},
+
+    {"pregunta": "¿Cuál es el gasto medio de los clientes de tipo Member?",
+     "esperado": df[df.customer_type == "Member"].total.mean(), "tolerancia": 0.01, "unidad": "€"},
+
+    {"pregunta": "¿Cuántas unidades se vendieron en Mandalay?",
+     "esperado": df[df.city == "Mandalay"].quantity.sum(), "tolerancia": 0, "unidad": "uds"},
+
+    {"pregunta": "¿Cuál es el importe medio de las ventas de Food and beverages?",
+     "esperado": df[df.product_line == "Food and beverages"].total.mean(), "tolerancia": 0.01, "unidad": "€"},
+
+    {"pregunta": "¿Cuántas ventas hizo la sucursal de Yangon?",
+     "esperado": int((df.city == "Yangon").sum()), "tolerancia": 0, "unidad": "ventas"},
+
+    {"pregunta": "¿Cuál es el precio unitario medio de todos los productos?",
+     "esperado": df.unit_price.mean(), "tolerancia": 0.01, "unidad": "€"},
+]
+
+print(f"{len(CONJUNTO_DORADO)} preguntas con respuesta conocida:\n")
+for c in CONJUNTO_DORADO:
+    print(f"  {c['esperado']:>12,.2f} {c['unidad']:<7}  {c['pregunta']}")
+
+#%%md
+> **Cómo se elige un conjunto dorado.** Estas doce preguntas no son aleatorias: cubren
+> **conteos, sumas, medias y filtros por cada dimensión**. Si tu agente falla, quieres saber
+> *qué tipo* de operación falla, no solo que falla. Un conjunto de veinte preguntas todas del
+> mismo tipo te da un número y ninguna información.
+
+#%%md
+## Fase 1 · Las herramientas
+
+Aquí hay una decisión de diseño que define el proyecto entero.
+
+**Opción A: darle un intérprete de Python.** `ejecutar_pandas(codigo: str)`. Máxima
+flexibilidad, y ejecutar código generado por un LLM sobre tus datos de producción es un
+agujero de seguridad con forma de herramienta. Requiere una caja de arena de verdad.
+
+**Opción B: herramientas con dominio cerrado.** El agente solo puede pedir operaciones
+declaradas. Menos flexible, pero **imposible de hacer explotar**, auditable y con errores
+predecibles.
+
+Vamos con la B, que es la respuesta correcta para el 90 % de los agentes de datos de empresa.
+La A tiene su sitio —cuadernos de exploración interna, sobre datos de mentira— pero no aquí.
+
+#%%py
+from typing import Literal
+
+from langchain.tools import tool
+from pydantic import BaseModel, Field
+
+METRICA = {
+    "importe": "total", "unidades": "quantity", "margen": "gross_income",
+    "precio_unitario": "unit_price", "valoracion": "customer_stratification_rating",
+}
+DIMENSION = {
+    "ciudad": "city", "linea_producto": "product_line", "tipo_cliente": "customer_type",
+    "metodo_pago": "payment", "genero": "gender", "sucursal": "branch",
+}
+UNIDAD = {"importe": "€", "unidades": "uds", "margen": "€", "precio_unitario": "€", "valoracion": "puntos"}
+
+
+class ArgsAgregar(BaseModel):
+    """Consulta agregada sobre las ventas."""
+
+    metrica: Literal["importe", "unidades", "margen", "precio_unitario", "valoracion"] = Field(
+        description="Qué se mide. 'importe' es el total de la venta con impuestos."
+    )
+    operacion: Literal["suma", "media", "conteo", "maximo", "minimo", "mediana"] = Field(
+        description="Cómo se agrega. Usa 'conteo' para saber CUÁNTAS ventas hay."
+    )
+    filtro_dimension: Literal["ciudad", "linea_producto", "tipo_cliente", "metodo_pago",
+                              "genero", "sucursal", "ninguno"] = Field(
+        default="ninguno", description="Por qué columna filtrar. 'ninguno' para toda la cadena."
+    )
+    filtro_valor: str = Field(default="", description="Valor exacto del filtro. Vacío si no filtras.")
+
+
+@tool("agregar_ventas", args_schema=ArgsAgregar)
+def agregar_ventas(metrica: str, operacion: str,
+                   filtro_dimension: str = "ninguno", filtro_valor: str = "") -> str:
+    """Calcula un único número agregado sobre las ventas, con un filtro opcional.
+
+    Úsala para preguntas del tipo "cuánto", "cuántas" o "cuál es la media de".
+    Devuelve UN número, no una tabla: para desgloses usa `desglosar_ventas`.
+    """
+    sel = df
+    if filtro_dimension != "ninguno":
+        col = DIMENSION[filtro_dimension]
+        sel = sel[sel[col] == filtro_valor]
+        if sel.empty:
+            validos = ", ".join(sorted(df[col].unique()))
+            return (f"Sin resultados: '{filtro_valor}' no es un valor de {filtro_dimension}. "
+                    f"Los valores válidos son: {validos}. Reintenta con uno de ellos.")
+
+    col = METRICA[metrica]
+    if operacion == "conteo":
+        return f"conteo de ventas ({filtro_dimension}={filtro_valor or 'todas'}): {len(sel)} ventas"
+
+    valor = getattr(sel[col], {"suma": "sum", "media": "mean", "maximo": "max",
+                               "minimo": "min", "mediana": "median"}[operacion])()
+    etiqueta = f"{operacion} de {metrica}"
+    if filtro_dimension != "ninguno":
+        etiqueta += f" para {filtro_dimension}={filtro_valor}"
+    return f"{etiqueta}: {valor:,.2f} {UNIDAD[metrica]} (sobre {len(sel)} ventas)"
+
+
+class ArgsDesglosar(BaseModel):
+    """Desglose de una métrica por una dimensión."""
+
+    metrica: Literal["importe", "unidades", "margen", "precio_unitario", "valoracion"]
+    operacion: Literal["suma", "media", "conteo", "mediana"] = "suma"
+    dimension: Literal["ciudad", "linea_producto", "tipo_cliente", "metodo_pago", "genero", "sucursal"]
+
+
+@tool("desglosar_ventas", args_schema=ArgsDesglosar)
+def desglosar_ventas(metrica: str, dimension: str, operacion: str = "suma") -> str:
+    """Devuelve una métrica desglosada por una dimensión, ordenada de mayor a menor.
+
+    Úsala para preguntas del tipo "cuál es el mayor", "compara X entre Y" o "cómo se reparte".
+    """
+    col, dim = METRICA[metrica], DIMENSION[dimension]
+    grupo = df.groupby(dim)[col]
+    serie = (grupo.count() if operacion == "conteo"
+             else getattr(grupo, {"suma": "sum", "media": "mean", "mediana": "median"}[operacion])())
+    serie = serie.sort_values(ascending=False)
+
+    unidad = "ventas" if operacion == "conteo" else UNIDAD[metrica]
+    filas = "\n".join(f"  {k}: {v:,.2f} {unidad}" for k, v in serie.head(12).items())
+    cola = f"\n  (mostrando 12 de {len(serie)} grupos)" if len(serie) > 12 else ""
+    return f"{operacion} de {metrica} por {dimension}:\n{filas}{cola}"
+
+
+@tool
+def describir_datos() -> str:
+    """Describe qué contiene el conjunto de datos: periodo, volumen y valores posibles.
+
+    Úsala UNA sola vez al principio si no sabes qué dimensiones o valores existen.
+    """
+    lineas = [f"{len(df)} ventas entre {df.date.min():%Y-%m-%d} y {df.date.max():%Y-%m-%d}.",
+              "Dimensiones y valores posibles:"]
+    for nombre, col in DIMENSION.items():
+        lineas.append(f"  {nombre}: {', '.join(sorted(df[col].unique()))}")
+    lineas.append("Métricas: importe (total con impuestos), unidades, margen, precio_unitario, valoracion.")
+    return "\n".join(lineas)
+
+
+HERRAMIENTAS = [agregar_ventas, desglosar_ventas, describir_datos]
+
+print(agregar_ventas.invoke({"metrica": "importe", "operacion": "suma",
+                             "filtro_dimension": "ciudad", "filtro_valor": "Naypyitaw"}))
+print()
+print(desglosar_ventas.invoke({"metrica": "importe", "dimension": "ciudad"}))
+print()
+print(agregar_ventas.invoke({"metrica": "importe", "operacion": "suma",
+                             "filtro_dimension": "ciudad", "filtro_valor": "Barcelona"}))
+
+#%%md
+Fíjate en el último caso: el filtro inválido devuelve **la lista de valores válidos**. Ese
+mensaje hace que el agente se corrija a la primera. Un `"[]"` o un `"error"` le habría hecho
+dar vueltas.
+
+#%%md
+## Fase 2 · El agente con middleware de producción
+
+#%%py
+import operator
+import time
+from typing import Annotated
+
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    AgentMiddleware, AgentState, ModelCallLimitMiddleware, ToolCallLimitMiddleware,
+    after_model, wrap_tool_call,
+)
+from langchain.messages import AIMessage, HumanMessage, ToolMessage
+
+
+class EstadoAnalista(AgentState):
+    """Todo lo que el agente acumula además de los mensajes."""
+    tokens_entrada: Annotated[int, operator.add]
+    tokens_salida: Annotated[int, operator.add]
+    llamadas_modelo: Annotated[int, operator.add]
+    observaciones: Annotated[list[str], operator.add]     # resultados literales de herramientas
+    auditoria: Annotated[list[str], operator.add]
+
+
+class ContabilidadMiddleware(AgentMiddleware):
+    """Acumula el consumo de tokens de cada llamada al modelo."""
+
+    state_schema = EstadoAnalista
+
+    def after_model(self, state, runtime) -> dict | None:
+        uso = getattr(state["messages"][-1], "usage_metadata", None)
+        if not uso:
+            return None
+        return {"tokens_entrada": uso.get("input_tokens", 0),
+                "tokens_salida": uso.get("output_tokens", 0),
+                "llamadas_modelo": 1}
+
+
+class ObservacionesMiddleware(AgentMiddleware):
+    """Guarda el texto exacto que devolvió cada herramienta.
+
+    Es la base de la verificación de la fase 4: para comprobar que una cifra de la respuesta
+    no está inventada hace falta tener a mano las cifras que sí se observaron.
+    """
+
+    state_schema = EstadoAnalista
+
+    def after_model(self, state, runtime) -> dict | None:
+        nuevas = [m.content for m in state["messages"][-4:] if isinstance(m, ToolMessage)]
+        return {"observaciones": nuevas} if nuevas else None
+
+
+CACHE: dict[str, str] = {}
+CACHE_ESTADISTICAS = {"aciertos": 0, "fallos": 0}
+
+
+@wrap_tool_call
+def auditar_y_cachear(request, handler):
+    """Registra cada llamada, mide su duración y evita repetir cálculos idénticos."""
+    import json
+    llamada = request.tool_call
+    clave = f"{llamada['name']}::{json.dumps(llamada['args'], sort_keys=True)}"
+
+    if clave in CACHE:
+        CACHE_ESTADISTICAS["aciertos"] += 1
+        return ToolMessage(CACHE[clave], tool_call_id=llamada["id"], name=llamada["name"])
+
+    CACHE_ESTADISTICAS["fallos"] += 1
+    t0 = time.perf_counter()
+    resultado = handler(request)
+    if isinstance(resultado, ToolMessage) and resultado.status != "error":
+        CACHE[clave] = str(resultado.content)
+    return resultado
+
+
+INSTRUCCIONES = (
+    "Eres un analista de datos de una cadena de supermercados. Respondes preguntas de negocio "
+    "usando EXCLUSIVAMENTE las herramientas disponibles.\n"
+    "Reglas estrictas:\n"
+    "1. NUNCA des una cifra que no venga de una herramienta. Si no la tienes, calcúlala o dilo.\n"
+    "2. No estimes, no redondees a ojo ni deduzcas un número a partir de otros.\n"
+    "3. Si un filtro falla, lee los valores válidos que te devuelve la herramienta y reintenta.\n"
+    "4. Responde en español, en 2 frases, citando la cifra exacta con su unidad."
+)
+
+
+def construir_agente(**extra):
+    return create_agent(
+        model=llm(),
+        tools=HERRAMIENTAS,
+        system_prompt=INSTRUCCIONES,
+        middleware=[
+            auditar_y_cachear,                                        # el más externo: lo ve todo
+            ContabilidadMiddleware(),
+            ObservacionesMiddleware(),
+            ModelCallLimitMiddleware(run_limit=6, exit_behavior="end"),
+            ToolCallLimitMiddleware(run_limit=8, exit_behavior="continue"),
+        ],
+        **extra,
+    )
+
+
+analista = construir_agente()
+mostrar_grafo(analista)
+
+#%%py
+ENTRADA_VACIA = {"tokens_entrada": 0, "tokens_salida": 0, "llamadas_modelo": 0,
+                 "observaciones": [], "auditoria": []}
+
+salida = analista.invoke(
+    {"messages": [HumanMessage("¿Qué ciudad factura más y cuánto exactamente?")], **ENTRADA_VACIA},
+    {"recursion_limit": 25},
+)
+print(salida["messages"][-1].text)
+print(f"\nllamadas al modelo: {salida['llamadas_modelo']}   tokens: "
+      f"{salida['tokens_entrada']:,} entrada / {salida['tokens_salida']:,} salida")
+
+#%%md
+## Fase 3 · Evaluación numérica
+
+Aquí está el corazón del proyecto. Para cada pregunta dorada extraemos **todos** los números
+de la respuesta del agente y comprobamos si el esperado está entre ellos, con tolerancia.
+
+Tres resultados posibles, y los tres importan:
+
+- **acierto**: la cifra correcta aparece en la respuesta.
+- **fallo**: da una cifra, pero no la correcta. El caso peligroso.
+- **abstención**: no da ninguna cifra. Malo, pero **mucho menos malo que un fallo**.
+
+#%%py
+import re
+
+
+def extraer_numeros(texto: str) -> list[float]:
+    """Extrae cifras de un texto en español, con separador de miles '.' o ',' indistintamente."""
+    candidatos = re.findall(r"\d[\d.,]*\d|\d", texto)
+    valores = []
+    for c in candidatos:
+        limpio = c
+        # "110.568,71" (europeo) -> "110568.71" ; "110,568.71" (anglosajón) -> "110568.71"
+        if "," in limpio and "." in limpio:
+            if limpio.rfind(",") > limpio.rfind("."):
+                limpio = limpio.replace(".", "").replace(",", ".")
+            else:
+                limpio = limpio.replace(",", "")
+        elif "," in limpio:
+            partes = limpio.split(",")
+            limpio = limpio.replace(",", ".") if len(partes[-1]) in (1, 2) else limpio.replace(",", "")
+        elif limpio.count(".") >= 1:
+            partes = limpio.split(".")
+            if len(partes[-1]) == 3 and len(partes) > 1:
+                limpio = limpio.replace(".", "")
+        try:
+            valores.append(float(limpio))
+        except ValueError:
+            pass
+    return valores
+
+
+# Comprobamos el extractor antes de fiarnos de él: un evaluador con un bug miente sobre el agente.
+for texto, esperado in [("Naypyitaw factura 110.568,71 €", 110568.71),
+                        ("Hay 1000 ventas registradas", 1000.0),
+                        ("El ticket medio es de 322.97 euros", 322.97),
+                        ("Se vendieron 971 unidades", 971.0)]:
+    valores = extraer_numeros(texto)
+    print(f"  {'ok ' if any(abs(v - esperado) < 0.02 for v in valores) else 'MAL'} {texto!r} -> {valores}")
+
+#%%py
+from collections import Counter
+
+
+def evaluar(agente_obj, nombre: str, conjunto=CONJUNTO_DORADO, verboso: bool = True) -> dict:
+    resultados = []
+    t0 = time.perf_counter()
+
+    for caso in conjunto:
+        entrada = {"messages": [HumanMessage(caso["pregunta"])], **ENTRADA_VACIA}
+        salida = agente_obj.invoke(entrada, {"recursion_limit": 25})
+        texto = salida["messages"][-1].text
+
+        numeros = extraer_numeros(texto)
+        tol = max(caso["tolerancia"], abs(caso["esperado"]) * 0.001)   # 0,1 % por el redondeo
+        acierta = any(abs(n - caso["esperado"]) <= tol for n in numeros)
+        veredicto = "acierto" if acierta else ("abstención" if not numeros else "fallo")
+
+        resultados.append({
+            "pregunta": caso["pregunta"], "esperado": caso["esperado"], "veredicto": veredicto,
+            "respuesta": texto, "llamadas": salida["llamadas_modelo"],
+            "tokens": salida["tokens_entrada"] + salida["tokens_salida"],
+        })
+
+    segundos = time.perf_counter() - t0
+    conteo = Counter(r["veredicto"] for r in resultados)
+    n = len(resultados)
+
+    separador(f"{nombre}   ({n} preguntas, {segundos:.0f} s)")
+    print(f"  aciertos    : {conteo['acierto']:>2}/{n}  ({conteo['acierto'] / n:.0%})")
+    print(f"  FALLOS      : {conteo['fallo']:>2}/{n}  <- cifra incorrecta: el caso peligroso")
+    print(f"  abstenciones: {conteo['abstención']:>2}/{n}")
+    print(f"  llamadas al modelo: {sum(r['llamadas'] for r in resultados)}   "
+          f"tokens: {sum(r['tokens'] for r in resultados):,}")
+
+    if verboso:
+        problemas = [r for r in resultados if r["veredicto"] != "acierto"]
+        if problemas:
+            print("\n  casos no resueltos:")
+            for r in problemas:
+                print(f"    [{r['veredicto']}] {r['pregunta']}")
+                print(f"      esperado: {r['esperado']:,.2f}")
+                print(f"      dijo    : {r['respuesta'][:130]}")
+
+    return {"nombre": nombre, "conteo": conteo, "n": n, "resultados": resultados,
+            "tokens": sum(r["tokens"] for r in resultados), "segundos": segundos}
+
+
+CACHE.clear()
+CACHE_ESTADISTICAS.update(aciertos=0, fallos=0)
+eval_base = evaluar(analista, "AGENTE BASE")
+print(f"\ncaché: {CACHE_ESTADISTICAS['aciertos']} aciertos de "
+      f"{sum(CACHE_ESTADISTICAS.values())} llamadas a herramienta")
+
+#%%md
+## Fase 4 · Que el agente demuestre lo que dice
+
+Un fallo es un número inventado. La defensa más eficaz no es pedirle al modelo que se
+esfuerce más, sino **obligarle a citar la fuente y comprobarlo nosotros**.
+
+Dos capas:
+
+1. **Salida estructurada** con un campo por cifra y su herramienta de origen.
+2. **Un verificador determinista** (`@after_model`) que comprueba que cada cifra citada
+   aparece literalmente en alguna observación de herramienta, y si no, devuelve el control
+   al modelo.
+
+#%%py
+class CifraCitada(BaseModel):
+    """Una cifra concreta con su procedencia."""
+    valor: str = Field(description="El número tal cual, sin separador de miles. Ejemplo: '110568.71'")
+    unidad: str = Field(description="€, uds, ventas o puntos")
+    de_donde: str = Field(description="Nombre de la herramienta de la que salió")
+
+
+class RespuestaAnalista(BaseModel):
+    """Respuesta verificable del analista."""
+    respuesta: str = Field(description="La respuesta para la persona, en 2 frases, en español")
+    cifras: list[CifraCitada] = Field(description="TODAS las cifras usadas en la respuesta")
+    todas_verificadas: bool = Field(
+        description="True solo si cada cifra salió literalmente de una herramienta, sin cálculos propios"
+    )
+
+
+class EstadoVerificado(EstadoAnalista):
+    avisos_verificacion: Annotated[list[str], operator.add]
+
+
+@after_model(state_schema=EstadoVerificado)
+def verificar_cifras(state, runtime):
+    """Comprueba que las cifras de la respuesta final aparecen en las observaciones."""
+    ultimo = state["messages"][-1]
+    if ultimo.type != "ai" or getattr(ultimo, "tool_calls", None):
+        return None       # paso intermedio, no es la respuesta final
+
+    evidencia = extraer_numeros(" ".join(state.get("observaciones", [])))
+    if not evidencia:
+        return None
+
+    sin_respaldo = [n for n in extraer_numeros(ultimo.text)
+                    if not any(abs(n - e) <= max(0.02, abs(e) * 0.001) for e in evidencia)]
+    if not sin_respaldo:
+        return None
+
+    return {"avisos_verificacion": [
+        f"cifras sin respaldo en observaciones: {sin_respaldo}"
+    ]}
+
+
+analista_verificado = create_agent(
+    model=llm(),
+    tools=HERRAMIENTAS,
+    system_prompt=INSTRUCCIONES + "\n5. Cita cada cifra con la herramienta exacta de la que salió.",
+    response_format=RespuestaAnalista,
+    middleware=[
+        auditar_y_cachear,
+        ContabilidadMiddleware(),
+        ObservacionesMiddleware(),
+        verificar_cifras,
+        ModelCallLimitMiddleware(run_limit=6, exit_behavior="end"),
+    ],
+)
+
+salida = analista_verificado.invoke(
+    {"messages": [HumanMessage("¿Cuál es el margen bruto total de la cadena?")],
+     **ENTRADA_VACIA, "avisos_verificacion": []},
+    {"recursion_limit": 25},
+)
+
+# `structured_response` puede faltar: si un tope de middleware corta la ejecución antes de
+# la respuesta final, la clave no llega a escribirse. En producción hay que contemplarlo.
+r = salida.get("structured_response")
+if r is None:
+    print("sin respuesta estructurada (se agotó algún tope antes de terminar)")
+    print("texto libre:", salida["messages"][-1].text)
+else:
+    print(f"respuesta          : {r.respuesta}")
+    print(f"todas verificadas  : {r.todas_verificadas}")
+    for c in r.cifras:
+        print(f"  {c.valor} {c.unidad}  <- {c.de_donde}")
+print(f"\navisos del verificador: {salida['avisos_verificacion'] or 'ninguno'}")
+
+#%%md
+Ese `avisos_verificacion` es la señal que de verdad quieres en producción. No hace falta que
+bloquee la respuesta: basta con **registrarla y contarla**. Si un día sube, algo ha cambiado
+—el modelo, el prompt, los datos— y te enteras antes de que lo haga tu cliente.
+
+#%%py
+CACHE.clear()
+CACHE_ESTADISTICAS.update(aciertos=0, fallos=0)
+
+
+def evaluar_estructurado(agente_obj, nombre: str) -> dict:
+    """Igual que `evaluar`, pero leyendo la respuesta del campo estructurado."""
+    resultados = []
+    t0 = time.perf_counter()
+
+    for caso in CONJUNTO_DORADO:
+        salida = agente_obj.invoke(
+            {"messages": [HumanMessage(caso["pregunta"])], **ENTRADA_VACIA, "avisos_verificacion": []},
+            {"recursion_limit": 25},
+        )
+        estructurada = salida.get("structured_response")
+        texto = estructurada.respuesta if estructurada else salida["messages"][-1].text
+        numeros = extraer_numeros(texto) + (
+            [float(c.valor.replace(",", "")) for c in estructurada.cifras
+             if c.valor.replace(",", "").replace(".", "").replace("-", "").isdigit()
+             or c.valor.replace(",", "").replace(".", "", 1).isdigit()]
+            if estructurada else []
+        )
+
+        tol = max(caso["tolerancia"], abs(caso["esperado"]) * 0.001)
+        acierta = any(abs(n - caso["esperado"]) <= tol for n in numeros)
+        resultados.append({
+            "pregunta": caso["pregunta"], "esperado": caso["esperado"],
+            "veredicto": "acierto" if acierta else ("abstención" if not numeros else "fallo"),
+            "respuesta": texto, "llamadas": salida["llamadas_modelo"],
+            "tokens": salida["tokens_entrada"] + salida["tokens_salida"],
+            "avisos": salida["avisos_verificacion"],
+        })
+
+    conteo = Counter(r["veredicto"] for r in resultados)
+    n = len(resultados)
+    segundos = time.perf_counter() - t0
+
+    separador(f"{nombre}   ({n} preguntas, {segundos:.0f} s)")
+    print(f"  aciertos    : {conteo['acierto']:>2}/{n}  ({conteo['acierto'] / n:.0%})")
+    print(f"  FALLOS      : {conteo['fallo']:>2}/{n}")
+    print(f"  abstenciones: {conteo['abstención']:>2}/{n}")
+    print(f"  respuestas con aviso del verificador: {sum(1 for r in resultados if r['avisos'])}/{n}")
+    for r in resultados:
+        if r["veredicto"] != "acierto":
+            print(f"    [{r['veredicto']}] {r['pregunta']}  (esperado {r['esperado']:,.2f})")
+
+    return {"nombre": nombre, "conteo": conteo, "n": n, "resultados": resultados,
+            "tokens": sum(r["tokens"] for r in resultados), "segundos": segundos}
+
+
+eval_verificado = evaluar_estructurado(analista_verificado, "AGENTE VERIFICADO")
+
+#%%md
+## Fase 5 · La comparativa
+
+#%%py
+def fila(ev: dict) -> str:
+    c, n = ev["conteo"], ev["n"]
+    return (f"{ev['nombre']:<24} {c['acierto']:>3}/{n:<3} {c['acierto'] / n:>6.0%} "
+            f"{c['fallo']:>7} {c['abstención']:>8} {ev['tokens']:>10,} {ev['segundos']:>7.0f}")
+
+
+print(f"{'configuración':<24} {'aciertos':>10} {'':>6} {'fallos':>7} {'abstenc.':>8} {'tokens':>10} {'seg':>7}")
+print("-" * 78)
+print(fila(eval_base))
+print(fila(eval_verificado))
+
+print("""
+Cómo leer esto, en orden de importancia:
+
+1. FALLOS antes que aciertos. Una respuesta con la cifra equivocada acaba en una diapositiva
+   de dirección; una abstención acaba en una pregunta al analista humano. No cuestan lo mismo,
+   así que no deberían pesar lo mismo en tu decisión.
+
+2. Los tokens son la factura. Si la versión verificada acierta un poco más y cuesta el doble,
+   la pregunta correcta es cuánto vale para el negocio cada punto de acierto, no cuál tiene
+   el número más bonito.
+
+3. Los casos no resueltos suelen agruparse. Si fallan la media y la mediana pero no las sumas,
+   el problema no es "el modelo": es que la descripción de `operacion` no distingue bien esos
+   casos. Casi siempre se arregla en la herramienta, no en el prompt.
+""")
+
+#%%md
+## Retos para llevarlo más lejos
+
+1. **Preguntas de dos saltos.** Añade al conjunto dorado tres preguntas que necesiten
+   combinar dos herramientas ("¿cuánto más gasta un Member que un Normal, en euros?"). Mide
+   cuánto cae el acierto. Esa caída es la diferencia real entre un agente y una consulta.
+
+2. **Una calculadora.** El agente falla en cifras derivadas porque no sabe restar sin
+   inventar. Dale una herramienta `calcular(expresion)` que solo acepte operaciones
+   aritméticas sobre números que ya haya observado, y vuelve a medir.
+
+3. **Elección de modelo por dificultad.** Aplica el `@wrap_model_call` del notebook 07:
+   `gpt-4o-mini` para preguntas de un salto, un modelo mayor para las de dos. Compara acierto
+   y coste. Casi siempre hay un punto dulce.
+
+4. **Cachear entre ejecuciones.** La caché de este notebook vive en un diccionario global y
+   nunca caduca. Cámbiala por `CachePolicy` con TTL (módulo 6) y piensa qué pasa si los datos
+   cambian a mitad de día.
+
+5. **El conjunto dorado como prueba de regresión.** Convierte `CONJUNTO_DORADO` en un fichero
+   de pruebas de `pytest` que falle si el acierto baja del 80 % o si hay más de un fallo. Ya
+   tienes la evaluación; hacerla automática es lo que impide que una mejora de prompt rompa
+   otra cosa sin que nadie se entere. Lo montamos en el módulo 6.
+
+## Lo que te llevas
+
+- **Dominio cerrado antes que flexibilidad.** `Literal` en los argumentos elimina familias
+  enteras de errores y cierra el agujero de seguridad de ejecutar código generado.
+- **El conjunto dorado es el proyecto.** Doce preguntas con respuesta calculada valen más que
+  cien horas de mirar salidas.
+- **Distingue fallo de abstención.** Son errores distintos con costes distintos.
+- **La verificación determinista gana a pedirle al modelo que se revise.** Una expresión
+  regular no tiene opinión ni se cansa.
+- **El middleware es donde vive lo transversal**: coste, auditoría, caché, topes. Fuera de la
+  lógica del agente, y por eso reutilizable en el siguiente.
+
+**Siguiente módulo:** [`../03_estado/08_persistencia_y_checkpointers.ipynb`](../03_estado/08_persistencia_y_checkpointers.ipynb)
+— persistencia, hilos y viaje en el tiempo.

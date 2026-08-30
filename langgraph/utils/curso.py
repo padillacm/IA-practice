@@ -221,9 +221,10 @@ def mostrar_mensajes(mensajes: Any, *, maximo: int | None = None, ancho: int = 1
             cabecera += f" ({nombre})"
         print(f"\n[{cabecera}]")
 
-        # `.text` es una propiedad en LangChain 1.x; en 0.x era un método.
+        # `.text` es una propiedad en LangChain 1.x (en 0.x era un método, y lo que
+        # devuelve sigue siendo invocable por compatibilidad: hay que comprobar `str` antes).
         contenido = getattr(m, "text", None)
-        if callable(contenido):
+        if contenido is not None and not isinstance(contenido, str) and callable(contenido):
             contenido = contenido()
         if contenido is None:
             contenido = getattr(m, "content", "")
