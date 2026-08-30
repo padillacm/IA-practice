@@ -1,0 +1,677 @@
+#%%md
+# 26 · Exponer el agente: MCP, A2A y rutas propias
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 30 min*
+
+El notebook 20 fue en una dirección: **tu agente consume** herramientas de servidores MCP
+ajenos. Este va en la contraria, que es la que casi nadie prepara: **otros sistemas
+consumen tu agente**.
+
+Y no es un caso raro. En cuanto tu agente funciona, aparecen las peticiones: el equipo de
+al lado quiere llamarlo desde su agente; alguien quiere usarlo desde Claude Desktop o desde
+un IDE; producto quiere una sonda de salud que diga algo más útil que "el proceso vive".
+
+El Agent Server ya trae todo eso montado. El trabajo no es implementarlo, es **diseñar el
+contrato**, y ahí es donde se falla.
+
+Al terminar sabrás:
+
+1. Las tres puertas de entrada a tu agente y cuándo usar cada una.
+2. Por qué un grafo que funciona perfectamente puede exponer una herramienta **inservible**.
+3. El fallo silencioso que deja tu esquema publicado a `null` en Python 3.11.
+4. El protocolo A2A: agent card, tareas y contextos.
+5. Montar rutas HTTP propias dentro del mismo proceso, con sus dos trampas.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+RAIZ = next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+            if (p / "despliegue").exists())
+APP = RAIZ / "despliegue"
+
+#%%md
+## 1. Tres puertas, tres clientes
+
+| Puerta | Endpoint | Quién llama | Contrato |
+|---|---|---|---|
+| **HTTP / SDK** | `/threads`, `/runs`, `/assistants` | Tu propio frontend, tus servicios | Hilos, ejecuciones, estado. Control total |
+| **MCP** | `/mcp` | Un **modelo** que quiere usarte como herramienta | Una función con esquema de entrada |
+| **A2A** | `/a2a/{assistant_id}` | Otro **agente conversacional** | Mensajes y tareas, con contexto que dura |
+
+La diferencia entre las dos últimas es la que más confusión genera, y se resuelve con una
+pregunta: **¿lo que hay al otro lado es un modelo eligiendo herramientas, o un agente
+manteniendo una conversación?**
+
+- **MCP** modela una *llamada a función*. Tu agente aparece en la lista de herramientas de
+  otro modelo, con nombre, descripción y esquema. Entra algo, sale algo, se acabó.
+- **A2A** modela una *tarea que evoluciona*. Hay estados (`working`, `completed`,
+  `failed`), hay un `contextId` que agrupa varias tareas, y hay streaming. Es la
+  abstracción correcta cuando el otro lado va a volver a hablarte.
+
+Las tres puertas están **encendidas por defecto** en el Agent Server. Eso es cómodo y es
+exactamente el motivo por el que el notebook 25 insiste en apagar lo que no uses
+(`disable_mcp`, `disable_a2a`).
+
+#%%md
+## 2. El problema real: tu esquema es tu API
+
+Aquí está el 90 % del valor de este notebook.
+
+Cuando expones un grafo por MCP, el servidor construye la herramienta así:
+
+| Parte de la herramienta | De dónde sale |
+|---|---|
+| Nombre | El nombre del grafo en `langgraph.json` |
+| Descripción | El campo `description` de `langgraph.json` |
+| Esquema de entrada | **El `input_schema` del grafo** — y si no lo declaras, el estado entero |
+
+Esa última fila es la que hace daño. Un grafo de chat normal tiene un estado con `messages`
+y con los campos internos que necesite: una bitácora, un contador, banderas. Todo eso acaba
+en la firma que ve el otro modelo.
+
+Vamos a construir los dos casos y comparar los esquemas publicados.
+
+#%%py
+import json
+import operator
+from typing import Annotated
+
+# ¡OJO con este import! Volvemos sobre él en la sección 2.2.
+from typing_extensions import TypedDict
+
+from langgraph.graph import END, START, MessagesState, StateGraph
+
+
+# ---------- (a) el grafo "normal", pensado para un chat ----------
+class EstadoChat(MessagesState):
+    bitacora: Annotated[list[str], operator.add]
+    consultas: Annotated[int, operator.add]
+
+
+def responder(estado: EstadoChat) -> dict:
+    return {"messages": [], "bitacora": ["respondido"], "consultas": 1}
+
+
+grafo_chat = (
+    StateGraph(EstadoChat)
+    .add_node("responder", responder)
+    .add_edge(START, "responder")
+    .add_edge("responder", END)
+    .compile()
+)
+
+
+# ---------- (b) el mismo trabajo, diseñado para ser consumido ----------
+class Entrada(TypedDict):
+    categoria: str
+
+
+class Salida(TypedDict):
+    resumen: str
+
+
+class EstadoConsulta(Entrada, Salida):
+    detalle: dict          # interno: ni entra ni sale
+
+
+def consultar(estado: EstadoConsulta) -> dict:
+    return {"resumen": f"hay tickets de {estado['categoria']}", "detalle": {}}
+
+
+grafo_expuesto = (
+    StateGraph(EstadoConsulta, input_schema=Entrada, output_schema=Salida)
+    .add_node("consultar", consultar)
+    .add_edge(START, "consultar")
+    .add_edge("consultar", END)
+    .compile()
+)
+
+for nombre, grafo in [("grafo de chat (sin diseñar)", grafo_chat),
+                      ("grafo expuesto (diseñado)", grafo_expuesto)]:
+    esquema = grafo.get_input_jsonschema()
+    print(f"\n{nombre}")
+    print("  campos que ve el otro modelo :", list(esquema.get("properties", {})))
+    print("  obligatorios                 :", esquema.get("required"))
+
+#%%md
+Mira la segunda línea del primer bloque: el otro modelo tiene que rellenar `bitacora` y
+`consultas` **obligatoriamente**, y no tiene ni idea de qué son. En la práctica, o inventa
+valores, o la llamada falla. Y no hay ningún error en tu lado: tu grafo funciona.
+
+> **La regla:** el estado es tu estructura de datos interna; el `input_schema` es tu API
+> pública. Si expones un grafo sin `input_schema`, has publicado tus variables privadas.
+
+Los dos parámetros que lo arreglan ya los conoces del notebook 12 —`input_schema` y
+`output_schema`— pero allí eran una comodidad para componer subgrafos. Aquí son la
+diferencia entre una herramienta usable y una inservible.
+
+#%%md
+### 2.1 Diseñar el contrato: cuatro reglas
+
+Cuando lo que consume tu agente es un modelo, el esquema **es el prompt**. Se aplican las
+mismas reglas del notebook 05 sobre escribir buenas herramientas:
+
+1. **Un campo por decisión.** Si el otro modelo tiene que rellenar cinco campos, se
+   equivocará en alguno. Uno o dos.
+2. **Dominio cerrado siempre que se pueda.** `Literal["facturacion", "tecnico", "todas"]`
+   en vez de `str`. El modelo deja de adivinar y la validación es gratis.
+3. **Descripción orientada a la decisión**, no a la documentación: *cuándo* usar esto, no
+   *qué* hace por dentro.
+4. **La salida también es contrato.** Sin `output_schema`, devuelves el estado entero; el
+   otro modelo se come tu bitácora en su contexto y paga los tokens.
+
+#%%py
+from typing import Literal
+
+
+class EntradaEstricta(TypedDict):
+    categoria: Literal["facturacion", "tecnico", "cuenta", "todas"]
+
+
+grafo_estricto = (
+    StateGraph(EstadoConsulta, input_schema=EntradaEstricta, output_schema=Salida)
+    .add_node("consultar", consultar)
+    .add_edge(START, "consultar")
+    .add_edge("consultar", END)
+    .compile()
+)
+
+print(json.dumps(grafo_estricto.get_input_jsonschema(), indent=2, ensure_ascii=False))
+print("\nEl `enum` viaja en el esquema: el modelo del otro lado ya no puede inventarse")
+print("una categoría, y si lo intenta, falla la validación antes de tocar tu código.")
+
+#%%md
+### 2.2 El fallo silencioso: `typing.TypedDict` en Python 3.11
+
+Este merece su propia sección porque **no da ningún error** y te deja el contrato vacío.
+
+Publicar el esquema exige convertir tu `TypedDict` a JSON Schema, y de eso se encarga
+Pydantic. En **Python anterior a 3.12**, Pydantic no puede introspeccionar un
+`typing.TypedDict`: necesita el de `typing_extensions`. Todo el resto del curso usa
+`typing.TypedDict` sin problema, porque el grafo nunca necesita su JSON Schema… hasta que
+lo expones.
+
+#%%py
+import typing
+
+import typing_extensions
+
+
+def construir_con(clase_typeddict):
+    Ent = clase_typeddict("Ent", {"categoria": str})
+    Sal = clase_typeddict("Sal", {"resumen": str})
+    Est = clase_typeddict("Est", {"categoria": str, "resumen": str})
+    return (StateGraph(Est, input_schema=Ent, output_schema=Sal)
+            .add_node("n", lambda e: {"resumen": "x"})
+            .add_edge(START, "n").add_edge("n", END).compile())
+
+
+print(f"Python {sys.version_info.major}.{sys.version_info.minor}\n")
+for nombre, td in [("typing.TypedDict", typing.TypedDict),
+                   ("typing_extensions.TypedDict", typing_extensions.TypedDict)]:
+    try:
+        esquema = construir_con(td).get_input_jsonschema()
+        print(f"{nombre:30s} -> {list(esquema.get('properties', {}))}")
+    except Exception as e:
+        print(f"{nombre:30s} -> {type(e).__name__}: {str(e).splitlines()[0]}")
+
+#%%md
+En Python 3.11, el primero lanza `PydanticUserError`. **Y el servidor se lo traga**: publica
+`input_schema: null` en `/assistants/{id}/schemas`, la herramienta MCP sale **sin ningún
+campo** y el formulario de Studio aparece vacío. Nadie te avisa.
+
+Comprobado contra el servidor de desarrollo, con el mismo grafo:
+
+| `TypedDict` importado de | `/assistants/{id}/schemas` | Herramienta MCP |
+|---|---|---|
+| `typing` | `input_schema: null` | `campos: []` |
+| `typing_extensions` | esquema completo | `campos: ['categoria']`, requerido |
+
+**La regla operativa:** en cualquier grafo que vayas a exponer —o que quieras ver bien en
+Studio— importa `TypedDict` de `typing_extensions`. En Python 3.12 y posteriores da igual,
+pero escribirlo así no cuesta nada y funciona en las dos.
+
+> Nota de coherencia: el resto del curso usa `typing.TypedDict` a propósito, porque es lo
+> que vas a leer en la documentación y porque para un grafo que no se expone da igual. Lo
+> que no da igual es saber **cuándo** deja de dar igual.
+
+#%%md
+## 3. `langgraph.json`: la forma extendida de `graphs`
+
+En el notebook 18 usamos la forma corta, `"nombre": "./fichero.py:variable"`. Para exponer
+hace falta la extendida, porque es donde vive la descripción.
+
+#%%py
+configuracion = json.loads((APP / "langgraph.json").read_text(encoding="utf-8"))
+print(json.dumps(configuracion, indent=2, ensure_ascii=False))
+
+#%%md
+Dos grafos, y solo uno pensado para el mundo exterior:
+
+- **`soporte`** usa la forma corta. Es la interfaz de chat: se consume por HTTP con
+  `messages`, y su estado tiene campos internos.
+- **`consultas`** usa la forma extendida con `description`. Es la que se expone por MCP.
+
+La `description` es lo que lee el modelo del otro lado para decidir si te llama. Sin ella,
+el servidor genera una por defecto —*"Tool based on the X assistant"*— que no ayuda a nadie
+a decidir nada.
+
+Y el fichero real que hay detrás, con el contrato explícito:
+
+#%%py
+codigo = (APP / "mi_agente" / "consultas.py").read_text(encoding="utf-8")
+inicio = codigo.index("class EntradaConsulta")
+print(codigo[inicio:codigo.index("def construir()", inicio)])
+
+#%%md
+## 4. A2A: cuando el otro lado también es un agente
+
+[A2A](https://a2a-protocol.org/) es el protocolo de Google para que agentes
+conversacionales hablen entre sí. El Agent Server lo implementa en
+`/a2a/{assistant_id}` sobre JSON-RPC.
+
+Su modelo de datos es distinto del de MCP y merece entenderlo:
+
+| Concepto | Qué es |
+|---|---|
+| **Agent card** | El "quién soy": nombre, descripción, capacidades y habilidades. Se publica en `/.well-known/agent-card.json` |
+| **Task** | Una unidad de trabajo con estado: `TASK_STATE_WORKING`, `_COMPLETED`, `_FAILED` |
+| **Context** | Agrupa varias tareas. Es el equivalente a un `thread_id` |
+
+Y tres cosas de la implementación que cuestan un rato de depuración:
+
+1. **Hay dos familias de nombres de método** y no se mezclan. Las v1.0
+   (`SendMessage`, `GetTask`, `CancelTask`, `ListTasks`) devuelven los enums en
+   `SCREAMING_SNAKE_CASE`; las v0.3 (`message/send`, `message/stream`, `tasks/get`,
+   `tasks/cancel`) los devuelven en minúsculas. **Elige una familia y quédate en ella.**
+2. **El sobre cambia según el método**, no según la familia: `SendMessage` envuelve la
+   tarea en `result.task`, mientras que `GetTask` y los nombres v0.3 la devuelven
+   directamente en `result`.
+3. **Por defecto se devuelve el historial del contexto entero**, no el de la tarea que
+   pediste. Con varias tareas en un contexto, un cliente que pinte todo el historial
+   **repite los turnos anteriores**. Se corrige con `historyScope: "task"`.
+
+#%%py
+print('''# --- Agent card: quién eres, para el que te va a llamar ---
+GET /a2a/{assistant_id}/.well-known/agent-card.json
+
+{
+  "name": "soporte",
+  "description": "soporte assistant",
+  "supportedInterfaces": [
+    {"url": ".../a2a/{assistant_id}", "protocolBinding": "jsonrpc", "protocolVersion": "1.0"}
+  ],
+  "capabilities": {"streaming": true, "pushNotifications": false},
+  "skills": [{"id": "...-main", "name": "soporte Capabilities", "tags": ["assistant", "langgraph"]}]
+}
+
+# --- Mandar un mensaje y obtener una tarea ---
+POST /a2a/{assistant_id}
+{
+  "jsonrpc": "2.0", "id": "1", "method": "SendMessage",
+  "params": {
+    "message": {"role": "ROLE_USER", "parts": [{"text": "cuántos tickets críticos hay"}],
+                "messageId": "m-1"},
+    "configuration": {"historyScope": "task"}
+  }
+}
+
+# --- Respuesta: la tarea, con su contexto y su estado ---
+{
+  "jsonrpc": "2.0", "id": "1",
+  "result": {"task": {"kind": "task",
+                      "id": "<contextId>:<runId>",
+                      "contextId": "8b1f0e5c-...",
+                      "status": {"state": "TASK_STATE_COMPLETED", "message": {...}}}}
+}''')
+
+#%%md
+Fíjate en la forma del `id` de la tarea: **`contextId:runId`**. No es un identificador
+opaco — lleva dentro a qué conversación pertenece. Si estás construyendo el cliente, eso te
+ahorra llevar la correlación por tu cuenta.
+
+Para continuar una conversación, se manda el mismo `contextId` en el siguiente mensaje. Es
+el `thread_id` con otro nombre, y con las mismas consecuencias del notebook 24: **dos
+mensajes seguidos al mismo contexto son dos ejecuciones sobre el mismo hilo**.
+
+#%%md
+## 5. Rutas propias: `http.app`
+
+El servidor trae sus rutas, pero ninguna aplicación real vive solo de ellas. Hace falta un
+`/version` para saber qué está desplegado, una sonda de salud con tu semántica, quizá un
+webhook entrante.
+
+Se monta una app de Starlette (o FastAPI, que es Starlette por dentro) **dentro del mismo
+proceso**, en vez de levantar un segundo servicio:
+
+```json
+{ "http": { "app": "./mi_agente/rutas.py:app" } }
+```
+
+#%%py
+rutas = (APP / "mi_agente" / "rutas.py").read_text(encoding="utf-8")
+inicio_r = rutas.index("async def salud_profunda")
+print(rutas[inicio_r:rutas.index("async def metricas")])
+
+#%%md
+La distinción entre `/ok` y `/salud` es de las que se agradecen a las tres de la mañana:
+
+- **`/ok`** (del servidor, y **sobrevive a `disable_meta`**) dice *"el proceso está vivo"*.
+  Es una sonda de *liveness*: si falla, reinicia el pod.
+- **`/salud`** (tuya) dice *"el servicio puede trabajar"*: los datos están cargados, la
+  clave del modelo está puesta, la base de datos responde. Es una sonda de *readiness*: si
+  falla, saca el pod del balanceador **sin reiniciarlo**.
+
+Reiniciar un pod que está sano pero sin base de datos no arregla nada y multiplica el
+problema. Por eso son dos sondas distintas.
+
+### 5.1 Las dos trampas de `http.app`
+
+| Trampa | Qué pasa | Arreglo |
+|---|---|---|
+| Tus rutas **no** pasan por la autenticación | `/metricas` queda abierto a internet aunque tengas `auth` configurado | `"enable_custom_route_auth": true` |
+| Tu middleware corre **antes** que la auth | Tu middleware no sabe quién es el usuario | `"middleware_order": "auth_first"` |
+
+La primera es un fallo de seguridad de manual: montas `auth` en el notebook 25, te quedas
+tranquilo, y tu endpoint de métricas —o peor, ese webhook que escribe en la base de
+datos— sigue abierto porque va por otra puerta.
+
+Comprobado arrancando el servidor con `langgraph.produccion.json`, que sí lo activa:
+
+| Petición | Sin token | Con token válido |
+|---|---|---|
+| `GET /version` | **401** | 200 |
+| `GET /salud` | **401** | 200 |
+| `GET /metricas` | **401** | 200 |
+| `POST /mcp` | **401** | funciona |
+| `GET /a2a/...` (con `disable_a2a`) | **404** | 404 |
+
+Quita `enable_custom_route_auth` y esas tres primeras filas pasan a 200 sin token, con la
+misma configuración de `auth` puesta. Es un cambio de una línea entre "cerrado" y "abierto".
+
+#%%md
+## 6. Comprobación contra un servidor de verdad
+
+Todo lo anterior está comprobado ejecutándolo. Si quieres reproducirlo, levanta el servidor
+en otra terminal:
+
+```bash
+cd langgraph
+uv sync --group despliegue
+cd despliegue
+uv run langgraph dev
+```
+
+Y ejecuta esta celda. Si el servidor no está, la celda te lo dice y sigue sin fallar.
+
+#%%py
+import urllib.error
+import urllib.request
+
+BASE = "http://127.0.0.1:2024"
+
+
+def servidor_disponible(base: str) -> bool:
+    try:
+        with urllib.request.urlopen(f"{base}/ok", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+if not servidor_disponible(BASE):
+    print(f"""El servidor no responde en {BASE}.
+
+Para esta sección, en otra terminal:
+
+    cd {RAIZ}
+    uv sync --group despliegue
+    cd despliegue
+    uv run langgraph dev
+
+y vuelve a ejecutar la celda.""")
+else:
+    import asyncio
+
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    async def inventario_mcp():
+        async with streamablehttp_client(f"{BASE}/mcp") as (lector, escritor, _):
+            async with ClientSession(lector, escritor) as sesion:
+                info = await sesion.initialize()
+                herramientas = (await sesion.list_tools()).tools
+                return info.serverInfo, herramientas
+
+    info, herramientas = asyncio.run(inventario_mcp())
+    print(f"servidor MCP: {info.name} {info.version}\n")
+    for h in sorted(herramientas, key=lambda x: x.name):
+        campos = list(h.inputSchema.get("properties", {}))
+        print(f"  {h.name:12s} campos={campos}")
+        print(f"  {'':12s} {(h.description or '')[:80]}")
+
+#%%md
+Este es el resultado real de esa celda contra la aplicación del curso, con los dos grafos
+del `langgraph.json` de la sección 3:
+
+```
+servidor MCP: LangGraph 0.13.2
+
+  consultas    campos=['categoria']
+               Responde cuántos tickets de soporte hay de una categoría y cuántos…
+  soporte      campos=['messages', 'bitacora', 'consultas']
+               Tool based on the soporte assistant
+```
+
+Los dos grafos son de la misma aplicación y están igual de bien escritos. La diferencia
+entera está en el contrato: uno se puede usar desde otro modelo y el otro no.
+
+Y la llamada real a `consultas` devuelve exactamente lo que declara su `output_schema`,
+sin bitácora ni campos internos:
+
+```
+{"resumen": "59 tickets (categoría=facturacion, prioridad=todas). De esos, 1 tickets…"}
+```
+
+#%%md
+## 7. Exponer también es superficie de ataque
+
+Todo lo del notebook 19 sobre inyección indirecta se aplica **al revés** cuando eres tú el
+que expone:
+
+1. **Tu descripción es prompt para el otro modelo.** Escríbela para que decida bien, y no
+   metas ahí instrucciones ni datos sensibles: la lee cualquiera que liste tus herramientas.
+2. **Los argumentos que llegan vienen de un modelo**, no de un formulario. Valídalos con
+   `Literal` y con Pydantic, y no los interpoles en SQL ni en comandos. Es el mismo consejo
+   del notebook 05, con más motivo.
+3. **La autenticación no es opcional en `/mcp`.** Sin `auth`, cualquiera que alcance el
+   puerto usa tu agente y gasta tu cuota. El `@auth.authenticate` del notebook 25 protege
+   también el endpoint MCP.
+4. **Límite de ritmo por cliente.** Un agente al otro lado no se cansa de reintentar.
+5. **Apaga lo que no expongas.** `disable_mcp`, `disable_a2a`, `disable_store`. La
+   superficie que no existe no se audita.
+
+#%%py
+def _mcp_encendido(cfg: dict) -> bool:
+    return cfg.get("http", {}).get("disable_mcp") is not True
+
+
+comprobaciones_exposicion = {
+    "al menos un grafo con `description` (si expones por MCP)":
+        lambda cfg: (not _mcp_encendido(cfg)
+                     or any(isinstance(g, dict) and g.get("description")
+                            for g in cfg["graphs"].values())),
+    "si MCP está encendido, hay `auth`":
+        lambda cfg: (not _mcp_encendido(cfg)) or "auth" in cfg,
+    "A2A apagado si no se usa":
+        lambda cfg: cfg.get("http", {}).get("disable_a2a") is True,
+    "las rutas propias pasan por auth":
+        lambda cfg: (cfg.get("http", {}).get("enable_custom_route_auth") is True
+                     if cfg.get("http", {}).get("app") else True),
+    "la auth corre antes que tu middleware":
+        lambda cfg: (cfg.get("http", {}).get("middleware_order") == "auth_first"
+                     if cfg.get("http", {}).get("app") else True),
+}
+
+for fichero in ("langgraph.json", "langgraph.produccion.json"):
+    cfg = json.loads((APP / fichero).read_text(encoding="utf-8"))
+    print(f"\n{fichero}   (MCP {'encendido' if _mcp_encendido(cfg) else 'apagado'}):")
+    for etiqueta, comprobar in comprobaciones_exposicion.items():
+        print(f"   {'ok  ' if comprobar(cfg) else 'FALTA'} {etiqueta}")
+
+#%%md
+El de desarrollo falla casi todo, y está bien que así sea: es de desarrollo. Lo que no
+puede pasar es que salga a producción sin que nadie mire esta lista.
+
+Fíjate en que las reglas son **condicionales**, no absolutas: "apaga MCP" es un mal
+consejo si tu producto es precisamente exponer una herramienta. La regla útil es *"si lo
+enciendes, protégelo"*. Un auditor que exige apagarlo todo se ignora a la tercera vez.
+
+## 8. Ejercicios
+
+### 8.1 Completa el auditor de exposición
+
+La comprobación *"¿todos los grafos expuestos declaran `input_schema`?"* está sin
+implementar. Escríbela: carga cada grafo de `langgraph.json` por ruta de fichero (como hace
+el servidor, notebook 18) y comprueba que su `get_input_jsonschema()` no sea el estado
+entero.
+
+Pista: un grafo sin `input_schema` publica exactamente las mismas claves que su estado.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+import importlib.util
+from typing import get_type_hints
+
+
+def cargar_grafo(ruta_app: pathlib.Path, referencia: str):
+    """Carga `fichero.py:variable` POR RUTA, que es como lo hace el servidor."""
+    ruta_rel, variable = referencia.rsplit(":", 1)
+    fichero = (ruta_app / ruta_rel).resolve()
+    spec = importlib.util.spec_from_file_location(fichero.stem, fichero)
+    modulo = importlib.util.module_from_spec(spec)
+    sys.modules[fichero.stem] = modulo
+    spec.loader.exec_module(modulo)
+    return getattr(modulo, variable)
+
+
+def auditar_exposicion(ruta_app: pathlib.Path) -> list[str]:
+    cfg = json.loads((ruta_app / "langgraph.json").read_text(encoding="utf-8"))
+    sys.path.insert(0, str(ruta_app))
+    hallazgos = []
+
+    for nombre, entrada in cfg["graphs"].items():
+        referencia = entrada["path"] if isinstance(entrada, dict) else entrada
+        if not isinstance(entrada, dict) or not entrada.get("description"):
+            hallazgos.append(f"{nombre}: sin `description`; el otro modelo no sabe cuándo usarlo")
+
+        try:
+            grafo = cargar_grafo(ruta_app, referencia)
+        except Exception as e:
+            hallazgos.append(f"{nombre}: no carga por ruta ({type(e).__name__})")
+            continue
+
+        try:
+            entrada_esq = set(grafo.get_input_jsonschema().get("properties", {}))
+        except Exception as e:
+            hallazgos.append(f"{nombre}: el esquema no se puede publicar ({type(e).__name__}); "
+                             f"se publicará como null")
+            continue
+
+        # El esquema de estado no se publica; se lee del constructor del grafo.
+        estado_esq = set(get_type_hints(grafo.builder.state_schema, include_extras=False))
+        if entrada_esq == estado_esq:
+            hallazgos.append(f"{nombre}: sin `input_schema`; expone el estado entero "
+                             f"{sorted(entrada_esq)}")
+
+    return hallazgos
+
+
+for hallazgo in auditar_exposicion(APP):
+    print("  ·", hallazgo)
+print("\n(el grafo `consultas` no aparece: tiene descripción y contrato propio)")
+
+#%%md
+Fíjate en que el auditor distingue **tres** fallos distintos, y los tres son silenciosos:
+falta de descripción, esquema que no se puede publicar (el `typing.TypedDict` de la sección
+2.2) y ausencia de `input_schema`. Los tres dan un servidor que arranca y funciona.
+
+</details>
+
+### 8.2 Diseña el contrato de un agente que ya tienes
+
+Coge el agente del capstone (`P6`) o el asistente de `P3` y responde por escrito, sin
+programar:
+
+1. ¿Qué expondrías por **MCP** y qué por **A2A**? ¿Por qué?
+2. ¿Cuál sería su `input_schema` mínimo? ¿Y el `output_schema`?
+3. ¿Qué campo de su estado actual **no** debe salir nunca?
+
+#%%md
+<details>
+<summary>Una respuesta razonada</summary>
+
+**1. MCP o A2A.** El asistente de soporte de `P3` es conversacional y tiene memoria entre
+sesiones: eso es **A2A**, porque el `contextId` mapea directamente sobre su `thread_id` y
+porque el otro lado va a volver a hablar. En cambio, sus *capacidades sueltas* —"cuántos
+tickets críticos hay de esta categoría", "resume este ticket"— son **MCP**: entra algo,
+sale algo, no hay conversación que mantener.
+
+Y esa es la respuesta general: **un mismo sistema suele exponer las dos cosas**, no una.
+Grafos pequeños y sin estado por MCP; el agente completo por A2A.
+
+**2. El contrato mínimo.** Para la capacidad de consulta:
+
+```python
+class Entrada(TypedDict):
+    categoria: Literal["facturacion", "tecnico", "cuenta", "todas"]
+    prioridad: Literal["baja", "media", "alta", "critica", "todas"]
+
+class Salida(TypedDict):
+    total: int
+    resumen: str
+```
+
+Dos campos de dominio cerrado y una salida con un número que el otro sistema puede usar sin
+volver a parsear texto. Devolver solo `resumen` obliga al otro modelo a extraer el número
+de una frase, que es una llamada más y un error más.
+
+**3. Lo que no debe salir.** La bitácora de auditoría, los identificadores internos de
+ticket, cualquier dato del usuario que no sea de quien pregunta, y el estado de las
+aprobaciones pendientes. Nada de eso ayuda a decidir al otro modelo, todo cuesta tokens y
+alguno es una fuga de datos entre clientes.
+
+</details>
+
+## 9. Resumen
+
+- Tu agente tiene **tres puertas**: HTTP/SDK para lo tuyo, **MCP** para modelos que te usan
+  como herramienta, **A2A** para agentes que conversan contigo. Las tres vienen encendidas.
+- **El `input_schema` es tu API pública.** Sin él, expones el estado entero: campos internos
+  incluidos, y marcados como obligatorios.
+- Cuando el consumidor es un modelo, el esquema es prompt: **un campo por decisión**,
+  `Literal` siempre que se pueda, y `output_schema` para no devolver tus tripas.
+- En **Python < 3.12**, un `typing.TypedDict` hace que el esquema **no se pueda publicar**:
+  el servidor pone `input_schema: null`, la herramienta MCP sale sin campos y no hay error
+  en ningún sitio. Usa `typing_extensions.TypedDict` en lo que expongas.
+- La `description` en la forma extendida de `graphs` es lo que lee el otro modelo para
+  decidir si te llama. Sin ella, el servidor genera una inútil.
+- **A2A**: agent card, tareas con estado y `contextId` (que es un `thread_id`). Una familia
+  de nombres de método, no dos. Y `historyScope: "task"` si no quieres repetir turnos.
+- **`http.app`** monta tus rutas en el mismo proceso. `/ok` es *liveness*, tu `/salud` es
+  *readiness*: son sondas distintas con consecuencias distintas.
+- Tus rutas propias **no pasan por auth** salvo que lo pidas con `enable_custom_route_auth`.
+
+**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría de
+producción completa, con este notebook incluido en la lista.

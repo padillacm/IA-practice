@@ -1,17 +1,21 @@
 {
   "$schema": "https://langgra.ph/schema.json",
   "python_version": "3.11",
-  "dependencies": ["."],
+  "dependencies": [
+    "."
+  ],
   "graphs": {
-    "soporte": "./mi_agente/grafo.py:grafo"
+    "soporte": "./mi_agente/grafo.py:grafo",
+    "consultas": {
+      "path": "./mi_agente/consultas.py:grafo",
+      "description": "Responde cuántos tickets de soporte hay de una categoría y cuántos son críticos. Usa 'todas' para el total."
+    }
   },
   "env": "../.env",
-
   "auth": {
     "path": "./mi_agente/auth.py:auth",
     "disable_studio_auth": false
   },
-
   "checkpointer": {
     "ttl": {
       "strategy": "delete",
@@ -19,7 +23,6 @@
       "default_ttl": 43200
     }
   },
-
   "store": {
     "ttl": {
       "refresh_on_read": true,
@@ -27,17 +30,24 @@
       "default_ttl": 10080
     }
   },
-
   "http": {
+    "app": "./mi_agente/rutas.py:app",
+    "enable_custom_route_auth": true,
+    "middleware_order": "auth_first",
     "cors": {
-      "allow_origins": ["https://app.ejemplo.com"],
-      "allow_methods": ["GET", "POST", "DELETE"],
+      "allow_origins": [
+        "https://app.ejemplo.com"
+      ],
+      "allow_methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
       "allow_credentials": true,
       "max_age": 600
     },
     "disable_meta": true,
     "disable_store": true,
-    "disable_mcp": true,
     "disable_a2a": true
   }
 }

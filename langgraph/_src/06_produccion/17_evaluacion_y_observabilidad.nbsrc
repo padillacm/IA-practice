@@ -439,8 +439,8 @@ tu observabilidad. Con eso, las trazas del agente van al mismo sitio que las de 
 servicios: Grafana Tempo, Jaeger, SigNoz, Datadog, o un colector propio.
 
 ```bash
-pip install openinference-instrumentation-langchain \
-            opentelemetry-sdk opentelemetry-exporter-otlp
+uv add openinference-instrumentation-langchain \
+       opentelemetry-sdk opentelemetry-exporter-otlp
 ```
 
 ```python

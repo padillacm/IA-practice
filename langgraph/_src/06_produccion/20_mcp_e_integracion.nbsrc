@@ -88,14 +88,14 @@ con anotaciones de tipo y un docstring. Lo que cambia es que ahora la puede usar
 cliente MCP —Claude Desktop, tu IDE, otro agente— y no solo tu código.
 
 #%%py
-# Requiere:  pip install langchain-mcp-adapters
+# Requiere:  uv add langchain-mcp-adapters   (ya viene con el curso)
 try:
     from langchain_mcp_adapters.client import MultiServerMCPClient
     MCP_DISPONIBLE = True
 except ImportError:
     MCP_DISPONIBLE = False
     print("Instala el adaptador para ejecutar esta sección:\n"
-          "    pip install langchain-mcp-adapters")
+          "    uv add langchain-mcp-adapters")
 
 RUTA_SERVIDOR = str(RAIZ / "ejemplos" / "servidor_mcp_demo.py")
 print("servidor de demostración:", RUTA_SERVIDOR)

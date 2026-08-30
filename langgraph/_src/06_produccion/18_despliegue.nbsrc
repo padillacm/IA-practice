@@ -35,7 +35,7 @@ Un notebook no se despliega. Lo primero es sacar el grafo a módulos normales de
 ```
 mi-app/
 ├── langgraph.json          # el manifiesto: qué grafos hay y dónde
-├── requirements.txt        # dependencias
+├── pyproject.toml          # dependencias de LA APLICACIÓN (no las del curso)
 ├── .env                    # variables (NUNCA en el repositorio)
 └── mi_agente/
     ├── __init__.py
@@ -251,10 +251,18 @@ Cuatro claves que necesitas conocer:
 | `env` | Ruta al `.env`, o un diccionario de variables |
 | `python_version` | La versión de Python del contenedor |
 
+Son las cuatro imprescindibles. El fichero admite bastantes más —`auth`, `checkpointer.ttl`,
+`http`, `store`— y las vemos completas en el notebook 25.
+
+> **Sobre las dependencias:** `"dependencies": ["."]` significa *"instala este directorio como
+> paquete"*. El CLI acepta tanto `requirements.txt` como `pyproject.toml`; usamos el segundo
+> porque es lo mismo que usa el curso y porque declara el paquete a construir, sin ambigüedad.
+
 #%%py
 import json
 
-configuracion = {
+base = {
+    "$schema": "https://langgra.ph/schema.json",
     "dependencies": ["."],
     "graphs": {
         # El nombre de la izquierda es el que usarás como assistant_id en la API.
@@ -264,15 +272,41 @@ configuracion = {
     "python_version": "3.11",
 }
 
-(APP / "langgraph.json").write_text(json.dumps(configuracion, indent=2) + "\n", encoding="utf-8")
+# Generador IDEMPOTENTE: si el fichero ya existe (porque lo ampliaste en los notebooks 25
+# y 26 con `auth`, más grafos o rutas propias), conservamos lo que hubiera y solo nos
+# aseguramos de las claves base. Un generador que pisa el trabajo posterior se convierte
+# en una celda que nadie se atreve a volver a ejecutar.
+manifiesto = APP / "langgraph.json"
+configuracion = json.loads(manifiesto.read_text(encoding="utf-8")) if manifiesto.exists() else {}
+configuracion = {**base, **configuracion}
+configuracion["graphs"] = {**base["graphs"], **configuracion.get("graphs", {})}
 
-(APP / "requirements.txt").write_text(
-    "langgraph>=1.2,<2\n"
-    "langchain>=1.3,<2\n"
-    "langchain-openai>=1.6,<2\n"
-    "pandas>=2.2\n",
-    encoding="utf-8",
-)
+manifiesto.write_text(json.dumps(configuracion, indent=2, ensure_ascii=False) + "\n",
+                      encoding="utf-8")
+
+# Las dependencias de la aplicación van en su propio `pyproject.toml`, no en el del curso:
+# lo que no se importa desde `mi_agente/` no tiene por qué estar en la imagen desplegada.
+(APP / "pyproject.toml").write_text('''[project]
+name = "mi-agente"
+version = "0.1.0"
+description = "Agente de soporte desplegable — la aplicación que construye el notebook 18"
+requires-python = ">=3.11,<3.14"
+
+dependencies = [
+    "langgraph>=1.2,<2",
+    "langchain>=1.3,<2",
+    "langchain-openai>=1.6,<2",
+    "langgraph-sdk>=0.4",
+    "pandas>=2.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mi_agente"]
+''', encoding="utf-8")
 
 (APP / "README.md").write_text('''# Agente de soporte — aplicación desplegable
 
@@ -281,9 +315,10 @@ Generada por el notebook `06_produccion/18_despliegue.ipynb` del curso.
 ## Ejecutar en local
 
 ```bash
-pip install "langgraph-cli[inmem]"
-cd langgraph/despliegue
-langgraph dev
+cd langgraph
+uv sync --group despliegue        # instala langgraph-cli[inmem]
+cd despliegue
+uv run langgraph dev
 ```
 
 Se levanta en `http://127.0.0.1:2024` y la salida incluye el enlace a LangGraph Studio.
@@ -342,9 +377,10 @@ mostrar_grafo(grafo_desplegable)
 ## 3. Servirlo en local: `langgraph dev`
 
 ```bash
-pip install "langgraph-cli[inmem]"
-cd langgraph/despliegue
-langgraph dev
+cd langgraph
+uv sync --group despliegue        # instala langgraph-cli[inmem]
+cd despliegue
+uv run langgraph dev
 ```
 
 Levanta un servidor completo en `http://127.0.0.1:2024`, con persistencia en memoria y
@@ -414,7 +450,7 @@ Dos formas, la misma API por debajo.
 
 #%%py
 print('''# --- SDK de Python (asíncrono) ---
-# pip install langgraph-sdk
+# uv add langgraph-sdk   (ya viene con el curso)
 
 from langgraph_sdk import get_client
 
@@ -879,9 +915,10 @@ if not servidor_disponible(BASE):
 
 Para hacer este ejercicio, en una terminal:
 
-    pip install "langgraph-cli[inmem]"
-    cd {APP}
-    langgraph dev
+    cd {APP.parent}
+    uv sync --group despliegue
+    cd despliegue
+    uv run langgraph dev
 
 y vuelve a ejecutar esta celda.""")
 else:

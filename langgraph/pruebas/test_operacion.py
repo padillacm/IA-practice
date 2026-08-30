@@ -14,11 +14,15 @@ from __future__ import annotations
 import collections
 import operator
 import sqlite3
+import sys
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, TypedDict
+
+import json
+import pathlib
 
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
@@ -26,6 +30,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
+RAIZ = pathlib.Path(__file__).resolve().parents[1]
 SERDE = JsonPlusSerializer()
 
 
@@ -220,10 +225,6 @@ def test_el_grafo_compilado_se_puede_compartir_entre_hilos():
 # ======================================================================================
 # Notebook 25 · configuración de despliegue
 # ======================================================================================
-import json
-import pathlib
-
-RAIZ = pathlib.Path(__file__).resolve().parents[1]
 
 
 def test_la_configuracion_de_produccion_esta_endurecida():
@@ -256,3 +257,149 @@ def test_las_reglas_de_acceso_cubren_todos_los_recursos():
                             ("threads", "delete"), ("assistants", "create"),
                             ("crons", "create"), ("store", "put")]:
         assert hay_regla(recurso, accion), f"{recurso}.{accion} sin regla"
+
+
+# ======================================================================================
+# Notebook 26 · el contrato que ve quien te consume
+# ======================================================================================
+def test_sin_input_schema_se_expone_el_estado_entero():
+    """Un grafo sin `input_schema` publica sus campos internos como obligatorios.
+
+    Es la razón de ser del notebook 26: el estado es tu estructura interna, el
+    `input_schema` es tu API pública.
+    """
+    from typing_extensions import TypedDict as TD
+
+    class Estado(TD):
+        pregunta: str
+        bitacora: list
+        contador: int
+
+    grafo = (StateGraph(Estado).add_node("n", lambda e: {})
+             .add_edge(START, "n").add_edge("n", END).compile())
+
+    campos = set(grafo.get_input_jsonschema().get("properties", {}))
+    assert campos == {"pregunta", "bitacora", "contador"}
+
+
+def test_con_input_schema_solo_se_expone_lo_declarado():
+    from typing_extensions import TypedDict as TD
+
+    class Entrada(TD):
+        pregunta: str
+
+    class Salida(TD):
+        respuesta: str
+
+    class Estado(Entrada, Salida):
+        bitacora: list
+
+    grafo = (StateGraph(Estado, input_schema=Entrada, output_schema=Salida)
+             .add_node("n", lambda e: {"respuesta": "x"})
+             .add_edge(START, "n").add_edge("n", END).compile())
+
+    assert set(grafo.get_input_jsonschema()["properties"]) == {"pregunta"}
+    assert set(grafo.get_output_jsonschema()["properties"]) == {"respuesta"}
+
+
+@pytest.mark.skipif(sys.version_info >= (3, 12),
+                    reason="en Python 3.12+ Pydantic ya introspecciona typing.TypedDict")
+def test_typing_typeddict_impide_publicar_el_esquema():
+    """El fallo silencioso del notebook 26.
+
+    En Python < 3.12, un `typing.TypedDict` hace que el esquema no se pueda generar; el
+    servidor lo publica como `null` y la herramienta MCP sale sin campos. Aquí lo fijamos
+    como prueba para que, si algún día deja de pasar, nos enteremos.
+    """
+    import typing
+
+    Entrada = typing.TypedDict("Entrada", {"categoria": str})
+    Estado = typing.TypedDict("Estado", {"categoria": str, "resumen": str})
+
+    grafo = (StateGraph(Estado, input_schema=Entrada)
+             .add_node("n", lambda e: {"resumen": "x"})
+             .add_edge(START, "n").add_edge("n", END).compile())
+
+    with pytest.raises(Exception, match="typing_extensions"):
+        grafo.get_input_jsonschema()
+
+
+def test_typing_extensions_typeddict_si_publica_el_esquema():
+    import typing_extensions
+
+    Entrada = typing_extensions.TypedDict("Entrada", {"categoria": str})
+    Estado = typing_extensions.TypedDict("Estado", {"categoria": str, "resumen": str})
+
+    grafo = (StateGraph(Estado, input_schema=Entrada)
+             .add_node("n", lambda e: {"resumen": "x"})
+             .add_edge(START, "n").add_edge("n", END).compile())
+
+    assert set(grafo.get_input_jsonschema()["properties"]) == {"categoria"}
+
+
+def test_los_grafos_expuestos_de_la_app_tienen_contrato():
+    """Los grafos con `description` en langgraph.json se consideran expuestos.
+
+    De uno expuesto exigimos las dos cosas que hacen que otro modelo pueda usarlo:
+    esquema publicable y distinto del estado entero.
+    """
+    import importlib.util
+    from typing import get_type_hints
+
+    ruta_app = RAIZ / "despliegue"
+    cfg = json.loads((ruta_app / "langgraph.json").read_text(encoding="utf-8"))
+    sys.path.insert(0, str(ruta_app))
+
+    expuestos = {n: e for n, e in cfg["graphs"].items()
+                 if isinstance(e, dict) and e.get("description")}
+    assert expuestos, "la app debería exponer al menos un grafo con descripción"
+
+    for nombre, entrada in expuestos.items():
+        fichero = (ruta_app / entrada["path"].rsplit(":", 1)[0]).resolve()
+        spec = importlib.util.spec_from_file_location(fichero.stem, fichero)
+        modulo = importlib.util.module_from_spec(spec)
+        sys.modules[fichero.stem] = modulo
+        spec.loader.exec_module(modulo)
+        grafo = getattr(modulo, entrada["path"].rsplit(":", 1)[1])
+
+        entrada_esq = set(grafo.get_input_jsonschema().get("properties", {}))
+        estado_esq = set(get_type_hints(grafo.builder.state_schema, include_extras=False))
+        assert entrada_esq, f"{nombre}: esquema de entrada vacío"
+        assert entrada_esq != estado_esq, f"{nombre}: expone el estado entero"
+
+
+# ======================================================================================
+# Consistencia del proyecto (uv)
+# ======================================================================================
+def test_requirements_esta_al_dia_con_el_lock():
+    """`requirements.txt` es un fichero DERIVADO de uv.lock.
+
+    Si alguien toca `pyproject.toml` y no reexporta, las dos vías de instalación divergen
+    en silencio. Esta prueba es la que lo impide.
+    """
+    import subprocess
+
+    if not (RAIZ / "uv.lock").exists():
+        pytest.skip("sin uv.lock")
+
+    salida = subprocess.run([sys.executable, str(RAIZ / "_tools" / "exportar_requisitos.py"),
+                             "--check"], capture_output=True, text=True)
+    if "uv" in salida.stderr and salida.returncode == 2:
+        pytest.skip("uv no está en el PATH de este entorno")
+    assert salida.returncode == 0, salida.stdout + salida.stderr
+
+
+def test_las_dependencias_del_curso_declaran_lo_que_importan_los_notebooks():
+    """Nada de dependerse de paquetes transitivos por accidente.
+
+    starlette, httpx y mcp los usan los notebooks 24 y 26; si llegaran solo como
+    dependencia indirecta de otro paquete, una actualización podría quitarlos.
+    """
+    import tomllib
+
+    pyproject = tomllib.loads((RAIZ / "pyproject.toml").read_text(encoding="utf-8"))
+    declaradas = {d.split(">")[0].split("[")[0].split("=")[0].strip().lower()
+                  for d in pyproject["project"]["dependencies"]}
+
+    for paquete in ("starlette", "httpx", "langgraph-sdk", "langchain-mcp-adapters"):
+        assert paquete in declaradas, f"{paquete} se usa en los notebooks y no está declarado"

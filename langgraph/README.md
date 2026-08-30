@@ -1,6 +1,6 @@
 # Curso de LangGraph — de cero al p99
 
-Un curso completo de **LangGraph en español**, en 33 notebooks interactivos, construido y
+Un curso completo de **LangGraph en español**, en 34 notebooks interactivos, construido y
 verificado contra **LangGraph 1.2** y **LangChain 1.3**.
 
 No es una traducción de la documentación. Cada afirmación técnica del material se comprobó
@@ -14,27 +14,59 @@ persistencia, concurrencia por `thread_id` y control de acceso.
 
 | | |
 |---|---|
-| **Notebooks** | 33 (26 de contenido + 7 de proyecto) |
+| **Notebooks** | 34 (27 de contenido + 7 de proyecto) |
 | **Módulos** | 8 |
-| **Celdas** | 1185 (668 de teoría, 517 de código ejecutable) |
+| **Celdas** | 1217 (688 de teoría, 529 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
-| **Pruebas** | 50 pruebas automáticas que corren en 1,5 s sin llamar a ningún modelo |
-| **Dedicación estimada** | 46-53 horas |
+| **Pruebas** | 57 pruebas automáticas que corren en 1,8 s sin llamar a ningún modelo |
+| **Dedicación estimada** | 48-55 horas |
 | **Coste en API** | unos 2 € en total con `gpt-4o-mini` |
 
 ---
 
 ## Empezar
 
+El curso usa [**uv**](https://docs.astral.sh/uv/). Si no lo tienes:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh     # macOS y Linux
+# Windows (PowerShell): irm https://astral.sh/uv/install.ps1 | iex
+```
+
+```bash
+cd langgraph
+uv sync                     # crea .venv e instala exactamente lo que dice uv.lock
+cp .env.example .env        # y escribe tu OPENAI_API_KEY
+uv run jupyter lab
+```
+
+Grupos opcionales, para lo que no hace falta hasta el módulo 6:
+
+```bash
+uv sync --group despliegue   # langgraph-cli: servidor local y Studio (notebooks 18, 25, 26)
+uv sync --group postgres     # PostgresSaver y psycopg (notebook 23)
+uv sync --all-groups         # todo
+```
+
+<details>
+<summary>Si prefieres pip</summary>
+
+`requirements.txt` se **genera** desde `uv.lock`, así que instala exactamente las mismas
+versiones:
+
 ```bash
 cd langgraph
 python -m venv .venv && source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env        # y escribe tu OPENAI_API_KEY
+cp .env.example .env
 jupyter lab
 ```
+
+No lo edites a mano: las dependencias se tocan en `pyproject.toml` y luego
+`uv lock && uv run _tools/exportar_requisitos.py`.
+
+</details>
 
 Abre `00_inicio/00_bienvenida_y_entorno.ipynb` y sigue el orden.
 
@@ -119,6 +151,7 @@ sale de contrastar el resto del curso con los problemas que la gente reporta en 
 | [`23_persistencia_a_escala`](07_operacion/23_persistencia_a_escala.ipynb) | La fórmula de checkpoints por turno, el efecto real de `durability`, poda del checkpointer y los parámetros de Postgres que nadie documenta |
 | [`24_concurrencia_y_servidor`](07_operacion/24_concurrencia_y_servidor.ipynb) | La pérdida de escrituras con dos peticiones al mismo hilo, cerrojos por `thread_id`, *double texting* y un servidor SSE propio |
 | [`25_auth_y_multitenencia`](07_operacion/25_auth_y_multitenencia.ipynb) | `langgraph_sdk.Auth`, filtros de metadatos, aislamiento del `Store` y el `langgraph.json` completo |
+| [`26_exponer_el_agente`](07_operacion/26_exponer_el_agente.ipynb) | El agente como servicio para otros agentes: endpoint `/mcp`, protocolo A2A, rutas HTTP propias y el diseño del contrato que ve el otro modelo |
 | **[`P7 · Auditoría de producción`](07_operacion/P7_proyecto_endurecer.ipynb)** | Un auditor que aplica los cuatro detectores a una aplicación heredada y a su versión endurecida |
 
 ---
@@ -150,7 +183,11 @@ python _tools/generar_tickets.py     # regenerar los sintéticos (determinista)
 ### Las herramientas del repositorio
 
 ```
+pyproject.toml             la fuente de verdad de las dependencias (uv)
+uv.lock                    el árbol completo resuelto: lo que instala `uv sync`
+requirements.txt           GENERADO desde el lock, para la vía de pip
 _tools/nbgen.py            genera los .ipynb desde fuentes de texto plano en _src/
+_tools/exportar_requisitos.py  regenera requirements.txt desde uv.lock (--check en la CI)
 _tools/validar.py          valida estructura, compila cada celda y comprueba que todo
                            símbolo importado EXISTE en el entorno instalado
 _tools/preparar_kb.py      construye el corpus RAG desde la documentación oficial
@@ -159,7 +196,7 @@ ejemplos/                  servidores MCP de demostración (notebook 20)
 utils/curso.py             arranque, fábrica de modelos, visualización, impresión legible
 utils/datos.py             carga de los conjuntos de datos
 utils/rag.py               troceado, BM25 y fusión de rangos (del notebook 14)
-pruebas/                   50 pruebas automáticas, sin llamadas a modelos
+pruebas/                   57 pruebas automáticas, sin llamadas a modelos
 despliegue/                aplicación desplegable que genera el notebook 18, con su
                            versión endurecida (auth.py + langgraph.produccion.json)
 ```
@@ -169,14 +206,15 @@ por `#%%md` y `#%%py`, y se compilan a `.ipynb`. Así las revisiones en git son 
 hay que editar JSON a mano.
 
 ```bash
-python _tools/nbgen.py _src/01_fundamentos/*.nbsrc   # regenerar notebooks
-python _tools/validar.py                             # validar todos
-python -m pytest pruebas/ -q                         # la batería de pruebas
+uv run _tools/nbgen.py _src/01_fundamentos/*.nbsrc   # regenerar notebooks
+uv run _tools/validar.py                             # validar todos
+uv run pytest                                        # la batería de pruebas
+uv run _tools/exportar_requisitos.py --check         # ¿sigue el requirements.txt al día?
 ```
 
 ### Cómo se verificó el material
 
-Cada notebook pasó por seis filtros antes de darse por bueno:
+Cada notebook pasó por siete filtros antes de darse por bueno:
 
 1. **Validación estática** — estructura del `.ipynb`, compilación de cada celda de código, y
    comprobación de que **cada símbolo importado existe** en LangGraph 1.2 / LangChain 1.3. Esto
@@ -190,12 +228,17 @@ Cada notebook pasó por seis filtros antes de darse por bueno:
    HTTP que carga el grafo, expone el assistant y responde en `/threads` y `/runs`. Fue ahí
    donde apareció el fallo de las importaciones relativas: ninguna comprobación estática lo
    detecta, y el material lo documenta precisamente por eso.
-5. **Todo lo anterior se repitió en un entorno virgen** creado solo desde `requirements.txt`,
-   para garantizar que el fichero de dependencias basta: 33/33 notebooks y 50/50 pruebas.
+5. **Todo lo anterior se repitió en dos entornos vírgenes**, uno creado con `uv sync` desde
+   el lock y otro con `pip install -r requirements.txt`, para garantizar que las dos vías de
+   instalación dan lo mismo: 34/34 notebooks y 57/57 pruebas en ambos, con versiones idénticas.
 6. **La capa de autenticación se ejercitó por HTTP.** `despliegue/langgraph.produccion.json`
    se arrancó con `langgraph dev` y se comprobaron los 401 sin token, los 403 por falta de
    permiso, los 200 con el `owner` escrito en los metadatos, el aislamiento entre usuarios y
    el 404 (que no 403) al pedir un recurso ajeno.
+7. **Los endpoints de interoperabilidad se ejercitaron con clientes reales.** Se listaron y
+   se llamaron las herramientas del endpoint `/mcp` con el SDK de MCP, se leyó el agent card
+   y se creó una tarea por A2A, y se comprobó que las rutas propias de `http.app` devuelven
+   401 sin token cuando `enable_custom_route_auth` está activo.
 
 ---
 
@@ -236,6 +279,9 @@ suele darse por supuesto:
 | Con la caché de prefijo contada, **resumir en cada turno sale más caro que no comprimir nada**: rompe la caché, paga una llamada extra y pierde información | 19 |
 | Meter la hora en el system prompt encarece la conversación un **86 %** aunque no cambie ni un token del resto | 19 |
 | Si una rama de un fan-out falla, las hermanas que terminaron **quedan persistidas**, y al reanudar **solo se reejecuta la que falló** | 15 |
+| Un grafo **sin `input_schema` expone el estado entero** por MCP: los campos internos salen como obligatorios y el otro modelo no puede usarlo | 26 |
+| En Python < 3.12, un `typing.TypedDict` hace que el esquema **no se pueda publicar**: el servidor pone `input_schema: null` y la herramienta MCP sale sin campos, sin ningún error | 26 |
+| Las rutas propias de `http.app` **no pasan por la autenticación** salvo que actives `enable_custom_route_auth` | 26 |
 
 ---
 

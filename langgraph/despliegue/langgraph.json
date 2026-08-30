@@ -1,10 +1,18 @@
 {
+  "$schema": "https://langgra.ph/schema.json",
   "dependencies": [
     "."
   ],
   "graphs": {
-    "soporte": "./mi_agente/grafo.py:grafo"
+    "soporte": "./mi_agente/grafo.py:grafo",
+    "consultas": {
+      "path": "./mi_agente/consultas.py:grafo",
+      "description": "Responde cuántos tickets de soporte hay de una categoría y cuántos son críticos. Usa 'todas' para el total."
+    }
   },
   "env": "../.env",
-  "python_version": "3.11"
+  "python_version": "3.11",
+  "http": {
+    "app": "./mi_agente/rutas.py:app"
+  }
 }

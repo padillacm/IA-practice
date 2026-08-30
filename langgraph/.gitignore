@@ -9,3 +9,8 @@ __pycache__/
 checkpoints/
 data/evaluaciones.jsonl
 .pytest_cache/
+
+# Entornos y cachés de uv
+.venv/
+.uv/
+# uv.lock SÍ se versiona: es lo que hace reproducible el curso.
