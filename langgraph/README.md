@@ -1,6 +1,6 @@
 # Curso de LangGraph — de cero al p99
 
-Un curso completo de **LangGraph en español**, en 34 notebooks interactivos, construido y
+Un curso completo de **LangGraph en español**, en 35 notebooks interactivos, construido y
 verificado contra **LangGraph 1.2** y **LangChain 1.3**.
 
 No es una traducción de la documentación. Cada afirmación técnica del material se comprobó
@@ -14,13 +14,13 @@ persistencia, concurrencia por `thread_id` y control de acceso.
 
 | | |
 |---|---|
-| **Notebooks** | 34 (27 de contenido + 7 de proyecto) |
+| **Notebooks** | 35 (28 de contenido + 7 de proyecto) |
 | **Módulos** | 8 |
-| **Celdas** | 1217 (688 de teoría, 529 de código ejecutable) |
+| **Celdas** | 1250 (706 de teoría, 544 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
-| **Pruebas** | 57 pruebas automáticas que corren en 1,8 s sin llamar a ningún modelo |
-| **Dedicación estimada** | 48-55 horas |
+| **Pruebas** | 66 pruebas automáticas que corren en 1,9 s sin llamar a ningún modelo |
+| **Dedicación estimada** | 50-57 horas |
 | **Coste en API** | unos 2 € en total con `gpt-4o-mini` |
 
 ---
@@ -152,6 +152,7 @@ sale de contrastar el resto del curso con los problemas que la gente reporta en 
 | [`24_concurrencia_y_servidor`](07_operacion/24_concurrencia_y_servidor.ipynb) | La pérdida de escrituras con dos peticiones al mismo hilo, cerrojos por `thread_id`, *double texting* y un servidor SSE propio |
 | [`25_auth_y_multitenencia`](07_operacion/25_auth_y_multitenencia.ipynb) | `langgraph_sdk.Auth`, filtros de metadatos, aislamiento del `Store` y el `langgraph.json` completo |
 | [`26_exponer_el_agente`](07_operacion/26_exponer_el_agente.ipynb) | El agente como servicio para otros agentes: endpoint `/mcp`, protocolo A2A, rutas HTTP propias y el diseño del contrato que ve el otro modelo |
+| [`27_evaluar_trayectorias`](07_operacion/27_evaluar_trayectorias.ipynb) | Evaluar **cómo** llegó el agente a la respuesta: los cuatro modos de coincidencia de `agentevals`, la trampa de los argumentos en lenguaje natural, trayectorias de grafo con interrupciones y los límites del juez LLM |
 | **[`P7 · Auditoría de producción`](07_operacion/P7_proyecto_endurecer.ipynb)** | Un auditor que aplica los cuatro detectores a una aplicación heredada y a su versión endurecida |
 
 ---
@@ -196,7 +197,7 @@ ejemplos/                  servidores MCP de demostración (notebook 20)
 utils/curso.py             arranque, fábrica de modelos, visualización, impresión legible
 utils/datos.py             carga de los conjuntos de datos
 utils/rag.py               troceado, BM25 y fusión de rangos (del notebook 14)
-pruebas/                   57 pruebas automáticas, sin llamadas a modelos
+pruebas/                   66 pruebas automáticas, sin llamadas a modelos
 despliegue/                aplicación desplegable que genera el notebook 18, con su
                            versión endurecida (auth.py + langgraph.produccion.json)
 ```
@@ -230,7 +231,7 @@ Cada notebook pasó por siete filtros antes de darse por bueno:
    detecta, y el material lo documenta precisamente por eso.
 5. **Todo lo anterior se repitió en dos entornos vírgenes**, uno creado con `uv sync` desde
    el lock y otro con `pip install -r requirements.txt`, para garantizar que las dos vías de
-   instalación dan lo mismo: 34/34 notebooks y 57/57 pruebas en ambos, con versiones idénticas.
+   instalación dan lo mismo: 35/35 notebooks y 66/66 pruebas en ambos, con versiones idénticas.
 6. **La capa de autenticación se ejercitó por HTTP.** `despliegue/langgraph.produccion.json`
    se arrancó con `langgraph dev` y se comprobaron los 401 sin token, los 403 por falta de
    permiso, los 200 con el `owner` escrito en los metadatos, el aislamiento entre usuarios y
@@ -282,6 +283,8 @@ suele darse por supuesto:
 | Un grafo **sin `input_schema` expone el estado entero** por MCP: los campos internos salen como obligatorios y el otro modelo no puede usarlo | 26 |
 | En Python < 3.12, un `typing.TypedDict` hace que el esquema **no se pueda publicar**: el servidor pone `input_schema: null` y la herramienta MCP sale sin campos, sin ningún error | 26 |
 | Las rutas propias de `http.app` **no pasan por la autenticación** salvo que actives `enable_custom_route_auth` | 26 |
+| Comparar argumentos en modo `exact` sobre una consulta en lenguaje natural **garantiza** una evaluación siempre roja | 27 |
+| La trayectoria de grafo registra `__interrupt__` como un paso más: es la única forma de comprobar que **hubo aprobación humana** | 27 |
 
 ---
 

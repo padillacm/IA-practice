@@ -36,6 +36,7 @@ dependencies = [
 
     # --- evaluación y observabilidad -----------------------------------------
     "langsmith>=0.11",
+    "agentevals>=0.0.9",                # evaluadores de trayectoria (notebook 27)
 
     # --- utilidades de notebook ----------------------------------------------
     "jupyterlab>=4.2",

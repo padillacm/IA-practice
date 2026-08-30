@@ -673,5 +673,5 @@ alguno es una fuga de datos entre clientes.
   *readiness*: son sondas distintas con consecuencias distintas.
 - Tus rutas propias **no pasan por auth** salvo que lo pidas con `enable_custom_route_auth`.
 
-**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría de
-producción completa, con este notebook incluido en la lista.
+**Siguiente:** [`27_evaluar_trayectorias.ipynb`](27_evaluar_trayectorias.ipynb) — cómo saber
+si tu agente ha empeorado, cuando la respuesta final no basta.

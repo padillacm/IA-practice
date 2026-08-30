@@ -1,0 +1,591 @@
+#%%md
+# 27 · Evaluar la trayectoria, no solo la respuesta
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 30 min*
+
+El notebook 17 montó la pirámide de pruebas y el conjunto dorado: das una entrada, comparas
+la salida con la esperada, y sacas un porcentaje. Es el nivel al que llega casi todo el
+mundo, y se queda corto por un motivo concreto:
+
+> **Un agente puede dar la respuesta correcta por el motivo equivocado.**
+
+Y al revés, que duele más: puede dar una respuesta ligeramente distinta habiendo hecho
+exactamente lo correcto, y tu métrica lo cuenta como fallo. Con las dos cosas a la vez, tu
+porcentaje deja de correlacionar con la calidad y las decisiones que tomas con él son ruido.
+
+La respuesta a esto es evaluar **la trayectoria**: qué herramientas llamó, con qué
+argumentos, en qué orden y por qué nodos pasó.
+
+Al terminar sabrás:
+
+1. Los cuatro niveles de evaluación de un agente, y cuál usar para qué.
+2. Los cuatro modos de coincidencia de trayectorias, con su tabla de verdad medida.
+3. Por qué comparar argumentos en modo exacto **garantiza** una evaluación siempre roja.
+4. Evaluar trayectorias de **grafo** (nodos y superpasos), interrupciones incluidas.
+5. Cuándo poner un juez LLM y cuándo no.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+#%%md
+## 1. El agente que acierta por casualidad
+
+Un ejemplo concreto, del dominio del curso. La pregunta:
+
+> *"¿Cuántos tickets críticos de facturación hay, y cumplimos el SLA?"*
+
+Y dos agentes que responden lo mismo:
+
+| | Agente A | Agente B |
+|---|---|---|
+| Herramientas | `buscar_politica("sla")` → `contar_tickets(facturacion, critica)` | `contar_tickets(facturacion, critica)` |
+| Respuesta | "Hay 12 críticos; el SLA es de 4 h, se cumple" | "Hay 12 críticos; el SLA es de 4 h, se cumple" |
+
+La respuesta es idéntica y **solo una es correcta**. El agente B se inventó el SLA: no
+consultó la política, lo sacó de lo que el modelo recuerda. Hoy acierta; el día que cambie
+la política seguirá diciendo cuatro horas.
+
+Un conjunto dorado sobre respuestas finales da 100 % en los dos. Uno sobre trayectorias
+suspende al B, que es justo lo que quieres.
+
+## 2. Los cuatro niveles
+
+| Nivel | Qué compara | Determinista | Cuándo |
+|---|---|---|---|
+| **Respuesta final** | La salida contra una referencia | No (texto libre) | Necesario, insuficiente |
+| **Trayectoria de herramientas** | Qué llamó, con qué argumentos y en qué orden | **Sí** | El caballo de batalla. Va en la CI |
+| **Trayectoria de grafo** | Por qué nodos y superpasos pasó | **Sí** | Cuando el flujo importa: aprobaciones, reintentos, rutas |
+| **Juez LLM** | Si la trayectoria "tiene sentido" | No | Cuando hay muchas trayectorias válidas |
+
+Los dos de en medio son los que faltan en la mayoría de los proyectos, y son los únicos
+**deterministas**: se pueden ejecutar en cada *pull request*, sin gastar cuota y sin
+varianza. Vamos con ellos.
+
+#%%md
+## 3. `agentevals`: los cuatro modos de coincidencia
+
+`agentevals` es el paquete de LangChain para esto. Su evaluador principal compara la
+trayectoria de mensajes de tu agente contra una de referencia, con cuatro estrategias.
+
+Los nombres se entienden mejor con una tabla de verdad que con una definición, así que la
+construimos.
+
+#%%py
+from langchain.messages import AIMessage, HumanMessage, ToolMessage
+from agentevals.trajectory.match import create_trajectory_match_evaluator
+
+
+def trayectoria(*llamadas) -> list:
+    """Construye una traza de agente a partir de (nombre_herramienta, argumentos)."""
+    mensajes = [HumanMessage("¿cuántos tickets críticos de facturación hay y cumplimos el SLA?")]
+    for i, (nombre, argumentos) in enumerate(llamadas):
+        mensajes.append(AIMessage("", tool_calls=[
+            {"name": nombre, "args": argumentos, "id": f"c{i}"}]))
+        mensajes.append(ToolMessage("resultado", tool_call_id=f"c{i}", name=nombre))
+    mensajes.append(AIMessage("Hay 12 críticos y el SLA se cumple."))
+    return mensajes
+
+
+POLITICA = ("buscar_politica", {"tema": "sla"})
+CONTAR = ("contar_tickets", {"categoria": "facturacion", "prioridad": "critica"})
+DETALLE = ("detalle_ticket", {"id_ticket": "TCK-0001"})
+
+referencia = trayectoria(POLITICA, CONTAR)
+
+casos = {
+    "idéntica":         trayectoria(POLITICA, CONTAR),
+    "orden invertido":  trayectoria(CONTAR, POLITICA),
+    "se saltó una":     trayectoria(CONTAR),
+    "llamó una de más": trayectoria(POLITICA, CONTAR, DETALLE),
+    "argumento distinto": trayectoria(POLITICA,
+                                      ("contar_tickets",
+                                       {"categoria": "facturacion", "prioridad": "alta"})),
+}
+
+MODOS = ["strict", "unordered", "subset", "superset"]
+print(f"{'trayectoria del agente':22s}" + "".join(f"{m:>11s}" for m in MODOS))
+print("-" * 68)
+for nombre, salida in casos.items():
+    fila = f"{nombre:22s}"
+    for modo in MODOS:
+        evaluar = create_trajectory_match_evaluator(trajectory_match_mode=modo)
+        fila += f"{str(evaluar(outputs=salida, reference_outputs=referencia)['score']):>11s}"
+    print(fila)
+
+#%%md
+Lee la tabla por columnas, que es donde está la decisión de diseño:
+
+| Modo | Aprueba si… | Úsalo cuando |
+|---|---|---|
+| `strict` | Mismas llamadas, mismos argumentos, **mismo orden** | El orden es parte de la corrección: comprobar permisos *antes* de actuar |
+| `unordered` | Las mismas llamadas, en cualquier orden | Lo que importa es que consultó la política **en algún momento** |
+| `subset` | El agente llamó **como mucho** lo de la referencia | Detectar herramientas de más: llamadas inútiles que cuestan dinero |
+| `superset` | El agente llamó **al menos** lo de la referencia | Detectar herramientas de menos: el agente B de la sección 1 |
+
+Fíjate en las dos filas del medio de la tabla medida, porque son las que la gente confunde:
+*"se saltó una"* aprueba en `subset` y suspende en `superset`; *"llamó una de más"* al revés.
+La forma de recordarlo: **el modo describe la trayectoria del agente respecto a la
+referencia**, no al contrario.
+
+> **La elección por defecto que recomiendo:** `superset` con `unordered`… que no existe como
+> combinación, así que en la práctica: **`superset`** para el conjunto de casos donde te
+> importa que no se salte pasos obligatorios, y **`strict`** solo para los flujos donde el
+> orden es un requisito de seguridad. `strict` en todo es la receta para una suite que nadie
+> mantiene, porque se pone roja cada vez que el modelo reordena dos llamadas independientes.
+
+#%%md
+## 4. La trampa de los argumentos
+
+Aquí está el error que hace que la mayoría de las suites de trayectorias se abandonen a las
+dos semanas.
+
+Por defecto, los argumentos se comparan **exactos**. Con una herramienta de dominio cerrado
+(`categoria="facturacion"`) eso es correcto y deseable. Con una herramienta que recibe
+**lenguaje natural** —una búsqueda, una consulta a un índice— es imposible de cumplir: el
+modelo escribirá la consulta ligeramente distinta cada vez.
+
+#%%py
+def con_busqueda(consulta: str, limite: int) -> list:
+    return [
+        HumanMessage("busca información sobre tickets críticos de facturación"),
+        AIMessage("", tool_calls=[{"name": "buscar",
+                                   "args": {"consulta": consulta, "limite": limite},
+                                   "id": "c0"}]),
+        ToolMessage("resultados", tool_call_id="c0", name="buscar"),
+        AIMessage("Encontrado."),
+    ]
+
+
+ref_busqueda = con_busqueda("tickets de facturación críticos", 5)
+sal_busqueda = con_busqueda("tickets criticos facturacion", 5)   # el mismo intento, otras palabras
+
+print("Comparando una consulta en lenguaje natural:\n")
+for modo in ("exact", "ignore", "subset", "superset"):
+    evaluar = create_trajectory_match_evaluator(
+        trajectory_match_mode="strict", tool_args_match_mode=modo)
+    resultado = evaluar(outputs=sal_busqueda, reference_outputs=ref_busqueda)
+    print(f"  tool_args_match_mode={modo:9s} -> {resultado['score']}")
+
+#%%md
+Solo `ignore` aprueba, y `ignore` es demasiado: dejaría pasar también un `limite=500` cuando
+esperabas 5.
+
+La salida buena es `tool_args_match_overrides`, que permite decidir **por herramienta**. Y
+acepta dos formas muy útiles: una lista de claves a comparar, o un comparador propio.
+
+#%%py
+# (a) Comparar solo las claves que sí son deterministas.
+solo_limite = create_trajectory_match_evaluator(
+    trajectory_match_mode="strict",
+    tool_args_match_overrides={"buscar": ["limite"]},
+)
+
+# (b) Un comparador propio para la parte en lenguaje natural.
+def consultas_equivalentes(argumentos, referencia_args) -> bool:
+    """Aprueba si las consultas comparten vocabulario y el resto de argumentos coincide.
+
+    Es deliberadamente tosco: normaliza acentos, parte en palabras y pide al menos dos en
+    común. Para una suite de evaluación eso suele bastar, y tiene la ventaja de que es
+    determinista y de que se lee en cinco segundos.
+    """
+    def palabras(d):
+        texto = str(d.get("consulta", "")).lower()
+        for a, b in (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u")):
+            texto = texto.replace(a, b)
+        return set(texto.split())
+
+    return (len(palabras(argumentos) & palabras(referencia_args)) >= 2
+            and argumentos.get("limite") == referencia_args.get("limite"))
+
+
+comparador_propio = create_trajectory_match_evaluator(
+    trajectory_match_mode="strict",
+    tool_args_match_overrides={"buscar": consultas_equivalentes},
+)
+
+for etiqueta, evaluar in [("comparando solo `limite`", solo_limite),
+                          ("con comparador propio  ", comparador_propio)]:
+    print(f"  {etiqueta} -> {evaluar(outputs=sal_busqueda, reference_outputs=ref_busqueda)['score']}")
+
+# Y comprobamos que el comparador propio SÍ detecta un límite equivocado:
+mal_limite = con_busqueda("tickets criticos facturacion", 500)
+print(f"  con limite=500          -> "
+      f"{comparador_propio(outputs=mal_limite, reference_outputs=ref_busqueda)['score']}")
+
+#%%md
+Esa última línea es la que justifica el trabajo: el comparador tolera la variación del
+lenguaje **y sigue detectando** el argumento numérico equivocado. Eso es una prueba útil;
+`ignore` no lo habría visto.
+
+> **Regla práctica:** `exact` para argumentos de dominio cerrado, override por lista de
+> claves cuando solo algunas son deterministas, comparador propio cuando hay texto libre
+> que sí importa. `ignore` solo si el argumento de verdad da igual — y si da igual,
+> pregúntate si debería estar en la firma de la herramienta.
+
+#%%md
+## 5. Trayectorias de grafo: nodos, no mensajes
+
+Lo anterior mira los mensajes. En LangGraph tienes una vista mejor para muchos casos: **por
+qué nodos pasó y en qué superpasos**. Es la que quieres cuando lo que evalúas es el flujo:
+¿pasó por la aprobación humana?, ¿entró en el bucle de reintento?, ¿tomó la rama corta?
+
+`agentevals` sabe extraer eso de un hilo, con checkpointer e interrupciones incluidas.
+
+#%%py
+import operator
+from typing import Annotated
+
+from typing_extensions import TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
+
+from agentevals.graph_trajectory.utils import extract_langgraph_trajectory_from_thread
+
+
+class EstadoGasto(TypedDict):
+    importe: float
+    pasos: Annotated[list[str], operator.add]
+    decision: str
+
+
+def analizar(estado: EstadoGasto) -> dict:
+    return {"pasos": ["analizar"]}
+
+
+def pedir_aprobacion(estado: EstadoGasto) -> dict:
+    return {"decision": interrupt({"importe": estado["importe"]}), "pasos": ["aprobacion"]}
+
+
+def ejecutar(estado: EstadoGasto) -> dict:
+    return {"pasos": ["ejecutar"]}
+
+
+def enrutar(estado: EstadoGasto) -> str:
+    # Por encima de 1.000 € pasa por un humano; por debajo, directo.
+    return "aprobacion" if estado["importe"] > 1000 else "ejecutar"
+
+
+flujo_gasto = (
+    StateGraph(EstadoGasto)
+    .add_node("analizar", analizar)
+    .add_node("aprobacion", pedir_aprobacion)
+    .add_node("ejecutar", ejecutar)
+    .add_edge(START, "analizar")
+    .add_conditional_edges("analizar", enrutar, ["aprobacion", "ejecutar"])
+    .add_edge("aprobacion", "ejecutar")
+    .add_edge("ejecutar", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+mostrar_grafo(flujo_gasto)
+
+#%%py
+import json
+
+
+def ejecutar_caso(importe: float, hilo: str) -> dict:
+    config = {"configurable": {"thread_id": hilo}}
+    flujo_gasto.invoke({"importe": importe, "pasos": [], "decision": ""}, config)
+    if flujo_gasto.get_state(config).next:              # se quedó esperando a un humano
+        flujo_gasto.invoke(Command(resume="aprobado"), config)
+    return extract_langgraph_trajectory_from_thread(flujo_gasto, config)
+
+
+caro = ejecutar_caso(5000, "caro")
+barato = ejecutar_caso(50, "barato")
+
+for etiqueta, traza in [("gasto de 5.000 € (debe pasar por un humano)", caro),
+                        ("gasto de 50 €    (debe ir directo)", barato)]:
+    print(f"\n{etiqueta}")
+    print("  entradas    :", traza["inputs"])
+    print("  superpasos  :", traza["outputs"]["steps"])
+
+#%%md
+Dos cosas que se ven ahí y que no se ven de ninguna otra forma:
+
+1. **`__interrupt__` aparece como un paso más.** El primer turno del caso caro termina en
+   `['__start__', 'analizar', 'aprobacion', '__interrupt__']`. Es decir: la trayectoria te
+   dice **que hubo una pausa para un humano**, y en qué punto. Un conjunto dorado sobre
+   respuestas finales no distingue "aprobó un humano" de "se lo saltó".
+2. **Los superpasos vienen agrupados por turno**, y `inputs` marca el `"__resuming__"`. La
+   estructura refleja la conversación real, no una lista plana.
+
+Con eso, la prueba que de verdad importa en un flujo con dinero de por medio se escribe
+así:
+
+#%%py
+def paso_por_aprobacion(traza) -> bool:
+    """¿Hubo una interrupción para un humano en algún punto del flujo?"""
+    return any("__interrupt__" in turno for turno in traza["outputs"]["steps"])
+
+
+def nodos_visitados(traza) -> list[str]:
+    return [n for turno in traza["outputs"]["steps"] for n in turno
+            if not n.startswith("__")]
+
+
+print("caso caro  · pasó por aprobación:", paso_por_aprobacion(caro),
+      "| nodos:", nodos_visitados(caro))
+print("caso barato· pasó por aprobación:", paso_por_aprobacion(barato),
+      "| nodos:", nodos_visitados(barato))
+
+assert paso_por_aprobacion(caro), "un gasto de 5.000 € NO puede ejecutarse sin aprobación"
+assert not paso_por_aprobacion(barato), "un gasto de 50 € no debería molestar a nadie"
+print("\nlas dos invariantes de negocio se cumplen")
+
+#%%md
+Ese `assert` es una **invariante de negocio comprobada sobre el flujo real**, no sobre el
+texto de una respuesta. Es la clase de prueba que sobrevive a que cambies el modelo, el
+prompt o el proveedor, porque no depende de ninguno de los tres.
+
+Y `agentevals` trae un comparador estricto para trayectorias de grafo, si prefieres
+compararlas contra una referencia en vez de escribir predicados:
+
+#%%py
+from agentevals.graph_trajectory.strict import graph_trajectory_strict_match
+
+esperado = ejecutar_caso(5000, "referencia-caro")
+obtenido = ejecutar_caso(4000, "otro-caro")        # otro importe, mismo camino
+
+print("mismo camino con otro importe :",
+      graph_trajectory_strict_match(outputs=obtenido["outputs"],
+                                    reference_outputs=esperado["outputs"])["score"])
+print("camino distinto (barato)      :",
+      graph_trajectory_strict_match(outputs=barato["outputs"],
+                                    reference_outputs=esperado["outputs"])["score"])
+
+#%%md
+## 6. El juez LLM: cuándo sí y cuándo no
+
+Los tres niveles anteriores son deterministas. El cuarto no, y por eso hay que ponerlo en su
+sitio.
+
+`agentevals` incluye un juez de trayectorias con una rúbrica ya escrita. Merece la pena
+leerla, porque define qué está midiendo:
+
+#%%py
+from agentevals.trajectory.llm import TRAJECTORY_ACCURACY_PROMPT
+
+print("\n".join(TRAJECTORY_ACCURACY_PROMPT.splitlines()[:12]))
+
+#%%md
+Es decir: mide **coherencia y progresión**, no corrección factual. Eso acota mucho para qué
+sirve.
+
+| Usa el juez LLM cuando… | No lo uses cuando… |
+|---|---|
+| Hay **muchas trayectorias válidas** y no puedes enumerarlas | Puedes escribir la trayectoria esperada: usa `strict`/`superset` |
+| Quieres detectar agentes que **dan vueltas** sin avanzar | La invariante es de negocio ("pasó por aprobación"): usa un `assert` |
+| Estás explorando un dominio nuevo y aún no sabes qué medir | Estás en la CI y necesitas que sea barato y estable |
+
+Y las dos limitaciones que hay que tener presentes siempre:
+
+1. **Cuesta dinero y tiene varianza.** El notebook 17 ya midió que una mejora por debajo de
+   la varianza no se puede distinguir del ruido. Con un juez, esa varianza sube.
+2. **Un juez sin referencia premia lo que parece razonable**, no lo que es correcto. El
+   agente B de la sección 1 —el que se inventó el SLA— tiene una trayectoria perfectamente
+   coherente. Un juez de coherencia lo aprueba.
+
+Por eso el orden correcto es: **primero las pruebas deterministas, y el juez para lo que
+sobre**. Al revés se acaba con una suite cara que no detecta el fallo del ejemplo inicial.
+
+#%%py
+# El juez se construye con el modelo del curso. Requiere clave de API, así que lo dejamos
+# preparado y guardado: el patrón es lo que importa.
+from agentevals.trajectory.llm import create_trajectory_llm_as_judge
+
+juez = create_trajectory_llm_as_judge(judge=llm(temperature=0), continuous=True)
+
+print("evaluador listo:", type(juez).__name__)
+print("""
+Uso:
+    resultado = juez(outputs=trayectoria_del_agente)
+    resultado["score"]    -> 0.0 a 1.0 con continuous=True
+    resultado["comment"]  -> el razonamiento (use_reasoning=True por defecto)
+
+Con `reference_outputs=` compara contra una trayectoria de referencia en vez de juzgar
+en abstracto, que es bastante más fiable cuando puedes permitírtelo.""")
+
+#%%md
+## 7. Montar la suite: qué corre dónde
+
+Junta todo el módulo 6 y este notebook en una decisión de infraestructura:
+
+| Nivel | Dónde corre | Coste | Qué detecta |
+|---|---|---|---|
+| Nodos como funciones puras (nb 17) | Cada *commit* | 0 | Regresiones de lógica |
+| **Trayectoria de herramientas** | Cada *commit*, con modelo guionizado | 0 | Herramientas de menos o de más |
+| **Trayectoria de grafo** | Cada *commit* | 0 | Rutas y aprobaciones saltadas |
+| Conjunto dorado end-to-end (nb 17) | *Nightly* / antes de desplegar | € | Calidad de la respuesta |
+| Juez LLM de trayectorias | *Nightly*, sobre una muestra | €€ | Agentes que dan vueltas |
+
+Lo que cambia respecto a un proyecto normal: **las dos filas nuevas son gratis y
+deterministas**, así que no hay excusa para dejarlas fuera de la CI. Y son las que atrapan
+la clase de fallo que más caro sale — el agente que deja de consultar la política y empieza
+a inventársela.
+
+#%%py
+# Ejemplo del evaluador determinista tal y como iría en `pruebas/`.
+def prueba_no_se_salta_la_politica():
+    evaluar = create_trajectory_match_evaluator(
+        trajectory_match_mode="superset",              # al menos lo de la referencia
+        tool_args_match_mode="exact",
+    )
+    agente_bueno = trayectoria(POLITICA, CONTAR)
+    agente_malo = trayectoria(CONTAR)                  # se saltó la política
+
+    assert evaluar(outputs=agente_bueno, reference_outputs=referencia)["score"] is True
+    assert evaluar(outputs=agente_malo, reference_outputs=referencia)["score"] is False
+    return "el evaluador distingue al agente que se salta la consulta de política"
+
+
+print(prueba_no_se_salta_la_politica())
+
+#%%md
+## 8. Ejercicios
+
+### 8.1 Elige el modo
+
+Para cada requisito, di qué `trajectory_match_mode` y qué `tool_args_match_mode` usarías, y
+por qué. Luego compruébalo construyendo el evaluador.
+
+1. *"Antes de emitir un reembolso, el agente **tiene que** haber comprobado la política."*
+2. *"El agente no debe llamar a `detalle_ticket` más de lo necesario: cuesta una consulta."*
+3. *"El agente puede buscar en la base de conocimiento con las palabras que quiera, pero
+   siempre con `limite=5`."*
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+soluciones = {
+    "1. debe comprobar la política": dict(
+        trajectory_match_mode="superset",     # al menos lo obligatorio; puede hacer más
+        tool_args_match_mode="exact",
+    ),
+    "2. no llamar de más": dict(
+        trajectory_match_mode="subset",       # como mucho lo de la referencia
+        tool_args_match_mode="exact",
+    ),
+    "3. consulta libre, límite fijo": dict(
+        trajectory_match_mode="unordered",
+        tool_args_match_mode="exact",
+        tool_args_match_overrides={"buscar": ["limite"]},   # solo `limite` es determinista
+    ),
+}
+
+for etiqueta, opciones in soluciones.items():
+    evaluar = create_trajectory_match_evaluator(**opciones)
+    print(f"{etiqueta:32s} {opciones['trajectory_match_mode']:10s} "
+          f"args={opciones['tool_args_match_mode']}"
+          f"{' + override' if 'tool_args_match_overrides' in opciones else ''}")
+
+# Comprobación del caso 1: el agente que se salta la política suspende.
+comprobar_politica = create_trajectory_match_evaluator(**soluciones["1. debe comprobar la política"])
+print("\ncaso 1 · agente que consulta la política :",
+      comprobar_politica(outputs=trayectoria(POLITICA, CONTAR),
+                         reference_outputs=referencia)["score"])
+print("caso 1 · agente que se la salta          :",
+      comprobar_politica(outputs=trayectoria(CONTAR), reference_outputs=referencia)["score"])
+
+# Comprobación del caso 2: una llamada de más suspende.
+no_de_mas = create_trajectory_match_evaluator(**soluciones["2. no llamar de más"])
+print("\ncaso 2 · justo lo necesario              :",
+      no_de_mas(outputs=trayectoria(POLITICA, CONTAR), reference_outputs=referencia)["score"])
+print("caso 2 · una llamada de más              :",
+      no_de_mas(outputs=trayectoria(POLITICA, CONTAR, DETALLE),
+                reference_outputs=referencia)["score"])
+
+# Comprobación del caso 3: el límite equivocado suspende aunque la consulta varíe.
+limite_fijo = create_trajectory_match_evaluator(**soluciones["3. consulta libre, límite fijo"])
+print("\ncaso 3 · otras palabras, limite=5        :",
+      limite_fijo(outputs=sal_busqueda, reference_outputs=ref_busqueda)["score"])
+print("caso 3 · otras palabras, limite=500      :",
+      limite_fijo(outputs=mal_limite, reference_outputs=ref_busqueda)["score"])
+
+#%%md
+</details>
+
+### 8.2 Una invariante de flujo para tu propio grafo
+
+Coge un grafo del curso con una decisión de ruta —el enrutador del notebook 03, el CRAG del
+14 o el flujo de aprobación del 10— y escribe **dos** invariantes sobre su trayectoria de
+grafo, con sus `assert`. Una que se cumpla y otra que detecte un caso mal enrutado.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+def invariantes_del_gasto(importe: float, hilo: str) -> dict:
+    traza = ejecutar_caso(importe, hilo)
+    nodos = nodos_visitados(traza)
+    return {
+        "importe": importe,
+        "pasó por aprobación": paso_por_aprobacion(traza),
+        "ejecutó": "ejecutar" in nodos,
+        "nodos": nodos,
+    }
+
+
+print(f"{'importe':>9s}  {'aprobación':>11s}  {'ejecutó':>8s}  nodos")
+for importe in (50, 999, 1001, 25_000):
+    r = invariantes_del_gasto(importe, f"inv-{importe}")
+    print(f"{importe:9,.0f}  {str(r['pasó por aprobación']):>11s}  "
+          f"{str(r['ejecutó']):>8s}  {r['nodos']}")
+
+# Invariante 1: por encima del umbral SIEMPRE hay aprobación humana.
+for importe in (1001, 25_000):
+    assert invariantes_del_gasto(importe, f"a-{importe}")["pasó por aprobación"], \
+        f"{importe} € se ejecutó sin aprobación"
+
+# Invariante 2: por debajo del umbral NUNCA se molesta a un humano.
+for importe in (50, 999):
+    assert not invariantes_del_gasto(importe, f"b-{importe}")["pasó por aprobación"], \
+        f"{importe} € pidió aprobación innecesaria"
+
+print("\nlas dos invariantes se cumplen en los cuatro importes")
+print("""
+Fíjate en los valores elegidos: 999 y 1001, justo a los lados del umbral. Un conjunto de
+casos que solo prueba 50 y 25.000 no detecta un `>=` escrito donde iba un `>`. Las
+trayectorias no eximen de elegir bien los casos límite.""")
+
+#%%md
+</details>
+
+## 9. Resumen
+
+- **Un agente puede acertar por el motivo equivocado.** Evaluar solo la respuesta final no
+  lo detecta, y es el fallo que más caro sale.
+- Hay **cuatro niveles**: respuesta, trayectoria de herramientas, trayectoria de grafo y
+  juez LLM. Los dos de en medio son **deterministas y gratis**: van en la CI.
+- Los cuatro modos de coincidencia, y la regla para no confundirlos: **el modo describe la
+  trayectoria del agente respecto a la referencia**. `superset` = "al menos esto";
+  `subset` = "como mucho esto".
+- `strict` en todo es la receta para una suite abandonada. Resérvalo para los flujos donde
+  el **orden** es un requisito.
+- **La trampa de los argumentos:** comparar en modo `exact` una consulta en lenguaje natural
+  garantiza una evaluación siempre roja. La salida es
+  `tool_args_match_overrides` con una lista de claves o un comparador propio — que tolera la
+  variación del texto **y sigue detectando** el argumento numérico equivocado.
+- Las trayectorias de **grafo** ven lo que las de mensajes no: por qué nodos pasó y, sobre
+  todo, **si hubo `__interrupt__`**. Ahí es donde se comprueban las invariantes de negocio.
+- El **juez LLM** mide coherencia, no corrección. Aprobaría al agente que se inventa la
+  política. Primero lo determinista; el juez, para lo que sobre.
+
+**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría de
+producción, donde todo esto se convierte en una lista que se ejecuta.

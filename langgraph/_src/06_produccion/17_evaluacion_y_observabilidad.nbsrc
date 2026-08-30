@@ -484,6 +484,13 @@ Si los dos primeros están vacíos, no se envía nada a ningún sitio: el trazad
 es opt-in. Conviene comprobarlo antes de ejecutar nada con datos reales.""")
 
 #%%md
+> **Lo que falta en esta pirámide, y es mucho:** todo lo anterior evalúa la **respuesta**.
+> Un agente puede dar la respuesta correcta habiendo hecho lo incorrecto —consultar de
+> memoria en vez de mirar la política, por ejemplo— y ningún conjunto dorado de respuestas
+> lo detecta. El [notebook 27](../07_operacion/27_evaluar_trayectorias.ipynb) añade el nivel
+> que falta: evaluar la **trayectoria**, que además es determinista y va en la CI.
+
+#%%md
 ## 6. Qué vigilar en producción
 
 Las cuatro señales que de verdad importan en un sistema de agentes, y ninguna es "el

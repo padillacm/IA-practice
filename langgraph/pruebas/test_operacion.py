@@ -403,3 +403,119 @@ def test_las_dependencias_del_curso_declaran_lo_que_importan_los_notebooks():
 
     for paquete in ("starlette", "httpx", "langgraph-sdk", "langchain-mcp-adapters"):
         assert paquete in declaradas, f"{paquete} se usa en los notebooks y no está declarado"
+
+
+# ======================================================================================
+# Notebook 27 · evaluación de trayectorias
+# ======================================================================================
+def _traza(*llamadas):
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    mensajes = [HumanMessage("pregunta")]
+    for i, (nombre, args) in enumerate(llamadas):
+        mensajes.append(AIMessage("", tool_calls=[{"name": nombre, "args": args, "id": f"c{i}"}]))
+        mensajes.append(ToolMessage("ok", tool_call_id=f"c{i}", name=nombre))
+    mensajes.append(AIMessage("respuesta"))
+    return mensajes
+
+
+_POLITICA = ("buscar_politica", {"tema": "sla"})
+_CONTAR = ("contar_tickets", {"categoria": "facturacion", "prioridad": "critica"})
+_DETALLE = ("detalle_ticket", {"id_ticket": "TCK-0001"})
+
+
+@pytest.mark.parametrize("modo,salida,esperado", [
+    # el agente hizo exactamente lo mismo
+    ("strict",    (_POLITICA, _CONTAR),            True),
+    # mismas llamadas, otro orden
+    ("strict",    (_CONTAR, _POLITICA),            False),
+    ("unordered", (_CONTAR, _POLITICA),            True),
+    # se saltó una llamada obligatoria: lo detecta `superset`
+    ("superset",  (_CONTAR,),                      False),
+    ("subset",    (_CONTAR,),                      True),
+    # llamó de más: lo detecta `subset`
+    ("subset",    (_POLITICA, _CONTAR, _DETALLE),  False),
+    ("superset",  (_POLITICA, _CONTAR, _DETALLE),  True),
+])
+def test_modos_de_coincidencia_de_trayectoria(modo, salida, esperado):
+    """Fija la tabla de verdad del notebook 27.
+
+    Si `agentevals` cambia la semántica de un modo, esta prueba lo dice antes de que el
+    material quede desactualizado.
+    """
+    agentevals = pytest.importorskip("agentevals.trajectory.match")
+
+    evaluar = agentevals.create_trajectory_match_evaluator(trajectory_match_mode=modo)
+    resultado = evaluar(outputs=_traza(*salida),
+                        reference_outputs=_traza(_POLITICA, _CONTAR))
+    assert resultado["score"] is esperado
+
+
+def test_comparar_argumentos_en_exacto_falla_con_lenguaje_natural():
+    """La trampa del notebook 27: `exact` sobre una consulta libre siempre suspende."""
+    match = pytest.importorskip("agentevals.trajectory.match")
+
+    ref = _traza(("buscar", {"consulta": "tickets de facturación críticos", "limite": 5}))
+    sal = _traza(("buscar", {"consulta": "tickets criticos facturacion", "limite": 5}))
+
+    exacto = match.create_trajectory_match_evaluator(tool_args_match_mode="exact")
+    assert exacto(outputs=sal, reference_outputs=ref)["score"] is False
+
+    # El override por lista de claves compara solo lo determinista.
+    solo_limite = match.create_trajectory_match_evaluator(
+        tool_args_match_overrides={"buscar": ["limite"]})
+    assert solo_limite(outputs=sal, reference_outputs=ref)["score"] is True
+
+    # …y sigue detectando el argumento numérico equivocado.
+    mal = _traza(("buscar", {"consulta": "tickets criticos facturacion", "limite": 500}))
+    assert solo_limite(outputs=mal, reference_outputs=ref)["score"] is False
+
+
+def test_la_trayectoria_de_grafo_registra_las_interrupciones():
+    """Una invariante de negocio comprobada sobre el flujo, no sobre el texto."""
+    utils = pytest.importorskip("agentevals.graph_trajectory.utils")
+    from langgraph.types import Command, interrupt
+    from typing_extensions import TypedDict as TD
+
+    class EstadoGasto(TD):
+        importe: float
+        decision: str
+
+    def analizar(estado):
+        return {}
+
+    def aprobar(estado):
+        return {"decision": interrupt({"importe": estado["importe"]})}
+
+    def ejecutar(estado):
+        return {}
+
+    flujo = (StateGraph(EstadoGasto)
+             .add_node("analizar", analizar)
+             .add_node("aprobacion", aprobar)
+             .add_node("ejecutar", ejecutar)
+             .add_edge(START, "analizar")
+             .add_conditional_edges(
+                 "analizar",
+                 lambda e: "aprobacion" if e["importe"] > 1000 else "ejecutar",
+                 ["aprobacion", "ejecutar"])
+             .add_edge("aprobacion", "ejecutar")
+             .add_edge("ejecutar", END)
+             .compile(checkpointer=InMemorySaver()))
+
+    def pasos_de(importe, hilo):
+        cfg = {"configurable": {"thread_id": hilo}}
+        flujo.invoke({"importe": importe, "decision": ""}, cfg)
+        if flujo.get_state(cfg).next:
+            flujo.invoke(Command(resume="aprobado"), cfg)
+        traza = utils.extract_langgraph_trajectory_from_thread(flujo, cfg)
+        return traza["outputs"]["steps"]
+
+    def hubo_aprobacion(pasos):
+        return any("__interrupt__" in turno for turno in pasos)
+
+    # Los casos límite, que son los que detectan un `>` escrito donde iba un `>=`.
+    assert hubo_aprobacion(pasos_de(1001, "caro"))
+    assert hubo_aprobacion(pasos_de(25_000, "carisimo"))
+    assert not hubo_aprobacion(pasos_de(999, "justo-debajo"))
+    assert not hubo_aprobacion(pasos_de(50, "barato"))

@@ -24,6 +24,10 @@ volver a usar.
 | 4 | La configuración de despliegue y las reglas de acceso | 25 |
 | 5 | El informe, y el mismo informe sobre la versión arreglada | — |
 
+> **Un quinto detector, para cuando lo tengas montado:** los notebooks 26 y 27 aportan dos
+> comprobaciones más que encajan aquí — el contrato que expones (`input_schema`,
+> `description`) y las invariantes de trayectoria. Están como retos al final.
+
 #%%py
 import sys, pathlib
 sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
@@ -568,8 +572,17 @@ print(f"\n{'concurrencia':30s} {'pierde escrituras':>14s} {'correcta':>14s}")
    de `staging`, calcula el percentil 95 del tamaño del estado y rehaz el número. La
    diferencia entre la media y el p95 suele ser de un orden de magnitud.
 
-5. **Aplícalo al capstone.** Pasa los cuatro detectores al sistema que construiste en `P6`.
-   Es la mejor forma de comprobar si el módulo se te ha quedado.
+5. **Añade el detector de contrato** del notebook 26: para cada grafo con `description` en
+   `langgraph.json`, comprobar que su `input_schema` se puede publicar y que no coincide con
+   el estado entero. Son las dos cosas que hacen inservible una herramienta expuesta.
+
+6. **Añade las invariantes de trayectoria** del notebook 27. En esta aplicación heredada no
+   hay aprobaciones, pero en la del capstone sí: *"un reembolso por encima del umbral pasa
+   siempre por `__interrupt__`"* es una invariante que se comprueba en 5 líneas y que
+   ninguna evaluación de respuestas detecta.
+
+7. **Aplícalo al capstone.** Pasa los detectores al sistema que construiste en `P6`. Es la
+   mejor forma de comprobar si el módulo se te ha quedado.
 
 ## Lo que te llevas
 
