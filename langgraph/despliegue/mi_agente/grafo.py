@@ -10,8 +10,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime
 
-from .estado import ContextoPeticion, EstadoSoporte
-from .herramientas import HERRAMIENTAS
+# Importaciones ABSOLUTAS, no relativas. El servidor carga este fichero POR RUTA
+# (`./mi_agente/grafo.py`), no como parte del paquete, así que un `from .estado import ...`
+# falla con "attempted relative import with no known parent package" y el grafo no arranca.
+# Es el error de despliegue más común, y no aparece hasta que levantas el servidor.
+from mi_agente.estado import ContextoPeticion, EstadoSoporte
+from mi_agente.herramientas import HERRAMIENTAS
 
 MODELO = os.environ.get("MODELO_AGENTE", "openai:gpt-4o-mini")
 

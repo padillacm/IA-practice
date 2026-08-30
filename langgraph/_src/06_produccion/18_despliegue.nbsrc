@@ -164,8 +164,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime
 
-from .estado import ContextoPeticion, EstadoSoporte
-from .herramientas import HERRAMIENTAS
+# Importaciones ABSOLUTAS, no relativas. El servidor carga este fichero POR RUTA
+# (`./mi_agente/grafo.py`), no como parte del paquete, así que un `from .estado import ...`
+# falla con "attempted relative import with no known parent package" y el grafo no arranca.
+# Es el error de despliegue más común, y no aparece hasta que levantas el servidor.
+from mi_agente.estado import ContextoPeticion, EstadoSoporte
+from mi_agente.herramientas import HERRAMIENTAS
 
 MODELO = os.environ.get("MODELO_AGENTE", "openai:gpt-4o-mini")
 
@@ -220,7 +224,15 @@ grafo = construir()
 print("creado:", PAQUETE / "grafo.py")
 
 #%%md
-> **El detalle que más gente falla al desplegar:** no pongas un `checkpointer=` en el grafo
+> **Los dos detalles que más gente falla al desplegar.**
+>
+> **Primero: importaciones absolutas.** El servidor carga tu módulo **por ruta de fichero**,
+> no como parte de un paquete. Un `from .estado import ...` revienta al arrancar con
+> `attempted relative import with no known parent package`. Escribe
+> `from mi_agente.estado import ...` aunque estés dentro de `mi_agente/`. Lo verás en la
+> sección 9, cuando el comprobador lo detecte.
+>
+> **Segundo:** no pongas un `checkpointer=` en el grafo
 > que exportas a LangGraph Platform. El servidor inyecta el suyo, conectado a su base de
 > datos; el que pongas tú lo sobrescribe y acabas con persistencia en memoria que se pierde
 > en cada reinicio, sin ningún error que te avise.
@@ -342,6 +354,11 @@ recarga automática al guardar. La salida incluye el enlace a **LangGraph Studio
 - 🚀 API: http://127.0.0.1:2024
 - 🎨 Studio: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 ```
+
+> Esta aplicación no es un ejemplo de papel: se arrancó con `langgraph dev` y se comprobó por
+> HTTP que carga el grafo, expone el assistant `soporte` y responde en `/threads` y `/runs`.
+> El fallo de las importaciones relativas de la sección 1 apareció precisamente ahí — ninguna
+> comprobación estática lo detecta, solo arrancar el servidor.
 
 **Studio** es la herramienta que más rápido rentabiliza el rato de configurar todo esto:
 
@@ -642,13 +659,17 @@ for seccion, puntos in COMPROBACIONES:
 <details>
 <summary><b>Ver solución 18.1</b></summary>
 
-La comprobación que más veces salva el despliegue es la última: un <code>checkpointer</code>
-no nulo en un grafo destinado a Platform es un fallo silencioso —el servidor arranca, todo
-parece funcionar, y la persistencia se pierde en cada reinicio sin un solo error.
+Dos comprobaciones salvan el despliegue con más frecuencia que las demás.
 
-Fíjate también en que la función <b>importa el módulo de verdad</b> en vez de leerlo con
-expresiones regulares. Es lo que hace el servidor, así que es la única comprobación que de
-verdad prueba algo: un fallo de importación aquí es un fallo de arranque allí.
+La primera es que el módulo <b>cargue por ruta de fichero</b>, que es exactamente como lo hace
+el servidor. La diferencia no es un tecnicismo: si lo cargas por nombre de módulo, los imports
+relativos funcionan y el comprobador da verde... y el servidor falla con
+<code>attempted relative import with no known parent package</code>. <b>Una comprobación que
+carga distinto de como carga producción no comprueba nada.</b>
+
+La segunda es el <code>checkpointer</code> nulo: uno no nulo en un grafo destinado a Platform
+es un fallo silencioso — el servidor arranca, todo parece funcionar, y la persistencia se
+pierde en cada reinicio sin un solo error.
 </details>
 
 #%%py
@@ -693,16 +714,23 @@ def revisar_aplicacion(ruta: pathlib.Path) -> list[tuple[str, bool, str]]:
         if not comprobar(f"grafo '{nombre_grafo}': el fichero existe", fichero.exists(), str(fichero)):
             continue
 
-        # Importamos por NOMBRE DE MÓDULO, no por ruta de fichero: es lo que hace el
-        # servidor, y es lo único que respeta los imports relativos del paquete
-        # (`from .estado import ...`). Cargarlo por ruta falla con ImportError.
-        nombre_modulo = (ruta_relativa.removeprefix("./").removesuffix(".py").replace("/", "."))
+        # Cargamos POR RUTA DE FICHERO, que es exactamente como lo hace el servidor.
+        # Es importante hacerlo igual: cargar por nombre de módulo funcionaría con imports
+        # relativos y el servidor no, así que el comprobador daría verde y el despliegue rojo.
         try:
-            modulo = importlib.import_module(nombre_modulo)
-            importlib.reload(modulo)
-            comprobar(f"grafo '{nombre_grafo}': el módulo importa", True)
+            spec = importlib.util.spec_from_file_location(f"_revision_{nombre_grafo}", fichero)
+            modulo = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(modulo)
+            comprobar(f"grafo '{nombre_grafo}': el módulo carga por ruta", True)
+        except ImportError as exc:
+            pista = (" — usa importaciones ABSOLUTAS (from mi_paquete.x import ...), "
+                     "no relativas") if "relative import" in str(exc) else ""
+            comprobar(f"grafo '{nombre_grafo}': el módulo carga por ruta", False,
+                      f"{type(exc).__name__}: {exc}{pista}")
+            continue
         except Exception as exc:
-            comprobar(f"grafo '{nombre_grafo}': el módulo importa", False, f"{type(exc).__name__}: {exc}")
+            comprobar(f"grafo '{nombre_grafo}': el módulo carga por ruta", False,
+                      f"{type(exc).__name__}: {exc}")
             continue
 
         objeto = getattr(modulo, variable, None)

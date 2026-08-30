@@ -167,6 +167,10 @@ Cada notebook pasó por tres filtros antes de darse por bueno:
    `usage_metadata`), para comprobar que la estructura de los grafos funciona sin gastar cuota.
 3. **Verificación de comportamiento** — cada afirmación no trivial sobre cómo se comporta
    LangGraph se comprobó ejecutando el caso.
+4. **La aplicación desplegable se levantó de verdad** con `langgraph dev`, y se comprobó por
+   HTTP que carga el grafo, expone el assistant y responde en `/threads` y `/runs`. Fue ahí
+   donde apareció el fallo de las importaciones relativas: ninguna comprobación estática lo
+   detecta, y el material lo documenta precisamente por eso.
 
 ---
 
@@ -192,6 +196,7 @@ suele darse por supuesto:
 | Las herramientas MCP son **asíncronas** y devuelven **bloques de contenido**, no cadenas | 20 |
 | La **descripción** de una herramienta MCP de terceros **es prompt**: puede llevar instrucciones para tu agente | 20 |
 | Reutilizar el mismo objeto `AIMessage` en un guion de pruebas hace que `add_messages` lo **sustituya** en vez de añadirlo | 21 |
+| El servidor carga tu grafo **por ruta de fichero**: con importaciones relativas no arranca | 18 |
 
 ---
 
