@@ -108,6 +108,30 @@ Usa LangGraph cuando necesites **control explícito sobre el flujo**, **estado d
 **varios actores coordinados**. La pregunta que hay que hacerse es: *¿necesito poder parar
 esto a la mitad, mirarlo por dentro y continuar?* Si la respuesta es sí, es LangGraph.
 
+### 3.1 Y si la respuesta es no, ¿qué?
+
+Saber defender la elección forma parte de dominar la herramienta, así que aquí va la
+comparación honesta con las alternativas que te van a mencionar en cualquier revisión de
+arquitectura:
+
+| Alternativa | Dónde gana | Dónde se queda corta |
+|---|---|---|
+| **SDK del proveedor** (OpenAI, Anthropic) | Una llamada, o un bucle de herramientas sencillo. Cero dependencias | Sin persistencia, sin reanudación, sin HIL: lo acabas escribiendo tú |
+| **OpenAI Agents SDK** | Arrancar rapidísimo, trazas incluidas | Estado a nivel de sesión; la persistencia entre sesiones te toca a ti |
+| **Pydantic AI** | Flujos lineales con salida estructurada y tipada: extractores, clasificadores, routers | No es su terreno el flujo con ciclos, bifurcaciones y pausas |
+| **CrewAI** | Prototipar un equipo de roles en una tarde | Menos control fino sobre el flujo; se complica cuando el caso deja de encajar en el molde |
+| **Tu propio bucle** | Transparencia total; sin capas mágicas | Reimplementas checkpointing, reanudación, streaming y HIL — y esa es la parte difícil |
+
+La ventaja específica de LangGraph, la que no se replica en una tarde, es el **modelo de
+persistencia**: checkpoints por superpaso, viaje en el tiempo, reanudación con granularidad
+de tarea e interrupciones para humanos, todo sobre la misma pieza. Si tu problema no
+necesita nada de eso, LangGraph es peso muerto y conviene decirlo.
+
+Y al revés: la queja más repetida en los foros —*"me monté 14 nodos para un chatbot de
+soporte que se resolvía con 50 líneas"*— casi nunca es culpa del framework. Es de haber
+empezado por la complejidad en vez de llegar a ella. **Añade estructura cuando algo
+concreto se rompa, no antes.**
+
 #%%md
 ## 4. El mapa del curso
 
@@ -118,9 +142,10 @@ esto a la mitad, mirarlo por dentro y continuar?* Si la respuesta es sí, es Lan
 | **3 · Estado duradero** | Checkpointers, memoria de largo plazo, human-in-the-loop | Tus agentes recuerdan, se pausan y se reanudan |
 | **4 · Composición** | Streaming, subgrafos, multiagente | Sistemas de varios actores que no se convierten en un plato de espaguetis |
 | **5 · RAG agéntico** | Recuperación con criterio, autocorrección | RAG que se da cuenta de que ha recuperado basura |
-| **6 · Producción** | Fiabilidad, Functional API, evaluación, despliegue | Lo que separa la demo del servicio |
+| **6 · Producción** | Fiabilidad, Functional API, evaluación, despliegue, MCP | Lo que separa la demo del servicio |
+| **7 · Operación real** | Serialización, persistencia a escala, concurrencia, autenticación | Lo que rompe tres semanas después de desplegar |
 
-Cada módulo cierra con un **notebook de proyecto** (`P1`…`P6`) que integra lo aprendido
+Cada módulo cierra con un **notebook de proyecto** (`P1`…`P7`) que integra lo aprendido
 sobre datos reales. Los proyectos son la parte importante: la teoría se olvida, el
 proyecto que depuraste a las once de la noche no.
 

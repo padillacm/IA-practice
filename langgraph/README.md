@@ -16,7 +16,7 @@ persistencia, concurrencia por `thread_id` y control de acceso.
 |---|---|
 | **Notebooks** | 33 (26 de contenido + 7 de proyecto) |
 | **Módulos** | 8 |
-| **Celdas** | 1180 (665 de teoría, 515 de código ejecutable) |
+| **Celdas** | 1185 (668 de teoría, 517 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
 | **Pruebas** | 50 pruebas automáticas que corren en 1,5 s sin llamar a ningún modelo |
@@ -234,6 +234,7 @@ suele darse por supuesto:
 | `langgraph dev` aborta con `BlockingError` ante cualquier E/S bloqueante dentro de un nodo `async` | 18 |
 | Con la caché de prefijo contada, **resumir en cada turno sale más caro que no comprimir nada**: rompe la caché, paga una llamada extra y pierde información | 19 |
 | Meter la hora en el system prompt encarece la conversación un **86 %** aunque no cambie ni un token del resto | 19 |
+| Si una rama de un fan-out falla, las hermanas que terminaron **quedan persistidas**, y al reanudar **solo se reejecuta la que falló** | 15 |
 
 ---
 

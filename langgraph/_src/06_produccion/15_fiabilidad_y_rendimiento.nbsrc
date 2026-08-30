@@ -412,6 +412,105 @@ una caída del proveedor**. Dos modelos de OpenAI se caen juntos. Si la disponib
 requisito real, el plan B vive en otra empresa.
 
 #%%md
+## 6.5 Qué pasa cuando falla UNA rama de un fan-out
+
+Pregunta que aparece siempre que alguien monta un map-reduce con `Send` y que se responde
+mal a menudo. La versión que circula es *"si una rama falla, el superpaso entero falla y se
+pierde todo"*. Vamos a comprobarlo en vez de creerlo.
+
+#%%py
+import operator
+from typing import Annotated, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Send
+
+EJECUCIONES = {"n": 0}
+
+
+class EstadoReparto(TypedDict):
+    items: list[int]
+    hechos: Annotated[list[str], operator.add]
+
+
+def repartir(estado: EstadoReparto):
+    return [Send("procesar", {"n": n}) for n in estado["items"]]
+
+
+def procesar(entrada) -> dict:
+    EJECUCIONES["n"] += 1
+    if entrada["n"] == 3 and EJECUCIONES["n"] <= 5:   # falla solo en la primera vuelta
+        raise ValueError("el item 3 revienta")
+    return {"hechos": [f"item {entrada['n']}"]}
+
+
+def reunir(estado: EstadoReparto) -> dict:
+    return {"hechos": ["reunido"]}
+
+
+reparto = (
+    StateGraph(EstadoReparto)
+    .add_node("procesar", procesar)
+    .add_node("reunir", reunir)
+    .add_conditional_edges(START, repartir, ["procesar"])
+    .add_edge("procesar", "reunir")
+    .add_edge("reunir", END)
+    .compile(checkpointer=InMemorySaver())
+)
+
+hilo_reparto = {"configurable": {"thread_id": "reparto"}}
+
+try:
+    reparto.invoke({"items": [1, 2, 3, 4, 5], "hechos": []}, hilo_reparto)
+except ValueError as e:
+    print("la ejecución falla:", e)
+
+print("veces que se ejecutó el nodo :", EJECUCIONES["n"])
+print("estado PERSISTIDO            :", reparto.get_state(hilo_reparto).values["hechos"])
+
+#%%md
+Primera sorpresa: **el trabajo de las ramas que sí funcionaron está guardado**. La
+ejecución falla, pero los cuatro items buenos ya están en el estado.
+
+La razón está en el notebook 23: LangGraph guarda las escrituras de cada tarea en la tabla
+`writes` **antes** de consolidar el superpaso. Esa tabla, que parecía puro coste de
+almacenamiento, es exactamente lo que hace que un fan-out sea reanudable con granularidad
+de tarea.
+
+Segunda sorpresa, y es la buena:
+
+#%%py
+antes = EJECUCIONES["n"]
+final = reparto.invoke(None, hilo_reparto)      # reanudar: ni entrada nueva ni Command
+
+print("ejecuciones ADICIONALES del nodo:", EJECUCIONES["n"] - antes, "(de 5 ramas)")
+print("estado final                    :", final["hechos"])
+print("¿algún item duplicado?          :",
+      len(final["hechos"]) != len(set(final["hechos"])))
+
+#%%md
+**Se reejecuta solo la rama que falló.** Ni las cuatro buenas se repiten, ni el resultado
+sale duplicado. Es el comportamiento que quieres y no el que suele contarse.
+
+Lo que hay que retener, porque cambia cómo diseñas un map-reduce caro:
+
+| Creencia habitual | Lo que pasa de verdad |
+|---|---|
+| "Falla una rama y se pierde el superpaso entero" | Las ramas que terminaron **quedan persistidas** |
+| "Al reanudar se repite todo el fan-out" | Se reejecuta **solo la tarea fallida** |
+| "Hay que hacer idempotente todo el reparto" | Solo hay que hacer idempotente **la rama**, y solo si tiene efectos externos |
+
+Un aviso sobre lo que *sí* engaña: `get_state(...).tasks` sigue listando las cinco tareas
+después del fallo, aunque solo una se vaya a reejecutar. No lo uses para contar trabajo
+pendiente; usa el estado.
+
+Y el corolario práctico: en un fan-out de 500 documentos donde cada rama cuesta una llamada
+al modelo, esto es la diferencia entre pagar 500 llamadas otra vez o pagar una. Combínalo
+con `RetryPolicy` en el nodo del reparto (sección 2) y el reintento ni siquiera sale del
+grafo.
+
+#%%md
 ## 7. Rendimiento: el catálogo de decisiones
 
 Cinco palancas, ordenadas por relación beneficio/esfuerzo.
