@@ -16,7 +16,7 @@ persistencia, concurrencia por `thread_id` y control de acceso.
 |---|---|
 | **Notebooks** | 33 (26 de contenido + 7 de proyecto) |
 | **Módulos** | 8 |
-| **Celdas** | 1169 (658 de teoría, 511 de código ejecutable) |
+| **Celdas** | 1180 (665 de teoría, 515 de código ejecutable) |
 | **Ejercicios** | 2 por notebook de contenido, con solución comentada |
 | **Datos** | 4 conjuntos reales + 1 sintético etiquetado + 18 documentos para RAG |
 | **Pruebas** | 50 pruebas automáticas que corren en 1,5 s sin llamar a ningún modelo |
@@ -232,6 +232,8 @@ suele darse por supuesto:
 | El `Store` no se protege con filtros: hay que **reescribir el `namespace`** | 25 |
 | Pedir un recurso ajeno devuelve **404, no 403** (un 403 confirmaría que existe) | 25 |
 | `langgraph dev` aborta con `BlockingError` ante cualquier E/S bloqueante dentro de un nodo `async` | 18 |
+| Con la caché de prefijo contada, **resumir en cada turno sale más caro que no comprimir nada**: rompe la caché, paga una llamada extra y pierde información | 19 |
+| Meter la hora en el system prompt encarece la conversación un **86 %** aunque no cambie ni un token del resto | 19 |
 
 ---
 

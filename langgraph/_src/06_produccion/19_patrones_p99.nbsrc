@@ -198,6 +198,219 @@ print(f"  ahorro  : {1 - despues / antes:.0%}, sin perder ni un mensaje de la co
 print("\n  LangChain trae esto de fábrica como ContextEditingMiddleware, con ClearToolUsesEdit.")
 
 #%%md
+### 1.3 El coste no es proporcional a los tokens: la caché de prefijo
+
+Aquí hay una asimetría que cambia decisiones de diseño y que casi nunca se tiene en cuenta
+al hablar de "comprimir el contexto".
+
+Los proveedores cachean el **prefijo** de la petición. Si dos llamadas consecutivas empiezan
+exactamente igual —mismo texto, mismos tokens, mismo orden— la parte común se cobra con un
+descuento importante (del orden del 50 % en OpenAI; Anthropic tiene su propio esquema, con
+escritura de caché explícita). La caché se rompe **en el primer token que cambia**, y todo lo
+que hay detrás se paga a precio completo.
+
+La consecuencia es contraintuitiva:
+
+> **Un cambio de un token al principio del prompt cuesta más que añadir mil al final.**
+
+Y de ahí sale la regla de ordenación:
+
+| Posición | Qué va ahí | Por qué |
+|---|---|---|
+| 1º | System prompt | Estable entre llamadas |
+| 2º | Esquemas de herramientas | Estables, y voluminosos |
+| 3º | Contexto de sesión que no cambia (perfil, políticas) | Estable dentro del hilo |
+| 4º | Historial de la conversación | **Solo se añade al final** |
+| 5º | La pregunta actual | Lo único que cambia siempre |
+
+Lo que rompe la caché sin que te des cuenta: una marca de tiempo en el system prompt, el
+`user_id` interpolado en medio, el orden no determinista de un `dict` de herramientas, y
+—la más cara— **resumir o recortar el historial**, que reescribe justo la parte de delante.
+
+#%%py
+from langchain.messages import SystemMessage as _SM
+
+# Precio relativo: entrada = 1, entrada cacheada = 0,5 (consulta la tarifa vigente
+# de tu proveedor; lo que importa aquí es la RELACIÓN, no el número).
+DESCUENTO_CACHE = 0.5
+
+
+def coste_relativo(llamadas: list[list], cachea: bool) -> float:
+    """Suma el coste de una serie de llamadas, con y sin caché de prefijo.
+
+    `llamadas` es una lista de listas de mensajes: una por llamada al modelo. El prefijo
+    cacheado es el prefijo COMÚN, mensaje a mensaje, con la llamada anterior.
+    """
+    total = 0.0
+    anterior: list = []
+    for mensajes in llamadas:
+        tokens = count_tokens_approximately(mensajes)
+        if cachea:
+            comun = 0
+            for a, b in zip(anterior, mensajes):
+                if a.content != b.content or type(a) is not type(b):
+                    break
+                comun += 1
+            cacheados = count_tokens_approximately(mensajes[:comun]) if comun else 0
+            total += cacheados * DESCUENTO_CACHE + (tokens - cacheados)
+        else:
+            total += tokens
+        anterior = mensajes
+    return total
+
+
+N_TURNOS = 24
+PREFIJO = [_SM("Eres un analista de soporte. " + "Instrucción. " * 60)]
+turnos = [HumanMessage(f"turno {i}: " + "conversación y resultados de herramientas. " * 40)
+          for i in range(N_TURNOS)]
+
+
+def resumen_de(bloque: int) -> _SM:
+    return _SM(f"Resumen hasta el punto {bloque}: " + "detalle. " * 30)
+
+
+# (a) Sin comprimir: el historial solo crece por el final. Prefijo perfectamente estable.
+estrategia_estable = [PREFIJO + turnos[: i + 1] for i in range(N_TURNOS)]
+
+# (b) Resumen deslizante: cada turno REESCRIBE el mensaje que va detrás del system prompt.
+estrategia_resumen = [PREFIJO + [resumen_de(i)] + turnos[i: i + 1] for i in range(N_TURNOS)]
+
+# (c) Resumen por bloques: se reescribe una vez cada 6 turnos.
+BLOQUE = 6
+estrategia_bloques = [
+    PREFIJO + [resumen_de(i // BLOQUE)] + turnos[(i // BLOQUE) * BLOQUE: i + 1]
+    for i in range(N_TURNOS)
+]
+
+print(f"{'estrategia':30s} {'sin caché':>11s} {'con caché':>11s} {'descuento':>10s}")
+print("-" * 66)
+medidas = {}
+for nombre, llamadas in [("sin comprimir", estrategia_estable),
+                         ("resumen cada turno", estrategia_resumen),
+                         (f"resumen cada {BLOQUE} turnos", estrategia_bloques)]:
+    sin = coste_relativo(llamadas, cachea=False)
+    con = coste_relativo(llamadas, cachea=True)
+    medidas[nombre] = con
+    print(f"{nombre:30s} {sin:11,.0f} {con:11,.0f} {1 - con / sin:10.0%}")
+
+#%%md
+Mira la última columna, que es la que nadie mira: **el resumidor agresivo se queda con un
+11 % de descuento donde el otro se lleva un 46 %**. Reescribe el mensaje que va justo detrás
+del system prompt en cada llamada, así que lo único cacheable que le queda es el system.
+
+Ahora bien, seamos honestos con la primera lectura: en coste absoluto **resumir sigue
+ganando**, porque envía muchísimos menos tokens. La caché no invierte el resultado. Lo que
+hace es algo más interesante: **reduce mucho lo que ganas comprimiendo**, y comprimir tiene
+un precio que la tabla anterior todavía no incluye.
+
+#%%py
+# El resumidor no es gratis: cada resumen es UNA LLAMADA MÁS al modelo, sobre lo que resume.
+def coste_de_resumir(veces: int, tokens_por_resumen: int) -> float:
+    return veces * tokens_por_resumen
+
+
+tokens_resumen = count_tokens_approximately([resumen_de(0)] + turnos[:BLOQUE])
+
+extra = {
+    "sin comprimir": 0,
+    "resumen cada turno": coste_de_resumir(N_TURNOS, tokens_resumen),
+    f"resumen cada {BLOQUE} turnos": coste_de_resumir(N_TURNOS // BLOQUE, tokens_resumen),
+}
+
+print(f"{'estrategia':30s} {'inferencia':>11s} {'resúmenes':>11s} {'TOTAL':>11s}")
+print("-" * 66)
+for nombre, con_cache in medidas.items():
+    print(f"{nombre:30s} {con_cache:11,.0f} {extra[nombre]:11,.0f} "
+          f"{con_cache + extra[nombre]:11,.0f}")
+
+mejor = min(medidas, key=lambda k: medidas[k] + extra[k])
+print(f"\nmás barata con todo contado: {mejor!r}")
+
+#%%md
+Con la llamada del resumidor sumada, **el resultado se invierte**: resumir en cada turno
+sale *más caro* que no comprimir nada, y resumir por bloques gana con holgura. La
+compresión agresiva pagaba su ahorro tres veces — con el descuento perdido, con la llamada
+extra y con la información que tira.
+
+Y ese es el punto:
+
+> **La caché de prefijo no dice "no comprimas". Dice "comprime pocas veces y en bloques
+> grandes".** Un resumen cada N turnos rompe la caché una vez de cada N; uno deslizante la
+> rompe siempre, paga una llamada extra siempre y encima pierde información siempre.
+
+Es exactamente el criterio que aplica `SummarizationMiddleware` con un umbral **alto**: no
+es que resuma peor, es que resume **menos veces**. Un umbral bajo parece más ahorrador en
+tokens enviados y sale más caro en las tres cuentas a la vez.
+
+#%%md
+### La forma más barata de romper la caché
+
+No hace falta un resumidor para tirar el descuento. Basta con una interpolación en el
+system prompt:
+
+#%%py
+import datetime as _dt
+
+PREFIJO_CON_FECHA = [
+    _SM(f"Fecha y hora: {_dt.datetime(2026, 1, 1, 10, i)}. Eres un analista de soporte. "
+        + "Instrucción. " * 60)
+    for i in range(N_TURNOS)
+]
+estrategia_fecha = [[PREFIJO_CON_FECHA[i]] + turnos[: i + 1] for i in range(N_TURNOS)]
+
+fijo = coste_relativo(estrategia_estable, cachea=True)
+con_fecha = coste_relativo(estrategia_fecha, cachea=True)
+print(f"system prompt fijo            : {fijo:11,.0f}")
+print(f"con la hora dentro del system : {con_fecha:11,.0f}")
+print(f"sobrecoste de un solo dato     : {con_fecha / fijo - 1:11.0%}")
+print("La fecha va en el mensaje del usuario, o al final del prompt. Nunca delante.")
+
+#%%md
+Otras formas de romperla sin querer, todas vistas en proyectos reales:
+
+- Un `user_id` o un `session_id` interpolado en el system prompt.
+- Herramientas construidas desde un `set` o un `dict` recorrido sin orden fijo: el esquema
+  cambia de orden entre procesos.
+- Un contador de mensajes, un "llevas N turnos", un porcentaje de progreso.
+- Recortar por el principio (`trim_messages` sin `include_system`), que desplaza todo.
+
+Todas comparten la misma pinta: **algo que varía, colocado antes de algo que no varía**.
+
+#%%md
+**Cómo comprobar si te está funcionando.** No hace falta adivinarlo: los mensajes de
+respuesta traen el desglose.
+
+#%%py
+from langchain_core.messages.ai import InputTokenDetails, OutputTokenDetails, UsageMetadata
+
+print("campos de usage_metadata:", list(UsageMetadata.__annotations__))
+print("  input_token_details :", list(InputTokenDetails.__annotations__))
+print("  output_token_details:", list(OutputTokenDetails.__annotations__))
+
+print("""
+En producción, la métrica que hay que graficar es:
+
+    tasa de acierto = cache_read / input_tokens
+
+Si baja de golpe, algo ha empezado a variar en tu prefijo — normalmente un despliegue que
+metió una interpolación en el system prompt. Es una alerta barata y muy rentable.
+
+Y ojo con `output_token_details['reasoning']`: en los modelos de razonamiento, esos tokens
+se pagan como salida y NO aparecen en el texto de la respuesta. Un agente que parece barato
+por lo que escribe puede no serlo.""")
+
+#%%md
+**La tensión con la sección 1.2**, que es lo que hay que resolver con criterio:
+
+- Comprimir reduce tokens **pero rompe la caché** en el punto donde toca el historial.
+- Cachear reduce el precio por token **pero te obliga a no tocar el pasado**.
+
+La combinación que funciona: **comprime pocas veces y en bloques grandes**, no en cada
+turno. Un resumen cada 20 turnos rompe la caché una vez de cada veinte; un recorte deslizante
+la rompe siempre. Es exactamente el criterio que aplica `SummarizationMiddleware` con un
+umbral alto, y la razón de que un umbral bajo salga más caro aunque envíe menos tokens.
+
+#%%md
 ## 2. Escalar el número de herramientas
 
 Con 5 herramientas, un agente elige bien. Con 30, empieza a equivocarse; con 100, es
@@ -723,6 +936,9 @@ LISTA = {
         "El historial se gestiona desde el primer día, no cuando duele",
         "Las observaciones antiguas se comprimen; las conversaciones se conservan",
         "El número de herramientas por agente está por debajo de 10",
+        "El prefijo del prompt es ESTABLE: nada variable delante del system prompt",
+        "Se resume por bloques, no en cada turno: cada resumen rompe la caché y cuesta una llamada",
+        "Se vigila cache_read / input_tokens; una caída delata un prefijo que se ha vuelto variable",
     ],
     "FIABILIDAD": [
         "recursion_limit explícito en todas las invocaciones (el defecto es 10007)",
