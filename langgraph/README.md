@@ -159,8 +159,9 @@ ejemplos/                  servidores MCP de demostración (notebook 20)
 utils/curso.py             arranque, fábrica de modelos, visualización, impresión legible
 utils/datos.py             carga de los conjuntos de datos
 utils/rag.py               troceado, BM25 y fusión de rangos (del notebook 14)
-pruebas/                   25 pruebas automáticas, sin llamadas a modelos
-despliegue/                aplicación desplegable que genera el notebook 18
+pruebas/                   50 pruebas automáticas, sin llamadas a modelos
+despliegue/                aplicación desplegable que genera el notebook 18, con su
+                           versión endurecida (auth.py + langgraph.produccion.json)
 ```
 
 Los notebooks se escriben en `_src/**/*.nbsrc`, un formato de texto plano con celdas separadas
@@ -175,7 +176,7 @@ python -m pytest pruebas/ -q                         # la batería de pruebas
 
 ### Cómo se verificó el material
 
-Cada notebook pasó por tres filtros antes de darse por bueno:
+Cada notebook pasó por seis filtros antes de darse por bueno:
 
 1. **Validación estática** — estructura del `.ipynb`, compilación de cada celda de código, y
    comprobación de que **cada símbolo importado existe** en LangGraph 1.2 / LangChain 1.3. Esto
