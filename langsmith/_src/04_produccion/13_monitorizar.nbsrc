@@ -1,0 +1,527 @@
+#%%md
+# 13 · Monitorizar: qué mirar cuando ya está en producción
+
+**Módulo 4 · Producción** — *tiempo estimado: 70 minutos* — *consumo: 0 trazas*
+
+Los tres módulos anteriores construyen la capacidad de medir. Este va de **qué mirar
+cuando no estás mirando**, que es distinto.
+
+Un panel de una aplicación con LLM no se parece a uno de un servicio web. Las métricas de
+siempre —peticiones, latencia, errores 5xx— siguen haciendo falta y **no dicen nada de lo
+que importa**: un agente puede tener el 100 % de disponibilidad y no resolver ni un caso.
+
+Al terminar sabrás:
+
+1. Las **cuatro familias** de métricas, y cuál falta en casi todos los paneles.
+2. Consultar agregados sin bajarte las trazas, con `get_run_stats` y el lenguaje de filtro.
+3. Las tres **métricas trampa** que engañan por sistema.
+4. Diseñar alertas que alguien mire, en vez de alertas que se silencien.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import collections, random, statistics
+from utils.curso import init, online, cliente, separador
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. Las cuatro familias
+
+| Familia | Ejemplos | ¿La tiene todo el mundo? |
+|---|---|---|
+| **Volumen y salud** | Peticiones, tasa de error, latencia p50/p95 | Sí |
+| **Coste** | Tokens, euros, coste por cliente y por plan | A medias |
+| **Calidad** | Feedback humano, juez alineado, señales implícitas | **Casi nadie** |
+| **Comportamiento** | Herramientas usadas, vueltas del bucle, escalados | **Nadie** |
+
+Las dos primeras las trae LangSmith hechas. Las dos últimas son las que deciden si tu
+aplicación sirve, y son las que hay que montar.
+
+Y la cuarta merece un párrafo, porque es específica de los agentes: **un agente puede
+degradarse sin fallar ni gastar más**. Empieza a dar tres vueltas donde daba una, o a
+llamar a la herramienta equivocada y recuperarse, o a escalar a un humano el doble de
+veces. Nada de eso aparece en disponibilidad, latencia ni coste — y todo aparece en el
+número de runs por traza.
+
+#%%py
+# Una semana de tráfico simulado, con un problema escondido dentro.
+def semana_de_trafico(semilla: int = 3) -> list[dict]:
+    aleatorio = random.Random(semilla)
+    peticiones = []
+    for dia in range(7):
+        # A partir del día 4 alguien despliega un cambio que degrada el comportamiento.
+        degradado = dia >= 4
+        for _ in range(200):
+            escalado = aleatorio.random() < (0.22 if degradado else 0.06)
+            vueltas = aleatorio.choice([1, 1, 1, 2] if not degradado else [1, 2, 3, 3])
+            peticiones.append({
+                "dia": dia,
+                "error": aleatorio.random() < 0.01,          # igual antes y después
+                "latencia_ms": aleatorio.gauss(900, 200),    # igual antes y después
+                "tokens": 400 * vueltas + aleatorio.randint(-50, 50),
+                "vueltas": vueltas,
+                "escalado": escalado,
+                "plan": aleatorio.choice(["free", "free", "pro", "business"]),
+            })
+    return peticiones
+
+
+TRAFICO = semana_de_trafico()
+
+def por_dia(peticiones, clave, agregacion=statistics.mean):
+    dias = collections.defaultdict(list)
+    for p in peticiones:
+        dias[p["dia"]].append(p[clave])
+    return {d: agregacion(v) for d, v in sorted(dias.items())}
+
+
+separador("una semana, con las métricas de siempre")
+print(f"{'día':>5}{'peticiones':>12}{'errores':>10}{'latencia p50':>14}{'tokens':>10}")
+print("-" * 52)
+for dia in range(7):
+    del_dia = [p for p in TRAFICO if p["dia"] == dia]
+    print(f"{dia:>5}{len(del_dia):>12}"
+          f"{sum(p['error'] for p in del_dia) / len(del_dia):>9.1%}"
+          f"{statistics.median(p['latencia_ms'] for p in del_dia):>13.0f}ms"
+          f"{statistics.mean(p['tokens'] for p in del_dia):>10.0f}")
+
+#%%md
+Mira esa tabla como la miraría alguien de guardia. Volumen estable, errores en el 1 %,
+latencia plana. **Todo verde.**
+
+Ahora las métricas de comportamiento:
+
+#%%py
+separador("las mismas peticiones, con las métricas que nadie tiene")
+print(f"{'día':>5}{'vueltas media':>16}{'% escalados':>14}{'tokens':>10}")
+print("-" * 46)
+for dia in range(7):
+    del_dia = [p for p in TRAFICO if p["dia"] == dia]
+    print(f"{dia:>5}{statistics.mean(p['vueltas'] for p in del_dia):>16.2f}"
+          f"{sum(p['escalado'] for p in del_dia) / len(del_dia):>13.1%}"
+          f"{statistics.mean(p['tokens'] for p in del_dia):>10.0f}")
+
+#%%md
+El día 4 el agente empezó a dar el doble de vueltas y a escalar a un humano **cuatro veces
+más**. El panel de salud no se enteró; el de comportamiento lo grita.
+
+Ese es el argumento del notebook: **si tu único panel es el de disponibilidad, tu agente
+puede dejar de funcionar sin que se encienda una sola luz.**
+
+> Es el mismo hallazgo que el notebook 30 del curso de LangGraph enuncia al revés: allí,
+> «un panel de concurrencia baja puede significar que todo está fallando». Aquí, un panel
+> de errores plano puede significar que el agente ha dejado de resolver nada.
+
+#%%md
+## 2. Agregados sin bajarte las trazas
+
+Para calcular esto en tu proyecto no hace falta descargar las trazas. `get_run_stats`
+devuelve los agregados ya calculados, con los mismos filtros que `list_runs`.
+
+#%%py
+import inspect
+from langsmith import Client
+
+print("get_run_stats acepta:")
+for nombre in inspect.signature(Client.get_run_stats).parameters:
+    if nombre != "self":
+        print("  ", nombre)
+
+#%%md
+Los tres que hacen el trabajo:
+
+| Parámetro | Para qué |
+|---|---|
+| `filter` | Una expresión sobre **el run**: `eq(status, "error")`, `has(tags, "produccion")` |
+| `trace_filter` | Una expresión sobre **la raíz** de la traza a la que pertenece |
+| `is_root` | Solo raíces. **Casi siempre lo quieres**: si no, cuentas cada nodo |
+
+El lenguaje de filtro es corto y merece la pena tenerlo a mano:
+
+```
+eq(status, "error")                     igualdad
+has(tags, "produccion")                 la lista contiene
+and(eq(status, "error"), gt(latency, 5))
+or(...)                                 combinaciones
+eq(metadata_key, "cliente")             sobre metadatos (nb 02)
+gte(start_time, "2026-08-01")           rangos de tiempo
+```
+
+Y la consulta que resuelve el fallo silencioso del notebook 01 —raíz correcta con algún
+descendiente en error— se escribe combinando los dos filtros:
+
+#%%py
+CONSULTAS = {
+    "volumen del día":
+        dict(is_root=True, filter='has(tags, "produccion")'),
+    "tasa de error":
+        dict(is_root=True, filter='eq(status, "error")'),
+    "fallos SILENCIOSOS (nb 01)":
+        dict(filter='eq(status, "error")', trace_filter='eq(status, "success")'),
+    "solo el plan enterprise":
+        dict(is_root=True, filter='eq(metadata_key, "plan")'),
+    "las llamadas al modelo, para el coste":
+        dict(filter='eq(run_type, "llm")'),
+}
+
+separador("las cinco consultas que conviene tener escritas")
+for etiqueta, argumentos in CONSULTAS.items():
+    print(f"  {etiqueta}")
+    print(f"     {argumentos}")
+
+#%%py
+@online("Los agregados de tu proyecto, sin bajar una sola traza", trazas=0)
+def _():
+    import datetime
+
+    c = cliente()
+    desde = (datetime.datetime.now(datetime.timezone.utc)
+             - datetime.timedelta(days=7)).isoformat()
+
+    total = c.get_run_stats(project_names=["curso-langsmith"], is_root=True,
+                            start_time=desde)
+    print("  agregados de la semana:", total)
+
+    silenciosos = c.get_run_stats(project_names=["curso-langsmith"], start_time=desde,
+                                  filter='eq(status, "error")',
+                                  trace_filter='eq(status, "success")')
+    print("  fallos silenciosos     :", silenciosos)
+
+#%%md
+## 3. Las tres métricas trampa
+
+Hay tres números que aparecen en todos los paneles de LLM y que engañan por sistema.
+
+### Trampa 1 · La media de la puntuación del juez
+
+Ya sabes del módulo 3 que un juez tiene sesgos. Pero hay algo peor que un juez sesgado:
+**la media de sus puntuaciones sobre un tráfico que cambia de composición**.
+
+#%%py
+def calidad_media(peticiones):
+    """Simula la puntuación media de un juez sobre un tráfico dado."""
+    # El juez puntúa mejor las consultas fáciles, que son las del plan free.
+    return statistics.mean(0.9 if p["plan"] == "free" else 0.6 for p in peticiones)
+
+
+aleatorio = random.Random(1)
+mes_1 = [{"plan": aleatorio.choice(["free"] * 8 + ["pro", "business"])} for _ in range(500)]
+mes_2 = [{"plan": aleatorio.choice(["free"] * 3 + ["pro"] * 4 + ["business"] * 3)}
+         for _ in range(500)]
+
+separador("la calidad «baja» sin que el sistema cambie")
+for etiqueta, mes in [("mes 1", mes_1), ("mes 2", mes_2)]:
+    reparto = collections.Counter(p["plan"] for p in mes)
+    print(f"  {etiqueta}: calidad media {calidad_media(mes):.2f}   reparto {dict(reparto)}")
+
+print()
+print("  el sistema es EXACTAMENTE el mismo. Lo que cambió es quién pregunta.")
+
+#%%md
+La calidad «cae» y nadie tocó nada: entraron clientes de plan superior con consultas más
+difíciles. Si reaccionas a ese número, vas a perseguir una regresión que no existe.
+
+**El arreglo es partir la métrica por lo que puede cambiar de composición**: plan,
+canal, categoría, idioma. Una media global sobre tráfico heterogéneo no significa nada.
+
+#%%py
+def calidad_por_segmento(peticiones, segmento="plan"):
+    grupos = collections.defaultdict(list)
+    for p in peticiones:
+        grupos[p[segmento]].append(0.9 if p["plan"] == "free" else 0.6)
+    return {k: statistics.mean(v) for k, v in sorted(grupos.items())}
+
+
+separador("la misma métrica, partida por plan")
+for etiqueta, mes in [("mes 1", mes_1), ("mes 2", mes_2)]:
+    print(f"  {etiqueta}: {calidad_por_segmento(mes)}")
+print()
+print("  cada segmento, estable. No hay regresión.")
+
+#%%md
+### Trampa 2 · La tasa de error
+
+Del notebook 01: **una excepción capturada no aparece como error**. Tu tasa de error mide
+las excepciones que se te escaparon, no los casos que no supiste resolver.
+
+En una aplicación con LLM bien escrita —con su plan B en cada herramienta— la tasa de
+error tiende a cero **por construcción**, y no dice nada.
+
+#%%py
+separador("tres formas de contar lo que va mal")
+del_dia = [p for p in TRAFICO if p["dia"] == 6]
+print(f"  tasa de error (excepciones)  : "
+      f"{sum(p['error'] for p in del_dia) / len(del_dia):>6.1%}")
+print(f"  escalados a un humano        : "
+      f"{sum(p['escalado'] for p in del_dia) / len(del_dia):>6.1%}")
+print(f"  peticiones con más de 2 vueltas: "
+      f"{sum(p['vueltas'] > 2 for p in del_dia) / len(del_dia):>6.1%}")
+print()
+print("  la primera es la que está en tu panel. Las otras dos son las que importan.")
+
+#%%md
+### Trampa 3 · La latencia media
+
+La media esconde la cola, y en un agente **la cola es donde vive el problema**: las
+peticiones que dan cinco vueltas son las que el usuario abandona.
+
+#%%py
+latencias = sorted(p["latencia_ms"] * p["vueltas"] for p in TRAFICO)
+
+def percentil(datos, p):
+    return datos[min(int(len(datos) * p / 100), len(datos) - 1)]
+
+separador("la media frente a la cola")
+print(f"  media : {statistics.mean(latencias):>7.0f} ms")
+print(f"  p50   : {percentil(latencias, 50):>7.0f} ms")
+print(f"  p95   : {percentil(latencias, 95):>7.0f} ms")
+print(f"  p99   : {percentil(latencias, 99):>7.0f} ms  <- el usuario que se va")
+
+#%%md
+> **Regla:** en el panel, **p95 y p99**, nunca la media. Y para un agente, además, la
+> latencia partida por número de vueltas — porque una petición de tres vueltas no es una
+> petición lenta, es una petición distinta.
+
+#%%md
+## 4. Alertas que alguien mire
+
+Una alerta que salta a menudo se silencia, y una vez silenciada no vuelve. El objetivo no
+es «alertar de todo», es **que cada alerta que salte tenga una acción asociada**.
+
+Tres reglas, y la tercera es la que casi nadie aplica:
+
+| Regla | Por qué |
+|---|---|
+| **Alerta sobre lo que puedes arreglar** | «La calidad ha bajado» no es accionable; «los escalados se han doblado» sí |
+| **Umbrales relativos, no absolutos** | Tu tráfico cambia. Compara con la semana pasada, no con un número fijo |
+| **Comprueba que la métrica sigue viva** | Una métrica que deja de llegar parece «todo bien» |
+
+#%%py
+def alertas(hoy: list[dict], referencia: list[dict], *, cambio_maximo: float = 0.5) -> list[str]:
+    """Compara hoy con una referencia y avisa de lo accionable. Nada de umbrales fijos."""
+    # La comprobación del silencio va PRIMERO, y no es un detalle de orden: si va al
+    # final, el propio cálculo de las métricas revienta con una lista vacía y la alerta
+    # que más importa nunca llega a emitirse.
+    if not hoy:
+        return ["NO HAY DATOS hoy: la métrica ha dejado de llegar, "
+                "que no es lo mismo que estar bien"]
+
+    avisos = []
+
+    def compara(nombre, funcion, unidad=""):
+        actual, antes = funcion(hoy), funcion(referencia)
+        if antes == 0:
+            return
+        cambio = (actual - antes) / antes
+        if abs(cambio) > cambio_maximo:
+            direccion = "sube" if cambio > 0 else "baja"
+            avisos.append(f"{nombre} {direccion} un {abs(cambio):.0%}: "
+                          f"{antes:.2f}{unidad} -> {actual:.2f}{unidad}")
+
+    compara("escalados", lambda p: sum(x["escalado"] for x in p) / len(p))
+    compara("vueltas por petición", lambda p: statistics.mean(x["vueltas"] for x in p))
+    compara("tokens por petición", lambda p: statistics.mean(x["tokens"] for x in p))
+    return avisos
+
+
+antes = [p for p in TRAFICO if p["dia"] < 4]
+despues = [p for p in TRAFICO if p["dia"] >= 4]
+
+separador("las alertas del día 4")
+for aviso in alertas(despues, antes):
+    print("  [ALERTA]", aviso)
+
+separador("el día 3, contra el 2 (dos días normales)")
+print("  ", alertas([p for p in TRAFICO if p["dia"] == 3],
+                    [p for p in TRAFICO if p["dia"] == 2]) or "sin alertas")
+
+separador("el día que la métrica deja de llegar")
+for aviso in alertas([], antes):
+    print("  [ALERTA]", aviso)
+
+#%%md
+Tres alertas el día del despliegue, y una alerta específica para el silencio. **Esa
+última es la que salva**: sin ella, un panel vacío se lee como un panel tranquilo.
+
+Pero mira la comparación de en medio: **dos días normales también producen una alerta.**
+Los escalados «bajan un 67 %» entre el día 2 y el 3, y no ha pasado nada — son 200
+peticiones al día y el 6 % de escalados son doce, así que pasar de quince a cinco es
+ruido puro (notebook 09, otra vez).
+
+Eso no es un fallo del código: es que **el umbral está mal elegido**, y elegirlo bien no
+se hace a ojo. El ejercicio 2 lo mide.
+
+Y fíjate en dónde está esa comprobación en el código: **la primera de todas, con retorno
+inmediato.** No es una cuestión de estilo. Si la pones al final, el propio cálculo de las
+métricas revienta con una lista vacía —lo comprobé escribiendo esta celda— y la alerta
+que más falta hace es justo la que nunca llega a emitirse.
+
+#%%md
+## 5. Ejercicios
+
+### Ejercicio 1 — El panel que detecta lo que el de salud no ve
+
+Escribe `panel(peticiones)` que produzca las cuatro familias del apartado 1 y marque las
+que se han movido respecto a la referencia. Compruébalo contra la semana simulada.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def panel(peticiones: list[dict]) -> dict:
+    n = len(peticiones)
+    latencias = sorted(p["latencia_ms"] * p["vueltas"] for p in peticiones)
+    return {
+        # Volumen y salud
+        "peticiones": n,
+        "tasa_error": sum(p["error"] for p in peticiones) / n,
+        "latencia_p95": percentil(latencias, 95),
+        # Coste
+        "tokens_por_peticion": statistics.mean(p["tokens"] for p in peticiones),
+        # Calidad (la señal implícita del notebook 04)
+        "escalados": sum(p["escalado"] for p in peticiones) / n,
+        # Comportamiento
+        "vueltas_media": statistics.mean(p["vueltas"] for p in peticiones),
+        "peticiones_largas": sum(p["vueltas"] > 2 for p in peticiones) / n,
+    }
+
+
+def comparar_paneles(hoy, referencia, *, umbral=0.3):
+    a, b = panel(hoy), panel(referencia)
+    filas = []
+    for metrica in a:
+        if b[metrica]:
+            cambio = (a[metrica] - b[metrica]) / b[metrica]
+            movida = abs(cambio) > umbral
+        else:
+            # Línea base cero: el porcentaje no existe, pero pasar de 0 a algo es
+            # justo el cambio que más quieres ver. Dividir daría 0 % y lo esconderías.
+            cambio = float("inf") if a[metrica] else 0.0
+            movida = bool(a[metrica])
+        filas.append((metrica, b[metrica], a[metrica], cambio, "MOVIDA" if movida else ""))
+    return filas
+
+
+separador("panel: días 0-3 frente a días 4-6")
+print(f"{'métrica':<22}{'antes':>12}{'ahora':>12}{'cambio':>10}   ")
+print("-" * 62)
+for metrica, valor_antes, valor_ahora, cambio, marca in comparar_paneles(despues, antes):
+    texto = "de 0 a algo" if cambio == float("inf") else f"{cambio:+.0%}"
+    print(f"{metrica:<22}{valor_antes:>12.3f}{valor_ahora:>12.3f}{texto:>12}   {marca}")
+
+#%%md
+Fíjate en lo que se mueve y en lo que no, porque el detalle es instructivo:
+
+- **La tasa de error se mueve un +33 %** — y no significa nada: pasa del 0,7 % al 1,0 %,
+  que sobre 600 peticiones son dos casos. Un porcentaje sobre una cifra diminuta es la
+  cuarta trampa, y por eso hay que mirar el valor absoluto al lado del cambio.
+- **La latencia p95 sí se mueve, un +62 %.** Pero mira la tabla del apartado 1: la
+  latencia *por llamada* estaba plana en 890 ms los siete días. Lo que se ha movido es la
+  latencia **de extremo a extremo**, porque ahora hay más vueltas. La p50 por llamada no
+  lo vio; la p95 de la petición completa, sí.
+- **`peticiones_largas` pasa de cero a la mitad**, que es el cambio más brutal de la
+  tabla y el que un porcentaje no sabe expresar — dividir entre cero da 0 % y lo
+  escondería. De ahí el caso especial en el código.
+
+O sea: con un panel de salud bien montado —p95 de extremo a extremo, no medias por
+llamada— el día 4 **sí** enciende una luz. Con el panel de salud típico, no.
+
+</details>
+
+#%%md
+### Ejercicio 2 — La alerta que no se silencia
+
+Una alerta se silencia cuando salta demasiado. Mide **cuántas veces saltaría** cada
+umbral sobre un tráfico sin problemas, y elige el que salta poco y detecta el problema
+del día 4.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def falsas_alarmas(umbral: float, *, semanas: int = 20) -> float:
+    """Cuántos días al mes saltaría esta alerta sobre tráfico SIN ningún problema."""
+    saltos = dias = 0
+    for semilla in range(semanas):
+        aleatorio = random.Random(1000 + semilla)
+        # Una semana entera sin degradación: solo ruido.
+        sana = []
+        for dia in range(7):
+            for _ in range(200):
+                sana.append({"dia": dia, "escalado": aleatorio.random() < 0.06,
+                             "vueltas": aleatorio.choice([1, 1, 1, 2]),
+                             "tokens": 400, "error": False, "latencia_ms": 900})
+        for dia in range(1, 7):
+            hoy = [p for p in sana if p["dia"] == dia]
+            ayer = [p for p in sana if p["dia"] == dia - 1]
+            dias += 1
+            if alertas(hoy, ayer, cambio_maximo=umbral):
+                saltos += 1
+    return 30 * saltos / dias        # días al mes
+
+
+def detecta_el_problema(umbral: float) -> bool:
+    return bool(alertas(despues, antes, cambio_maximo=umbral))
+
+
+separador("elegir el umbral")
+print(f"{'umbral':>8}{'falsas alarmas/mes':>22}{'¿detecta el día 4?':>22}")
+print("-" * 54)
+for umbral in (0.10, 0.20, 0.30, 0.50, 0.80, 1.20):
+    print(f"{umbral:>8.0%}{falsas_alarmas(umbral):>21.1f}"
+          f"{('sí' if detecta_el_problema(umbral) else 'NO'):>22}")
+
+#%%md
+Ahí está el compromiso, con números en vez de con intuición.
+
+Todos los umbrales detectan el problema del día 4 —era grande: los escalados se
+triplicaron—, así que la columna que decide es la otra.
+
+Un umbral del 10 % **salta veinticinco veces al mes** sobre tráfico sin ningún problema.
+En dos semanas alguien crea una regla de filtrado en el correo y esa alerta deja de
+existir. Un umbral del 80 % salta dos veces al mes y sigue detectando el problema.
+
+**Elige el umbral más bajo que produzca una o dos falsas alarmas al mes.** Esa cifra
+determina si alguien va a seguir mirando tus alertas dentro de tres meses, y la única
+forma de elegirla es esta: midiéndola sobre tu propio ruido, no a ojo.
+
+Y hay que aceptar la contrapartida: con un umbral del 80 %, **una degradación del 30 % no
+te va a saltar nunca**. Para esas no sirve una alerta — sirve la revisión semanal, que
+compara con más datos y tolera mirar cosas pequeñas.
+
+</details>
+
+#%%md
+## 6. Resumen
+
+- Cuatro familias de métricas. Las de **calidad** y **comportamiento** no las tiene casi
+  nadie, y son las que dicen si tu aplicación sirve.
+- **Un agente se degrada sin fallar ni gastar más**: más vueltas, más escalados, la
+  herramienta equivocada. Nada de eso aparece en disponibilidad ni en latencia.
+- `get_run_stats` da agregados sin bajar trazas, con `filter`, `trace_filter` e
+  `is_root`. La combinación `filter=error` + `trace_filter=success` es la consulta de
+  fallos silenciosos del notebook 01.
+- **Tres métricas trampa**: la media del juez sobre tráfico que cambia de composición
+  —pártela por segmento—, la tasa de error —que en una aplicación con planes B tiende a
+  cero por construcción— y la latencia media —usa p95 y p99—.
+- **Alertas relativas, no absolutas**, sobre lo que puedes arreglar, y **una alerta para
+  el silencio**: una métrica que deja de llegar se lee como «todo bien».
+- Elige el umbral **midiendo las falsas alarmas sobre tu propio ruido**. El umbral
+  correcto es el más bajo que produzca una o dos al mes; por debajo de eso, la alerta se
+  silencia y deja de existir.
+
+**Siguiente:** [`14_reglas_y_evaluacion_en_linea`](14_reglas_y_evaluacion_en_linea.ipynb)
+— mirar está bien, pero lo que cierra el bucle es que las trazas malas se conviertan en
+casos de prueba **sin que nadie haga nada**.
