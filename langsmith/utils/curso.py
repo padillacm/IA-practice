@@ -844,3 +844,164 @@ def agente_de_soporte(guion: list | None = None):
         return construir(), modelo
     finally:
         chat_models.init_chat_model = original
+
+
+# --------------------------------------------------------------------------------------
+# Datasets y experimentos en local (módulo 2)
+# --------------------------------------------------------------------------------------
+#
+# Segundo hallazgo que amplía lo verificable, después del `enabled="local"` del módulo 1:
+# `evaluate()` acepta `upload_results=False` y una **lista de `Example` construida en
+# memoria** en vez del nombre de un dataset del servidor. Con las dos cosas, el motor de
+# evaluación entero —el objetivo, los evaluadores, las repeticiones, los evaluadores de
+# resumen, `to_pandas()`— corre en tu máquina sin cuenta, sin clave y sin gastar cuota.
+#
+# Lo que NO da el modo local, y conviene tenerlo claro para no venderlo de más:
+# no hay historial entre experimentos, no hay comparación en la interfaz, no hay versiones
+# del dataset y no hay nada que compartir con nadie. O sea, no sustituye al servicio:
+# sirve para aprender la mecánica y para probar tus evaluadores antes de gastar trazas.
+
+
+def ejemplos_locales(filas: list[dict], *, entradas: tuple[str, ...],
+                     salidas: tuple[str, ...], id_dataset: Any = None) -> list[Any]:
+    """Construye una lista de `Example` en memoria a partir de diccionarios.
+
+        ejemplos = ejemplos_locales(
+            [{"mensaje": "...", "categoria": "facturacion"}, ...],
+            entradas=("mensaje",),
+            salidas=("categoria",),
+        )
+
+    Es lo que se le pasa a `experimento_local()` como `datos`. Cada fila se parte en
+    `inputs` y `outputs` según las claves que indiques; lo que no esté en ninguna de las
+    dos listas se guarda en `metadata`, que es donde conviene dejar lo que sirve para
+    filtrar (el plan del cliente, el canal, la dificultad) sin que el evaluador lo vea.
+    """
+    import datetime
+    import uuid
+
+    ahora = datetime.datetime.now(datetime.timezone.utc)
+    id_dataset = id_dataset or uuid.uuid4()
+
+    from langsmith.schemas import Example
+
+    construidos = []
+    for fila in filas:
+        metadatos = {k: v for k, v in fila.items() if k not in entradas and k not in salidas}
+        construidos.append(Example(
+            id=uuid.uuid4(),
+            dataset_id=id_dataset,
+            created_at=ahora,
+            inputs={k: fila[k] for k in entradas},
+            outputs={k: fila[k] for k in salidas},
+            metadata=metadatos or None,
+        ))
+    return construidos
+
+
+def experimento_local(objetivo, datos, *, evaluadores=None, evaluadores_de_resumen=None,
+                      repeticiones: int = 1, prefijo: str = "local", **kwargs):
+    """Ejecuta `evaluate()` **sin subir nada** y sin salir a la red.
+
+        resultados = experimento_local(mi_clasificador, ejemplos, evaluadores=[acierto])
+        resultados.to_pandas()
+
+    Es el motor de evaluación de verdad —el mismo `evaluate()` del SDK— con dos
+    diferencias: `upload_results=False` y un cliente que no habla con nadie.
+
+    Un detalle que sorprende y conviene saber: en este modo **`experiment_prefix` se
+    ignora** y `experiment_name` devuelve un nombre aleatorio. Sin subida no hay
+    experimento que nombrar, así que no te fíes de ese nombre en local.
+    """
+    import warnings
+
+    from langsmith import evaluate
+
+    # `upload_results=False` está marcado como beta y el SDK avisa en cada llamada. El
+    # aviso es cierto y el curso lo dice en el notebook 07, así que aquí se silencia
+    # para que la salida del notebook se lea: repetirlo veinte veces no informa de nada.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*upload_results.*")
+        return _lanzar(evaluate, objetivo, datos, evaluadores, evaluadores_de_resumen,
+                       repeticiones, prefijo, kwargs)
+
+
+def _lanzar(evaluate, objetivo, datos, evaluadores, evaluadores_de_resumen,
+            repeticiones, prefijo, kwargs):
+    return evaluate(
+        objetivo,
+        data=datos,
+        evaluators=evaluadores,
+        summary_evaluators=evaluadores_de_resumen,
+        num_repetitions=repeticiones,
+        experiment_prefix=prefijo,
+        upload_results=False,
+        client=_cliente_mudo(),
+        **kwargs,
+    )
+
+
+def resumen_del_experimento(resultados) -> dict[str, float]:
+    """Media de cada métrica de un experimento, más lo que dijeron los de resumen.
+
+    `ExperimentResults` no expone las medias: hay que recorrer las filas. Y los
+    resultados de los evaluadores de resumen viven en `_summary_results`, que es
+    privado — en el servicio los ves en la interfaz, en local hay que ir a buscarlos.
+    """
+    import collections
+
+    acumulado: dict[str, list[float]] = collections.defaultdict(list)
+    for fila in resultados:
+        for resultado in fila["evaluation_results"]["results"]:
+            if resultado.score is not None:
+                acumulado[resultado.key].append(float(resultado.score))
+
+    medias = {clave: sum(v) / len(v) for clave, v in acumulado.items() if v}
+    for resultado in (getattr(resultados, "_summary_results", None) or {}).get("results", []):
+        if resultado.score is not None:
+            medias[f"{resultado.key} (resumen)"] = float(resultado.score)
+    return medias
+
+
+def tickets(n: int | None = None, *, semilla: int = 7, **filtros) -> list[dict]:
+    """Devuelve tickets del conjunto compartido con el curso de LangGraph, como dicts.
+
+        tickets(30, categoria="facturacion")
+        tickets(50)                            # muestra estratificada por categoría
+
+    Sin filtros y con `n`, la muestra es **estratificada por categoría**: coge
+    aproximadamente la misma cantidad de cada una. Un conjunto de evaluación construido
+    con las primeras 50 filas de un CSV mide lo que hubo en enero, no lo que hace tu
+    sistema — y esa es una de las lecciones del módulo 2.
+    """
+    import pandas as pd
+
+    marco = pd.read_csv(ruta_datos("tickets_soporte.csv"))
+    for columna, valor in filtros.items():
+        marco = marco[marco[columna] == valor]
+    if n is None:
+        return marco.to_dict("records")
+
+    if filtros:
+        return marco.sample(min(n, len(marco)), random_state=semilla).to_dict("records")
+
+    # Muestreo estratificado a mano: `groupby().apply()` cambió de contrato en pandas 3
+    # (`include_groups` ya no se admite) y esto funciona igual en las dos versiones.
+    categorias = sorted(marco["categoria"].unique())
+    por_grupo = max(1, n // len(categorias))
+    trozos = []
+    for categoria in categorias:
+        grupo = marco[marco["categoria"] == categoria]
+        trozos.append(grupo.sample(min(por_grupo, len(grupo)), random_state=semilla))
+    muestra = pd.concat(trozos)
+
+    # Si `n` no es múltiplo del número de categorías, la estratificación se queda corta.
+    # Se completa con lo que sobra, al azar, para devolver exactamente `n`: un conjunto
+    # que dice tener 30 casos y trae 24 estropea cualquier cuenta que hagas encima.
+    if len(muestra) < n:
+        resto = marco.drop(index=muestra.index)
+        faltan = min(n - len(muestra), len(resto))
+        if faltan:
+            muestra = pd.concat([muestra, resto.sample(faltan, random_state=semilla)])
+
+    return muestra.sample(frac=1.0, random_state=semilla).head(n).to_dict("records")

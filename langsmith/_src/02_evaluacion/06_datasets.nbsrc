@@ -1,0 +1,513 @@
+#%%md
+# 06 · Datasets: el conjunto sobre el que se mide
+
+**Módulo 2 · Datasets y experimentos** — *tiempo estimado: 70 minutos* — *consumo: ~0 trazas*
+
+El módulo 1 terminó con trazas buenas y buscables. La pregunta cambia ahora: de «¿qué
+pasó?» a **«¿está mejorando?»**, y eso no se contesta mirando ejemplos sueltos.
+
+Al terminar sabrás:
+
+1. Qué es un dataset en LangSmith y **qué no** conviene meter dentro.
+2. Construir uno bien: cuántos casos, cuáles, y por qué la muestra importa más que el tamaño.
+3. Los tres tipos (`kv`, `chat`, `llm`) y cuándo cada uno.
+4. **Versionar** el dataset, que es lo que hace que dos experimentos se puedan comparar.
+5. El bucle que cierra el curso: `create_example_from_run` — de una traza de producción
+   a un caso de prueba.
+
+Y una buena noticia sobre el método: **este módulo se ejecuta entero en local**. Lo
+explico en el apartado 2.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import (init, online, cliente, separador, tickets,
+                         ejemplos_locales, experimento_local, resumen_del_experimento)
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. Qué es un dataset, y qué no
+
+Un **dataset** es una colección de **ejemplos**. Un ejemplo tiene tres partes:
+
+| Parte | Qué es | ¿Lo ve el sistema evaluado? |
+|---|---|---|
+| `inputs` | Lo que le das a tu aplicación | **Sí** |
+| `outputs` | La respuesta de referencia — lo que debería salir | No: solo lo ve el evaluador |
+| `metadata` | Todo lo demás: el plan del cliente, el canal, la dificultad | No |
+
+La separación entre `outputs` y `metadata` es la que más se equivoca, y tiene
+consecuencias:
+
+> Todo lo que metas en `outputs` es **algo que tu evaluador va a comparar**. Si guardas
+> ahí el identificador del ticket «por tenerlo a mano», un evaluador ingenuo lo comparará
+> y te dará puntuaciones absurdas. Lo que sirve para **filtrar y agrupar** va en
+> `metadata`.
+
+### Lo que un dataset no es
+
+- **No es tu conjunto de entrenamiento.** No se usa para ajustar nada; se usa para medir.
+- **No es una copia de producción.** Un dataset de mil casos que tarda una hora en correr
+  no se ejecuta nunca, y un conjunto que no se ejecuta no detecta nada.
+- **No es estático.** Crece con los fallos que encuentras. El apartado 5 va de eso.
+
+#%%md
+## 2. La buena noticia: este módulo se ejecuta
+
+Los datasets viven en el servidor y aquí no lo alcanzo. Pero al mirar la firma de
+`evaluate()` apareció esto:
+
+```python
+evaluate(target, data=..., evaluators=..., upload_results=True, ...)
+```
+
+**`upload_results=False`**, y `data` acepta una **lista de `Example` construida en
+memoria**. Con las dos cosas, el motor de evaluación entero —el objetivo, los
+evaluadores, las repeticiones, los evaluadores de resumen, `to_pandas()`— corre en tu
+máquina sin cuenta y sin gastar una traza.
+
+Es el mismo `evaluate()` del SDK, no una imitación. `utils.curso` lo envuelve en
+`experimento_local()`.
+
+**Lo que el modo local NO da**, para no venderlo de más:
+
+| En local | Con el servicio |
+|---|---|
+| Un experimento suelto | Historial: este experimento frente a los quince anteriores |
+| — | Comparación lado a lado en la interfaz |
+| — | **Versiones del dataset** (apartado 4) |
+| — | Algo que enseñarle a otra persona |
+
+O sea: sirve para **aprender la mecánica y para depurar tus evaluadores antes de gastar
+cuota**, que no es poco. No sustituye al servicio.
+
+> Un aviso que el SDK da y conviene repetir: **`upload_results` está marcado como beta**.
+> Si en una versión futura cambia, lo que se rompe es el modo local de este curso, no tu
+> producción. Las pruebas del curso lo vigilan.
+
+#%%md
+## 3. Construir uno bien
+
+Vamos a hacer un dataset de clasificación de tickets con los 400 etiquetados que ya
+conoces del curso de LangGraph.
+
+La primera decisión no es cuántos casos, es **cuáles**.
+
+#%%py
+import collections
+
+# Lo que hace todo el mundo la primera vez: las primeras N filas.
+ingenuo = tickets()[:40]
+print("las primeras 40 filas del CSV:")
+print("  ", dict(collections.Counter(t["categoria"] for t in ingenuo)))
+
+# Lo que hay que hacer: una muestra estratificada.
+equilibrado = tickets(40)
+print("\nmuestra estratificada por categoría:")
+print("  ", dict(collections.Counter(t["categoria"] for t in equilibrado)))
+
+#%%md
+El primero mide **lo que hubo en enero**. Si tu sistema falla justo en las categorías
+poco frecuentes —que es lo normal, son las que tienen menos ejemplos en el prompt—, ese
+conjunto no lo va a ver.
+
+El segundo mide **tu sistema**.
+
+Y ojo con el efecto perverso del primero: como las categorías frecuentes dominan, un
+clasificador que responda siempre «facturación» puede sacar buena nota. El apartado
+siguiente lo enseña con números.
+
+#%%py
+ejemplos = ejemplos_locales(
+    equilibrado,
+    entradas=("asunto", "mensaje"),   # lo que ve el sistema
+    salidas=("categoria",),           # lo que se compara
+)
+# Lo demás —plan, canal, prioridad, antigüedad— queda en metadata: sirve para filtrar,
+# no para comparar.
+
+primero = ejemplos[0]
+print("inputs  :", {k: v[:60] + "…" for k, v in primero.inputs.items()})
+print("outputs :", primero.outputs)
+print("metadata:", list(primero.metadata or {}))
+
+#%%py
+# El clasificador tonto que hay que batir: responde SIEMPRE la clase mayoritaria del
+# conjunto al que se enfrenta. Es la definición honesta de una línea base, y la que
+# hace visible el desequilibrio.
+def perezoso_para(muestra: list[dict]):
+    mayoritaria = collections.Counter(t["categoria"] for t in muestra).most_common(1)[0][0]
+    def clasificar(entradas: dict) -> dict:
+        return {"categoria": mayoritaria}
+    return clasificar, mayoritaria
+
+def acierto(outputs: dict, reference_outputs: dict) -> dict:
+    return {"key": "acierto",
+            "score": float(outputs["categoria"] == reference_outputs["categoria"])}
+
+separador("la línea base que hay que batir")
+
+for etiqueta, muestra in [("primeras 40 filas", ingenuo), ("estratificado", equilibrado)]:
+    perezoso, clase = perezoso_para(muestra)
+    conjunto = ejemplos_locales(muestra, entradas=("asunto", "mensaje"), salidas=("categoria",))
+    puntuacion = resumen_del_experimento(
+        experimento_local(perezoso, conjunto, evaluadores=[acierto]))["acierto"]
+    print(f"  {etiqueta:<20} responde siempre «{clase:<24}» -> {puntuacion:.0%}")
+
+#%%md
+Ahí está el problema, con números. Sobre las primeras filas, un clasificador **que no
+clasifica nada** —responde siempre lo mismo— saca casi el triple de nota que sobre el
+conjunto estratificado, solo porque una categoría domina la muestra.
+
+Si tu línea base es la primera, cualquier sistema que la supere un poco parecerá bueno.
+Y no lo es: está aprovechando el desequilibrio del conjunto, no clasificando.
+
+> **Regla:** antes de medir tu sistema, mide el modelo tonto **sobre el mismo conjunto**.
+> Si tu sistema no le saca una distancia clara, no has demostrado nada.
+
+En el conjunto estratificado la línea base es 1/8 —el azar con ocho clases—, que es lo
+que quieres: un suelo bajo y honesto contra el que se vea la mejora de verdad.
+
+### ¿Cuántos casos?
+
+La respuesta honesta es «depende», pero hay dos límites duros:
+
+- **Por abajo:** con menos de 20-30 casos, la diferencia entre dos experimentos es ruido.
+  El notebook 09 lo mide en vez de suponerlo.
+- **Por arriba:** el que puedas ejecutar **en cada cambio**. Un conjunto de 500 casos
+  con un juez LLM son 1.000 trazas y varios minutos: se ejecuta una vez y se abandona.
+
+Con el plan Developer y su presupuesto (notebook 00), el punto razonable está en
+**30-50 casos** para el conjunto que corre siempre, más uno grande que corres antes de
+un cambio importante.
+
+#%%md
+## 4. Los tres tipos, y las versiones
+
+### Tipos
+
+| `data_type` | Forma de `inputs` | Para |
+|---|---|---|
+| `kv` (por defecto) | Un diccionario cualquiera | Casi todo. Es el que quieres |
+| `chat` | Una lista de mensajes | Conversaciones multiturno |
+| `llm` | Un `prompt` y una `completion` de texto | Compatibilidad con formatos de ajuste fino |
+
+En la práctica, **`kv` salvo que tengas una razón**. Los otros dos existen sobre todo
+para importar datos de otros sitios, y te atan a una forma concreta.
+
+### Versiones, que es lo que hace comparables dos experimentos
+
+Esta parte es la que más se pasa por alto y la que más duele.
+
+Un dataset **cambia**: añades casos, corriges una etiqueta mal puesta, borras un ejemplo
+ambiguo. Si comparas el experimento del lunes con el del viernes y por el medio tocaste
+el conjunto, **no estás comparando dos sistemas: estás comparando dos exámenes distintos**.
+
+LangSmith versiona cada cambio y te deja fijar una versión por su fecha o por una
+etiqueta que le pongas.
+
+#%%py
+@online("Crear el dataset, versionarlo y fijar una etiqueta", trazas=0)
+def _():
+    c = cliente()
+
+    conjunto = c.create_dataset(
+        dataset_name="tickets-clasificacion",
+        description="40 tickets estratificados por categoría. Módulo 2 del curso.",
+        # kv es el valor por defecto; se pone explícito porque es una decisión.
+        data_type="kv",
+    )
+
+    c.create_examples(
+        dataset_id=conjunto.id,
+        examples=[{"inputs": e.inputs, "outputs": e.outputs, "metadata": e.metadata}
+                  for e in ejemplos],
+    )
+
+    # La etiqueta es lo que hace que un experimento de dentro de tres meses siga
+    # comparándose con este. Sin ella solo tienes fechas.
+    c.update_dataset_tag(dataset_id=conjunto.id, as_of="latest", tag="v1")
+    print(f"  dataset {conjunto.id} con {len(ejemplos)} ejemplos, etiquetado v1")
+
+@online("Listar las versiones de un dataset", trazas=0)
+def _():
+    for version in cliente().list_dataset_versions(dataset_name="tickets-clasificacion"):
+        print(f"  {version.as_of}  etiquetas={version.tags}")
+
+#%%md
+Y al evaluar, se fija la versión:
+
+```python
+evaluate(
+    mi_clasificador,
+    data=cliente().list_examples(dataset_name="tickets-clasificacion", as_of="v1"),
+    evaluators=[acierto],
+)
+```
+
+**Si no pasas `as_of`, coges la última.** Que es lo cómodo y lo que hace que tres meses
+después no sepas contra qué mediste.
+
+#%%md
+## 5. El bucle: de una traza de producción a un caso de prueba
+
+Aquí es donde el módulo 1 y el 2 se juntan, y es la mecánica que hace que un conjunto de
+pruebas crezca solo en vez de envejecer.
+
+La secuencia:
+
+```
+producción -> una traza sale mal -> alguien la corrige (nb 04: `correction`)
+           -> create_example_from_run -> el caso entra en el dataset
+           -> el siguiente experimento lo detecta si vuelve a fallar
+```
+
+`create_example_from_run` coge un run y crea un ejemplo con **sus entradas y sus
+salidas**. Que es justo lo que no quieres tal cual, y aquí está el detalle que importa:
+
+> Si el run salió **mal**, sus `outputs` son la respuesta equivocada. Meterla como
+> referencia convierte tu error en el criterio. **Hay que sustituirla por la corrección**,
+> que es exactamente para lo que existe el campo `correction` del notebook 04.
+
+#%%py
+@online("Convertir las trazas mal puntuadas en casos de prueba", trazas=0)
+def _():
+    c = cliente()
+    conjunto = c.read_dataset(dataset_name="tickets-clasificacion")
+
+    añadidos = 0
+    for feedback in c.list_feedback(project_ids=None, feedback_key=["utilidad"], limit=20):
+        if feedback.score is None or feedback.score >= 0.5:
+            continue                       # solo nos interesan las que salieron mal
+        run = c.read_run(feedback.run_id)
+
+        ejemplo = c.create_example_from_run(run=run, dataset_id=conjunto.id)
+        # LA LÍNEA QUE IMPORTA: la referencia es la corrección del humano, no lo que
+        # respondió el sistema.
+        if feedback.correction:
+            c.update_example(example_id=ejemplo.id, outputs=feedback.correction)
+            añadidos += 1
+
+    print(f"  {añadidos} fallos de producción convertidos en casos de prueba")
+
+#%%md
+El módulo 4 automatiza esto con una **regla**: «toda traza con `utilidad < 0.5` va a este
+dataset», sin que nadie ejecute nada. Pero conviene haberlo hecho a mano una vez para
+entender qué está pasando.
+
+### La trampa de este bucle
+
+Si metes en el dataset **todo** lo que falla, en tres meses tienes 800 casos, tarda
+veinte minutos y nadie lo ejecuta. El conjunto se ha suicidado por éxito.
+
+Lo que funciona son **dos conjuntos**:
+
+| Conjunto | Tamaño | Cuándo se ejecuta | Qué contiene |
+|---|---|---|---|
+| **Rápido** | 30-50 | En cada cambio, en la CI | Un caso por tipo de fallo, elegido a mano |
+| **Completo** | El que crezca | Antes de un cambio grande | Todo lo que ha fallado alguna vez |
+
+Y una operación de mantenimiento que nadie hace y que es la que mantiene vivo el
+conjunto rápido: **quitar los casos que ya nadie falla**. Un caso que llevan ocho
+experimentos seguidos acertando no aporta información y sí tiempo.
+
+#%%py
+def casos_que_ya_no_informan(historial: list[dict], *, seguidos: int = 8) -> list[str]:
+    """Casos acertados en los últimos N experimentos. Candidatos a salir del conjunto rápido.
+
+    `historial` es una lista de experimentos, cada uno un dict {id_caso: acertó}.
+    """
+    if len(historial) < seguidos:
+        return []
+    recientes = historial[-seguidos:]
+    todos = set(recientes[0])
+    return sorted(caso for caso in todos
+                  if all(experimento.get(caso) for experimento in recientes))
+
+
+# Diez experimentos simulados sobre seis casos.
+historial = []
+for i in range(10):
+    historial.append({
+        "caso-facil-1": True, "caso-facil-2": True,
+        "caso-dificil-1": i % 3 == 0, "caso-dificil-2": i > 6,
+        "caso-regresion": i != 5, "caso-nuevo": True,
+    })
+
+sobrantes = casos_que_ya_no_informan(historial)
+print("candidatos a salir del conjunto rápido:", sobrantes)
+print("se quedan:", sorted(set(historial[-1]) - set(sobrantes)))
+
+#%%md
+Los dos fáciles y el nuevo llevan ocho experimentos sin fallar: no están midiendo nada.
+Se van al conjunto completo y el rápido se queda con los tres que **todavía discriminan**.
+
+`caso-regresion` es el más valioso de todos: falló una vez, en el experimento 5. Ese es
+exactamente el caso que un conjunto de pruebas existe para atrapar.
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — Un dataset que discrimina
+
+Construye un conjunto de 24 tickets con el que un clasificador **perezoso** (siempre la
+misma categoría) saque menos de un 20 %, y comprueba que un clasificador **por palabras
+clave** —de veinte líneas— lo bate con claridad.
+
+Es la comprobación que hay que hacer siempre antes de confiar en un conjunto.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+conjunto = ejemplos_locales(tickets(24), entradas=("asunto", "mensaje"),
+                            salidas=("categoria",))
+
+
+PISTAS = {
+    "facturacion":  ("factur", "cobr", "cargo", "pago", "reembolso", "precio", "tarifa"),
+    "integraciones": ("integra", "conect", "api", "webhook", "salesforce", "sincron"),
+    "acceso_cuenta": ("contraseñ", "acceso", "login", "sesión", "verificaci", "cuenta"),
+    "rendimiento":  ("lent", "tarda", "rendimiento", "timeout", "caíd", "cuelga"),
+    "bug_producto": ("error", "fallo", "bug", "no funciona", "roto"),
+    "datos_privacidad": ("privacidad", "rgpd", "datos personales", "borrar mis"),
+    "solicitud_funcionalidad": ("sería genial", "podríais añadir", "propuesta", "sugerencia"),
+}
+
+def clasificador_por_palabras(entradas: dict) -> dict:
+    texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+    puntuaciones = {categoria: sum(p in texto for p in pistas)
+                    for categoria, pistas in PISTAS.items()}
+    mejor = max(puntuaciones, key=puntuaciones.get)
+    return {"categoria": mejor if puntuaciones[mejor] else "otros"}
+
+
+muestra_24 = tickets(24)
+perezoso, clase = perezoso_para(muestra_24)
+
+separador("¿el conjunto discrimina?")
+for nombre, sistema in [(f"perezoso (siempre «{clase}»)", perezoso),
+                        ("por palabras clave", clasificador_por_palabras)]:
+    puntuacion = resumen_del_experimento(
+        experimento_local(sistema, conjunto, evaluadores=[acierto]))["acierto"]
+    print(f"  {nombre:<40} {puntuacion:.0%}")
+
+#%%md
+El perezoso se queda en el suelo y el de palabras clave le saca una distancia clara. El
+conjunto discrimina, así que sirve.
+
+Si los dos hubieran sacado parecido, el problema no sería el clasificador: sería el
+conjunto, y habría que rehacerlo antes de medir nada con él.
+
+Y fíjate en lo que acaba de pasar: **veinte líneas de `in` sobre un texto** son ahora la
+línea base que tu sistema con LLM tiene que batir. Ese es el número que hay que enseñar
+al lado del resultado del modelo, y casi nadie lo hace.
+
+</details>
+
+#%%md
+### Ejercicio 2 — Ejemplos que no valen
+
+Escribe `revisar_conjunto(ejemplos)` que detecte los cuatro problemas que arruinan un
+dataset sin que se note:
+
+1. **Duplicados** en las entradas — inflan la nota del caso repetido.
+2. **Referencias fuera del vocabulario** — una etiqueta que tu sistema no puede producir.
+3. **Desequilibrio grave** — una clase con más de la mitad de los casos.
+4. **Entradas vacías o larguísimas** — ruido, o el límite de 20 MB del notebook 03.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import collections
+
+def revisar_conjunto(ejemplos, *, vocabulario=None, largo_maximo=4000):
+    avisos = []
+
+    vistos = collections.Counter(
+        tuple(sorted((k, str(v)) for k, v in e.inputs.items())) for e in ejemplos)
+    repetidos = [n for n, veces in vistos.items() if veces > 1]
+    if repetidos:
+        avisos.append(f"{len(repetidos)} entrada(s) duplicada(s): esos casos pesan doble")
+
+    if vocabulario is not None:
+        fuera = {v for e in ejemplos for v in e.outputs.values() if v not in vocabulario}
+        if fuera:
+            avisos.append(f"referencias que el sistema no puede producir: {sorted(fuera)}")
+
+    conteo = collections.Counter(str(list(e.outputs.values())[0]) for e in ejemplos)
+    mayor, veces = conteo.most_common(1)[0]
+    if veces > len(ejemplos) / 2:
+        avisos.append(f"«{mayor}» es el {100 * veces // len(ejemplos)} % del conjunto: "
+                      "un sistema que responda siempre eso saca buena nota")
+
+    for e in ejemplos:
+        largo = sum(len(str(v)) for v in e.inputs.values())
+        if largo == 0:
+            avisos.append("hay un ejemplo con las entradas vacías")
+        elif largo > largo_maximo:
+            avisos.append(f"un ejemplo de {largo} caracteres: revisa el límite de la traza")
+    return avisos
+
+
+# Un conjunto con los cuatro problemas, a propósito.
+malo = ejemplos_locales(
+    [{"asunto": "cobro", "mensaje": "me cobraron dos veces", "categoria": "facturacion"},
+     {"asunto": "cobro", "mensaje": "me cobraron dos veces", "categoria": "facturacion"},
+     {"asunto": "otro cobro", "mensaje": "y otro cargo raro", "categoria": "facturacion"},
+     {"asunto": "", "mensaje": "", "categoria": "facturacion"},
+     {"asunto": "x", "mensaje": "y" * 5000, "categoria": "categoria_inventada"}],
+    entradas=("asunto", "mensaje"), salidas=("categoria",))
+
+print("=== conjunto con problemas ===")
+for aviso in revisar_conjunto(malo, vocabulario=set(PISTAS) | {"otros"}):
+    print("  [AVISO]", aviso)
+
+print("\n=== el conjunto estratificado del apartado 3 ===")
+print("  ", revisar_conjunto(conjunto, vocabulario=set(PISTAS) | {"otros"}) or "sin avisos")
+
+#%%md
+Los cuatro detectados, y ninguno habría dado un error: el experimento habría corrido, te
+habría devuelto un número, y ese número no habría significado nada.
+
+Es el mismo patrón que el módulo 1 encontró seis veces en el SDK, ahora en tus propios
+datos: **lo que falla en silencio es lo caro**. Una función de treinta líneas en la CI,
+junto al auditor de instrumentación del notebook 02, y el conjunto no se degrada.
+
+</details>
+
+#%%md
+## 7. Resumen
+
+- Un ejemplo son **`inputs`, `outputs` y `metadata`**. Lo que va en `outputs` es lo que
+  el evaluador compara; lo que sirve para filtrar va en `metadata`.
+- **La muestra importa más que el tamaño.** Las primeras N filas de tu CSV miden lo que
+  hubo en enero; una muestra estratificada mide tu sistema.
+- **Mide primero el modelo tonto.** Si tu sistema no le saca una distancia clara, no has
+  demostrado nada — y sobre un conjunto desequilibrado el tonto saca buena nota.
+- Usa **`kv`** salvo que tengas una razón concreta.
+- **Fija la versión del dataset** (`as_of`) o no estás comparando dos sistemas, sino dos
+  exámenes distintos.
+- `create_example_from_run` cierra el bucle producción → prueba, **pero la referencia
+  tiene que ser la corrección del humano**, no la respuesta que falló.
+- Dos conjuntos: **rápido** (30-50 casos, en cada cambio) y **completo**. Y quita del
+  rápido lo que lleva ocho experimentos sin fallar: no está midiendo nada.
+- El motor de evaluación corre **entero en local** con `upload_results=False` y ejemplos
+  en memoria. Sirve para aprender y para depurar evaluadores sin gastar cuota; no
+  sustituye al servicio, que es quien guarda el historial.
+
+**Siguiente:** [`07_experimentos`](07_experimentos.ipynb) — ya hay conjunto; ahora, cómo
+se corre un experimento de verdad y qué significan sus números.

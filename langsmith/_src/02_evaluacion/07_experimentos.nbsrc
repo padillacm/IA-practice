@@ -1,0 +1,620 @@
+#%%md
+# 07 · Experimentos: correr la medida y leerla bien
+
+**Módulo 2 · Datasets y experimentos** — *tiempo estimado: 75 minutos* — *consumo: 0 trazas en local*
+
+Ya hay conjunto. Un **experimento** es ejecutarlo:
+
+```
+experimento = objetivo  ×  dataset  ×  evaluadores
+```
+
+Al terminar sabrás:
+
+1. Las **tres formas** que puede tener un objetivo, y cuál te conviene.
+2. Los parámetros de `evaluate()` que importan, con lo que cuesta cada uno.
+3. **Por qué un sistema que revienta puede sacar un 100 %** — el fallo más caro de este
+   módulo, y lo demostramos.
+4. Que un evaluador roto **desaparece en silencio** de tus resultados.
+5. Cómo se comparan dos experimentos y qué mira LangSmith que tú no.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import (init, online, cliente, separador, tickets,
+                         ejemplos_locales, experimento_local, resumen_del_experimento)
+
+init(silencioso=True)
+
+CONJUNTO = ejemplos_locales(tickets(32), entradas=("asunto", "mensaje"),
+                            salidas=("categoria",))
+print(f"conjunto de {len(CONJUNTO)} tickets, estratificado")
+
+#%%md
+## 1. El objetivo: tres formas
+
+El primer argumento de `evaluate()` puede ser tres cosas distintas, y la elección tiene
+consecuencias.
+
+| Forma | Cómo se escribe | Cuándo |
+|---|---|---|
+| **Una función** | `def f(inputs: dict) -> dict` | Casi siempre. Es la que da control |
+| **Un `Runnable`** | Tu cadena o tu grafo directamente | Cuando quieres evaluar el sistema **tal cual se despliega** |
+| **Un experimento anterior** | Su nombre o su id | Para añadir evaluadores a algo ya ejecutado, **sin volver a pagarlo** |
+
+La tercera es la que más se desconoce y la que más ahorra: si ejecutaste un experimento
+caro y luego se te ocurre otra métrica, **no repitas el experimento**. Pásale el nombre a
+`evaluate()` con el evaluador nuevo y se aplica sobre las salidas ya guardadas.
+
+#%%py
+# Forma 1: una función. La firma es `(inputs) -> outputs`, con diccionarios.
+PISTAS = {
+    "facturacion": ("factur", "cobr", "cargo", "pago", "reembolso", "tarifa", "precio"),
+    "integraciones": ("integra", "conect", "api", "webhook", "salesforce", "sincron"),
+    "acceso_cuenta": ("contraseñ", "acceso", "login", "sesión", "verificaci"),
+    "rendimiento": ("lent", "tarda", "rendimiento", "timeout", "cuelga"),
+    "bug_producto": ("error", "fallo", "bug", "no funciona", "roto"),
+    "datos_privacidad": ("privacidad", "rgpd", "datos personales", "borrar mis"),
+    "solicitud_funcionalidad": ("sería genial", "podríais", "propuesta", "sugerencia"),
+}
+
+def clasificar(entradas: dict) -> dict:
+    texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+    puntos = {c: sum(p in texto for p in pistas) for c, pistas in PISTAS.items()}
+    mejor = max(puntos, key=puntos.get)
+    return {"categoria": mejor if puntos[mejor] else "otros"}
+
+
+def acierto(outputs: dict, reference_outputs: dict) -> dict:
+    return {"key": "acierto",
+            "score": float(outputs["categoria"] == reference_outputs["categoria"])}
+
+
+resultados = experimento_local(clasificar, CONJUNTO, evaluadores=[acierto])
+print("acierto:", f"{resumen_del_experimento(resultados)['acierto']:.0%}")
+
+#%%md
+> **Los nombres de los argumentos importan.** El SDK inspecciona la firma de tu evaluador
+> y le pasa lo que pida por nombre: `inputs`, `outputs`, `reference_outputs`, `run`,
+> `example`, `attachments`. Si escribes `def acierto(salidas, referencia)` no falla con
+> un error claro — falla diciendo que no reconoce esos argumentos. Usa los nombres en
+> inglés aunque el resto de tu código esté en español.
+
+#%%md
+## 2. El fallo más caro: el 100 % que no lo es
+
+Aquí va la parte que justifica el notebook. Vamos a evaluar un sistema **malo a
+propósito**: revienta con las entradas largas.
+
+#%%py
+def clasificador_fragil(entradas: dict) -> dict:
+    """Como el anterior, pero se rompe con los mensajes largos.
+
+    Es un fallo realista: un `IndexError`, un tiempo agotado, una respuesta del modelo
+    que no se pudo parsear. En producción son los casos difíciles los que revientan.
+    """
+    mensaje = entradas.get("mensaje", "")
+    if len(mensaje) > 155:
+        raise ValueError("mensaje demasiado largo para el parser")
+    return clasificar(entradas)
+
+
+# El evaluador que escribe todo el mundo la primera vez.
+def acierto_ingenuo(outputs: dict, reference_outputs: dict) -> dict:
+    return {"key": "acierto",
+            "score": float(outputs["categoria"] == reference_outputs["categoria"])}
+
+
+# El mismo, con una guarda. Ojo a cuál: el apartado siguiente enseña que la que sale
+# natural —`(outputs or {})`— no sirve de nada aquí.
+def acierto_cuidadoso(outputs: dict, reference_outputs: dict) -> dict:
+    return {"key": "acierto",
+            "score": float((outputs or {}).get("categoria") == reference_outputs["categoria"])}
+
+
+import contextlib, io
+
+separador("el mismo sistema frágil, medido de dos formas")
+for nombre, evaluador in [("evaluador ingenuo  ", acierto_ingenuo),
+                          ("evaluador cuidadoso", acierto_cuidadoso)]:
+    with contextlib.redirect_stderr(io.StringIO()):     # el SDK vuelca el traceback
+        r = experimento_local(clasificador_fragil, CONJUNTO, evaluadores=[evaluador])
+        filas = list(r)
+        puntuadas = sum(len(f["evaluation_results"]["results"]) for f in filas)
+        media = resumen_del_experimento(r)["acierto"]
+    con_error = sum(1 for f in filas if f["run"].error)
+    print(f"  {nombre}  casos: {len(filas)}  reventados: {con_error}  "
+          f"puntuados: {puntuadas}  ->  acierto {media:.0%}")
+
+#%%md
+Lee esos dos números otra vez.
+
+**El mismo sistema, sobre el mismo conjunto, saca una nota muy distinta según cómo
+escribiste el evaluador.** Y la nota alta es la del evaluador ingenuo.
+
+La mecánica, que es una cadena de tres cosas razonables que juntas mienten:
+
+1. El objetivo lanza una excepción. `evaluate()` **no se detiene** —correcto: no quieres
+   perder un experimento de media hora por un caso—, marca esa fila con `error` y pone
+   sus `outputs` a `{"output": None}`.
+2. Se llama al evaluador igualmente. El ingenuo hace `outputs["categoria"]` sobre ese
+   diccionario y **lanza `KeyError`**.
+3. El error del evaluador también se captura. Esa fila **se queda sin puntuación**, y la
+   media se calcula sobre las que sí la tienen.
+
+Resultado: **los casos que tu sistema no supo resolver desaparecen del promedio**. Cuanto
+más frágil sea tu sistema, mejor nota saca.
+
+### La guarda que no guarda
+
+Fíjate en el paso 1, porque aquí hay una trampa dentro de la trampa. Los `outputs` de una
+fila reventada **no son `None`**: son `{"output": None}`, un diccionario con una clave.
+
+Eso importa mucho, porque el reflejo defensivo de cualquiera es escribir
+`(outputs or {})`. Y `{"output": None}` **es verdadero**, así que ese idioma no hace
+absolutamente nada. Comparémoslos:
+
+#%%py
+def indexa(outputs, reference_outputs):
+    return {"key": "acierto",
+            "score": float(outputs["categoria"] == reference_outputs["categoria"])}
+
+def con_or(outputs, reference_outputs):
+    return {"key": "acierto",
+            "score": float((outputs or {})["categoria"] == reference_outputs["categoria"])}
+
+def con_get(outputs, reference_outputs):
+    return {"key": "acierto",
+            "score": float((outputs or {}).get("categoria") == reference_outputs["categoria"])}
+
+for etiqueta, evaluador in [("outputs['categoria']        ", indexa),
+                            ("(outputs or {})['categoria']", con_or),
+                            ("(outputs or {}).get(...)    ", con_get)]:
+    with contextlib.redirect_stderr(io.StringIO()):
+        r = experimento_local(clasificador_fragil, CONJUNTO, evaluadores=[evaluador])
+        filas = list(r)
+        puntuadas = sum(len(f["evaluation_results"]["results"]) for f in filas)
+        media = resumen_del_experimento(r)["acierto"]
+    print(f"  {etiqueta}  puntuadas {puntuadas}/{len(filas)}  ->  acierto {media:.0%}")
+
+#%%md
+**`or {}` no cambia nada.** La única de las tres que puntúa los 32 casos es la del
+`.get()`, porque es la única que tolera que la clave no esté.
+
+> **La regla, ahora sí:** en un evaluador, **accede a `outputs` con `.get()`**, nunca por
+> índice. Y todo experimento tiene que mirar **cuántas filas se puntuaron**, no solo la
+> media: si `puntuadas < casos`, la media que estás leyendo es de otro conjunto más fácil.
+
+#%%py
+def informe(resultados) -> dict:
+    """Lo que hay que mirar SIEMPRE, no solo la media.
+
+    La cobertura se cuenta **por métrica**: cuántos casos tienen puntuación de la
+    métrica que menos casos ha puntuado. Contar el total de resultados no vale cuando
+    hay más de un evaluador, porque unos tapan a otros.
+    """
+    import collections
+
+    filas = list(resultados)
+    con_error = [f for f in filas if f["run"].error]
+
+    por_metrica: collections.Counter = collections.Counter()
+    for fila in filas:
+        for resultado in fila["evaluation_results"]["results"]:
+            por_metrica[resultado.key] += 1
+
+    puntuados = min(por_metrica.values()) if por_metrica else 0
+    return {
+        "casos": len(filas),
+        "reventados": len(con_error),
+        "sin_puntuar": len(filas) - puntuados,
+        "cobertura": f"{100 * puntuados / len(filas):.0f} %",
+        **{k: round(v, 3) for k, v in resumen_del_experimento(resultados).items()},
+    }
+
+
+with contextlib.redirect_stderr(io.StringIO()):
+    print("frágil + ingenuo   :", informe(
+        experimento_local(clasificador_fragil, CONJUNTO, evaluadores=[acierto_ingenuo])))
+    print("frágil + cuidadoso :", informe(
+        experimento_local(clasificador_fragil, CONJUNTO, evaluadores=[acierto_cuidadoso])))
+    print("robusto + cuidadoso:", informe(
+        experimento_local(clasificar, CONJUNTO, evaluadores=[acierto_cuidadoso])))
+
+#%%md
+Con la cobertura delante, el primero se delata solo: una nota altísima sobre una
+cobertura pobre no es un buen resultado, es un experimento que no midió lo que crees.
+
+#%%md
+## 3. Un evaluador que se cae desaparece de la vista
+
+El mismo mecanismo, un paso más allá. ¿Qué pasa si el que falla es tu juez?
+
+#%%py
+def juez_que_se_cae(outputs: dict, reference_outputs: dict) -> dict:
+    raise RuntimeError("el servicio del juez devolvió 500")
+
+with contextlib.redirect_stderr(io.StringIO()):
+    r = experimento_local(clasificar, CONJUNTO,
+                          evaluadores=[acierto_cuidadoso, juez_que_se_cae])
+    print("métricas que ves:", resumen_del_experimento(r))
+
+#%%md
+**La métrica del juez no aparece.** Ni un cero, ni un `null`, ni un aviso: simplemente no
+está en la lista.
+
+Si tu panel muestra «calidad: 0,87» y el juez se cayó a mitad del experimento, verás la
+media de los que sí respondieron, que serán los casos que llegaron primero. Y si se cayó
+del todo, la fila desaparece del panel y nadie mira las filas que faltan.
+
+> **Comprueba siempre que están todas las métricas que esperabas.** Es una línea:
+> `assert set(esperadas) <= set(resumen)`. En la CI, es lo que separa «el juez dice que
+> vamos bien» de «el juez lleva una semana caído».
+
+#%%md
+## 4. Los parámetros de `evaluate()`, con su coste
+
+#%%py
+import inspect
+from langsmith import evaluate
+
+for nombre, p in inspect.signature(evaluate).parameters.items():
+    if nombre in ("target", "kwargs"):
+        continue
+    print(f"  {nombre:<22} = {p.default!r}")
+
+#%%md
+Los que de verdad usas:
+
+| Parámetro | Qué hace | Lo que cuesta |
+|---|---|---|
+| `evaluators` | Puntúa **cada caso** | Un juez LLM aquí es **una traza más por caso** |
+| `summary_evaluators` | Puntúa **el experimento entero** | Se ejecuta una vez. Es donde van F1, precisión, recall |
+| `num_repetitions` | Repite todo N veces | Multiplica el coste por N. Notebook 09 |
+| `max_concurrency` | Casos en paralelo | Tiempo abajo, riesgo de límite de tasa arriba |
+| `experiment_prefix` | Nombre legible | Gratis, y lo agradeces a los tres meses |
+| `metadata` | Qué versión, qué modelo, qué prompt | Gratis, e imprescindible para comparar |
+| `upload_results` | Subir o no | Lo que usa el modo local de este curso |
+
+### `summary_evaluators`: donde van las métricas que no son medias
+
+Un evaluador normal puntúa un caso, y LangSmith promedia. Eso vale para «acertó / no
+acertó» y **no vale** para F1, precisión, recall o cualquier métrica de conjunto: la
+media de F1 por caso no es el F1.
+
+#%%py
+def f1_macro(outputs: list, reference_outputs: list) -> dict:
+    """F1 macro: la métrica de verdad de un clasificador desequilibrado.
+
+    Ve TODAS las salidas de golpe, que es lo que la hace posible.
+    """
+    import collections
+
+    clases = {r["categoria"] for r in reference_outputs}
+    f1s = []
+    for clase in clases:
+        vp = sum(o.get("categoria") == clase and r["categoria"] == clase
+                 for o, r in zip(outputs, reference_outputs))
+        fp = sum(o.get("categoria") == clase and r["categoria"] != clase
+                 for o, r in zip(outputs, reference_outputs))
+        fn = sum(o.get("categoria") != clase and r["categoria"] == clase
+                 for o, r in zip(outputs, reference_outputs))
+        precision = vp / (vp + fp) if vp + fp else 0.0
+        cobertura = vp / (vp + fn) if vp + fn else 0.0
+        f1s.append(2 * precision * cobertura / (precision + cobertura)
+                   if precision + cobertura else 0.0)
+    return {"key": "f1_macro", "score": sum(f1s) / len(f1s)}
+
+
+r = experimento_local(clasificar, CONJUNTO, evaluadores=[acierto_cuidadoso],
+                      evaluadores_de_resumen=[f1_macro])
+print(resumen_del_experimento(r))
+
+#%%md
+El acierto y el F1 macro cuentan cosas distintas, y la diferencia entre los dos te dice
+si tu sistema va bien **en todas las clases** o solo en las fáciles. Un acierto alto con
+un F1 macro bajo significa que hay categorías que no aciertas nunca.
+
+### La concurrencia, medida
+
+#%%py
+import time
+
+def clasificador_con_latencia(entradas: dict) -> dict:
+    time.sleep(0.03)              # como si llamara a un modelo
+    return clasificar(entradas)
+
+for concurrencia in (1, 4, 16):
+    inicio = time.time()
+    list(experimento_local(clasificador_con_latencia, CONJUNTO,
+                           evaluadores=[acierto_cuidadoso], max_concurrency=concurrencia))
+    print(f"  max_concurrency={concurrencia:<3} {time.time() - inicio:5.2f} s "
+          f"para {len(CONJUNTO)} casos")
+
+#%%md
+La diferencia es real y grande. Pero antes de subirla a 16 en producción:
+
+- **Los límites de tasa del proveedor.** Dieciséis peticiones a la vez a la API de un
+  modelo es la forma más rápida de comerse un 429. El curso de LangGraph trata esto en su
+  notebook 29 con `InMemoryRateLimiter`, y aquí aplica igual.
+- **El coste no baja.** Solo el tiempo. Las mismas llamadas, más juntas.
+- **Los tiempos por caso dejan de ser comparables** si tu sistema comparte recursos.
+
+Para el conjunto rápido de 30-50 casos, `max_concurrency=4` es un punto sensato.
+
+#%%md
+## 5. Comparar dos experimentos
+
+Un número solo no dice nada. «Acierto 58 %» ¿es bueno? Depende de qué había antes.
+
+#%%py
+PISTAS_V2 = {
+    **PISTAS,
+    # Pistas nuevas para las dos categorías que v1 acierta peor, sacadas de mirar sus
+    # fallos: es exactamente lo que haría cualquiera.
+    "bug_producto": PISTAS["bug_producto"] + (
+        "desaparec", "sale vacía", "0 bytes", "no cargan", "en blanco",
+        "se pierden", "antes funcionaba"),
+    "solicitud_funcionalidad": PISTAS["solicitud_funcionalidad"] + (
+        "nos vendría bien", "necesitaríamos", "echamos de menos", "echo en falta",
+        "hoja de ruta", "me gustaría", "estaría bien"),
+}
+
+def clasificar_v2(entradas: dict) -> dict:
+    """Igual que v1, con pistas nuevas para las dos categorías que v1 acierta peor.
+
+    Es el cambio típico: alguien mira los fallos, añade reglas para lo que falla, y
+    hay que comprobar que no rompió lo que iba bien.
+    """
+    texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+    puntos = {c: sum(p in texto for p in pistas) for c, pistas in PISTAS_V2.items()}
+    mejor = max(puntos, key=puntos.get)
+    return {"categoria": mejor if puntos[mejor] else "otros"}
+
+
+comparacion = {}
+for etiqueta, sistema in [("v1", clasificar), ("v2 (pistas nuevas)", clasificar_v2)]:
+    r = experimento_local(sistema, CONJUNTO, evaluadores=[acierto_cuidadoso],
+                          evaluadores_de_resumen=[f1_macro],
+                          prefijo=etiqueta.replace(" ", "-"))
+    comparacion[etiqueta] = {**informe(r)}
+
+for etiqueta, datos in comparacion.items():
+    print(f"  {etiqueta:<16} acierto={datos['acierto']:.3f}  "
+          f"f1_macro={datos['f1_macro (resumen)']:.3f}  cobertura={datos['cobertura']}")
+
+#%%md
+Con dos números por sistema ya se puede decidir. Pero **la media esconde el movimiento**:
+un experimento puede subir dos décimas de acierto arreglando cinco casos y rompiendo tres.
+
+Lo que hay que mirar es **qué casos cambiaron de resultado**, y en qué dirección.
+
+#%%py
+def casos_que_cambian(sistema_a, sistema_b, conjunto, evaluador):
+    """Qué se arregló y qué se rompió, caso a caso. Lo que la media no dice."""
+    def por_caso(sistema):
+        filas = list(experimento_local(sistema, conjunto, evaluadores=[evaluador]))
+        return {str(f["example"].id): (f["evaluation_results"]["results"][0].score
+                                       if f["evaluation_results"]["results"] else None)
+                for f in filas}
+
+    a, b = por_caso(sistema_a), por_caso(sistema_b)
+    arreglados = [k for k in a if not a[k] and b.get(k)]
+    rotos = [k for k in a if a[k] and not b.get(k)]
+    return arreglados, rotos
+
+
+arreglados, rotos = casos_que_cambian(clasificar, clasificar_v2, CONJUNTO, acierto_cuidadoso)
+print(f"casos arreglados por v2 : {len(arreglados)}")
+print(f"casos ROTOS por v2      : {len(rotos)}")
+print(f"movimiento neto         : {len(arreglados) - len(rotos)} "
+      f"(y la media solo te enseña esto)")
+
+#%%md
+Aquí v2 sale bien parada: **arregla seis y no rompe ninguno**. Ese es el resultado que
+quieres ver antes de desplegar, y es distinto de «subió la media».
+
+Porque la media no los distingue. Un cambio que arregla 7 y rompe 5 da un neto de +2, y
+uno que arregla 2 y no rompe ninguno también. **Las dos medias son idénticas y los dos
+cambios no se parecen en nada**: el primero mete cinco regresiones en producción.
+
+Los casos **rotos** son los que hay que mirar uno a uno. En la interfaz de LangSmith esto
+es la vista de comparación; en local, esta función de diez líneas.
+
+#%%py
+@online("Comparar dos experimentos en el servicio", trazas=0)
+def _():
+    """Con el servicio la comparación es lo que aporta el historial.
+
+    `evaluate_comparative` va más allá: en vez de puntuar cada sistema por separado,
+    pone las dos respuestas delante de un juez y le pregunta cuál es mejor. Es lo que
+    hace falta cuando no hay respuesta de referencia — el notebook 09 lo trata.
+    """
+    from langsmith import evaluate
+
+    c = cliente()
+    for nombre, sistema in [("clasificador-v1", clasificar), ("clasificador-v2", clasificar_v2)]:
+        evaluate(
+            sistema,
+            data=c.list_examples(dataset_name="tickets-clasificacion", as_of="v1"),
+            evaluators=[acierto_cuidadoso],
+            summary_evaluators=[f1_macro],
+            experiment_prefix=nombre,
+            metadata={"version": nombre, "conjunto": "v1"},   # para poder filtrar luego
+            max_concurrency=4,
+            client=c,
+        )
+    print("  en la interfaz: selecciona los dos experimentos -> Compare")
+
+#%%md
+> **Detalle del modo local que conviene saber:** con `upload_results=False`,
+> **`experiment_prefix` se ignora** y `experiment_name` devuelve un nombre aleatorio. Sin
+> subida no hay experimento que nombrar. En local, la etiqueta la pones tú en tu propio
+> diccionario, como en el apartado 5.
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — Una CI que no se deja engañar
+
+Escribe `comprobar_experimento(resultados, esperadas, minimos)` que falle —lanzando
+`AssertionError`— si se da cualquiera de estas cuatro cosas:
+
+1. Alguna métrica esperada **no está** (el juez se cayó).
+2. La **cobertura** es menor del 100 % (hay casos sin puntuar).
+3. Alguna métrica está por debajo de su mínimo.
+4. Hay **casos reventados**.
+
+Es la función que va en la CI, y las cuatro comprobaciones vienen de este notebook.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def comprobar_experimento(resultados, *, esperadas: set[str], minimos: dict[str, float]):
+    datos = informe(resultados)
+
+    faltan = esperadas - {k.replace(" (resumen)", "") for k in datos}
+    assert not faltan, f"métricas ausentes (¿se cayó el juez?): {sorted(faltan)}"
+
+    assert datos["sin_puntuar"] == 0, (
+        f"{datos['sin_puntuar']} caso(s) sin puntuar de {datos['casos']}: "
+        "la media que estás leyendo es de un conjunto más fácil")
+
+    assert datos["reventados"] == 0, (
+        f"{datos['reventados']} caso(s) reventaron: arréglalos antes de mirar la nota")
+
+    for metrica, minimo in minimos.items():
+        valor = datos.get(metrica, datos.get(f"{metrica} (resumen)"))
+        assert valor is not None and valor >= minimo, \
+            f"{metrica}={valor} por debajo del mínimo {minimo}"
+
+    return datos
+
+
+# El juez tiene que estar en la lista de esperadas: si no, su ausencia no se nota.
+# Es la mitad de la comprobación, y la que se olvida.
+def juez_de_tono(outputs: dict, reference_outputs: dict) -> dict:
+    """Un juez que funciona, para tener el caso bueno con el que comparar."""
+    return {"key": "tono", "score": 1.0}
+
+ESPERADAS = {"acierto", "f1_macro", "tono"}
+MINIMOS = {"acierto": 0.4, "f1_macro": 0.3}
+
+separador("la CI sobre tres sistemas")
+for nombre, sistema, evaluador, juez in [
+    ("robusto + cuidadoso", clasificar,          acierto_cuidadoso, juez_de_tono),
+    ("frágil  + ingenuo  ", clasificador_fragil, acierto_ingenuo,   juez_de_tono),
+    ("robusto + juez roto", clasificar,          acierto_cuidadoso, juez_que_se_cae),
+]:
+    with contextlib.redirect_stderr(io.StringIO()):
+        r = experimento_local(sistema, CONJUNTO, evaluadores=[evaluador, juez],
+                              evaluadores_de_resumen=[f1_macro])
+        try:
+            comprobar_experimento(r, esperadas=ESPERADAS, minimos=MINIMOS)
+            veredicto = "PASA"
+        except AssertionError as e:
+            veredicto = f"FALLA — {e}"
+    print(f"  {nombre}: {veredicto}")
+
+#%%md
+El segundo es el importante: **habría pasado cualquier umbral de acierto** —sacaba una
+nota altísima— y falla aquí por la razón correcta, que no es la nota sino la cobertura.
+
+El tercero falla porque su juez se cayó, aunque el acierto esté perfecto. Sin esa
+comprobación, tu CI habría dado luz verde durante semanas con una métrica que no se
+estaba calculando.
+
+Ninguna de las dos cosas se ve mirando la media.
+
+</details>
+
+#%%md
+### Ejercicio 2 — ¿Cuánto de la mejora es real?
+
+`clasificar_v2` mejora sobre `clasificar`. Antes de creértelo, comprueba **de dónde sale
+la mejora**: ¿acierta más en todas las categorías, o solo en una?
+
+Escribe `desglose_por_clase(sistema, conjunto)` y compáralas.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import collections
+
+def desglose_por_clase(sistema, conjunto):
+    aciertos = collections.Counter()
+    totales = collections.Counter()
+    for fila in experimento_local(sistema, conjunto, evaluadores=[acierto_cuidadoso]):
+        esperada = fila["example"].outputs["categoria"]
+        obtenida = (fila["run"].outputs or {}).get("categoria")
+        totales[esperada] += 1
+        aciertos[esperada] += int(obtenida == esperada)
+    return {c: aciertos[c] / totales[c] for c in sorted(totales)}
+
+
+a = desglose_por_clase(clasificar, CONJUNTO)
+b = desglose_por_clase(clasificar_v2, CONJUNTO)
+
+print(f"{'categoría':<26}{'v1':>8}{'v2':>8}{'':>4}")
+print("-" * 48)
+for clase in a:
+    flecha = "sube" if b[clase] > a[clase] else ("BAJA" if b[clase] < a[clase] else "=")
+    print(f"{clase:<26}{a[clase]:>7.0%}{b[clase]:>8.0%}   {flecha}")
+
+peor = [c for c in a if b[c] < a[c]]
+print(f"\ncategorías que EMPEORAN con v2: {peor or 'ninguna'}")
+
+#%%md
+Aquí la respuesta es limpia: v2 sube justo las dos categorías que se propuso arreglar
+—de un 25 % a un 100 %— y **deja las otras seis exactamente igual**. Eso es un cambio
+bueno, y solo se puede afirmar mirando el desglose.
+
+La razón de mirarlo siempre es el caso contrario, que es igual de frecuente: si v2
+hubiera subido el acierto global hundiendo una categoría, habrías cambiado un problema
+por otro, y el usuario al que le importa esa categoría lo notaría aunque tu panel
+estuviera más verde.
+
+Esto es exactamente lo que mide el **F1 macro** del apartado 4, que promedia por clase
+en vez de por caso: sube solo si mejoras de forma repartida. Por eso es la métrica que
+hay que mirar en un clasificador desequilibrado, y el acierto es la que hay que mirar con
+desconfianza.
+
+</details>
+
+#%%md
+## 7. Resumen
+
+- Un experimento es **objetivo × dataset × evaluadores**. El objetivo puede ser una
+  función, un `Runnable`, o **un experimento anterior** — esta última reevalúa sin
+  volver a pagar la ejecución.
+- Los evaluadores reciben sus argumentos **por nombre**: `inputs`, `outputs`,
+  `reference_outputs`, `run`, `example`. En inglés, aunque tu código esté en español.
+- **Un sistema que revienta saca mejor nota de la que merece.** El objetivo falla, sus
+  `outputs` pasan a ser `{"output": None}`, el evaluador ingenuo lanza `KeyError` al
+  indexarlos, ese error también se captura, y la fila desaparece del promedio.
+- Y la guarda que sale natural, `(outputs or {})`, **no sirve**: ese diccionario es
+  verdadero. Accede con **`.get()`**, y **mira siempre la cobertura**, no solo la media.
+- **Un evaluador que se cae desaparece de los resultados** sin dejar rastro. Comprueba
+  que están todas las métricas que esperabas.
+- `summary_evaluators` es donde van F1, precisión y recall: la media de F1 por caso no es
+  el F1.
+- `max_concurrency` baja el tiempo mucho y el coste nada, y te acerca a los límites de
+  tasa del proveedor.
+- Comparar es mirar **qué casos se arreglaron y cuáles se rompieron**, no restar dos
+  medias. Un «+2 neto» que rompe 5 casos no es lo mismo que un «+2» que no rompe ninguno.
+
+**Siguiente:** [`08_evaluadores`](08_evaluadores.ipynb) — hasta aquí el evaluador era una
+comparación exacta. La mayoría de las respuestas no se comparan así, y ahí empiezan los
+jueces LLM.
