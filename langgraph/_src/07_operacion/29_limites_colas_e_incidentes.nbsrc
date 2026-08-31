@@ -756,5 +756,5 @@ bucle — que es el fallo clásico de configurar las dos sondas con la misma URL
 - El *runbook* que sirve **se ejecuta**: hilos a medias sin humano detrás es la fila que
   importa, y el barredor que los reanuda va con tope.
 
-**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría de
-producción que junta todo el módulo en una lista que se ejecuta.
+**Siguiente:** [`30_el_resto_de_produccion.ipynb`](30_el_resto_de_produccion.ipynb) — datos
+personales, coste por cliente, cambio de modelo y continuidad: lo que no cubre ningún otro.

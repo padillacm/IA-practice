@@ -1,0 +1,777 @@
+#%%md
+# 30 · El resto de producción: datos, dinero y cambio
+
+**Módulo 7 · Operación real** — *tiempo estimado: 1 h 45 min*
+
+Los notebooks 15 a 29 cubren cómo hacer que el sistema funcione, aguante, se despliegue y se
+mida. Queda una capa que no es de ingeniería del agente sino de **operar un producto**: qué
+datos guardas y durante cuánto, quién paga qué, y cómo cambias de modelo sin que se note.
+
+Son temas que se resuelven mal cuando se resuelven tarde: el día que llega la petición de
+borrado o la factura sorpresa, la decisión ya está tomada por el código que escribiste hace
+seis meses.
+
+Este notebook es deliberadamente el más recopilatorio del curso. Aun así, dos de sus
+afirmaciones se miden en vez de suponerse, y la primera contradice lo que la mayoría da por
+hecho al montar redacción de datos personales.
+
+Al terminar sabrás:
+
+1. Por qué `PIIMiddleware` **no protege tu base de datos**, y dónde sí hay que redactar.
+2. Implementar el derecho al olvido de verdad, en las tres capas donde acaban los datos.
+3. Atribuir el coste a cada cliente, y ponerle un tope.
+4. Cambiar de modelo o de proveedor sin descubrirlo en producción.
+5. Qué respaldar, qué medir como SLO y cómo actualizar dependencias sin miedo.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m7")
+
+#%%md
+## 0. Dónde encaja esto
+
+Para que quede claro qué es nuevo y qué no, el mapa de la parte de producción:
+
+| Preocupación | Dónde está |
+|---|---|
+| Que no se caiga | 15 · fiabilidad, 29 · límites |
+| Que se pueda probar | 17 · evaluación, 27 · trayectorias |
+| Que se pueda desplegar | 18 · despliegue, 28 · ciclo de vida |
+| Que no se dispare el coste | 19 · caché de prefijo, 23 · persistencia |
+| Que no lo rompa un atacante | 19 · inyección, 25 · autenticación |
+| Que otros lo usen | 26 · MCP y A2A |
+| **Qué datos guardas y de quién** | **este** |
+| **Quién paga qué** | **este** |
+| **Cómo cambias de modelo** | **este** |
+| **Qué pasa si se pierde la base de datos** | **este** |
+
+## 1. Datos personales: dónde acaban de verdad
+
+El notebook 07 presentó `PIIMiddleware` como una pieza del sistema de middleware. Aquí lo
+miramos desde la única pregunta que importa en producción: **¿qué queda escrito en disco?**
+
+#%%py
+import re
+import sqlite3
+
+from langchain.agents import create_agent
+from langchain.agents.middleware import PIIMiddleware
+from langgraph.checkpoint.sqlite import SqliteSaver
+
+CORREO = "ana@ejemplo.com"
+MENSAJE = f"mi correo es {CORREO} y quiero cancelar"
+
+
+def bytes_del_almacen(conexion: sqlite3.Connection) -> bytes:
+    """Todo lo que hay escrito, tal cual está en las tablas."""
+    trozos = []
+    for consulta in ("SELECT checkpoint FROM checkpoints", "SELECT value FROM writes"):
+        for (valor,) in conexion.execute(consulta):
+            trozos.append(valor if isinstance(valor, bytes) else str(valor).encode())
+    return b"".join(trozos)
+
+
+con_middleware = sqlite3.connect(":memory:", check_same_thread=False)
+agente = create_agent(
+    model=llm(),
+    tools=[],
+    middleware=[PIIMiddleware("email", strategy="redact", apply_to_input=True)],
+    checkpointer=SqliteSaver(con_middleware),
+)
+resultado = agente.invoke({"messages": [{"role": "user", "content": MENSAJE}]},
+                          {"configurable": {"thread_id": "con-middleware"}})
+
+print("lo que ves en el estado:")
+for mensaje in resultado["messages"]:
+    print(f"   {type(mensaje).__name__:14s} {mensaje.content!r}"[:90])
+
+crudo = bytes_del_almacen(con_middleware)
+print(f"\n¿el correo original está en el checkpoint? {CORREO.encode() in crudo}")
+print(f"¿está también la versión redactada?        {b'[REDACTED_EMAIL]' in crudo}")
+
+#%%md
+Ahí está la trampa, y es de las caras:
+
+- **El estado se ve limpio.** `[REDACTED_EMAIL]`, como esperabas.
+- **El correo original está en la base de datos.** Las dos cosas conviven.
+
+`PIIMiddleware` intercepta la conversación **camino del modelo**: protege lo que sale hacia
+el proveedor, que es un objetivo legítimo. Lo que **no** hace es evitar que la entrada
+original se persista, porque el estado inicial ya se escribió antes de que el middleware
+entrara en juego.
+
+Si tu obligación es sobre lo que el proveedor ve, el middleware basta. Si es sobre lo que
+**almacenas** —que es lo que pregunta una auditoría, y lo que se filtra si alguien se lleva
+la tabla— hace falta redactar antes.
+
+#%%py
+def redactar(texto: str) -> str:
+    """Redacción en el borde: antes de que el texto entre al grafo.
+
+    Deliberadamente tosca. En producción se usa un detector de verdad (Presidio, el del
+    proveedor de nube, o el `detector=` de PIIMiddleware). Lo que importa aquí es DÓNDE
+    se aplica, no con qué.
+    """
+    texto = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[correo]", texto)
+    texto = re.sub(r"\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b", "[tarjeta]", texto)
+    return texto
+
+
+con_borde = sqlite3.connect(":memory:", check_same_thread=False)
+agente_limpio = create_agent(model=llm(), tools=[], checkpointer=SqliteSaver(con_borde))
+agente_limpio.invoke({"messages": [{"role": "user", "content": redactar(MENSAJE)}]},
+                     {"configurable": {"thread_id": "en-el-borde"}})
+
+print("redactando en el borde, antes de invocar:")
+print(f"  ¿el correo original está en el checkpoint? "
+      f"{CORREO.encode() in bytes_del_almacen(con_borde)}")
+
+#%%md
+### 1.1 Las tres capas donde acaban tus datos
+
+Y aunque redactes en el borde, el dato de un usuario acaba en más sitios de los que uno
+recuerda. Esta es la lista que hay que tener delante al diseñar la retención:
+
+| Capa | Qué guarda | Se limpia con |
+|---|---|---|
+| **Checkpointer** | El estado completo de cada superpaso, mensajes incluidos | `delete_thread` (sección 2) y el TTL del notebook 23 |
+| **Store** | Memorias de largo plazo por `namespace` | `store.delete`, namespace por usuario (nb 25) |
+| **Trazas** (LangSmith, OTel) | Prompts y respuestas, fuera de tu base de datos | La retención del proveedor de trazas, o no enviar el contenido (nb 17) |
+
+La tercera es la que se olvida siempre. Borras el hilo, borras la memoria, y los prompts
+siguen en el sistema de trazas de un tercero durante el tiempo que diga *su* política. Si el
+dato es sensible, la decisión de si el contenido se manda a las trazas hay que tomarla
+**explícitamente**, no por defecto.
+
+#%%md
+## 2. El derecho al olvido, implementado
+
+*"Bórrame."* Es una petición legítima y con plazo legal, y hay una complicación real: los
+hilos se identifican por `thread_id`, no por usuario. Si no lo previste, no sabes cuáles son
+suyos.
+
+La forma de preverlo es **etiquetar el hilo con el usuario al invocar**, en la `metadata`
+del `config`.
+
+#%%py
+import operator
+from typing import Annotated
+
+from typing_extensions import TypedDict
+
+from langgraph.graph import END, START, StateGraph
+from langgraph.store.memory import InMemoryStore
+
+
+class EstadoConversacion(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+
+
+bd = sqlite3.connect(":memory:", check_same_thread=False)
+almacen = SqliteSaver(bd)
+memoria = InMemoryStore()
+
+conversacion = (
+    StateGraph(EstadoConversacion)
+    .add_node("responder", lambda estado: {"pasos": ["respondido"]})
+    .add_edge(START, "responder")
+    .add_edge("responder", END)
+    .compile(checkpointer=almacen, store=memoria)
+)
+
+USUARIOS = {"u-ana": ["hilo-1", "hilo-2"], "u-luis": ["hilo-3"]}
+
+for usuario, hilos in USUARIOS.items():
+    for id_hilo in hilos:
+        conversacion.invoke(
+            {"pasos": []},
+            {"configurable": {"thread_id": id_hilo},
+             "metadata": {"id_usuario": usuario}},      # <- la etiqueta que lo hace posible
+        )
+    memoria.put((usuario, "recuerdos"), "preferencias", {"idioma": "es"})
+
+print("checkpoints escritos:", bd.execute("SELECT count(*) FROM checkpoints").fetchone()[0])
+
+#%%py
+# Primera sorpresa: la metadata NO se puede buscar con SQL a pelo.
+por_sql = bd.execute(
+    "SELECT DISTINCT thread_id FROM checkpoints WHERE metadata LIKE ?", ("%u-ana%",)).fetchall()
+print("buscando con SQL `LIKE`      :", [f[0] for f in por_sql] or "nada")
+
+# Porque está serializada, no en texto plano. La forma correcta es el propio checkpointer:
+def hilos_de(usuario: str) -> list[str]:
+    return sorted({t.config["configurable"]["thread_id"]
+                   for t in almacen.list(None, filter={"id_usuario": usuario})})
+
+
+print("con checkpointer.list(filter):", hilos_de("u-ana"))
+
+#%%md
+> **Por qué falla el `LIKE`:** la columna `metadata` guarda la estructura **serializada**,
+> no JSON en texto. Buscar dentro con `LIKE` devuelve vacío aunque el valor esté ahí — que
+> es el peor resultado posible, porque parece que el usuario no tiene datos. Usa
+> `checkpointer.list(..., filter=...)`, que sabe deserializar.
+>
+> En Postgres, `metadata` **sí** es `jsonb` y se puede consultar con `metadata->>'id_usuario'`.
+> Es una diferencia entre backends que conviene conocer antes de escribir el borrado.
+
+#%%py
+def borrar_usuario(usuario: str, checkpointer, store) -> dict:
+    """Borrado en las dos capas que controlas. La tercera (trazas) no vive aquí.
+
+    Devuelve un recibo: en un borrado por RGPD hay que poder demostrar qué se borró.
+    """
+    hilos = sorted({t.config["configurable"]["thread_id"]
+                    for t in checkpointer.list(None, filter={"id_usuario": usuario})})
+    for id_hilo in hilos:
+        checkpointer.delete_thread(id_hilo)
+
+    memorias = []
+    for espacio in (("recuerdos",), ("preferencias",), ()):
+        for elemento in store.search((usuario, *espacio)):
+            store.delete((usuario, *espacio), elemento.key)
+            memorias.append("/".join((usuario, *espacio, elemento.key)))
+
+    return {"usuario": usuario, "hilos_borrados": hilos, "memorias_borradas": memorias}
+
+
+print("antes  · u-ana:", hilos_de("u-ana"),
+      "| memorias:", [n.key for n in memoria.search(("u-ana", "recuerdos"))])
+
+recibo = borrar_usuario("u-ana", almacen, memoria)
+print("\nrecibo :", recibo)
+
+print("\ndespués · u-ana:", hilos_de("u-ana") or "nada",
+      "| memorias:", [n.key for n in memoria.search(("u-ana", "recuerdos"))] or "nada")
+print("        · u-luis intacto:", hilos_de("u-luis"))
+print("        · filas restantes:",
+      bd.execute("SELECT count(*) FROM checkpoints").fetchone()[0], "checkpoints,",
+      bd.execute("SELECT count(*) FROM writes").fetchone()[0], "writes")
+
+#%%md
+`delete_thread` limpia **checkpoints y writes** del hilo, y no toca a los demás usuarios.
+
+Y ahora la parte que no resuelve ninguna función, porque es de proceso:
+
+| Lo que se olvida | Qué hacer |
+|---|---|
+| Las **trazas** en LangSmith / tu colector | Tienen su propia retención. Si el dato es sensible, decide si el contenido se envía |
+| Los **registros de aplicación** | Un `logger.info(f"consulta: {texto}")` es una copia de los datos personales |
+| Las **copias de seguridad** | Restaurar una copia de ayer resucita al usuario borrado. Documenta la ventana |
+| Los **datos derivados** | Índices vectoriales, resúmenes, conjuntos de evaluación |
+| El **recibo** | Guarda que borraste, cuándo y qué. Sin el recibo no puedes demostrar que cumpliste |
+
+Ese último punto tiene una tensión que hay que resolver a conciencia: el recibo **no puede
+contener** los datos que borraste. Guarda identificadores y recuentos, no contenido.
+
+#%%md
+## 3. Quién paga qué
+
+Un agente multicliente sin atribución de coste es una factura que no se puede explicar. Y la
+pieza que hace falta ya la tienes: `usage_metadata` (nb 19) más la `metadata` del `config`
+(sección 2).
+
+#%%py
+from dataclasses import dataclass, field
+
+# Precios de ejemplo por millón de tokens. Consulta la tarifa vigente de tu proveedor:
+# lo que enseña esta sección es la MECÁNICA, no los números.
+PRECIOS = {"gpt-4o-mini": {"entrada": 0.15, "entrada_cacheada": 0.075, "salida": 0.60}}
+
+
+def coste_de(uso: dict, modelo: str = "gpt-4o-mini") -> float:
+    """Convierte `usage_metadata` en euros, separando lo cacheado."""
+    tarifa = PRECIOS[modelo]
+    detalle = uso.get("input_token_details") or {}
+    cacheados = detalle.get("cache_read", 0)
+    entrada = uso["input_tokens"] - cacheados
+    return (entrada * tarifa["entrada"]
+            + cacheados * tarifa["entrada_cacheada"]
+            + uso["output_tokens"] * tarifa["salida"]) / 1e6
+
+
+@dataclass
+class Contabilidad:
+    """Coste acumulado por cliente. En producción esto es una tabla, no un dict."""
+
+    por_cliente: dict[str, float] = field(default_factory=dict)
+    topes: dict[str, float] = field(default_factory=dict)
+
+    def anotar(self, cliente: str, uso: dict) -> float:
+        importe = coste_de(uso)
+        self.por_cliente[cliente] = self.por_cliente.get(cliente, 0.0) + importe
+        return importe
+
+    def excedido(self, cliente: str) -> bool:
+        return self.por_cliente.get(cliente, 0.0) >= self.topes.get(cliente, float("inf"))
+
+
+libro = Contabilidad(topes={"acme": 0.05, "globex": 10.0})
+
+USOS = [
+    ("acme", {"input_tokens": 120_000, "output_tokens": 2_000,
+              "input_token_details": {"cache_read": 100_000}}),
+    ("acme", {"input_tokens": 120_000, "output_tokens": 2_000,
+              "input_token_details": {"cache_read": 100_000}}),
+    ("globex", {"input_tokens": 3_000, "output_tokens": 500, "input_token_details": {}}),
+]
+
+for cliente, uso in USOS:
+    importe = libro.anotar(cliente, uso)
+    print(f"{cliente:8s} +{importe:.5f} €   acumulado {libro.por_cliente[cliente]:.5f} €"
+          f"   {'⛔ TOPE EXCEDIDO' if libro.excedido(cliente) else ''}")
+
+print("\nY lo que cuesta lo mismo sin caché de prefijo (nb 19):")
+sin_cache = {"input_tokens": 120_000, "output_tokens": 2_000, "input_token_details": {}}
+print(f"  con caché: {coste_de(USOS[0][1]):.5f} €   sin caché: {coste_de(sin_cache):.5f} €")
+
+#%%md
+Tres decisiones de diseño que hacen que esto sirva:
+
+1. **La unidad de atribución es la petición, no el turno.** Un agente hace varias llamadas al
+   modelo por turno; hay que sumar `usage_metadata` de todos los `AIMessage`, no solo del
+   último. Es el error más común y subestima el coste por un factor de 3 a 10.
+2. **Los tokens cacheados se cobran distinto.** Si no los separas, tu contabilidad y tu
+   factura no cuadran, y no sabrás si la caché está funcionando.
+3. **El tope se comprueba *antes* de la llamada cara, no después.** Comprobarlo al final te
+   dice cuánto te has pasado; comprobarlo antes lo evita. Con el `before_model` del sistema
+   de middleware (nb 07), o con un nodo de guarda al principio del grafo.
+
+> **Y el que no se ve en `usage_metadata`:** los tokens de razonamiento van en
+> `output_token_details["reasoning"]` y se cobran como salida aunque no aparezcan en el
+> texto. Un agente que parece barato por lo que escribe puede no serlo.
+
+#%%md
+## 4. Cambiar de modelo sin descubrirlo en producción
+
+Antes o después vas a cambiar de modelo: sale uno mejor, sube el precio del tuyo, o el
+proveedor deprecia el que usas. Lo que se rompe casi nunca es lo que uno espera.
+
+| Qué cambia | Síntoma | Cómo se detecta antes |
+|---|---|---|
+| **Llamada a herramientas** | Llama a la herramienta equivocada, o no llama | Evaluación de trayectorias (nb 27), modo `superset` |
+| **Salida estructurada** | Falla la validación de Pydantic en casos raros | Conjunto dorado con esquemas estrictos (nb 17) |
+| **Ventana de contexto** | Error 400 solo con las conversaciones largas | Prueba con el p95 de longitud, no con la media |
+| **Verbosidad** | El coste sube sin que suba el tráfico | Contabilidad por cliente (sección 3) |
+| **Formato del prompt** | Peor calidad, sin ningún error | Solo lo ve la evaluación |
+| **Caché de prefijo** | Se pierde el descuento | `cache_read / input_tokens` (nb 19) |
+
+La fila que hace más daño es la penúltima: **degradación silenciosa**. No hay excepción, no
+hay alerta; simplemente las respuestas son peores. Es exactamente el fallo para el que
+existen los notebooks 17 y 27.
+
+#%%py
+print('''# El cambio de modelo, hecho bien: assistants (notebook 18) en vez de código.
+
+# 1. El assistant actual, con su modelo, apuntando a la versión en producción.
+actual = await cliente.assistants.create(
+    graph_id="soporte",
+    config={"configurable": {"model": "openai:gpt-4o-mini"}},
+    metadata={"entorno": "produccion", "version": "2026-08"},
+    name="soporte-estable")
+
+# 2. El candidato: MISMO grafo, otra configuración. Cero despliegues.
+candidato = await cliente.assistants.create(
+    graph_id="soporte",
+    config={"configurable": {"model": "openai:gpt-5-mini"}},
+    metadata={"entorno": "canario", "version": "2026-09"},
+    name="soporte-canario")
+
+# 3. El enrutado por porcentaje vive en TU capa, no en la plataforma:
+#    un hash estable del usuario decide, para que el mismo usuario vea siempre lo mismo.
+import hashlib
+
+def assistant_para(id_usuario: str, porcentaje_canario: int) -> str:
+    posicion = int(hashlib.sha256(id_usuario.encode()).hexdigest()[:8], 16) % 100
+    return candidato if posicion < porcentaje_canario else actual
+''')
+
+#%%py
+import hashlib
+
+
+def reparto(id_usuario: str, porcentaje: int) -> str:
+    posicion = int(hashlib.sha256(id_usuario.encode()).hexdigest()[:8], 16) % 100
+    return "canario" if posicion < porcentaje else "estable"
+
+
+usuarios = [f"u-{i}" for i in range(1000)]
+for porcentaje in (1, 10, 50):
+    en_canario = sum(1 for u in usuarios if reparto(u, porcentaje) == "canario")
+    print(f"{porcentaje:2d}% configurado -> {en_canario / 10:.1f}% real")
+
+# La propiedad que importa: el reparto es MONÓTONO. Quien entra en el canario ya no
+# vuelve a salir al subir el porcentaje, y nadie alterna entre versiones.
+en_el_1 = [u for u in usuarios if reparto(u, 1) == "canario"][:3]
+salen = [u for u in en_el_1 if reparto(u, 50) != "canario"]
+
+print("\nY la propiedad que importa: el reparto es ESTABLE y MONÓTONO.")
+for u in en_el_1:
+    print(f"  {u:6s} al 1%: {reparto(u, 1):8s} al 10%: {reparto(u, 10):8s} "
+          f"al 50%: {reparto(u, 50)}")
+print(f"  usuarios que ENTRAN al 1 % y luego SALEN al 50 %: {len(salen)}")
+print("  (con random() alternarían en cada petición y las métricas no compararían nada)")
+
+#%%md
+Ese hash estable es lo que separa un canario de un sorteo. Con `random()`, el mismo usuario
+vería una versión distinta en cada petición: sus conversaciones mezclarían dos modelos y las
+métricas no compararían nada.
+
+**La secuencia completa de un cambio de modelo**, que es lo único que hay que recordar:
+
+1. Conjunto dorado y trayectorias con el modelo nuevo, **offline** (nb 17 y 27).
+2. Canario al 1 %, comparando calidad **y coste** (sección 3).
+3. Subir por escalones, con un criterio de vuelta atrás escrito **antes** de empezar.
+4. La vuelta atrás es cambiar el porcentaje a 0, no un despliegue.
+
+#%%md
+## 5. Qué respaldar y cómo probarlo
+
+Tu checkpointer **es** tu base de datos de producción. Si la pierdes, pierdes todas las
+conversaciones a medias y todas las aprobaciones pendientes.
+
+| Pregunta | Qué contestar |
+|---|---|
+| **RPO** — cuántos datos puedes perder | ¿Una hora de conversaciones? ¿Cinco minutos? Decide el número |
+| **RTO** — cuánto puedes tardar en volver | Mientras tanto, ¿rechazas tráfico o arrancas en vacío? |
+| **Qué respaldar** | Checkpointer, store y la configuración de los assistants |
+| **Cada cuánto se ensaya** | Una copia que nunca se ha restaurado no es una copia |
+
+Y una particularidad de este dominio: **restaurar una copia resucita trabajo a medias**. Los
+hilos vuelven al estado que tenían en la copia, con sus interrupciones pendientes. Después de
+restaurar hay que pasar el diagnóstico del notebook 29, porque tendrás hilos parados que
+quizá ya se habían resuelto.
+
+#%%py
+import shutil
+import tempfile
+
+
+def ensayo_de_restauracion(origen: sqlite3.Connection) -> dict:
+    """Copia el almacén, lo restaura en otro sitio y comprueba que sigue sirviendo.
+
+    Es la versión mínima del ensayo. Con Postgres cambia la mecánica (`pg_dump` y
+    restauración en una instancia aparte), no la idea: **restaurar y verificar**, no solo
+    comprobar que el fichero de la copia existe.
+    """
+    destino = pathlib.Path(tempfile.mkdtemp()) / "copia.sqlite"
+    respaldo = sqlite3.connect(destino)
+    origen.backup(respaldo)                     # copia consistente, en caliente
+    respaldo.commit()
+
+    restaurado = SqliteSaver(sqlite3.connect(destino, check_same_thread=False))
+    app = (StateGraph(EstadoConversacion)
+           .add_node("responder", lambda estado: {"pasos": ["respondido"]})
+           .add_edge(START, "responder").add_edge("responder", END)
+           .compile(checkpointer=restaurado))
+
+    hilos = {t.config["configurable"]["thread_id"] for t in restaurado.list(None)}
+    parados = [h for h in hilos
+               if app.get_state({"configurable": {"thread_id": h}}).next]
+
+    return {"fichero": str(destino), "hilos recuperados": len(hilos),
+            "a medias tras restaurar": len(parados),
+            "sigue funcionando": bool(app.invoke(
+                {"pasos": []}, {"configurable": {"thread_id": "prueba-post-restauracion"}}))}
+
+
+print("ENSAYO DE RESTAURACIÓN")
+for clave, valor in ensayo_de_restauracion(bd).items():
+    print(f"  {clave:26s} {valor}")
+
+print("\n(recupera un solo hilo porque los de `u-ana` los borramos en la sección 2:")
+print(" el ensayo se hace sobre el estado real del almacén, no sobre uno de juguete)")
+
+#%%md
+## 6. SLO: medir lo que le importa al usuario
+
+La tentación es poner un SLO de latencia y disponibilidad, como en cualquier servicio. Para
+un agente eso mide poco: una respuesta rápida y equivocada cumple el SLO.
+
+| SLI | Cómo se mide | Por qué este |
+|---|---|---|
+| **Tareas completadas** | Ejecuciones que llegan a `END` sin escalar a un humano | Es lo que el usuario venía a hacer |
+| **Latencia p95 hasta el primer token** | Streaming (nb 11) | Lo que se percibe como "responde" |
+| **Tasa de escalado** | Cuántas acaban en un humano | Sube sola cuando cambian los datos (nb 17) |
+| **Coste por tarea completada** | Sección 3 dividido por tareas | La métrica de negocio, no la técnica |
+
+#%%py
+def presupuesto_de_error(objetivo: float, total: int, fallidas: int, dias: int = 30) -> dict:
+    """Cuánto margen te queda, y a qué ritmo lo estás gastando."""
+    permitidas = total * (1 - objetivo)
+    consumido = fallidas / permitidas if permitidas else float("inf")
+    return {
+        "objetivo": f"{objetivo:.1%}",
+        "fallos permitidos": round(permitidas),
+        "fallos reales": fallidas,
+        "presupuesto consumido": f"{consumido:.0%}",
+        "veredicto": ("congelar cambios y arreglar" if consumido >= 1
+                      else "margen para desplegar" if consumido < 0.5
+                      else "cuidado: consume despacio"),
+    }
+
+
+print(f"{'escenario':22s} {'consumido':>11s}  veredicto")
+print("-" * 72)
+for etiqueta, fallidas in [("mes tranquilo", 120), ("mes normal", 400), ("mes malo", 900)]:
+    r = presupuesto_de_error(objetivo=0.99, total=50_000, fallidas=fallidas)
+    print(f"{etiqueta:22s} {r['presupuesto consumido']:>11s}  {r['veredicto']}")
+
+print("""
+Para qué sirve de verdad el presupuesto de error: convierte "¿desplegamos el viernes?" en
+una pregunta con respuesta. Con el 24 % consumido, se despliega. Con el 180 %, se arregla
+lo que falla antes de tocar nada más.""")
+
+#%%md
+## 7. Actualizar dependencias sin miedo
+
+LangGraph y LangChain se mueven rápido. La pregunta no es si actualizar, es cómo hacerlo sin
+que sea una apuesta — y el curso ya tiene montada la respuesta.
+
+#%%py
+print('''# 1. Ver qué cambiaría, sin cambiar nada.
+uv lock --upgrade --dry-run
+
+# 2. Actualizar en una rama y pasar las tres etapas de la CI (notebook 28).
+uv lock --upgrade
+uv sync --all-groups
+uv run _tools/validar.py            # ¿siguen existiendo los símbolos que usas?
+uv run pytest                       # ¿siguen valiendo las invariantes?
+uv run _tools/ejecutar_notebooks.py # ¿sigue corriendo todo?
+
+# 3. Regenerar la vía de pip para que no se desincronice.
+uv run _tools/exportar_requisitos.py''')
+
+print("""
+La primera etapa es la que más sorprende: `validar.py` comprueba que **cada símbolo que
+importas existe** en la versión instalada. Es lo que detecta una API renombrada antes de
+que lo haga un usuario, y cuesta segundos.
+
+Las pruebas del módulo 7 son la segunda red, y están escritas justo para esto: fijan
+comportamientos que el material afirma. Si LangGraph cambia el número de checkpoints por
+turno o empieza a lanzar una excepción al renombrar un nodo, la prueba falla y el notebook
+correspondiente hay que revisarlo. Una prueba que falla porque el mundo mejoró es una buena
+prueba.""")
+
+#%%md
+## 8. La lista final
+
+Todo el módulo 7, en una pantalla. Es la versión larga de la lista del notebook 18, y la que
+conviene pasar antes de abrir al público.
+
+#%%py
+LISTA_FINAL = {
+    "DATOS": [
+        "Sé en qué tres capas acaban los datos de un usuario y cómo se limpia cada una",
+        "Los datos personales se redactan ANTES de invocar, no solo camino del modelo",
+        "Los hilos llevan el id de usuario en la metadata: sin eso no hay borrado posible",
+        "El borrado por usuario está implementado, probado y deja recibo sin contenido",
+        "Decidí explícitamente si los prompts se envían al sistema de trazas",
+    ],
+    "DINERO": [
+        "El coste se atribuye por cliente, sumando TODAS las llamadas del turno",
+        "Los tokens cacheados y los de razonamiento se contabilizan aparte",
+        "Hay tope por cliente, comprobado ANTES de la llamada cara",
+        "Vigilo coste por tarea completada, no coste por token",
+    ],
+    "CAMBIO": [
+        "Cambiar de modelo es cambiar un assistant, no desplegar código",
+        "El canario reparte con hash estable del usuario, no al azar",
+        "El criterio de vuelta atrás está escrito antes de empezar el despliegue",
+        "Las trayectorias y el conjunto dorado corren con el modelo nuevo ANTES del canario",
+    ],
+    "CONTINUIDAD": [
+        "RPO y RTO decididos, no heredados",
+        "La restauración se ha ensayado de verdad, no solo comprobado que el fichero existe",
+        "Tras restaurar, paso el diagnóstico de hilos a medias (nb 29)",
+        "Actualizar dependencias pasa por las tres etapas de la CI",
+    ],
+}
+
+for seccion, puntos in LISTA_FINAL.items():
+    print(f"\n{seccion}")
+    for punto in puntos:
+        print(f"  [ ] {punto}")
+
+#%%md
+## 9. Ejercicios
+
+### 9.1 El borrado que no borra
+
+Este procedimiento de borrado tiene **tres** fallos. Encuéntralos.
+
+```python
+def borrar_usuario_mal(usuario, conexion, store):
+    hilos = conexion.execute(
+        "SELECT DISTINCT thread_id FROM checkpoints WHERE metadata LIKE ?",
+        (f"%{usuario}%",)).fetchall()
+    for (h,) in hilos:
+        conexion.execute("DELETE FROM checkpoints WHERE thread_id = ?", (h,))
+    conexion.commit()
+    logger.info(f"borrado {usuario}: {hilos}")
+```
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+**1. El `LIKE` no encuentra nada.** La metadata está serializada, no en texto plano (sección
+2). En SQLite esa consulta devuelve una lista vacía y el borrado no borra nada — mientras
+registra un éxito. Hay que usar `checkpointer.list(..., filter=...)`. En Postgres, donde
+`metadata` sí es `jsonb`, funcionaría… lo que hace que el fallo dependa del backend y sea
+todavía más difícil de ver.
+
+**2. Deja huérfana la tabla `writes`.** Borra de `checkpoints` a mano en vez de usar
+`delete_thread`, así que las escrituras del hilo se quedan. Contienen los mismos mensajes.
+
+**3. Registra los datos que acaba de borrar.** Si el `thread_id` o la metadata llevan algo
+identificable, el `logger.info` es una copia nueva en otro sistema, con otra retención. El
+recibo debe llevar identificadores y recuentos, no contenido.
+
+Y una cuarta, de proceso: no toca el `store`, así que las memorias de largo plazo del
+usuario siguen ahí.
+
+#%%py
+print("comprobación del fallo 1, sobre la base de datos de este notebook:")
+print("  con LIKE            :", bd.execute(
+    "SELECT DISTINCT thread_id FROM checkpoints WHERE metadata LIKE ?",
+    ("%u-luis%",)).fetchall() or "nada (¡y sí tiene datos!)")
+print("  con list(filter=)   :", hilos_de("u-luis"))
+
+#%%md
+</details>
+
+### 9.2 Un tope que se comprueba a tiempo
+
+Escribe un nodo de guarda que rechace la ejecución **antes** de llamar al modelo si el
+cliente ha superado su tope, y demuestra que corta.
+
+#%%py
+# TU CÓDIGO AQUÍ
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+#%%py
+from dataclasses import dataclass as _dataclass
+
+from langgraph.runtime import Runtime
+
+
+@_dataclass
+class ContextoCliente:
+    id_cliente: str = "desconocido"
+
+
+class EstadoConTope(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+    rechazado: bool
+
+
+def guarda_de_presupuesto(estado: EstadoConTope, runtime: Runtime[ContextoCliente]) -> dict:
+    """Se ejecuta ANTES del nodo caro. Rechazar aquí cuesta cero tokens."""
+    cliente = runtime.context.id_cliente
+    if libro.excedido(cliente):
+        return {"rechazado": True, "pasos": [f"rechazado: {cliente} superó su tope"]}
+    return {"rechazado": False, "pasos": ["presupuesto ok"]}
+
+
+def trabajo_caro(estado: EstadoConTope) -> dict:
+    return {"pasos": ["llamada al modelo (cara)"]}
+
+
+grafo_con_tope = (
+    StateGraph(EstadoConTope, context_schema=ContextoCliente)
+    .add_node("guarda", guarda_de_presupuesto)
+    .add_node("trabajo", trabajo_caro)
+    .add_edge(START, "guarda")
+    .add_conditional_edges("guarda",
+                           lambda e: END if e["rechazado"] else "trabajo",
+                           [END, "trabajo"])
+    .add_edge("trabajo", END)
+    .compile()
+)
+
+for cliente in ("acme", "globex"):
+    resultado = grafo_con_tope.invoke({"pasos": [], "rechazado": False},
+                                      context=ContextoCliente(id_cliente=cliente))
+    print(f"{cliente:8s} acumulado {libro.por_cliente.get(cliente, 0):.5f} € "
+          f"de {libro.topes[cliente]:.2f} € -> {resultado['pasos']}")
+
+#%%md
+Fíjate en que el rechazo llega a `END` **sin pasar por el nodo caro**. Comprobar el tope
+después de la llamada te dice cuánto te has pasado; comprobarlo antes lo evita.
+
+En un agente con `create_agent`, el sitio natural es un `before_model` del sistema de
+middleware (nb 07), que además corta en cada vuelta del bucle y no solo al principio.
+
+</details>
+
+### 9.3 Diseña el cambio de modelo de tu sistema
+
+Sin programar: escribe el plan para cambiar el modelo del capstone (`P6`), respondiendo a
+
+1. ¿Qué mides **antes** del canario, y con qué notebook?
+2. ¿Qué porcentaje y durante cuánto?
+3. ¿Cuál es el criterio de vuelta atrás, **en números**?
+4. ¿Qué señal indicaría una degradación silenciosa?
+
+#%%md
+<details>
+<summary>Solución</summary>
+
+Un plan razonable, y lo que importa es que los números estén escritos antes de empezar:
+
+**1. Antes del canario.** Conjunto dorado del notebook 17 sobre los casos etiquetados, y
+trayectorias del 27 en modo `superset` para comprobar que el modelo nuevo no se salta pasos
+obligatorios. Si el sistema tiene aprobaciones, además las invariantes de trayectoria de
+grafo: que un gasto por encima del umbral siga pasando por `__interrupt__`.
+
+**2. El reparto.** 1 % durante 48 h, luego 10 % durante una semana, luego 50 %. Los saltos
+son a propósito: al 1 % detectas fallos duros; el volumen para detectar diferencias de
+calidad no lo tienes hasta el 10 %.
+
+**3. La vuelta atrás, en números.** Tres condiciones, cualquiera dispara: tasa de escalado a
+humano **+2 puntos** sobre la línea base; coste por tarea completada **+20 %**; cualquier
+subida en errores de validación de salida estructurada. Volver atrás es poner el porcentaje
+a 0 — segundos, sin despliegue.
+
+**4. La degradación silenciosa.** No la ves en los errores. Las señales, por orden de
+sensibilidad: la **tasa de escalado** (sube sin que cambie nada más), la longitud media de
+las respuestas (verbosidad distinta), y la **tasa de acierto de la caché de prefijo**, que se
+desploma si el modelo nuevo cambia el formato del prompt. Y la que siempre funciona: leer
+veinte trazas al azar.
+
+</details>
+
+## 10. Resumen
+
+- **`PIIMiddleware` protege al modelo, no a tu base de datos.** Con `apply_to_input=True` el
+  estado se ve redactado y el dato original sigue en el checkpoint. Si tu obligación es sobre
+  lo que almacenas, redacta **en el borde**, antes de invocar.
+- Los datos de un usuario acaban en **tres capas**: checkpointer, store y trazas. La tercera
+  no la borra tu código.
+- Sin `metadata` con el id de usuario al invocar, **no hay borrado posible**. Y la metadata
+  no se busca con `LIKE`: está serializada. Usa `checkpointer.list(filter=...)`; en Postgres
+  además es `jsonb`.
+- `delete_thread` limpia checkpoints **y** writes. El recibo del borrado lleva
+  identificadores, nunca contenido.
+- El coste se atribuye sumando **todas** las llamadas del turno, con los tokens cacheados y
+  los de razonamiento aparte. El tope se comprueba **antes** de la llamada cara.
+- Cambiar de modelo es cambiar un **assistant**, y el canario reparte con **hash estable**
+  del usuario: con `random()` el mismo usuario vería versiones distintas y las métricas no
+  compararían nada.
+- Lo que más daño hace al cambiar de modelo es la **degradación silenciosa**: sin errores,
+  sin alertas, solo respuestas peores.
+- Una copia que nunca se ha restaurado no es una copia. Y restaurar **resucita trabajo a
+  medias**: pasa el diagnóstico del notebook 29 después.
+- Un SLO de latencia mide poco en un agente: una respuesta rápida y equivocada lo cumple.
+  Mide **tareas completadas** y **coste por tarea completada**.
+
+**Siguiente:** [`P7_proyecto_endurecer.ipynb`](P7_proyecto_endurecer.ipynb) — la auditoría que
+convierte todo el módulo en una lista que se ejecuta.

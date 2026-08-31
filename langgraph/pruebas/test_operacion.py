@@ -857,3 +857,156 @@ def test_el_barredor_no_toca_los_hilos_que_esperan_a_un_humano():
     assert barrer() == ["cortado"], "solo debería reanudar el huérfano"
     assert app.get_state(esperando).next == ("aprobar",), "el que espera no se toca"
     assert "resolver" in app.get_state(cortado).values["pasos"]
+
+
+# ======================================================================================
+# Notebook 30 · datos, dinero y cambio
+# ======================================================================================
+def _bytes_del_almacen(conexion: sqlite3.Connection) -> bytes:
+    trozos = []
+    for consulta in ("SELECT checkpoint FROM checkpoints", "SELECT value FROM writes"):
+        for (valor,) in conexion.execute(consulta):
+            trozos.append(valor if isinstance(valor, bytes) else str(valor).encode())
+    return b"".join(trozos)
+
+
+def test_pii_middleware_no_protege_el_checkpoint():
+    """El hallazgo del notebook 30: redacta hacia el modelo, no hacia el disco.
+
+    Si algún día el dato original deja de persistirse, es una gran noticia y hay que
+    reescribir la sección 1 del notebook 30.
+    """
+    pytest.importorskip("langchain.agents.middleware")
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import PIIMiddleware
+
+    sys.path.insert(0, str(RAIZ / "_tools"))
+    import modelo_falso
+
+    correo = b"ana@ejemplo.com"
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    agente = create_agent(
+        model=modelo_falso.FakeChat(),
+        tools=[],
+        middleware=[PIIMiddleware("email", strategy="redact", apply_to_input=True)],
+        checkpointer=SqliteSaver(con),
+    )
+    resultado = agente.invoke(
+        {"messages": [{"role": "user", "content": "mi correo es ana@ejemplo.com"}]},
+        {"configurable": {"thread_id": "t"}})
+
+    assert "[REDACTED_EMAIL]" in resultado["messages"][0].content, "el estado sí se redacta"
+    assert correo in _bytes_del_almacen(con), "pero el original sigue en el checkpoint"
+
+
+def test_redactar_en_el_borde_si_protege_el_checkpoint():
+    import re
+
+    from langchain.agents import create_agent
+
+    sys.path.insert(0, str(RAIZ / "_tools"))
+    import modelo_falso
+
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    agente = create_agent(model=modelo_falso.FakeChat(), tools=[],
+                          checkpointer=SqliteSaver(con))
+    limpio = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[correo]", "mi correo es ana@ejemplo.com")
+    agente.invoke({"messages": [{"role": "user", "content": limpio}]},
+                  {"configurable": {"thread_id": "t"}})
+
+    assert b"ana@ejemplo.com" not in _bytes_del_almacen(con)
+
+
+def _grafo_con_metadata(almacen):
+    from typing_extensions import TypedDict as TD
+
+    class E(TD):
+        pasos: Annotated[list[str], operator.add]
+
+    return (StateGraph(E).add_node("n", lambda e: {"pasos": ["x"]})
+            .add_edge(START, "n").add_edge("n", END).compile(checkpointer=almacen))
+
+
+def test_la_metadata_del_config_se_persiste_y_es_filtrable():
+    """Sin esto no hay borrado por usuario posible."""
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    almacen = SqliteSaver(con)
+    app = _grafo_con_metadata(almacen)
+
+    for usuario, hilos in {"u-ana": ["h1", "h2"], "u-luis": ["h3"]}.items():
+        for h in hilos:
+            app.invoke({"pasos": []},
+                       {"configurable": {"thread_id": h}, "metadata": {"id_usuario": usuario}})
+
+    def hilos_de(usuario):
+        return sorted({t.config["configurable"]["thread_id"]
+                       for t in almacen.list(None, filter={"id_usuario": usuario})})
+
+    assert hilos_de("u-ana") == ["h1", "h2"]
+    assert hilos_de("u-luis") == ["h3"]
+
+    # Y la trampa: en SQLite la metadata NO es texto plano, así que `LIKE` no la encuentra.
+    por_like = con.execute(
+        "SELECT DISTINCT thread_id FROM checkpoints WHERE metadata LIKE ?",
+        ("%u-ana%",)).fetchall()
+    assert por_like == [], "si esto deja de estar vacío, revisar la sección 2 del nb 30"
+
+
+def test_delete_thread_limpia_checkpoints_y_writes():
+    con = sqlite3.connect(":memory:", check_same_thread=False)
+    almacen = SqliteSaver(con)
+    app = _grafo_con_metadata(almacen)
+
+    for h in ("h1", "h2"):
+        app.invoke({"pasos": []},
+                   {"configurable": {"thread_id": h}, "metadata": {"id_usuario": "u-ana"}})
+    app.invoke({"pasos": []},
+               {"configurable": {"thread_id": "h3"}, "metadata": {"id_usuario": "u-luis"}})
+
+    almacen.delete_thread("h1")
+    almacen.delete_thread("h2")
+
+    quedan_cp = {t for (t,) in con.execute("SELECT DISTINCT thread_id FROM checkpoints")}
+    quedan_w = {t for (t,) in con.execute("SELECT DISTINCT thread_id FROM writes")}
+    assert quedan_cp == {"h3"}, "no debe quedar ningún checkpoint del usuario borrado"
+    assert quedan_w == {"h3"}, "tampoco writes: por eso no se borra con SQL a mano"
+
+
+def test_el_reparto_del_canario_es_estable_y_monotono():
+    """Con `random()` el mismo usuario alternaría de versión en cada petición."""
+    import hashlib
+
+    def reparto(id_usuario: str, porcentaje: int) -> bool:
+        posicion = int(hashlib.sha256(id_usuario.encode()).hexdigest()[:8], 16) % 100
+        return posicion < porcentaje
+
+    usuarios = [f"u-{i}" for i in range(1000)]
+
+    # Estable: la misma entrada da siempre lo mismo.
+    assert all(reparto(u, 10) == reparto(u, 10) for u in usuarios)
+
+    # Monótono: quien entra al 1 % sigue dentro al 10 % y al 50 %.
+    en_el_uno = [u for u in usuarios if reparto(u, 1)]
+    assert en_el_uno, "con 1000 usuarios debería haber alguno en el 1 %"
+    assert all(reparto(u, 10) and reparto(u, 50) for u in en_el_uno)
+
+    # Y el reparto se acerca al porcentaje pedido.
+    assert 5 <= sum(reparto(u, 10) for u in usuarios) / 10 <= 15
+
+
+def test_el_coste_separa_los_tokens_cacheados():
+    """Sin separarlos, la contabilidad y la factura no cuadran."""
+    precios = {"entrada": 0.15, "entrada_cacheada": 0.075, "salida": 0.60}
+
+    def coste(uso: dict) -> float:
+        cacheados = (uso.get("input_token_details") or {}).get("cache_read", 0)
+        entrada = uso["input_tokens"] - cacheados
+        return (entrada * precios["entrada"] + cacheados * precios["entrada_cacheada"]
+                + uso["output_tokens"] * precios["salida"]) / 1e6
+
+    con_cache = {"input_tokens": 120_000, "output_tokens": 2_000,
+                 "input_token_details": {"cache_read": 100_000}}
+    sin_cache = {"input_tokens": 120_000, "output_tokens": 2_000, "input_token_details": {}}
+
+    assert coste(con_cache) < coste(sin_cache)
+    assert coste(sin_cache) / coste(con_cache) > 1.5
