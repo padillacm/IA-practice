@@ -96,62 +96,200 @@ centro de gravedad de esta rama es el otro: trazas (72 páginas), evaluación (6
 
 ---
 
+## 3 bis. Lo que salió del barrido de documentación y foros
+
+Antes de cerrar el temario hice el mismo ejercicio que dio los mejores notebooks del curso
+de LangGraph: leer la documentación entera buscando lo que no se cuenta en los tutoriales, y
+contrastarlo con lo que la gente reporta. Fuentes: las 476 páginas de la documentación
+oficial (clonadas en local), GitHub Issues de `langchain-ai/langsmith-sdk`, el foro de
+LangChain, y comparativas de terceros para la parte económica.
+
+Lo que sigue **ya está comprobado en este entorno, sin clave ni red**, salvo donde se indica.
+Esto es lo que va a alimentar la tabla «Detalles que sorprenden» del README del curso.
+
+### Hallazgo 1 · El SDK reconoce 51 variables de entorno, y la documentación cubre seis
+
+Las conté sobre el código instalado. La mayoría no aparecen en ninguna guía, y varias
+resuelven problemas reales:
+
+| Variable | Para qué | Por qué importa |
+|---|---|---|
+| `LANGSMITH_TRACING_SAMPLING_RATE` | Muestrear trazas | **La herramienta del presupuesto** (sección 2) |
+| `LANGSMITH_TEST_CACHE` | Cachear las respuestas del modelo en las pruebas | Pruebas con LLM **deterministas y gratis** en CI |
+| `LANGSMITH_TEST_TRACKING` | Correr las pruebas sin subir nada | Modo local del *plugin* de pytest |
+| `LANGSMITH_TRACING_BACKGROUND` | Enviar en primer plano | **El arreglo de las trazas que se pierden** (hallazgo 2) |
+| `LANGSMITH_REPLICAS` | Duplicar trazas a varios proyectos | Un mismo agente observado por dos equipos |
+| `LANGSMITH_RUNS_ENDPOINTS` | Enviar a varios destinos | Migrar de instancia sin perder cobertura |
+| `LANGSMITH_EXCLUDE_INPUTS_ON_PATCH` | No reenviar las entradas al cerrar el run | Ahorra ancho de banda; por defecto ya está a `True` |
+| `LANGSMITH_FAILED_TRACES_MAX_MB` | Tope del buffer de trazas fallidas | Por defecto 100 MB de tu RAM |
+| `LANGSMITH_DISABLE_RUN_COMPRESSION` | Desactivar la compresión | Depurar problemas de ingesta |
+
+Da para una sección propia en el notebook 02, y varias son la respuesta a preguntas que en
+los foros se contestan con «no se puede».
+
+### Hallazgo 2 · Las trazas se pierden si el proceso muere antes de vaciar el buffer
+
+Es **el problema número uno** en los foros: *"no me aparecen las trazas"*. La causa casi
+siempre es la misma y no es un fallo: por defecto el envío es **en segundo plano** para no
+añadir latencia. En un entorno efímero —una función serverless, un script corto, un job de
+CI— el proceso termina antes de que el hilo de envío haya salido.
+
+Tres arreglos, con sus contrapartidas, y los tres verificados como API existente:
+
+| Arreglo | Coste |
+|---|---|
+| `wait_for_all_tracers()` antes de salir | Bloquea al final; es lo correcto en un script |
+| `client.flush()` explícito | Control fino, hay que acordarse |
+| `LANGSMITH_TRACING_BACKGROUND=false` | Añade latencia a **cada** llamada |
+
+Conecta directamente con el notebook 28 del curso de LangGraph: un pod que recibe `SIGTERM`
+tiene exactamente este problema con sus trazas, y el drenaje que ya diseñamos allí tiene que
+incluir el vaciado del buffer. **Ese cruce no lo he visto documentado en ningún sitio.**
+
+### Hallazgo 3 · El muestreo es por traza completa, no por run
+
+Leyendo `_filter_for_sampling` en el cliente: cuando una traza no entra en la muestra, se
+registra su `trace_id` y **se descartan también todos sus runs hijos y los parches
+posteriores**. No existe el caso de «media traza».
+
+Es la diferencia entre un muestreo que sirve y uno que produce árboles rotos, y es lo que
+hace que `LANGSMITH_TRACING_SAMPLING_RATE=0.1` sea utilizable en producción de verdad.
+Comprobado además que el valor se valida en el constructor: fuera de `[0, 1]` lanza
+`LangSmithUserError`.
+
+### Hallazgo 4 · `hide_inputs` acepta una función, no solo un booleano
+
+La firma real es `Optional[Union[Callable[[dict], dict], bool]]`. Casi todos los ejemplos lo
+usan como interruptor, y ahí se pierde lo interesante: puedes **transformar** en vez de
+ocultar — redactar el correo y dejar el resto, quedarte con la longitud del documento en vez
+del documento.
+
+Junto al anonimizador (`create_anonymizer`, que ya comprobé que recorre estructuras anidadas)
+son las dos piezas de la sección «lo que no debe salir», y cierran el hueco que el notebook
+30 del curso de LangGraph deja abierto a propósito.
+
+### Hallazgo 5 · Hay una forma de tener pruebas con LLM deterministas y gratis
+
+`LANGSMITH_TEST_CACHE` + el extra `langsmith[vcr]` graban las respuestas del modelo en
+ficheros que se versionan. A partir de ahí las pruebas **no llaman al modelo**: son
+deterministas, gratis y rápidas, y solo cambian cuando cambias el *prompt* o el modelo.
+
+Esto merece decirse claro porque resuelve un problema que el curso de LangGraph deja
+planteado: allí la CI usa un modelo falso, que comprueba estructura pero no calidad. Con el
+caché de LangSmith se puede tener **calidad en la CI** sin gastar cuota. Es de las cosas que
+más cambian la forma de trabajar y está escondida en una página.
+
+Además, `langsmith.expect` da aserciones aproximadas —`edit_distance`,
+`embedding_distance`, `score`, `value`— pensadas justo para salidas no deterministas.
+
+### Hallazgo 6 · Los límites que te van a morder
+
+De la documentación, con números concretos:
+
+| Límite | Valor | Síntoma |
+|---|---|---|
+| Cuota Developer sin método de pago | **5.000 trazas/mes**, retención 1 mes | Deja de ingerir |
+| Tamaño de petición | **300 MB** | `413 Request entity too large` |
+| Visualización en la interfaz | **20 MB** por traza | Se ve truncada aunque esté completa |
+| Buffer de trazas fallidas | 100 MB de RAM por defecto | Consumo de memoria inesperado |
+
+La fila de los 20 MB explica una queja recurrente de los foros: *"la traza está incompleta"*.
+No lo está — es la interfaz la que no la pinta entera. Es un ejemplo perfecto de por qué el
+curso mide en vez de suponer.
+
+### Hallazgo 7 · «Align Evaluator» existe, y valida el módulo 3
+
+Propuse el notebook `10_alinear_el_juez` por convicción: un juez LLM sin alinear con humanos
+es una métrica inventada. Resulta que **LangSmith tiene una funcionalidad dedicada a
+exactamente eso**, con un flujo documentado de cuatro pasos: seleccionar ejecuciones →
+etiquetar en una cola de anotación → probar el *prompt* del juez contra lo etiquetado →
+refinar y repetir.
+
+Que el producto tenga una pieza específica confirma que el problema es real y generalizado.
+El notebook pasa de ser una propuesta mía a cubrir una funcionalidad de primera clase.
+
+### Hallazgo 8 · La economía, que el curso tiene que contar
+
+De las comparativas de terceros, y va al notebook 00 en un apartado «cuándo NO usar
+LangSmith», igual que el curso de LangGraph hace con su herramienta:
+
+- El plan Plus cuesta **39 $/puesto/mes antes de la primera traza**: un equipo de cinco
+  arranca en 195 $/mes.
+- A un millón de trazas mensuales, el orden de magnitud citado es **~2.500 $/mes**, frente a
+  ~100 $ autoalojando Langfuse.
+- LangSmith es **cerrado**, y el autoalojado es de plan Enterprise. Langfuse tiene núcleo
+  MIT; Phoenix y Laminar son nativos de OpenTelemetry.
+
+La conclusión honesta no es «no lo uses»: es que **la integración con LangGraph y las
+funciones de evaluación son difíciles de igualar**, y que la salida está en OpenTelemetry —
+que ya tratamos en el notebook 17. Un curso que no diga esto no es un curso, es un folleto.
+
+---
+
 ## 4. Temario propuesto
 
-**16 notebooks de contenido + 4 de proyecto**, en cinco módulos. Frente a los 38 del curso
-de LangGraph, es un complemento proporcionado: unas 22-26 horas.
+**18 notebooks de contenido + 4 de proyecto**, en cinco módulos. Subió de 16 a 18 tras el
+barrido: dos notebooks nuevos (`03_trazas_que_se_pierden` y `10_pruebas_con_modelo_en_ci`)
+salen directamente de los hallazgos 2 y 5, y los dos son de los más valiosos del temario.
+Frente a los 38 del curso de LangGraph, es un complemento proporcionado: unas 26-30 horas.
 
 ### Módulo 0 · Punto de partida (1 notebook)
 
 **`00_por_que_langsmith`** — Qué resuelve y qué no. El mapa contra lo que ya sabes: dónde
-encaja cada pieza respecto a los notebooks 17, 27 y 30. Cuenta, clave, proyecto, y las
-cuatro variables de entorno que gobiernan todo (`LANGSMITH_TRACING`, `_API_KEY`, `_PROJECT`,
-`_ENDPOINT`). **El presupuesto de trazas** y cómo trabajar el curso sin agotarlo. El
-mecanismo de los dos modos (con clave y sin ella).
+encaja cada pieza respecto a los notebooks 17, 27 y 30. Cuenta, clave, proyecto y las cuatro
+variables que gobiernan todo. **El presupuesto de trazas** y cómo trabajar el curso sin
+agotarlo. El mecanismo de los dos modos.
 
-### Módulo 1 · Trazas: qué se registra y qué no (4 + 1)
+Y una sección **«cuándo NO usar LangSmith»** (hallazgo 8), igual que el notebook 00 del curso
+de LangGraph hace con su herramienta: los 39 $/puesto antes de la primera traza, el orden de
+magnitud a un millón de trazas frente a autoalojar, que es cerrado, y cuál es la salida
+(OpenTelemetry, notebook 17). Un curso que no dice esto es un folleto.
+
+### Módulo 1 · Trazas: qué se registra y qué no (5 + 1)
 
 | Notebook | Contenido | Verificación |
 |---|---|---|
 | `01_anatomia_de_una_traza` | `@traceable`, `RunTree`, `dotted_order`, tipos de run, cómo se construye la jerarquía por dentro | **Ejecutable offline** |
-| `02_instrumentar_de_verdad` | Automático en LangChain/LangGraph, `wrap_openai` para el SDK a pelo, metadata, tags, `run_name`, proyecto dinámico. Y qué **no** se instrumenta solo | Mixta |
-| `03_hilos_y_realimentacion` | El `thread_id` de LangSmith frente al de LangGraph: no son lo mismo y se relacionan a mano. Feedback del usuario final con tokens prefirmados | Mixta |
-| `04_lo_que_no_debe_salir` | El anonimizador con reglas propias, `hide_inputs`/`hide_outputs`, y la decisión explícita de mandar o no el contenido. **Cierra el hueco que deja el notebook 30** | **Ejecutable offline** |
+| `02_instrumentar_de_verdad` | Automático en LangChain/LangGraph, `wrap_openai` para el SDK a pelo, metadata, tags, `run_name`, proyecto dinámico. Y qué **no** se instrumenta solo. **Las 51 variables de entorno** (hallazgo 1): las nueve que resuelven problemas reales, con las demás en una tabla de referencia | Mixta |
+| `03_trazas_que_se_pierden` 🆕 | **El problema nº 1 de los foros** (hallazgo 2): envío en segundo plano y procesos efímeros. `wait_for_all_tracers()`, `client.flush()`, `LANGSMITH_TRACING_BACKGROUND`, con sus contrapartidas. Muestreo **por traza completa** (hallazgo 3) y los límites de 300 MB / 20 MB / 5.000 trazas (hallazgo 6). Enlaza con el drenaje del notebook 28: un `SIGTERM` también se lleva tus trazas | **Ejecutable offline** |
+| `04_hilos_y_realimentacion` | El `thread_id` de LangSmith frente al de LangGraph: no son lo mismo y se relacionan a mano. Feedback del usuario final con tokens prefirmados | Mixta |
+| `05_lo_que_no_debe_salir` | El anonimizador con reglas propias y `hide_inputs` **como función, no como interruptor** (hallazgo 4): transformar en vez de ocultar. La decisión explícita de mandar o no el contenido. **Cierra el hueco que deja el notebook 30** | **Ejecutable offline** |
 | **`P1 · Instrumentar el agente de soporte`** | Coger el agente del curso de LangGraph y responder con trazas preguntas que sin ellas son adivinar | Mixta |
 
-### Módulo 2 · Datasets y experimentos (4 + 1)
+### Módulo 2 · Datasets y experimentos (5 + 1)
 
 | Notebook | Contenido |
 |---|---|
-| `05_datasets` | Crear, versionar, *splits*, los tres tipos (kv, chat, llm). Y el bucle que importa: `create_example_from_run` — de una traza de producción a un caso de prueba |
-| `06_experimentos` | `evaluate()` a fondo: *target*, `summary_evaluators`, `experiment_prefix`, repeticiones, concurrencia. Comparar dos experimentos |
-| `07_evaluadores` | Código frente a juez LLM. `openevals`, rúbricas, `EvaluationResult`, claves de feedback. Los evaluadores del notebook 27 dentro de LangSmith |
-| `08_regresion_de_verdad` | Varianza, cuántas repeticiones hacen falta, umbral con tolerancia **medida** (retoma el nb 17), y `evaluate_comparative` para comparaciones por pares |
+| `06_datasets` | Crear, versionar, *splits*, los tres tipos (kv, chat, llm). Y el bucle que importa: `create_example_from_run` — de una traza de producción a un caso de prueba |
+| `07_experimentos` | `evaluate()` a fondo: *target*, `summary_evaluators`, `experiment_prefix`, repeticiones, concurrencia. Comparar dos experimentos |
+| `08_evaluadores` | Código frente a juez LLM. `openevals`, rúbricas, `EvaluationResult`, claves de feedback. Los evaluadores del notebook 27 dentro de LangSmith |
+| `09_regresion_de_verdad` | Varianza, cuántas repeticiones hacen falta, umbral con tolerancia **medida** (retoma el nb 17), y `evaluate_comparative` para comparaciones por pares. **Fijar la versión del dataset**: sin eso los experimentos no se comparan entre sí |
+| `10_pruebas_con_modelo_en_ci` 🆕 | **El hallazgo 5, que cambia la forma de trabajar.** El *plugin* de pytest, `LANGSMITH_TEST_CACHE` con el extra `vcr` y `langsmith.expect` (`edit_distance`, `embedding_distance`, `score`). Pruebas con LLM **deterministas, gratis y versionadas** — resuelve lo que el curso de LangGraph deja abierto, donde la CI usa un modelo falso que comprueba estructura pero no calidad | Mixta |
 | **`P2 · Conjunto dorado de tickets`** | Sobre los 400 tickets etiquetados que ya tiene el curso: línea base, experimento y detección de regresión |
 
 ### Módulo 3 · El humano en el bucle de la calidad (2 + 1)
 
 | Notebook | Contenido |
 |---|---|
-| `09_anotacion` | Colas de anotación, `add_runs_to_annotation_queue`, esquemas de feedback, cómo se escribe una rúbrica que dos personas interpreten igual |
-| `10_alinear_el_juez` | **El notebook que casi nadie escribe**: medir el acuerdo entre tu juez LLM y tus anotadores humanos, y corregir el juez hasta que valga. Un juez sin alinear es una métrica inventada |
+| `11_anotacion` | Colas de anotación, `add_runs_to_annotation_queue`, esquemas de feedback, cómo se escribe una rúbrica que dos personas interpreten igual |
+| `12_alinear_el_juez` | Medir el acuerdo entre tu juez LLM y tus anotadores humanos, y corregir el juez hasta que valga. Un juez sin alinear es una métrica inventada. Cubre **Align Evaluator** (hallazgo 7), que resulta ser una funcionalidad de primera clase: seleccionar ejecuciones → etiquetar → probar el *prompt* contra lo etiquetado → refinar |
 | **`P3 · Un juez que sirve`** | Anotar 30 casos, medir el acuerdo, iterar el prompt del juez, volver a medir |
 
 ### Módulo 4 · Producción: mirar y actuar (3 + 1)
 
 | Notebook | Contenido |
 |---|---|
-| `11_monitorizar` | Paneles, monitores, alertas. Qué métricas para un agente — retoma la discusión del nb 30: tareas completadas, no latencia |
-| `12_reglas_y_evaluacion_en_linea` | Automatizaciones: mandar trazas a un dataset o a una cola sin intervención. Evaluar **en producción**, muestreado, y qué cuesta |
-| `13_prompts_versionados` | Hub, *commits*, Playground, y el puente con los *assistants* del notebook 18: dónde vive de verdad la versión de un prompt |
+| `13_monitorizar` | Paneles, monitores, alertas. Qué métricas para un agente — retoma la discusión del nb 30: tareas completadas, no latencia |
+| `14_reglas_y_evaluacion_en_linea` | Automatizaciones: mandar trazas a un dataset o a una cola sin intervención. Evaluar **en producción**, muestreado, y qué cuesta |
+| `15_prompts_versionados` | Hub, *commits*, Playground, y el puente con los *assistants* del notebook 18: dónde vive de verdad la versión de un prompt |
 | **`P4 · Capstone: el bucle completo`** | Producción → traza → regla → dataset → experimento → mejora → despliegue. Es el ciclo entero, con los tickets del curso |
 
 ### Módulo 5 · Gobierno (2)
 
 | Notebook | Contenido |
 |---|---|
-| `14_organizacion_y_accesos` | Organizaciones, espacios de trabajo, roles, claves y su rotación, registro de auditoría |
-| `15_retencion_y_cumplimiento` | Retención por plan, qué se guarda, borrado, y el RGPD sobre trazas. **Cierra del todo el notebook 30**: la capa que su código no borra |
+| `16_organizacion_y_accesos` | Organizaciones, espacios de trabajo, roles, claves y su rotación, registro de auditoría |
+| `17_retencion_y_cumplimiento` | Retención por plan, qué se guarda, borrado, y el RGPD sobre trazas. **Cierra del todo el notebook 30**: la capa que su código no borra |
 
 ---
 
@@ -233,8 +371,8 @@ Pensadas para que puedas parar en cualquier punto con algo completo en la mano:
 
 | Fase | Qué entrega | Notebooks | Por qué este orden |
 |---|---|---|---|
-| **1** | Infraestructura + módulos 0 y 1 | 6 | Trazas es lo primero que se usa y lo más verificable offline |
-| **2** | Módulo 2 | 5 | Evaluación: donde está el grueso del valor |
+| **1** | Infraestructura + módulos 0 y 1 | 7 | Trazas es lo primero que se usa y lo más verificable offline. Incluye los hallazgos 1-4 y 6 |
+| **2** | Módulo 2 | 6 | Evaluación: donde está el grueso del valor. Incluye el hallazgo 5 |
 | **3** | Módulo 3 | 3 | Alinear el juez, que depende de tener experimentos |
 | **4** | Módulo 4 | 4 | Producción y el capstone |
 | **5** | Módulo 5 + README + CI | 2 | Gobierno y cierre |
