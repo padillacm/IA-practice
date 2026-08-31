@@ -1,0 +1,604 @@
+#%%md
+# 08 · Evaluadores: código, jueces y la diferencia
+
+**Módulo 2 · Datasets y experimentos** — *tiempo estimado: 80 minutos* — *consumo: 0 trazas en local*
+
+Hasta aquí el evaluador era `salida == referencia`. Eso vale para clasificar y no vale
+para casi nada más: la mayoría de las respuestas de un sistema con LLM son **texto
+libre**, y no hay una cadena correcta con la que compararlo.
+
+Al terminar sabrás:
+
+1. Cuándo un **evaluador de código** es suficiente — que es más veces de las que parece.
+2. Cómo se monta un **juez LLM** con `openevals`, y las 33 rúbricas que ya trae.
+3. Los parámetros que deciden si el juez sirve: `continuous`, `choices`, `use_reasoning`,
+   `few_shot_examples`.
+4. Lo que **cuesta** un juez, en trazas, dinero y latencia.
+5. Y lo que hay que tener claro antes de creerse ninguno de sus números: **un juez es un
+   instrumento de medida que nadie ha calibrado**.
+
+El notebook se ejecuta entero: trae un juez local que corre la maquinaria de verdad de
+`openevals` sin clave.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import (init, online, cliente, separador, tickets, juez_local,
+                         ejemplos_locales, experimento_local, resumen_del_experimento)
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. Primero, agota el código
+
+La tentación al llegar aquí es poner un juez LLM a todo. Es cara y suele ser innecesaria.
+
+**Un evaluador de código es determinista, instantáneo y gratis.** Antes de escribir una
+rúbrica, pregúntate si lo que quieres medir se puede comprobar con código. La respuesta
+es que sí más veces de las que parece:
+
+| Lo que quieres saber | Cómo, con código |
+|---|---|
+| ¿Es la categoría correcta? | `==` |
+| ¿Devolvió JSON válido con las claves que pedías? | `json.loads` y comprobar claves |
+| ¿Citó al menos una fuente de las recuperadas? | Intersección de conjuntos |
+| ¿Se inventó un identificador? | ¿Está en tu base de datos? |
+| ¿Respondió en el idioma pedido? | Un detector de idioma |
+| ¿Se pasa de largo? ¿Está vacía? | `len()` |
+| ¿Filtró un dato personal? | Las expresiones del notebook 05 |
+| ¿Se parece bastante a la referencia? | Distancia de edición |
+
+Esa última fila es la que más se olvida, y el SDK la trae hecha.
+
+#%%py
+from langsmith import expect
+
+pares = [
+    ("Te devolvemos el cargo en 5 días hábiles.", "Te devolvemos el cargo en 5 días hábiles."),
+    ("Te devolvemos el cargo en 5 dias habiles.", "Te devolvemos el cargo en 5 días hábiles."),
+    ("El reembolso tarda una semana.",            "Te devolvemos el cargo en 5 días hábiles."),
+]
+
+print("distancia de edición (0 = idénticas):")
+for prediccion, referencia in pares:
+    comparador = expect.edit_distance(prediccion, referencia)
+    print(f"  {comparador.value:.3f}   {prediccion[:44]}")
+
+#%%md
+Sin llamar a ningún modelo y sin gastar nada, ya distingues «igual», «igual salvo
+tildes» y «distinto». Para muchas comprobaciones eso es exactamente lo que necesitas.
+
+> `expect.embedding_distance` hace lo mismo con significado en vez de con letras, pero
+> **eso sí llama a un modelo de embeddings** — es barato, no gratis, y depende de la red.
+
+#%%py
+# El patrón que resuelve la mayoría de los casos: varias comprobaciones baratas en un
+# solo evaluador, cada una con su clave. Se ven separadas en el panel.
+import json
+import re
+
+CATEGORIAS = {"facturacion", "integraciones", "acceso_cuenta", "rendimiento",
+              "bug_producto", "datos_privacidad", "solicitud_funcionalidad", "otros"}
+CORREO = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+
+def comprobaciones_baratas(outputs: dict, reference_outputs: dict) -> list[dict]:
+    """Un evaluador puede devolver VARIOS resultados. Es la forma de no montar cinco."""
+    salida = outputs or {}
+    categoria = salida.get("categoria")
+    respuesta = str(salida.get("respuesta", ""))
+    return [
+        {"key": "categoria_valida", "score": float(categoria in CATEGORIAS)},
+        {"key": "categoria_correcta", "score": float(categoria == reference_outputs["categoria"])},
+        {"key": "sin_datos_personales", "score": float(not CORREO.search(respuesta))},
+        {"key": "longitud_razonable", "score": float(0 < len(respuesta) <= 400)},
+    ]
+
+
+def sistema(entradas: dict) -> dict:
+    texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+    categoria = "facturacion" if "cobr" in texto or "factur" in texto else "otros"
+    return {"categoria": categoria,
+            "respuesta": "Lo revisamos y te escribimos a ana@acme.com en 24 h."}
+
+
+CONJUNTO = ejemplos_locales(tickets(24), entradas=("asunto", "mensaje"),
+                            salidas=("categoria",))
+resultados = experimento_local(sistema, CONJUNTO, evaluadores=[comprobaciones_baratas])
+for metrica, valor in sorted(resumen_del_experimento(resultados).items()):
+    print(f"  {metrica:<24} {valor:.0%}")
+
+#%%md
+Cuatro métricas, cero llamadas a modelos, cero trazas. Y una de ellas —
+`sin_datos_personales` — acaba de detectar que el sistema mete un correo en cada
+respuesta, que es un fallo que ningún juez de «calidad» habría señalado porque la
+respuesta *es* buena.
+
+**Devolver una lista de resultados** es lo que evita montar cuatro evaluadores para
+cuatro comprobaciones que se hacen sobre el mismo dato.
+
+#%%md
+## 2. Cuándo hace falta un juez
+
+Cuando lo que mides es **subjetivo pero no arbitrario**: si la respuesta es útil, si el
+tono encaja, si se inventó algo, si contestó lo que se le preguntaba.
+
+`openevals` —que ya viene con el curso— trae la maquinaria y, lo que más ahorra, **33
+rúbricas escritas**:
+
+#%%py
+from openevals import prompts
+
+disponibles = sorted(n for n in dir(prompts) if n.isupper())
+print(f"{len(disponibles)} rúbricas listas:\n")
+for i in range(0, len(disponibles), 3):
+    print("   " + "".join(f"{n:<38}" for n in disponibles[i:i + 3]))
+
+#%%md
+No son etiquetas: son rúbricas completas, con criterios explícitos de qué penalizar.
+Merece la pena leer una entera antes de escribir la tuya.
+
+#%%py
+from openevals.prompts import CORRECTNESS_PROMPT
+
+print(CORRECTNESS_PROMPT[:900])
+
+#%%md
+Fíjate en la estructura, porque es la que hay que copiar: **`<Rubric>` con qué es una
+buena respuesta y qué se penaliza, `<Instructions>` con en qué fijarse, `<Reminder>` con
+el objetivo**, y luego los huecos `{inputs}`, `{outputs}`, `{reference_outputs}`.
+
+Lo que hace útil a esa rúbrica no es la lista de virtudes: es la **lista de lo que
+penaliza**. Un juez al que solo le dices «puntúa la calidad» puntúa la longitud.
+
+#%%md
+## 3. Montar el juez, y ejecutarlo aquí mismo
+
+`create_llm_as_judge` monta un evaluador a partir de una rúbrica y un modelo. Para poder
+ejecutarlo sin clave, el curso trae `juez_local`: un modelo falso que implementa lo que
+`openevals` le pide —`with_structured_output(...).invoke(...)`— y decide con una función
+tuya.
+
+Lo que se aprende con él es todo lo que **no** es el modelo: la rúbrica, la clave de
+feedback, el rango, cómo entra en `evaluate()`. Lo que no se aprende es si tu rúbrica
+está bien escrita; eso solo lo dice un modelo de verdad.
+
+#%%py
+from openevals.llm import create_llm_as_judge
+
+def veredicto_simulado(prompt_completo: str) -> tuple[float, str]:
+    """Hace de modelo. Recibe el prompt entero que se le mandaría al juez de verdad.
+
+    Simula un juez razonable: penaliza las respuestas que prometen un plazo concreto
+    sin tener datos, que es el fallo típico de un agente de soporte.
+    """
+    texto = prompt_completo.lower()
+    if "24 h" in texto or "5 días" in texto:
+        return 0.0, "promete un plazo concreto sin haber consultado el caso"
+    return 1.0, "responde sin comprometerse a lo que no puede saber"
+
+
+juez_de_correccion = create_llm_as_judge(
+    prompt=CORRECTNESS_PROMPT,
+    judge=juez_local(veredicto_simulado),
+    feedback_key="correccion",
+)
+
+print(juez_de_correccion(
+    inputs={"mensaje": "¿cuándo me devolvéis el dinero?"},
+    outputs={"respuesta": "Lo revisamos y te escribimos en 24 h."},
+    reference_outputs={"respuesta": "Depende de tu banco; lo consultamos y te avisamos."},
+))
+print()
+print(juez_de_correccion(
+    inputs={"mensaje": "¿cuándo me devolvéis el dinero?"},
+    outputs={"respuesta": "Lo estamos consultando y te avisamos en cuanto lo sepamos."},
+    reference_outputs={"respuesta": "Depende de tu banco; lo consultamos y te avisamos."},
+))
+
+#%%md
+Eso es un evaluador de `openevals` completo, con su rúbrica real y su maquinaria real,
+corriendo sin clave. Devuelve `key`, `score` y **`comment`** — el razonamiento del juez,
+que es la mitad del valor: sin él tienes un número que no puedes discutir.
+
+### Los parámetros que deciden si sirve
+
+#%%py
+import inspect
+
+for nombre, p in inspect.signature(create_llm_as_judge).parameters.items():
+    print(f"  {nombre:<20} = {p.default!r}")
+
+#%%md
+| Parámetro | Qué cambia | Recomendación |
+|---|---|---|
+| `feedback_key` | El nombre de la métrica | **Una clave por origen**: `correccion_juez`, no `correccion` (nb 04) |
+| `continuous` | Puntuación continua en vez de 0/1 | **Empieza binario.** Un juez que da 0,7 no sabe distinguir 0,7 de 0,6 |
+| `choices` | Restringe a valores concretos, p. ej. `[0, 0.5, 1]` | El punto medio entre binario y continuo, y el que suele funcionar |
+| `use_reasoning` | Que explique antes de puntuar | **Déjalo activado.** Mejora la puntuación y te da qué leer |
+| `few_shot_examples` | Ejemplos de puntuaciones correctas | **La herramienta más potente**, y la del módulo 3 |
+| `output_schema` | Salida estructurada tuya | Para jueces que devuelven varias cosas a la vez |
+
+#%%py
+# Binario, tres niveles y continuo, sobre el mismo caso.
+for etiqueta, extra in [("binario", {}),
+                        ("tres niveles", {"choices": [0.0, 0.5, 1.0]}),
+                        ("continuo", {"continuous": True})]:
+    juez = create_llm_as_judge(prompt=CORRECTNESS_PROMPT, feedback_key="correccion",
+                               judge=juez_local(lambda t: (0.5, "regular")), **extra)
+    veredicto = juez(inputs={"m": "una consulta"},
+                     outputs={"respuesta": "una respuesta"},
+                     reference_outputs={"respuesta": "la buena"})
+    print(f"  {etiqueta:<14} -> {veredicto}")
+
+#%%md
+> **Nota honesta sobre esta celda:** con un juez local, lo que devuelve lo decide mi
+> función, no el parámetro. Lo que estos parámetros hacen de verdad es **cambiar el
+> esquema y las instrucciones que se le mandan al modelo** — con `choices`, el modelo
+> solo puede elegir entre los valores que le das. Eso solo se puede comprobar con un
+> modelo de verdad, y por eso la celda de abajo va marcada.
+
+#%%py
+@online("El mismo juez, con un modelo de verdad", trazas=3)
+def _():
+    from langsmith.run_helpers import tracing_context
+
+    juez = create_llm_as_judge(
+        prompt=CORRECTNESS_PROMPT,
+        model="openai:gpt-4o-mini",     # o pásale un `judge=` que ya tengas montado
+        feedback_key="correccion_juez",
+        choices=[0.0, 0.5, 1.0],
+        use_reasoning=True,
+    )
+    with tracing_context(enabled=True, project_name="curso-langsmith"):
+        print(juez(
+            inputs={"mensaje": "¿cuándo me devolvéis el dinero?"},
+            outputs={"respuesta": "Lo revisamos y te escribimos en 24 h."},
+            reference_outputs={"respuesta": "Depende de tu banco; lo consultamos."},
+        ))
+
+#%%md
+## 4. Lo que cuesta un juez
+
+Tres costes, y el primero es el que se olvida:
+
+| Coste | Cuánto |
+|---|---|
+| **Trazas** | **Una por caso y por juez.** 50 casos × 2 jueces = 100 trazas *además* de las 50 del sistema |
+| **Dinero** | Una llamada al modelo por caso, con el prompt entero de la rúbrica dentro |
+| **Latencia** | Tu experimento pasa de segundos a minutos |
+
+Ese primer coste es la cuenta del notebook 00, y ahora se ve de dónde sale.
+
+#%%py
+from utils.curso import presupuesto_de_trazas
+
+presupuesto_de_trazas(ejemplos=50, repeticiones=3, evaluadores_llm=2,
+                      etiqueta="conjunto de 50 con dos jueces, tres repeticiones")
+
+#%%md
+De ahí sale la estrategia que hay que aplicar y que casi nadie aplica:
+
+> **Los evaluadores de código, en todos los casos. El juez, solo donde el código no
+> llega.** Y en el conjunto rápido de la CI, si puedes, **sin juez**: que el juez entre
+> en el conjunto completo, el que corres antes de un cambio grande.
+
+#%%py
+# La misma medida, con y sin juez, para ver la diferencia de coste.
+def juez_de_tono(outputs, reference_outputs):
+    """Aquí, gratis. Con un modelo de verdad, una traza por caso."""
+    respuesta = (outputs or {}).get("respuesta", "")
+    return {"key": "tono_juez", "score": float("por favor" in respuesta.lower()
+                                               or "gracias" in respuesta.lower())}
+
+separador("dos estrategias sobre el mismo conjunto")
+for etiqueta, evaluadores, jueces in [
+    ("solo código (CI)", [comprobaciones_baratas], 0),
+    ("código + juez   ", [comprobaciones_baratas, juez_de_tono], 1),
+]:
+    r = experimento_local(sistema, CONJUNTO, evaluadores=evaluadores)
+    metricas = len(resumen_del_experimento(r))
+    coste = len(CONJUNTO) * jueces
+    print(f"  {etiqueta}: {metricas} métricas, {coste} trazas de juez")
+
+#%%md
+## 5. Lo que hay que tener claro antes de creerse un juez
+
+Y aquí va la advertencia que sostiene el módulo 3 entero.
+
+Un juez LLM es **un instrumento de medida**. Cuando tu panel dice «corrección: 0,82», eso
+no es la corrección de tu sistema: es **lo que otro modelo opina** sobre la corrección de
+tu sistema, con una rúbrica que escribiste en veinte minutos.
+
+Los cuatro fallos conocidos, y ninguno da error:
+
+| Sesgo | Qué hace | Cómo se nota |
+|---|---|---|
+| **De longitud** | Puntúa mejor lo largo | Tu sistema aprende a ser verboso |
+| **De posición** | En comparaciones, prefiere una de las dos posiciones | Comparaciones que cambian al invertir el orden |
+| **De autopreferencia** | Prefiere el texto de su propia familia de modelos | Juez y sistema del mismo proveedor |
+| **De formato** | Puntúa mejor lo que está bien maquetado | Viñetas por encima de exactitud |
+
+#%%py
+# El de longitud, medido: dos respuestas con el MISMO contenido y distinta extensión.
+def juez_ingenuo(texto_del_prompt: str) -> tuple[float, str]:
+    """Un juez al que solo le has dicho «puntúa la calidad».
+
+    Simula lo que hace un modelo sin rúbrica: se deja llevar por la extensión y por la
+    presencia de estructura. No es una caricatura, es el comportamiento documentado.
+    """
+    longitud = len(texto_del_prompt)
+    tiene_estructura = "- " in texto_del_prompt or "1." in texto_del_prompt
+    puntuacion = min(1.0, longitud / 2600) + (0.2 if tiene_estructura else 0.0)
+    return round(min(1.0, puntuacion), 2), "más completo y mejor estructurado"
+
+
+juez_sin_rubrica = create_llm_as_judge(prompt=CORRECTNESS_PROMPT,
+                                       judge=juez_local(juez_ingenuo),
+                                       feedback_key="calidad", continuous=True)
+
+BREVE = "Tu reembolso llega en 5 días hábiles."
+LARGA = ("Gracias por contactarnos. Hemos revisado tu caso con detenimiento.\n"
+         "- Hemos localizado el cargo duplicado.\n"
+         "- Hemos iniciado la devolución.\n"
+         "- El importe llegará en 5 días hábiles.\n"
+         "Quedamos a tu disposición para cualquier otra consulta.")
+
+for etiqueta, respuesta in [("breve", BREVE), ("larga", LARGA)]:
+    r = juez_sin_rubrica(inputs={"m": "¿cuándo llega mi reembolso?"},
+                         outputs={"respuesta": respuesta},
+                         reference_outputs={"respuesta": BREVE})
+    print(f"  {etiqueta:<6} ({len(respuesta):>3} car.)  ->  {r['score']}")
+
+#%%md
+Las dos dicen exactamente lo mismo —cinco días hábiles— y la larga saca mejor nota.
+
+Si optimizas tu prompt contra ese juez, en tres iteraciones tendrás un sistema que
+escribe párrafos. Y tu panel estará más verde.
+
+> **Un juez sin calibrar es una métrica inventada.** No es que sea impreciso: es que no
+> sabes en qué dirección se equivoca ni cuánto. El **módulo 3** va exactamente de esto:
+> anotar casos a mano, medir el acuerdo entre tu juez y tus anotadores, y corregir el
+> juez hasta que valga.
+
+#%%md
+## 6. Los evaluadores de trayectoria del otro curso
+
+El notebook 27 del curso de LangGraph monta evaluadores de **trayectoria** con
+`agentevals`: no puntúan la respuesta final, sino **qué herramientas usó el agente y en
+qué orden**. Eso aquí no se repite; lo que aporta este curso es meterlos en `evaluate()`
+como un evaluador más.
+
+#%%py
+from agentevals.trajectory.match import create_trajectory_match_evaluator
+
+evaluador_de_trayectoria = create_trajectory_match_evaluator(
+    trajectory_match_mode="unordered",     # las mismas herramientas, en cualquier orden
+)
+
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+def llamada(nombre, args, id_):
+    return {"name": nombre, "args": args, "id": id_, "type": "tool_call"}
+
+esperada = [
+    HumanMessage("¿cuántos tickets de facturación urgentes hay?"),
+    AIMessage("", tool_calls=[llamada("contar_tickets", {"categoria": "facturacion"}, "1")]),
+    ToolMessage("87 tickets", tool_call_id="1"),
+    AIMessage("Hay 87."),
+]
+obtenida = [
+    HumanMessage("¿cuántos tickets de facturación urgentes hay?"),
+    AIMessage("", tool_calls=[llamada("contar_tickets", {"categoria": "facturacion"}, "1")]),
+    ToolMessage("87 tickets", tool_call_id="1"),
+    AIMessage("Son 87 en total."),
+]
+desviada = [
+    HumanMessage("¿cuántos tickets de facturación urgentes hay?"),
+    AIMessage("", tool_calls=[llamada("detalle_ticket", {"id_ticket": "TCK-1"}, "1")]),
+    ToolMessage("...", tool_call_id="1"),
+    AIMessage("No lo sé."),
+]
+
+for etiqueta, trayectoria in [("misma trayectoria, otra redacción", obtenida),
+                              ("herramienta equivocada", desviada)]:
+    r = evaluador_de_trayectoria(outputs=trayectoria, reference_outputs=esperada)
+    print(f"  {etiqueta:<36} -> {r['score']}")
+
+#%%md
+La primera pasa aunque el texto final sea distinto; la segunda falla aunque hubiera
+podido dar una respuesta plausible. Es lo que quieres de un agente: **que haga lo
+correcto**, no solo que suene bien.
+
+Y es un evaluador **de código**: determinista, gratis, sin juez. Para agentes suele dar
+más información por euro que cualquier rúbrica.
+
+#%%md
+## 7. Ejercicios
+
+### Ejercicio 1 — El juez que no se deja engañar por la longitud
+
+Coge el juez ingenuo del apartado 5 y arréglalo con lo único que se puede arreglar sin
+cambiar de modelo: **la rúbrica**. Escribe una que le diga explícitamente qué penalizar,
+y comprueba que la respuesta breve y la larga sacan la misma nota.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+RUBRICA_SIN_SESGO = """Evalúas si una respuesta de soporte contiene la información
+que el cliente necesita. Solo eso.
+
+<Rubric>
+  Una respuesta correcta contiene el dato que resuelve la consulta.
+
+  PUNTÚA IGUAL una respuesta de una línea y una de diez si contienen el mismo dato.
+  PENALIZA explícitamente:
+  - Añadir cortesía, estructura o viñetas sin añadir información.
+  - Repetir la pregunta del cliente.
+  - Prometer plazos o importes que no aparecen en la referencia.
+
+  NO tengas en cuenta la longitud, el formato ni el tono.
+</Rubric>
+
+<input>{inputs}</input>
+<output>{outputs}</output>
+<reference_outputs>{reference_outputs}</reference_outputs>
+"""
+
+def juez_con_rubrica(texto_del_prompt: str) -> tuple[float, str]:
+    """Simula un juez que SÍ sigue la rúbrica: busca el dato, ignora el envoltorio.
+
+    Ojo al `unicode_escape`: ver la nota de debajo.
+    """
+    import re
+
+    texto = texto_del_prompt.encode().decode("unicode_escape", errors="ignore").lower()
+    plazos = set(re.findall(r"\d+\s*d[ií]as?", texto))
+    if not plazos:
+        return 0.0, "no aparece ningún plazo"
+    return 1.0, f"contiene el dato que resuelve la consulta ({sorted(plazos)})"
+
+
+juez_arreglado = create_llm_as_judge(prompt=RUBRICA_SIN_SESGO,
+                                     judge=juez_local(juez_con_rubrica),
+                                     feedback_key="calidad", continuous=True)
+
+separador("misma información, distinta extensión")
+for etiqueta, respuesta in [("breve", BREVE), ("larga", LARGA)]:
+    antes = juez_sin_rubrica(inputs={"m": "¿cuándo llega?"}, outputs={"respuesta": respuesta},
+                             reference_outputs={"respuesta": BREVE})["score"]
+    despues = juez_arreglado(inputs={"m": "¿cuándo llega?"}, outputs={"respuesta": respuesta},
+                             reference_outputs={"respuesta": BREVE})["score"]
+    print(f"  {etiqueta:<6} ({len(respuesta):>3} car.)   sin rúbrica: {antes:<5} "
+          f"con rúbrica: {despues}")
+
+#%%md
+Misma nota para las dos, que es lo correcto: dicen lo mismo.
+
+> **Detalle que cuesta media hora si no lo sabes, y afecta a cualquiera que evalúe en
+> español:** `openevals` mete las entradas y salidas en el prompt como JSON con
+> `ensure_ascii`, así que **los acentos llegan escapados**: `5 días` se convierte en
+> `5 d\u00edas`. Un modelo de verdad lo entiende sin problema, pero cualquier expresión
+> regular tuya sobre ese texto —en un juez simulado, o en un evaluador de código que
+> mire el prompt— no encuentra nada y no da ningún error. Por eso la función de arriba
+> empieza deshaciendo el escape.
+
+**La lección no es que mi función simulada sea mejor.** Es que la palanca para arreglar
+un juez sesgado es la **rúbrica**, y concretamente la lista de «penaliza esto» y «no
+tengas en cuenta aquello». Con un modelo de verdad esa lista es literalmente lo único
+que puedes cambiar sin cambiar de modelo.
+
+Y aun así **hay que comprobar que funcionó**, porque la rúbrica es una petición, no una
+garantía. Eso es el módulo 3.
+
+</details>
+
+#%%md
+### Ejercicio 2 — Cuánto juez necesitas de verdad
+
+Tienes un conjunto de 24 casos y dos formas de medir la calidad de la respuesta:
+
+- Cuatro comprobaciones **de código** (categoría válida y correcta, sin datos
+  personales, longitud razonable).
+- Un **juez** LLM.
+
+Mide **cuánto añade el juez** que el código no vea ya: cuántos casos puntúa distinto. Si
+son pocos, el juez no está pagando su coste en el conjunto rápido.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def veredicto_del_juez(outputs: dict, reference_outputs: dict) -> dict:
+    """El juez, aplicado sobre la respuesta completa."""
+    respuesta = (outputs or {}).get("respuesta", "")
+    r = juez_arreglado(inputs={}, outputs={"respuesta": respuesta},
+                       reference_outputs={"respuesta": BREVE})
+    return {"key": "juez", "score": r["score"]}
+
+
+def sistema_variado(entradas: dict) -> dict:
+    """Un sistema con fallos de varios tipos, para que haya algo que distinguir."""
+    texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+    categoria = "facturacion" if "cobr" in texto or "factur" in texto else "otros"
+    if "urgent" in texto or "critic" in texto:
+        respuesta = "Lo miramos."                       # correcta pero sin el dato
+    elif len(texto) > 150:
+        respuesta = "Tu reembolso llega en 5 días hábiles. " * 12   # se pasa de largo
+    else:
+        respuesta = "Tu reembolso llega en 5 días hábiles."
+    return {"categoria": categoria, "respuesta": respuesta}
+
+
+resultados = experimento_local(sistema_variado, CONJUNTO,
+                               evaluadores=[comprobaciones_baratas, veredicto_del_juez])
+
+filas = list(resultados)
+solo_juez = solo_codigo = coinciden = 0
+for fila in filas:
+    puntuaciones = {r.key: r.score for r in fila["evaluation_results"]["results"]}
+    codigo_ok = all(puntuaciones.get(k, 1) == 1 for k in
+                    ("categoria_valida", "sin_datos_personales", "longitud_razonable"))
+    juez_ok = puntuaciones.get("juez") == 1
+    if codigo_ok and not juez_ok:
+        solo_juez += 1
+    elif juez_ok and not codigo_ok:
+        solo_codigo += 1
+    else:
+        coinciden += 1
+
+print(f"casos: {len(filas)}")
+print(f"  código y juez de acuerdo        : {coinciden}")
+print(f"  SOLO el juez detecta el problema: {solo_juez}")
+print(f"  solo el código lo detecta       : {solo_codigo}")
+print()
+print(f"aporte propio del juez: {100 * solo_juez / len(filas):.0f} % de los casos, "
+      f"a cambio de {len(filas)} trazas")
+
+#%%md
+Ese porcentaje es el número que hay que mirar antes de meter un juez en la CI.
+
+Si el juez aporta un 4 % de casos nuevos, en un conjunto de 24 son **un caso**, y estás
+pagando 24 trazas y varios minutos por él. Si aporta un 30 %, está viendo cosas que el
+código no ve y merece la pena.
+
+Y fíjate en la tercera fila: los casos que **solo el código** detecta. El juez los da por
+buenos porque juzga la redacción, no el formato ni la fuga de datos. Esa es la razón de
+que la respuesta no sea «juez o código» sino **código siempre, juez donde aporte**.
+
+</details>
+
+#%%md
+## 8. Resumen
+
+- **Agota el código antes de poner un juez.** JSON válido, identificadores inventados,
+  idioma, longitud, datos personales, citas: todo eso se comprueba gratis y sin ruido.
+- Un evaluador puede **devolver varios resultados** con claves distintas. No montes
+  cuatro evaluadores para cuatro comprobaciones sobre el mismo dato.
+- `expect.edit_distance` compara textos sin llamar a nadie;
+  `expect.embedding_distance` compara significado, pero **sí llama a un modelo**.
+- `openevals` trae **33 rúbricas escritas**. Cópiales la estructura: lo que las hace
+  útiles es la lista de **qué penalizar**.
+- Del juez: `use_reasoning` activado, empieza **binario** o con `choices`, y **una clave
+  por origen** para no promediar al juez con los humanos.
+- **Un juez cuesta una traza por caso**, además de las del sistema. Código en el conjunto
+  rápido; juez en el completo.
+- Los cuatro sesgos —longitud, posición, autopreferencia, formato— **no dan error**. Y
+  optimizar contra un juez sesgado te lleva a un sistema verboso con el panel verde.
+- **Un juez sin calibrar es una métrica inventada.** La palanca para arreglarlo es la
+  rúbrica, y hay que comprobar que funcionó.
+
+**Siguiente:** [`09_regresion_de_verdad`](09_regresion_de_verdad.ipynb) — ya se puede
+medir. Ahora la pregunta difícil: cuándo una diferencia entre dos experimentos es una
+mejora y cuándo es ruido.

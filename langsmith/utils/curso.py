@@ -1005,3 +1005,82 @@ def tickets(n: int | None = None, *, semilla: int = 7, **filtros) -> list[dict]:
             muestra = pd.concat([muestra, resto.sample(faltan, random_state=semilla)])
 
     return muestra.sample(frac=1.0, random_state=semilla).head(n).to_dict("records")
+
+
+# --------------------------------------------------------------------------------------
+# Un juez LLM que se puede ejecutar sin clave (módulo 2 y 3)
+# --------------------------------------------------------------------------------------
+
+
+def juez_local(decidir):
+    """Un modelo de chat falso que sirve como juez de `openevals`, sin clave ni red.
+
+        juez = juez_local(lambda texto: (1.0, "la respuesta menciona la política"))
+        evaluador = create_llm_as_judge(prompt=CORRECTNESS_PROMPT, judge=juez,
+                                        feedback_key="correccion")
+
+    `decidir` recibe el **prompt ya montado** —todo el texto que se le mandaría al juez
+    de verdad, con las entradas, la salida y la referencia dentro— y devuelve
+    `(puntuacion, razonamiento)`.
+
+    Para qué sirve: para trabajar la parte del juez que **no** es el modelo. La rúbrica,
+    la clave de feedback, el rango de la puntuación, cómo se integra en `evaluate()`, y
+    sobre todo el desacuerdo con los humanos del módulo 3. Todo eso se puede estudiar
+    con un juez determinista, y estudiarlo con uno de verdad cuesta una traza por caso.
+
+    Para qué NO sirve: para saber si tu rúbrica está bien escrita. Eso solo lo dice un
+    modelo de verdad, y el módulo 3 va de medir exactamente eso.
+
+    Descansa en un detalle de `openevals`: al juez le llama
+    `judge.with_structured_output(esquema).invoke(mensajes)`. Basta implementar esos
+    dos métodos.
+    """
+    from langchain_core.callbacks import CallbackManagerForLLMRun
+    from langchain_core.language_models import BaseChatModel
+    from langchain_core.messages import AIMessage
+    from langchain_core.outputs import ChatGeneration, ChatResult
+    from langchain_core.runnables import RunnableLambda
+
+    class _Juez(BaseChatModel):
+        @property
+        def _llm_type(self) -> str:
+            return "juez-local-del-curso"
+
+        def _generate(self, messages, stop=None,
+                      run_manager: CallbackManagerForLLMRun | None = None, **kwargs):
+            puntuacion, razon = decidir(_texto_de(messages))
+            return ChatResult(generations=[ChatGeneration(
+                message=AIMessage(f"{puntuacion} — {razon}"))])
+
+        def with_structured_output(self, schema, **kwargs):
+            claves = set(_claves_del_esquema(schema))
+
+            def responder(mensajes):
+                puntuacion, razon = decidir(_texto_de(mensajes))
+                salida: dict[str, Any] = {}
+                if "score" in claves:
+                    salida["score"] = puntuacion
+                if "reasoning" in claves:
+                    salida["reasoning"] = razon
+                return salida or {"score": puntuacion, "reasoning": razon}
+
+            return RunnableLambda(responder)
+
+    return _Juez()
+
+
+def _texto_de(mensajes) -> str:
+    """Aplana a texto lo que `openevals` le pasa al juez (dicts o mensajes)."""
+    trozos = []
+    for mensaje in mensajes if isinstance(mensajes, list) else [mensajes]:
+        if isinstance(mensaje, dict):
+            trozos.append(str(mensaje.get("content", "")))
+        else:
+            trozos.append(str(getattr(mensaje, "content", mensaje)))
+    return "\n".join(trozos)
+
+
+def _claves_del_esquema(schema) -> list[str]:
+    if isinstance(schema, dict):
+        return list((schema.get("properties") or {}))
+    return list(getattr(schema, "model_fields", {}) or {})

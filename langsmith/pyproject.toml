@@ -33,6 +33,11 @@ dependencies = [
     "openevals>=0.1",
     "agentevals>=0.0.9",
 
+    # `expect.edit_distance` del notebook 08 lo pide explícitamente: sin él lanza un
+    # ImportError en vez de degradarse. Es una dependencia opcional de langsmith que el
+    # curso sí usa, así que se declara.
+    "rapidfuzz>=3.9",
+
     # Manipulación de los tickets y de los resultados de los experimentos.
     "pandas>=2.2",
     "python-dotenv>=1.0",

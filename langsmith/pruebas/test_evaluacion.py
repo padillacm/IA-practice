@@ -234,3 +234,140 @@ def test_en_local_el_prefijo_del_experimento_se_ignora():
                                          evaluadores=[_acierto], prefijo="mi-prefijo")
     list(resultados)
     assert not resultados.experiment_name.startswith("mi-prefijo")
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 08 · evaluadores
+# ------------------------------------------------------------------------------------
+
+
+def test_un_evaluador_puede_devolver_varios_resultados():
+    """Es lo que evita montar cuatro evaluadores para cuatro comprobaciones."""
+    def varias(outputs, reference_outputs):
+        return [{"key": "a", "score": 1.0},
+                {"key": "b", "score": 0.0},
+                {"key": "c", "score": 1.0}]
+
+    resultados = curso.experimento_local(lambda e: {"categoria": "otros"}, _conjunto(4),
+                                         evaluadores=[varias])
+    medias = curso.resumen_del_experimento(resultados)
+    assert set(medias) == {"a", "b", "c"}
+
+
+def test_expect_edit_distance_funciona_sin_red():
+    """Necesita `rapidfuzz`, que por eso es dependencia declarada del curso."""
+    from langsmith import expect
+
+    igual = expect.edit_distance("cinco días", "cinco días").value
+    parecido = expect.edit_distance("cinco dias", "cinco días").value
+    distinto = expect.edit_distance("una semana", "cinco días").value
+
+    assert igual == 0.0
+    assert 0 < parecido < distinto
+
+
+def test_openevals_trae_rubricas_escritas():
+    """El notebook 08 dice «33». Que envejezca a la vista si cambian."""
+    from openevals import prompts
+
+    rubricas = [n for n in dir(prompts) if n.isupper()]
+    assert 25 <= len(rubricas) <= 45, f"ahora son {len(rubricas)}: actualiza el nb 08"
+    assert "CORRECTNESS_PROMPT" in rubricas
+    assert "HALLUCINATION_PROMPT" in rubricas
+    # Lo que hace útil una rúbrica es la lista de qué penalizar, no la de virtudes.
+    assert "penalize" in prompts.CORRECTNESS_PROMPT.lower()
+
+
+def test_un_juez_de_openevals_corre_sin_clave():
+    """El mecanismo que hace ejecutable el notebook 08.
+
+    `openevals` llama al juez con `with_structured_output(...).invoke(...)`, así que
+    basta implementar esos dos métodos. Si eso cambia, el notebook 08 deja de correr.
+    """
+    from openevals.llm import create_llm_as_judge
+    from openevals.prompts import CORRECTNESS_PROMPT
+
+    juez = create_llm_as_judge(
+        prompt=CORRECTNESS_PROMPT,
+        judge=curso.juez_local(lambda texto: (1.0, "coincide con la referencia")),
+        feedback_key="correccion",
+    )
+    veredicto = juez(inputs={"m": "una consulta"},
+                     outputs={"respuesta": "una respuesta"},
+                     reference_outputs={"respuesta": "una respuesta"})
+
+    assert veredicto["key"] == "correccion"
+    assert veredicto["score"] == 1.0
+    assert veredicto["comment"] == "coincide con la referencia"
+
+
+def test_openevals_escapa_los_acentos_en_el_prompt():
+    """Detalle que muerde a cualquiera que evalúe en español.
+
+    Las entradas y salidas se meten en el prompt como JSON con `ensure_ascii`, así que
+    `días` llega como `d\\u00edas`. Un modelo lo entiende; una expresión regular tuya
+    no encuentra nada y no da ningún error.
+    """
+    from openevals.llm import create_llm_as_judge
+
+    visto = {}
+
+    def espia(texto):
+        visto["prompt"] = texto
+        return 1.0, "ok"
+
+    juez = create_llm_as_judge(prompt="{inputs} {outputs} {reference_outputs}",
+                               judge=curso.juez_local(espia), feedback_key="x")
+    juez(inputs={"m": "¿cuándo?"}, outputs={"r": "en 5 días"}, reference_outputs={"r": "en 5 días"})
+
+    assert "días" not in visto["prompt"]
+    assert "d\\u00edas" in visto["prompt"]
+    # Y así se recupera, que es lo que hace el notebook.
+    assert "días" in visto["prompt"].encode().decode("unicode_escape")
+
+
+def test_el_juez_sin_rubrica_premia_la_longitud():
+    """El sesgo que el notebook 08 mide, como prueba.
+
+    Dos respuestas con el mismo dato y distinta extensión no deberían puntuar distinto.
+    Con un juez al que solo le dices «puntúa la calidad», sí lo hacen.
+    """
+    from openevals.llm import create_llm_as_judge
+    from openevals.prompts import CORRECTNESS_PROMPT
+
+    def por_longitud(texto):
+        return round(min(1.0, len(texto) / 2600), 2), "más completo"
+
+    juez = create_llm_as_judge(prompt=CORRECTNESS_PROMPT, feedback_key="calidad",
+                               judge=curso.juez_local(por_longitud), continuous=True)
+
+    breve = "Tu reembolso llega en 5 días hábiles."
+    larga = breve + " " + "Gracias por tu paciencia y quedamos a tu disposición." * 4
+
+    nota_breve = juez(inputs={"m": "x"}, outputs={"r": breve},
+                      reference_outputs={"r": breve})["score"]
+    nota_larga = juez(inputs={"m": "x"}, outputs={"r": larga},
+                      reference_outputs={"r": breve})["score"]
+
+    assert nota_larga > nota_breve      # mismo dato, más nota
+
+
+def test_los_evaluadores_de_trayectoria_del_otro_curso_se_integran():
+    """El puente con el notebook 27 del curso de LangGraph."""
+    from agentevals.trajectory.match import create_trajectory_match_evaluator
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    evaluador = create_trajectory_match_evaluator(trajectory_match_mode="unordered")
+
+    def con(nombre):
+        return [
+            HumanMessage("¿cuántos tickets hay?"),
+            AIMessage("", tool_calls=[{"name": nombre, "args": {}, "id": "1",
+                                       "type": "tool_call"}]),
+            ToolMessage("87", tool_call_id="1"),
+            AIMessage("Hay 87."),
+        ]
+
+    esperada = con("contar_tickets")
+    assert evaluador(outputs=con("contar_tickets"), reference_outputs=esperada)["score"]
+    assert not evaluador(outputs=con("detalle_ticket"), reference_outputs=esperada)["score"]

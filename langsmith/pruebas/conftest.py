@@ -29,6 +29,12 @@ def sin_servicio(monkeypatch):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LANGSMITH_TRACING", "false")
 
+    # `langsmith.expect` (notebook 08) está pensado para el plugin de pytest y registra
+    # cada comprobación en LangSmith. Fuera del plugin lo intenta igualmente y sale a la
+    # red. `LANGSMITH_TEST_TRACKING=false` es justo la variable para eso —la misma que
+    # documenta el notebook 02— y la que hace que la suite no toque el servicio.
+    monkeypatch.setenv("LANGSMITH_TEST_TRACKING", "false")
+
     # `get_env_var` está decorada con `lru_cache`, así que el valor que leyó una prueba
     # se lo encuentra la siguiente. Es la misma trampa que enseña el notebook 02, y aquí
     # provoca pruebas que pasan solas y fallan en la suite —dependientes del orden—,
@@ -49,3 +55,30 @@ def con_servicio(monkeypatch):
     """
     monkeypatch.setenv("LANGSMITH_API_KEY", "lsv2_pt_de_mentira")
     return "lsv2_pt_de_mentira"
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _sin_salida_a_la_red():
+    """Corta la salida al servicio durante TODA la suite, y anota los intentos.
+
+    El curso afirma que sus pruebas no tocan LangSmith. Esto es lo que lo sostiene, y
+    no es paranoia: `langsmith.expect` salía a la red desde una prueba que se llamaba
+    literalmente «funciona sin red». Sin este corte, una dependencia puede empezar a
+    gastar la cuota de quien ejecute la suite con su clave puesta y nadie se entera.
+    """
+    import socket
+
+    intentos: list[str] = []
+    original = socket.getaddrinfo
+
+    def getaddrinfo(host, port, *args, **kwargs):
+        nombre = host.decode() if isinstance(host, bytes) else str(host)
+        if "smith.langchain.com" in nombre or "api.openai.com" in nombre:
+            intentos.append(nombre)
+            raise OSError(f"la suite intentó salir a {nombre}: eso no debe pasar")
+        return original(host, port, *args, **kwargs)
+
+    socket.getaddrinfo = getaddrinfo
+    yield
+    socket.getaddrinfo = original
+    assert not intentos, f"la suite salió a la red: {sorted(set(intentos))}"
