@@ -1,0 +1,669 @@
+#%%md
+# P4 · Capstone: el bucle entero
+
+**Módulo 4 · Proyecto final** — *tiempo estimado: 110 minutos* — *consumo: ~40 trazas en modo en línea*
+
+Los quince notebooks anteriores enseñan las piezas. Este las pone en el único orden que
+importa: **producción → señal → regla → dataset → experimento → arreglo → despliegue →
+vuelta a producción.**
+
+No es un repaso. Es un caso que **no está resuelto de antemano**: se arranca con una
+semana de tráfico sin etiquetar, se descubre el problema con lo único que hay en
+producción —trazas sin verdad— y se mide el arreglo antes de desplegarlo.
+
+Y termina donde tiene que terminar un curso honesto: **midiendo lo que este bucle no
+puede encontrar**, que resulta ser más de lo que parece.
+
+Al terminar tendrás:
+
+1. Una señal de producción que **detecta un problema sin etiquetas**, y la alerta
+   habitual que **no lo detecta nunca**.
+2. Una regla que convierte esa señal en un dataset, **con cortafuegos**.
+3. Un arreglo medido contra el conjunto dorado del P2, con su banda de tolerancia.
+4. Una puerta de despliegue que junta lo del notebook 15 con lo del 09.
+5. El número que cierra el curso: **cuánto del problema real sigue ahí después de todo
+   esto, y por qué el bucle no lo ve.**
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import collections, contextlib, copy, io, math, random, statistics
+from utils.curso import (init, online, cliente, separador, tickets, ejemplos_locales,
+                         experimento_local, resumen_del_experimento, traza_local,
+                         presupuesto_de_trazas)
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. La semana de producción
+
+El sistema es el clasificador de tickets que enruta el agente de soporte: entra un
+ticket, sale una categoría, y esa categoría decide a qué cola va. Está escrito con reglas
+—no con un LLM— **a propósito**: así el bucle entero se ejecuta en tu portátil y los
+números son reproducibles. Cámbialo por tu modelo y no cambia nada de lo que sigue.
+
+Lo importante es la restricción: **en producción no hay etiquetas.** Ni una. La categoría
+real de un ticket la sabes semanas después, si es que la sabes.
+
+#%%py
+PISTAS_V1 = {
+    "facturacion": ["factur", "cobro", "cargo", "pago", "reembols", "precio", "tarjeta", "suscrip"],
+    "acceso_cuenta": ["contraseñ", "acceso", "login", "sesión", "sesion", "verificaci", "2fa", "entrar"],
+    "integraciones": ["integra", "conect", "webhook", "api", "salesforce", "slack", "zapier", "sincroniz"],
+    "bug_producto": ["error", "fallo", "no funciona", "se rompe", "excepción", "bug", "pantalla"],
+    "rendimiento": ["lento", "lentitud", "tarda", "timeout", "rendimiento", "latencia", "cuelga"],
+    "datos_privacidad": ["rgpd", "gdpr", "datos personales", "privacidad", "borrar mis datos", "exporta"],
+    "solicitud_funcionalidad": ["sería genial", "podríais", "sugerencia", "echo de menos",
+                                "añadir", "funcionalidad"],
+}
+
+
+def clasificador(pistas: dict[str, list[str]]):
+    """Devuelve un clasificador. La categoría de reserva es «otros»: cuando ninguna pista
+    aparece, el sistema no dice «no sé», dice «otros». Recuerda esto en el apartado 2."""
+    def clasifica(ticket: dict) -> str:
+        texto = (ticket["asunto"] + " " + ticket["mensaje"]).lower()
+        puntos = {c: sum(texto.count(p) for p in ps) for c, ps in pistas.items()}
+        mejor = max(puntos, key=lambda c: puntos[c])
+        return mejor if puntos[mejor] else "otros"
+    return clasifica
+
+
+v1 = clasificador(PISTAS_V1)
+
+# Una semana de tráfico: los 400 tickets del curso, repartidos en 7 días.
+azar = random.Random(11)
+SEMANA = [dict(t, dia=azar.randrange(7)) for t in tickets()]
+
+separador("la semana de producción")
+print(f"  peticiones: {len(SEMANA)}")
+print(f"  días       : {len({t['dia'] for t in SEMANA})}")
+print(f"  etiquetas disponibles en producción: 0")
+
+#%%py
+# Y así se ve una petición, con la instrumentación de P1 y los metadatos del notebook 15.
+PROMPT_EN_PRODUCCION = {"prompt_id": "soporte-clasificador", "prompt_commit": "a1b2c3d4",
+                        "prompt_huella": "47aac8db604d"}
+
+with traza_local("clasificar_ticket") as traza:
+    from langsmith import traceable
+
+    @traceable(run_type="chain", name="clasificar_ticket")
+    def atender(ticket: dict) -> dict:
+        return {"categoria": v1(ticket), "confianza": "reglas"}
+
+    ejemplo = SEMANA[0]
+    atender(ejemplo, langsmith_extra={"metadata": {**PROMPT_EN_PRODUCCION,
+                                                   "plan": ejemplo["plan_cliente"],
+                                                   "canal": ejemplo["canal"]}})
+
+separador("una petición, tal y como queda registrada")
+traza.dibujar(detalle=True)
+print("\n  metadatos:", traza.raiz.child_runs[0].extra["metadata"] if traza.raiz.child_runs
+      else traza.raiz.extra["metadata"])
+
+#%%md
+## 2. La señal: la alerta que no salta
+
+Ahora la pregunta de producción: **con esas trazas y sin una sola etiqueta, ¿se puede
+saber que el clasificador va mal?**
+
+Lo primero es lo que haría cualquiera, y lo que enseña el notebook 13: mirar la serie
+temporal de una métrica y avisar cuando suba.
+
+#%%py
+def tasa_de_reserva(peticiones, clasifica) -> float:
+    """Qué proporción acaba en «otros». No necesita etiquetas: es lo que el sistema dijo."""
+    return sum(1 for t in peticiones if clasifica(t) == "otros") / len(peticiones)
+
+
+separador("tasa de «otros», día a día")
+tasas = []
+for dia in range(7):
+    del_dia = [t for t in SEMANA if t["dia"] == dia]
+    tasa = tasa_de_reserva(del_dia, v1)
+    tasas.append(tasa)
+    print(f"  día {dia}: {len(del_dia):>3} peticiones   {tasa:>6.1%}  {'█' * round(tasa * 60)}")
+print(f"\n  media {statistics.mean(tasas):.1%}   desviación {statistics.pstdev(tasas):.1%}")
+
+#%%py
+# La alerta habitual: «avisa si sube más de un 50 % respecto a ayer».
+saltos = [dia for dia in range(1, 7) if tasas[dia] > tasas[dia - 1] * 1.5]
+
+separador("la alerta día contra día")
+print(f"  días en los que salta: {saltos or 'ninguno'}")
+print()
+print("  Y no es que esté mal configurada: es que NO HAY NADA QUE DETECTAR.")
+print("  El problema no empezó el martes. Estaba ahí desde el principio.")
+
+#%%md
+> **La trampa del módulo 4, en una frase:** *un detector de cambios no encuentra un
+> problema que siempre estuvo.* Y la mayor parte de lo que va mal en un sistema con LLM
+> es exactamente eso: no una degradación, sino algo que nunca funcionó y nadie midió.
+
+Lo que sí funciona sin etiquetas es comparar la salida contra **lo que sabes que debería
+salir**: la distribución de tu histórico etiquetado. No necesitas saber si *este* ticket
+está bien clasificado para saber que **el 23 % de tu tráfico no puede ser «otros»**.
+
+#%%py
+esperada = sum(1 for t in tickets() if t["categoria"] == "otros") / 400
+observada = tasa_de_reserva(SEMANA, v1)          # la semana entera, no la media de días
+
+separador("la comparación que sí ve el problema")
+print(f"  «otros» en el histórico etiquetado : {esperada:>6.1%}")
+print(f"  «otros» en producción esta semana  : {observada:>6.1%}")
+print(f"  factor                             : x{observada / esperada:.1f}")
+print()
+print(f"  Casi siete veces lo que el histórico dice que debería salir.")
+print("  Y para verlo no ha hecho falta ni una etiqueta.")
+
+#%%md
+Esa es la métrica que hay que tener en el panel del notebook 13, y la razón por la que la
+**tasa de la categoría de reserva** merece un sitio propio: es la única salida del sistema
+que significa *no lo sé*, y por tanto la única que se puede auditar sin verdad.
+
+> Si tu sistema no tiene una categoría de reserva —si siempre contesta algo— no tienes
+> esta señal. Merece la pena crearla solo por esto.
+
+#%%md
+## 3. De la señal al dataset, con cortafuegos
+
+Ya hay señal. El notebook 14 dice qué hacer con ella: **una regla que mande esas trazas a
+un dataset**, sin que nadie tenga que acordarse.
+
+Y dice también lo que pasa si la regla no tiene cortafuegos. Aquí se ve con números.
+
+#%%py
+CUBO = [t for t in SEMANA if v1(t) == "otros"]
+
+def firma(ticket: dict) -> str:
+    """La firma que agrupa casos «iguales». Aquí, el asunto; en tu sistema, lo que
+    distinga un problema de otro: la herramienta que falló, el código de error, el paso."""
+    return ticket["asunto"]
+
+
+separador("lo que la regla mandaría al dataset")
+print(f"  trazas que cumplen el filtro : {len(CUBO)}")
+print(f"  casos DISTINTOS ahí dentro   : {len({firma(t) for t in CUBO})}")
+print()
+for (asunto, categoria), n in collections.Counter(
+        (firma(t), t["categoria"]) for t in CUBO).most_common():
+    print(f"  {n:>3} × {asunto}")
+
+#%%md
+**95 trazas que son 11 problemas.** Y dos de ellos —una app móvil que se cierra y unos
+cambios que no se guardan— son 40 de las 95.
+
+Sin cortafuegos, tu conjunto dorado se llena de copias del mismo caso, tu evaluación mide
+sobre todo ese caso, y quien tenga que etiquetar abandona a la tercera semana. Es
+exactamente el fallo del notebook 14, aquí con el número delante.
+
+#%%py
+def con_cortafuegos(trazas, *, clave=firma, por_firma: int = 1) -> list[dict]:
+    """El cortafuegos del notebook 14: como mucho N ejemplos por firma."""
+    cuenta: collections.Counter = collections.Counter()
+    salida = []
+    for traza in trazas:
+        k = clave(traza)
+        if cuenta[k] < por_firma:
+            cuenta[k] += 1
+            salida.append(traza)
+    return salida
+
+
+CASOS = con_cortafuegos(CUBO)
+
+separador("cortafuegos frente a muestra al azar")
+print(f"  {'estrategia':<34}{'trazas':>8}{'casos vistos':>15}")
+print("  " + "-" * 57)
+for n in (10, 20, 30):
+    vistos = [len({firma(t) for t in random.Random(s).sample(CUBO, n)}) for s in range(200)]
+    print(f"  {'al azar, n=' + str(n):<34}{n:>8}{statistics.mean(vistos):>10.1f} de 11")
+casos_vistos = len({firma(t) for t in CASOS})
+print(f"  {'con cortafuegos, uno por firma':<34}{len(CASOS):>8}{casos_vistos:>10.1f} de 11")
+print()
+print(f"  El cortafuegos ve los 11 casos con {len(CASOS)} etiquetas.")
+print(f"  Una muestra al azar de 20 ve 8,4 de media — con casi el doble de trabajo.")
+
+#%%py
+@online("La regla, montada de verdad en LangSmith", trazas=0)
+def _():
+    """Lo que hay que crear en el proyecto para que esto pase solo.
+
+    El notebook 14 lo detalla: la regla vive en la interfaz del proyecto (Rules), el
+    filtro es el mismo lenguaje que usas en `list_runs`, y el destino es el dataset.
+    El SDK no crea reglas; sí crea el dataset y sí lee lo que la regla ha metido.
+    """
+    c = cliente()
+    dataset = c.create_dataset("soporte-cubo-otros",
+                               description="Trazas que acabaron en «otros». Regla del P4.")
+    print(f"  dataset listo: {dataset.id}")
+    print("  filtro de la regla, para pegar en la interfaz:")
+    print('    and(eq(is_root, true), eq(outputs_key, "categoria"))')
+    print("  muestreo: 100 % (son pocas). Cortafuegos: en tu código, al aceptar el ejemplo.")
+
+#%%md
+## 4. El humano: 11 etiquetas
+
+Aquí entra el módulo 3. Once casos, una persona, veinte minutos. Ese es todo el coste
+humano de este bucle — y es así **porque el cortafuegos existe**, no por suerte.
+
+En este notebook la persona la simulamos con la etiqueta real del conjunto, que es la
+única trampa del capstone y está señalada.
+
+#%%py
+# El «humano» etiqueta los 11 casos. En tu sistema, esto es una cola de anotación (nb 11).
+ETIQUETADOS = [{"asunto": t["asunto"], "mensaje": t["mensaje"],
+                "categoria": t["categoria"], "veces": sum(1 for x in CUBO if firma(x) == firma(t))}
+               for t in CASOS]
+
+separador("lo que dijo la persona")
+print(f"  {'caso':<44}{'dijo el sistema':<18}{'dice la persona':<26}{'trazas':>7}")
+print("  " + "-" * 96)
+for e in sorted(ETIQUETADOS, key=lambda e: -e["veces"]):
+    print(f"  {e['asunto'][:42]:<44}{'otros':<18}{e['categoria']:<26}{e['veces']:>7}")
+
+#%%py
+separador("el diagnóstico, en una tabla")
+reparto = collections.Counter(e["categoria"] for e in ETIQUETADOS)
+peso = collections.Counter()
+for e in ETIQUETADOS:
+    peso[e["categoria"]] += e["veces"]
+
+print(f"  {'lo que era de verdad':<28}{'casos':>7}{'trazas':>9}{'% del cubo':>13}")
+print("  " + "-" * 57)
+for categoria, n in peso.most_common():
+    print(f"  {categoria:<28}{reparto[categoria]:>7}{n:>9}{n / len(CUBO):>12.0%}")
+print()
+print(f"  Solo {peso['otros']} de las {len(CUBO)} trazas eran «otros» de verdad.")
+print(f"  El resto —{1 - peso['otros'] / len(CUBO):.0%}— son tickets que el sistema tenía que")
+print("  haber clasificado y no supo.")
+
+#%%md
+## 5. El arreglo
+
+Y aquí está la disciplina del capstone: **el arreglo se escribe mirando SOLO esos 11
+casos.** No mirando el conjunto entero, porque el conjunto entero no lo tienes — es lo
+que hace que el número del apartado 8 signifique algo.
+
+#%%py
+PISTAS_V2 = copy.deepcopy(PISTAS_V1)
+# Cada línea sale de un caso concreto de los 11. Nada más.
+PISTAS_V2["bug_producto"] += ["desaparec", "se pierden", "se cierra sola", "reinstalado"]
+PISTAS_V2["rendimiento"] += ["no terminan", "no termina", "sin terminar"]
+PISTAS_V2["datos_privacidad"] += ["dpa", "tratamiento de datos", "se almacenan",
+                                  "almacenan nuestros datos"]
+PISTAS_V2["solicitud_funcionalidad"] += ["falta ", "echamos de menos", "agradeceríamos",
+                                         "petición:", "nos vendría bien"]
+
+v2 = clasificador(PISTAS_V2)
+
+separador("el arreglo, caso a caso")
+print(f"  {'caso':<44}{'v1':<12}{'v2':<24}{'correcto'}")
+print("  " + "-" * 92)
+for e in sorted(ETIQUETADOS, key=lambda e: -e["veces"]):
+    dijo = v2(e)
+    marca = "sí" if dijo == e["categoria"] else "NO"
+    print(f"  {e['asunto'][:42]:<44}{'otros':<12}{dijo:<24}{marca}")
+
+#%%md
+## 6. La medición, antes de tocar producción
+
+Los 11 casos que se usaron para escribir el arreglo **no sirven para medirlo**: es la
+lección del notebook 12 y del P3, y aquí aplica igual. Lo que mide es el **conjunto
+dorado del P2** —estratificado, etiquetado, independiente de esta semana— con el motor de
+evaluación del notebook 07.
+
+#%%py
+DORADO_FILAS = tickets(40)
+DORADO = ejemplos_locales(DORADO_FILAS, entradas=("asunto", "mensaje"), salidas=("categoria",))
+
+
+def acierto(outputs: dict, reference_outputs: dict) -> dict:
+    # `.get()`, no `outputs["categoria"]`: una fila que reventó trae {"output": None}
+    # y es un dict verdadero. La trampa del notebook 07.
+    return {"key": "acierto",
+            "score": float(outputs.get("categoria") == reference_outputs.get("categoria"))}
+
+
+def medir(clasifica, etiqueta: str) -> float:
+    with contextlib.redirect_stderr(io.StringIO()):
+        resultados = experimento_local(lambda e: {"categoria": clasifica(e)}, DORADO,
+                                       evaluadores=[acierto], prefijo=etiqueta)
+    return resumen_del_experimento(resultados)["acierto"]
+
+
+# Los dos experimentos primero: `evaluate()` escribe una línea propia por experimento
+# —con un `%s` sin formatear, que es un fallo del SDK y no tuyo— y así no parte la tabla.
+base, nuevo = medir(v1, "v1"), medir(v2, "v2")
+
+separador("el conjunto dorado del P2")
+print("  reparto:", dict(collections.Counter(t["categoria"] for t in DORADO_FILAS)))
+print(f"\n  v1 (en producción) : {base:.1%}")
+print(f"  v2 (la candidata)  : {nuevo:.1%}")
+print(f"  diferencia         : {nuevo - base:+.1%}")
+
+#%%py
+# ¿Es real esa diferencia, o cabe en el ruido de un conjunto de 40? La banda del nb 09.
+def banda(p: float, n: int) -> float:
+    """Dos desviaciones de una binomial: la anchura por debajo de la cual no hay nada."""
+    return 2 * math.sqrt(p * (1 - p) / n)
+
+
+margen = banda(base, len(DORADO))
+
+separador("¿es real la mejora?")
+print(f"  banda de ruido a n={len(DORADO)}, p={base:.2f} : ±{margen:.1%}")
+print(f"  diferencia medida                : {nuevo - base:+.1%}")
+print(f"  ¿fuera de la banda?              : {'SÍ' if abs(nuevo - base) > margen else 'no'}")
+print(f"  margen de sobra                  : {abs(nuevo - base) - margen:+.1%}")
+print()
+if abs(nuevo - base) <= margen:
+    print("  -> con 40 casos no se puede afirmar. Haría falta un conjunto mayor.")
+else:
+    print(f"  -> pasa. Por {abs(nuevo - base) - margen:.1%}: es un aprobado raspado, no una")
+    print("     victoria. Un conjunto de 40 casos no puede resolver mucho más fino que")
+    print("     esto, y conviene decirlo al escribir el informe del cambio.")
+
+#%%py
+# Y la comprobación que casi nadie hace: ¿ha ROTO algo el arreglo?
+separador("¿el arreglo rompe algo?")
+print(f"  {'categoría':<28}{'v1':>8}{'v2':>8}{'':>4}")
+print("  " + "-" * 48)
+regresiones = []
+for categoria in sorted({t["categoria"] for t in DORADO_FILAS}):
+    grupo = [t for t in DORADO_FILAS if t["categoria"] == categoria]
+    a1 = sum(1 for t in grupo if v1(t) == categoria) / len(grupo)
+    a2 = sum(1 for t in grupo if v2(t) == categoria) / len(grupo)
+    marca = "  ⬇" if a2 < a1 else ("  ⬆" if a2 > a1 else "")
+    if a2 < a1:
+        regresiones.append(categoria)
+    print(f"  {categoria:<28}{a1:>7.0%}{a2:>8.0%}{marca}")
+print(f"\n  categorías que empeoran: {regresiones or 'ninguna'}")
+
+#%%md
+## 7. El despliegue
+
+Con la medida hecha, el despliegue es lo del notebook 15: la candidata se publica, la
+puerta comprueba, y **solo entonces** se mueve la etiqueta.
+
+#%%py
+def puerta_de_despliegue(*, dorado_v1: float, dorado_v2: float, n: int,
+                         regresiones: list[str], casos_usados_para_arreglar: int) -> list[str]:
+    """Todo lo que tiene que ser verdad antes de mover la etiqueta «produccion».
+
+    Junta las tres puertas del curso: la del P2 (¿mejora fuera del ruido?), la del nb 09
+    (¿es el mismo conjunto?) y la del nb 15 (¿pasó por aquí?).
+    """
+    problemas = []
+    if dorado_v2 <= dorado_v1:
+        problemas.append(f"no mejora: {dorado_v2:.1%} <= {dorado_v1:.1%}")
+    elif dorado_v2 - dorado_v1 <= banda(dorado_v1, n):
+        problemas.append(f"la mejora ({dorado_v2 - dorado_v1:+.1%}) cabe en la banda "
+                         f"(±{banda(dorado_v1, n):.1%}): mide con más casos")
+    if regresiones:
+        problemas.append(f"empeora en {', '.join(regresiones)}")
+    if casos_usados_para_arreglar == 0:
+        problemas.append("no hay ningún caso de producción detrás de este cambio")
+    return problemas
+
+
+separador("la puerta, sobre lo que acabamos de medir")
+problemas = puerta_de_despliegue(dorado_v1=base, dorado_v2=nuevo, n=len(DORADO),
+                                 regresiones=regresiones,
+                                 casos_usados_para_arreglar=len(ETIQUETADOS))
+print(f"  veredicto: {'DESPLIEGA' if not problemas else 'BLOQUEA'}")
+for problema in problemas:
+    print(f"     - {problema}")
+
+#%%py
+@online("Mover la etiqueta y dejar rastro", trazas=0)
+def _():
+    """El despliegue del notebook 15, con lo que hay que dejar escrito."""
+    import hashlib
+
+    from langchain_core.prompts import ChatPromptTemplate
+
+    plantilla = ChatPromptTemplate.from_messages([
+        ("system", "Clasifica el ticket en una de estas categorías: {categorias}."),
+        ("human", "Asunto: {asunto}\nMensaje: {mensaje}"),
+    ])
+    c = cliente()
+    c.push_prompt("soporte-clasificador", object=plantilla,
+                  commit_description=f"P4: +{nuevo - base:.1%} en el dorado, 11 casos de producción",
+                  commit_tags=["produccion"])
+    print("  etiqueta movida.")
+    print("  Y lo que hay que dejar apuntado, porque dentro de tres meses nadie se acuerda:")
+    print("    - el experimento que lo respalda (su id)")
+    print("    - los 11 casos, en el dataset, con su versión etiquetada")
+    print("    - la huella del prompt nuevo, para el filtro de trazas del nb 15")
+
+#%%py
+# Y la vuelta al principio: la misma señal, ahora como guardia.
+separador("el bucle cerrado")
+antes = tasa_de_reserva(SEMANA, v1)
+despues = tasa_de_reserva(SEMANA, v2)
+print(f"  tasa de «otros» con v1 : {antes:>6.1%}")
+print(f"  tasa de «otros» con v2 : {despues:>6.1%}")
+print(f"  esperada (histórico)   : {esperada:>6.1%}")
+print()
+print("  La señal que abrió el bucle es la misma que ahora vigila que no vuelva.")
+print("  Umbral del monitor: no un número inventado, sino la distribución conocida")
+print(f"  con margen: alerta si «otros» supera {esperada * 2:.1%} durante dos días.")
+
+#%%md
+## 8. Lo que este bucle NO encuentra
+
+Aquí es donde el capstone deja de felicitarte.
+
+El bucle ha funcionado: una señal sin etiquetas, once etiquetas humanas, un arreglo
+medido y una puerta. El acierto en el dorado sube. La tasa de reserva vuelve a lo
+esperado.
+
+**¿Cuánto del problema real queda?** Esa pregunta solo se puede contestar aquí, en un
+notebook, porque tenemos las 400 etiquetas que en producción no existirían.
+
+#%%py
+separador("la verdad completa, que en producción no tendrías")
+for nombre, f in (("v1", v1), ("v2", v2)):
+    aciertos = sum(1 for t in SEMANA if f(t) == t["categoria"])
+    print(f"  {nombre}: acierto real sobre las 400 peticiones = {aciertos / len(SEMANA):.1%}")
+
+fallos = collections.Counter((t["categoria"], v2(t)) for t in SEMANA if v2(t) != t["categoria"])
+print(f"\n  peticiones que v2 SIGUE clasificando mal: {sum(fallos.values())}")
+print(f"\n  {'lo que era':<28}{'lo que dice v2':<28}{'cuántas':>8}{'¿deja rastro?':>16}")
+print("  " + "-" * 82)
+for (real, dicho), n in fallos.most_common():
+    rastro = "sí: «otros»" if dicho == "otros" else "NO"
+    print(f"  {real:<28}{dicho:<28}{n:>8}{rastro:>16}")
+
+#%%md
+Léelo despacio, porque es la conclusión del curso:
+
+**Ninguno de los 58 fallos que quedan deja rastro.** Ni uno. Todos son respuestas
+*seguras* y equivocadas: 26 peticiones de funcionalidad que el sistema manda a
+integraciones con toda la confianza del mundo, 23 informes de fallo que acaban en
+privacidad.
+
+- No suben la tasa de «otros»: la bajan.
+- No aparecen en ningún filtro de error: no hay error.
+- No los recoge ninguna regla: la regla busca la señal, y no hay señal.
+- El panel del notebook 13 los ve como tráfico perfectamente normal.
+
+Y lo que remata la idea: **son exactamente los mismos 58 tickets que v1 también fallaba
+en silencio.** No es que el arreglo los haya escondido — nunca fueron visibles. El bucle
+se llevó por delante el 100 % de los fallos que dejaban rastro y el 0 % de los otros.
+
+#%%py
+def fallos(clasifica) -> tuple[set, set]:
+    """Los que falla, partidos en dos: los que dejan rastro y los que no."""
+    mal = [t for t in SEMANA if clasifica(t) != t["categoria"]]
+    visibles = {t["id_ticket"] for t in mal if clasifica(t) == "otros"}
+    invisibles = {t["id_ticket"] for t in mal} - visibles
+    return visibles, invisibles
+
+
+vis_v1, inv_v1 = fallos(v1)
+vis_v2, inv_v2 = fallos(v2)
+
+separador("lo que se ganó y lo que se perdió")
+print(f"  {'':<12}{'fallos':>9}{'visibles':>11}{'invisibles':>13}")
+print("  " + "-" * 45)
+for nombre, vis, inv in (("v1", vis_v1, inv_v1), ("v2", vis_v2, inv_v2)):
+    print(f"  {nombre:<12}{len(vis) + len(inv):>9}{len(vis):>11}{len(inv):>13}")
+print()
+print(f"  Fallos visibles   : {len(vis_v1)} -> {len(vis_v2)}   (el bucle se los llevó todos)")
+print(f"  Fallos invisibles : {len(inv_v1)} -> {len(inv_v2)}   (el bucle no tocó ninguno)")
+print()
+print(f"  ¿son literalmente los mismos tickets? {inv_v1 == inv_v2}")
+print()
+print("  Esa igualdad es la frase entera del capstone: el bucle de producción resolvió")
+print("  todo lo que podía ver y nada de lo que no. No es que se le escapara algo —")
+print("  es que su alcance es exactamente «lo que deja rastro», ni un caso más.")
+
+#%%md
+> **La conclusión que ordena todo el curso:** el bucle de producción encuentra lo que
+> **deja rastro**. Una respuesta segura y equivocada no deja ninguno, y es el fallo más
+> frecuente de un sistema con LLM.
+>
+> Por eso el módulo 2 y el módulo 3 no son opcionales cuando ya tienes monitorización.
+> **Son lo único que ve lo invisible**, porque son lo único que tiene etiquetas.
+
+#%%py
+# Y para que no sea una moraleja: cuánto de eso ve el dorado, y con qué precisión.
+separador("lo que sí ve el conjunto dorado, y con qué certeza")
+grupo = [t for t in DORADO_FILAS if t["categoria"] == "solicitud_funcionalidad"]
+aciertos = sum(1 for t in grupo if v2(t) == "solicitud_funcionalidad")
+p = aciertos / len(grupo)
+
+print(f"  solicitudes de funcionalidad en el dorado : {len(grupo)}")
+print(f"  las que v2 acierta                        : {aciertos}  ({p:.0%})")
+print(f"  banda a n={len(grupo)}                               : ±{banda(p, len(grupo)):.0%}")
+print()
+print(f"  El dorado VE el problema —{p:.0%} en una categoría— pero con {len(grupo)} casos")
+print(f"  la banda es de ±{banda(p, len(grupo)):.0%}: sirve para levantar la mano, no para medir el arreglo.")
+print()
+real = sum(1 for t in SEMANA if t["categoria"] == "solicitud_funcionalidad"
+           and v2(t) == "solicitud_funcionalidad") / \
+       sum(1 for t in SEMANA if t["categoria"] == "solicitud_funcionalidad")
+print(f"  (el valor real sobre las 400: {real:.0%}. Cae dentro de la banda, sí — pero es")
+print(f"   que con una banda de ±{banda(p, len(grupo)):.0%} cabe casi cualquier cosa. Una banda así no")
+print("   confirma nada; solo dice que no sabes.)")
+print()
+print("  -> el siguiente ciclo del bucle NO empieza en producción.")
+print("     Empieza ampliando el dorado en la categoría que el dorado señaló.")
+
+#%%md
+## 9. Ejercicio — La señal que te falta
+
+El bucle de este capstone funcionó porque el sistema tenía una **categoría de reserva**
+que se podía auditar sin etiquetas. Tu sistema puede no tenerla.
+
+Escribe las señales sin etiquetas que **tu** sistema podría producir, y para cada una: qué
+fallo detecta, cuál no, y qué hay que cambiar en el sistema para que exista.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+SENALES = [
+    {"senal": "tasa de la categoría de reserva",
+     "detecta": "el sistema no sabe y lo dice",
+     "ciega_a": "respuestas seguras y equivocadas",
+     "hay_que": "tener una categoría de reserva y no penalizarla"},
+    {"senal": "reformulación del usuario (nb 04)",
+     "detecta": "la respuesta no sirvió, aunque pareciera correcta",
+     "ciega_a": "el usuario que se rinde y no vuelve a escribir",
+     "hay_que": "trazar la conversación entera con thread_id, no la petición suelta"},
+    {"senal": "escalada a una persona",
+     "detecta": "lo que el sistema no resolvió, con etiqueta implícita",
+     "ciega_a": "lo que resolvió mal y nadie escaló",
+     "hay_que": "registrar la escalada COMO realimentación de la traza (nb 04)"},
+    {"senal": "distribución de salidas contra el histórico",
+     "detecta": "un sesgo nuevo o un colapso hacia una clase",
+     "ciega_a": "errores que conservan la distribución",
+     "hay_que": "tener un histórico etiquetado y volver a medirlo cada trimestre"},
+    {"senal": "vueltas del agente y herramientas usadas (nb 13)",
+     "detecta": "el agente que da vueltas antes de acertar",
+     "ciega_a": "el que acierta a la primera con la respuesta equivocada",
+     "hay_que": "trazar cada llamada a herramienta como run hija, no como texto"},
+    {"senal": "juez en línea sobre una muestra (nb 14)",
+     "detecta": "cualquier cosa que la rúbrica describa, incluidas las invisibles",
+     "ciega_a": "lo que la rúbrica no menciona; y cuesta dinero por traza",
+     "hay_que": "un juez alineado (nb 12) y un muestreo estratificado (nb 14)"},
+]
+
+separador("señales sin etiquetas, y su punto ciego")
+for s in SENALES:
+    print(f"\n  {s['senal']}")
+    print(f"     detecta  : {s['detecta']}")
+    print(f"     CIEGA A  : {s['ciega_a']}")
+    print(f"     requiere : {s['hay_que']}")
+
+print("\n" + "-" * 78)
+print("  Las cinco primeras son gratis y todas tienen el mismo punto ciego en común.")
+print("  La sexta es la única que puede ver una respuesta segura y equivocada,")
+print("  y es la única que cuesta dinero. No es casualidad.")
+
+#%%md
+La lista tiene una simetría que merece la pena decir en voz alta: **todas las señales
+gratuitas son ciegas al mismo fallo**, y la única que no lo es cuesta una llamada a un
+modelo por traza muestreada.
+
+Eso convierte el presupuesto del notebook 00 en una decisión de diseño, no de
+contabilidad: lo que puedes permitirte muestrear con un juez es, literalmente, la
+proporción de tus fallos invisibles que puedes llegar a ver.
+
+</details>
+
+#%%py
+presupuesto_de_trazas(ejemplos=400, repeticiones=1, evaluadores_llm=1,
+                      etiqueta="juez en línea sobre TODA una semana")
+presupuesto_de_trazas(ejemplos=20, repeticiones=1, evaluadores_llm=1,
+                      etiqueta="juez en línea al 5 %, estratificado (nb 14)")
+
+#%%md
+## 10. Resumen del módulo 4, y del curso
+
+**Del módulo 4:**
+
+- Un **detector de cambios no encuentra un problema que siempre estuvo**, y eso es la
+  mayoría de lo que va mal. La señal que sí lo encuentra compara la salida contra una
+  distribución conocida (nb 13).
+- Una **regla sin cortafuegos** llena el dataset de copias: aquí, 95 trazas que eran 11
+  problemas, con dos casos ocupando el 42 % (nb 14).
+- El **prompt es la parte que peor se versiona**, y ponerlo en el Hub desacopla el cambio
+  del despliegue: es su ventaja y su peligro. Etiqueta siempre, y una puerta que corra
+  **periódicamente** (nb 15).
+
+**Del curso entero, en el orden en que se usan:**
+
+| Cuando quieras… | Empieza por |
+|---|---|
+| Entender qué pasó en una petición | Módulo 1: instrumentar bien y no filtrar nada |
+| Saber si un cambio mejora o empeora | Módulo 2: dataset, experimento, banda de ruido |
+| Confiar en la medida | Módulo 3: kappa, rúbrica, juez alineado en una reserva |
+| Enterarte sin mirar | Módulo 4: panel, regla con cortafuegos, prompt etiquetado |
+
+Y el número con el que cerramos, que es el que hay que recordar cuando alguien proponga
+sustituir la evaluación por monitorización:
+
+> Después de un ciclo completo del bucle de producción —señal, regla, etiquetas, arreglo
+> medido, despliegue con puerta— el sistema pasó del 65 % al 86 % de acierto, la tasa de
+> reserva volvió a su valor histórico, y **los 58 fallos que quedan son todos
+> invisibles desde producción**.
+>
+> El bucle encuentra lo que deja rastro. Para el resto hacen falta etiquetas, y las
+> etiquetas las produce una persona.
+
+---
+
+**Queda el módulo 5:** gobierno — quién ve qué, cuánto se guarda y qué hay que poder
+borrar. Menos vistoso que esto y con más consecuencias.

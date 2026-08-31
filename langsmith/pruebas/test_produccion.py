@@ -423,3 +423,185 @@ def test_el_rollback_por_cache_es_mas_lento_que_reiniciar_es_falso():
     cambio_en = 100
     sirven_lo_viejo = [p for p, t in cacheado_en.items() if t < cambio_en < t + ttl]
     assert sirven_lo_viejo == ["proceso-a"]
+
+
+# ------------------------------------------------------------------------------------
+# P4 · el bucle entero
+# ------------------------------------------------------------------------------------
+
+
+def _clasificadores():
+    """Las dos versiones del clasificador del P4, tal cual están en el notebook."""
+    import copy
+
+    v1 = {
+        "facturacion": ["factur", "cobro", "cargo", "pago", "reembols", "precio",
+                        "tarjeta", "suscrip"],
+        "acceso_cuenta": ["contraseñ", "acceso", "login", "sesión", "sesion",
+                          "verificaci", "2fa", "entrar"],
+        "integraciones": ["integra", "conect", "webhook", "api", "salesforce", "slack",
+                          "zapier", "sincroniz"],
+        "bug_producto": ["error", "fallo", "no funciona", "se rompe", "excepción", "bug",
+                         "pantalla"],
+        "rendimiento": ["lento", "lentitud", "tarda", "timeout", "rendimiento",
+                        "latencia", "cuelga"],
+        "datos_privacidad": ["rgpd", "gdpr", "datos personales", "privacidad",
+                             "borrar mis datos", "exporta"],
+        "solicitud_funcionalidad": ["sería genial", "podríais", "sugerencia",
+                                    "echo de menos", "añadir", "funcionalidad"],
+    }
+    v2 = copy.deepcopy(v1)
+    v2["bug_producto"] += ["desaparec", "se pierden", "se cierra sola", "reinstalado"]
+    v2["rendimiento"] += ["no terminan", "no termina", "sin terminar"]
+    v2["datos_privacidad"] += ["dpa", "tratamiento de datos", "se almacenan",
+                               "almacenan nuestros datos"]
+    v2["solicitud_funcionalidad"] += ["falta ", "echamos de menos", "agradeceríamos",
+                                      "petición:", "nos vendría bien"]
+
+    def hacer(pistas):
+        def clasifica(ticket):
+            texto = (ticket["asunto"] + " " + ticket["mensaje"]).lower()
+            puntos = {c: sum(texto.count(p) for p in ps) for c, ps in pistas.items()}
+            mejor = max(puntos, key=lambda c: puntos[c])
+            return mejor if puntos[mejor] else "otros"
+        return clasifica
+
+    return hacer(v1), hacer(v2)
+
+
+def test_el_detector_de_cambios_no_ve_un_problema_que_siempre_estuvo():
+    """La trampa que abre el P4: la tasa de «otros» es del 24 %, plana durante los siete
+    días, y una alerta día-contra-día no salta ni una vez. Es la diferencia entre vigilar
+    un cambio y vigilar un nivel."""
+    import random
+
+    from utils.curso import tickets
+
+    v1, _ = _clasificadores()
+    azar = random.Random(11)
+    semana = [dict(t, dia=azar.randrange(7)) for t in tickets()]
+
+    tasas = []
+    for dia in range(7):
+        del_dia = [t for t in semana if t["dia"] == dia]
+        tasas.append(sum(1 for t in del_dia if v1(t) == "otros") / len(del_dia))
+
+    # Plana: ningún día sube un 50 % sobre el anterior.
+    assert not [d for d in range(1, 7) if tasas[d] > tasas[d - 1] * 1.5]
+
+    # Y sin embargo el nivel es absurdo comparado con el histórico etiquetado.
+    esperada = sum(1 for t in tickets() if t["categoria"] == "otros") / 400
+    observada = sum(1 for t in semana if v1(t) == "otros") / len(semana)
+    assert esperada < 0.05
+    assert observada > 0.20
+    assert observada / esperada > 5
+
+
+def test_el_cubo_de_trazas_son_muchas_copias_de_pocos_casos():
+    """95 trazas, 11 problemas, y dos de ellos son el 42 % del cubo. Es el argumento
+    entero del cortafuegos del notebook 14, con el número medido."""
+    from utils.curso import tickets
+
+    v1, _ = _clasificadores()
+    cubo = [t for t in tickets() if v1(t) == "otros"]
+    firmas = collections.Counter(t["asunto"] for t in cubo)
+
+    assert len(cubo) > 80
+    assert len(firmas) == 11
+    assert sum(n for _, n in firmas.most_common(2)) / len(cubo) > 0.40
+
+    # Y el cortafuegos ve los 11 casos con 11 etiquetas: cobertura total y 88 % menos
+    # trabajo humano que etiquetar el cubo entero.
+    vistos, dedup = set(), []
+    for t in cubo:
+        if t["asunto"] not in vistos:
+            vistos.add(t["asunto"])
+            dedup.append(t)
+    assert len(dedup) == len(firmas) == 11
+    assert len(dedup) / len(cubo) < 0.15
+
+
+def test_una_muestra_al_azar_ve_menos_casos_que_el_cortafuegos_con_mas_trabajo():
+    """La comparación que justifica el cortafuegos: 20 trazas al azar ven ~8,4 casos de
+    11; 11 trazas con cortafuegos ven los 11."""
+    import random
+    import statistics
+
+    from utils.curso import tickets
+
+    v1, _ = _clasificadores()
+    cubo = [t for t in tickets() if v1(t) == "otros"]
+
+    media = statistics.mean(
+        len({t["asunto"] for t in random.Random(s).sample(cubo, 20)}) for s in range(200))
+    assert 7.5 < media < 9.5          # ni cerca de 11, con casi el doble de etiquetas
+
+
+def test_el_arreglo_mejora_pero_la_banda_de_40_casos_apenas_lo_permite():
+    """La medida del P4 sobre el conjunto dorado: +15,0 puntos frente a una banda de
+    ±14,8. Pasa por dos décimas, y el notebook lo dice así en vez de cantar victoria."""
+    import math
+
+    from utils.curso import tickets
+
+    v1, v2 = _clasificadores()
+    dorado = tickets(40)
+
+    base = sum(1 for t in dorado if v1(t) == t["categoria"]) / len(dorado)
+    nuevo = sum(1 for t in dorado if v2(t) == t["categoria"]) / len(dorado)
+    banda = 2 * math.sqrt(base * (1 - base) / len(dorado))
+
+    assert nuevo > base
+    assert nuevo - base > banda                    # pasa la puerta...
+    assert (nuevo - base) - banda < 0.02           # ...por menos de dos puntos
+
+    # Y no empeora ninguna categoría: la comprobación que casi nadie hace.
+    for categoria in {t["categoria"] for t in dorado}:
+        grupo = [t for t in dorado if t["categoria"] == categoria]
+        antes = sum(1 for t in grupo if v1(t) == categoria)
+        despues = sum(1 for t in grupo if v2(t) == categoria)
+        assert despues >= antes, categoria
+
+
+def test_el_bucle_se_lleva_todos_los_fallos_visibles_y_ninguno_de_los_otros():
+    """El cierre del curso, y el único número que no se puede discutir: los fallos que
+    dejan rastro pasan de 81 a 0, y los que no dejan rastro siguen siendo LOS MISMOS 58
+    tickets. El bucle de producción no se dejó nada por descuido: su alcance es
+    exactamente «lo que deja rastro»."""
+    from utils.curso import tickets
+
+    v1, v2 = _clasificadores()
+    todos = tickets()
+
+    def fallos(clasifica):
+        mal = [t for t in todos if clasifica(t) != t["categoria"]]
+        visibles = {t["id_ticket"] for t in mal if clasifica(t) == "otros"}
+        return visibles, {t["id_ticket"] for t in mal} - visibles
+
+    vis_v1, inv_v1 = fallos(v1)
+    vis_v2, inv_v2 = fallos(v2)
+
+    assert len(vis_v1) > 70 and len(vis_v2) == 0        # todos los visibles, resueltos
+    assert inv_v1 == inv_v2                            # y los invisibles, intactos
+    assert len(inv_v2) > 50
+
+    # El acierto sube mucho, y aun así queda un 14 % de tráfico mal enrutado en silencio.
+    assert sum(1 for t in todos if v1(t) == t["categoria"]) / len(todos) < 0.70
+    assert sum(1 for t in todos if v2(t) == t["categoria"]) / len(todos) > 0.84
+    assert len(inv_v2) / len(todos) > 0.10
+
+
+def test_el_conjunto_dorado_ve_lo_invisible_pero_con_una_banda_inservible():
+    """El matiz que evita la moraleja fácil: el dorado SÍ señala la categoría rota —una
+    de cinco solicitudes de funcionalidad— pero con n=5 la banda es tan ancha que solo
+    sirve para levantar la mano, no para medir el arreglo."""
+    import math
+
+    from utils.curso import tickets
+
+    _, v2 = _clasificadores()
+    grupo = [t for t in tickets(40) if t["categoria"] == "solicitud_funcionalidad"]
+    p = sum(1 for t in grupo if v2(t) == "solicitud_funcionalidad") / len(grupo)
+
+    assert p < 0.5                                       # la señal existe
+    assert 2 * math.sqrt(p * (1 - p) / len(grupo)) > 0.30  # y no se puede medir con eso
