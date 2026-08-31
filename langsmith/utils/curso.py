@@ -549,6 +549,7 @@ class _ServicioSimulado:
         self.cae_tras = cae_tras
         self.peticiones: list[tuple[str, str]] = []
         self.recibidos: list[dict] = []
+        self.cierres: list[dict] = []
         self.rechazados: list[tuple[str, str]] = []
         self.errores: list[Exception] = []
         self.cliente: Any = None
@@ -563,8 +564,22 @@ class _ServicioSimulado:
     def resumen(self) -> None:
         print(f"  peticiones que salieron : {len(self.peticiones)}")
         print(f"  runs que llegaron       : {len(self.recibidos)} {self.nombres_recibidos}")
+        print(f"  runs que se cerraron    : {len(self.cierres)}")
         print(f"  peticiones rechazadas   : {len(self.rechazados)}")
         print(f"  errores de envío vistos : {len(self.errores)}")
+
+    def run(self, indice: int = 0) -> dict:
+        """El run tal y como llegó, con lo que trajo el cierre ya incorporado.
+
+        Es lo que de verdad quedaría guardado, que es la pregunta del notebook 05:
+        no «qué mandé» sino **qué acabó en el servidor**.
+        """
+        entero = dict(self.recibidos[indice])
+        objetivo = str(entero.get("id"))
+        for cierre in self.cierres:
+            if str(cierre.get("id")) == objetivo:
+                entero.update({k: v for k, v in cierre.items() if v is not None})
+        return entero
 
     # -- las tripas --------------------------------------------------------------------
 
@@ -580,14 +595,18 @@ class _ServicioSimulado:
         if self._debe_fallar():
             self.rechazados.append((str(method), str(url)))
             return False
-        if str(method).upper() == "POST" and cuerpo:
-            try:
-                datos = json.loads(cuerpo)
-            except (TypeError, ValueError):
-                return True
-            for run in datos if isinstance(datos, list) else [datos]:
-                if isinstance(run, dict) and "name" in run:
-                    self.recibidos.append(run)
+        if not cuerpo:
+            return True
+        try:
+            datos = json.loads(cuerpo)
+        except (TypeError, ValueError):
+            return True
+        # El POST abre el run con sus entradas; el PATCH lo cierra con sus salidas.
+        # Hay que quedarse con los dos para saber qué acabó guardado.
+        destino = self.recibidos if str(method).upper() == "POST" else self.cierres
+        for run in datos if isinstance(datos, list) else [datos]:
+            if isinstance(run, dict):
+                destino.append(run)
         return True
 
 
@@ -623,7 +642,7 @@ class _SesionDeServicio(_SesionMuda):
 
 @contextlib.contextmanager
 def servicio_simulado(*, falla: bool = False, cae_tras: int | None = None,
-                      muestreo: float | None = None):
+                      muestreo: float | None = None, **opciones_del_cliente: Any):
     """Un LangSmith de mentira con el que el SDK habla de verdad.
 
     Sirve para enseñar en local lo que solo se ve cuando el servicio falla:
@@ -640,6 +659,10 @@ def servicio_simulado(*, falla: bool = False, cae_tras: int | None = None,
         cae_tras: acepta las primeras N peticiones y falla a partir de ahí. Sirve para
             el caso realista —el servicio se cae a mitad— en vez del binario.
         muestreo: la tasa de `tracing_sampling_rate` del `Client`, entre 0 y 1.
+        **opciones_del_cliente: lo que sea que quieras pasarle al `Client`. Es lo que
+            usa el notebook 05 para comprobar `anonymizer`, `hide_inputs` y
+            `hide_outputs` mirando lo que llega de verdad, en vez de creerse la
+            documentación.
 
     Lo que se puede mirar después: `peticiones`, `recibidos`, `nombres_recibidos`,
     `rechazados` y `errores` —estos últimos son los que el SDK pasó a
@@ -663,6 +686,7 @@ def servicio_simulado(*, falla: bool = False, cae_tras: int | None = None,
         retry_config=Retry(total=0),
         tracing_sampling_rate=muestreo,
         tracing_error_callback=servicio.errores.append,
+        **opciones_del_cliente,
     )
     cliente._info = LangSmithInfo()
     servicio.cliente = cliente
