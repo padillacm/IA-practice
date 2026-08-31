@@ -150,3 +150,139 @@ def test_un_umbral_bajo_produce_demasiadas_falsas_alarmas():
     con_umbral_alto = falsas_alarmas(0.80)
     assert con_umbral_bajo > 10          # se silenciaría en dos semanas
     assert con_umbral_alto < 5           # este sí se puede mantener
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 14 · reglas y evaluación en línea
+# ------------------------------------------------------------------------------------
+
+
+def test_el_sdk_no_expone_reglas_paneles_ni_alertas():
+    """Afirmación fuerte del notebook 14, que condiciona cómo se trabaja.
+
+    Si algún día aparecen, esta prueba salta y el notebook hay que actualizarlo —a
+    mejor, porque entonces se podrían versionar.
+    """
+    from langsmith import Client
+
+    publicos = {m for m in dir(Client) if not m.startswith("_")}
+    for ausente in ("rules", "dashboards", "alerts", "monitors"):
+        assert ausente not in publicos
+
+
+def test_los_evaluadores_en_linea_si_tienen_api_publica():
+    from langsmith import Client
+
+    assert isinstance(vars(Client).get("evaluators"), property)
+    assert isinstance(vars(Client).get("annotation_queues"), property)
+
+
+def test_los_issues_solo_se_alcanzan_por_un_accesor_privado():
+    """El matiz que el notebook 14 deja escrito: el recurso existe en el cliente
+    generado y `Client` no lo publica, así que llegar a él es usar API privada."""
+    from langsmith import Client
+    from langsmith._openapi_client import _client as generado
+
+    assert not hasattr(Client, "issues")
+    assert "issues" in dir(generado.Langsmith)
+    assert hasattr(Client, "_get_langsmith_api")
+
+
+def test_el_evaluador_de_codigo_se_define_con_codigo_y_lenguaje():
+    """El hallazgo del notebook 14: se sube Python que corre en el lado de LangSmith,
+    sobre el 100 % del tráfico y sin gastar una traza de juez."""
+    from langsmith._openapi_client.types import online_evaluator_create_params as p
+
+    assert set(p.CreateOnlineCodeEvaluatorRequestParam.__annotations__) == {"code", "language"}
+    assert "llm" in p.OnlineEvaluatorType.__args__
+    assert "code" in p.OnlineEvaluatorType.__args__
+
+
+def test_el_juez_en_linea_referencia_un_prompt_del_hub():
+    """No lleva el prompt dentro: lleva un handle y un commit. O sea que el prompt del
+    juez de producción está versionado quieras o no. Es el puente con el notebook 15."""
+    from langsmith._openapi_client.types import online_evaluator_create_params as p
+
+    campos = set(p.CreateOnlineLlmEvaluatorRequestParam.__annotations__)
+    assert {"prompt_repo_handle", "commit_hash_or_tag"} <= campos
+
+
+def test_el_muestreo_estratificado_ve_todos_los_problemas():
+    """La comparación que decide cómo gastar el presupuesto de evaluación en línea.
+
+    Al mismo coste, el estratificado ve el 100 % de lo problemático y el uniforme
+    una fracción.
+    """
+    import hashlib
+
+    aleatorio = random.Random(4)
+    trafico = [{"id": f"pet-{i}",
+                "escalado": aleatorio.random() < 0.04,
+                "feedback_negativo": aleatorio.random() < 0.01,
+                "vueltas": 4 if aleatorio.random() < 0.02 else aleatorio.choice([1, 1, 1, 2]),
+                "plan": aleatorio.choice(["free"] * 20 + ["pro"] * 8 + ["enterprise"])}
+               for i in range(10_000)]
+
+    def problematica(p):
+        return p["escalado"] or p["feedback_negativo"] or p["vueltas"] > 3
+
+    def estratificado(p, *, tasa=0.02):
+        if problematica(p) or p["plan"] == "enterprise":
+            return True
+        digito = int(hashlib.blake2b(p["id"].encode(), digest_size=4).hexdigest(), 16)
+        return (digito % 10_000) < tasa * 10_000
+
+    elegidas = [p for p in trafico if estratificado(p)]
+    problemas = [p for p in trafico if problematica(p)]
+    vistos = [p for p in problemas if estratificado(p)]
+
+    # Mismo coste, muestreo uniforme.
+    tasa = len(elegidas) / len(trafico)
+    otro = random.Random(9)
+    uniformes = [p for p in trafico if otro.random() < tasa]
+    vistos_uniforme = [p for p in uniformes if problematica(p)]
+
+    assert len(vistos) == len(problemas)                       # el 100 %
+    assert len(vistos_uniforme) < len(problemas) * 0.3         # una fracción
+    assert len(elegidas) < len(trafico) * 0.25                 # y cuesta poco
+
+
+def test_el_muestreo_por_hash_es_reproducible():
+    """Con `random()` la decisión cambia según cuándo mires; con un hash es una función
+    pura de la petición, así que dos servicios coinciden sin coordinarse."""
+    import hashlib
+
+    def decide(identificador, *, tasa=0.02):
+        digito = int(hashlib.blake2b(identificador.encode(), digest_size=4).hexdigest(), 16)
+        return (digito % 10_000) < tasa * 10_000
+
+    ids = [f"pet-{i}" for i in range(500)]
+    assert [decide(i) for i in ids] == [decide(i) for i in ids]
+    # Y la tasa sale donde debe.
+    assert 0 < sum(decide(i) for i in ids) / len(ids) < 0.08
+
+
+def test_la_regla_sin_cortafuegos_se_come_el_conjunto():
+    """«Todo lo que falla va al dataset» pasa de 40 casos a cientos en un año, y un
+    conjunto que tarda media hora deja de ejecutarse."""
+    tipos = ["no da el plazo", "herramienta equivocada", "se inventa una cifra",
+             "responde en otro idioma", "cita una fuente que no existe"]
+    categorias = [f"cat{i}" for i in range(8)]
+
+    def un_ano(con_filtro):
+        aleatorio = random.Random(2)
+        dataset = []
+        for _ in range(12):
+            for _ in range(40):
+                caso = {"categoria": aleatorio.choice(categorias),
+                        "tipo": aleatorio.choice(tipos)}
+                firma = (caso["categoria"], caso["tipo"])
+                if con_filtro and any((c["categoria"], c["tipo"]) == firma for c in dataset):
+                    continue
+                dataset.append(caso)
+        return len(dataset)
+
+    sin_filtro, con_filtro = un_ano(False), un_ano(True)
+    assert sin_filtro > 400
+    assert con_filtro <= len(categorias) * len(tipos)      # como mucho, uno de cada tipo
+    assert con_filtro < sin_filtro / 5

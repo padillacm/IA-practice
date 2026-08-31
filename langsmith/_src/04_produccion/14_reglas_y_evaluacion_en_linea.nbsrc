@@ -1,0 +1,589 @@
+#%%md
+# 14 · Reglas y evaluación en línea
+
+**Módulo 4 · Producción** — *tiempo estimado: 75 minutos* — *consumo: 0 trazas en local*
+
+El notebook 13 enseña a mirar. Este va de que **pasen cosas sin que nadie mire**, que es
+lo único que sostiene el bucle del notebook 00 más allá de la primera semana.
+
+La secuencia que hay que automatizar:
+
+```
+producción -> una traza sale mal -> alguien la detecta -> alguien la convierte
+           -> en caso de prueba -> alguien la anota -> alguien la evalúa
+```
+
+Cada «alguien» de esa cadena es un sitio donde el bucle se rompe. Y se rompe siempre, en
+el mes dos, cuando la persona que lo llevaba tiene otra cosa que hacer.
+
+Al terminar sabrás:
+
+1. Qué es una **regla** y las tres que merece la pena tener.
+2. **Evaluación en línea**: puntuar producción sin lanzar experimentos, con las dos formas
+   —código y juez— y lo que cuesta cada una.
+3. El **muestreo** que hace que eso sea pagable.
+4. Que LangSmith agrupa los fallos parecidos en **issues**, y para qué sirve.
+5. Qué de todo esto tiene API y qué **solo existe en la interfaz** — que es la parte
+   incómoda y hay que decirla.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import collections, hashlib, random, re, statistics
+from utils.curso import init, online, cliente, separador, presupuesto_de_trazas
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. Qué tiene API y qué no
+
+Antes de nada, el mapa honesto de lo que se puede automatizar desde código en esta versión
+del SDK, porque no es lo que uno esperaría:
+
+#%%py
+import inspect
+from langsmith import Client
+
+INTERESANTES = {
+    "colas de anotación": "annotation_queues",
+    "evaluadores en línea": "evaluators",
+    "issues (agrupación de fallos)": "issues",
+    "reglas / automatizaciones": "rules",
+    "paneles y monitores": "dashboards",
+    "alertas": "alerts",
+}
+
+publicos = {m for m in dir(Client) if not m.startswith("_")}
+# El cliente OpenAPI que hay por debajo expone más recursos de los que `Client` publica.
+from langsmith._openapi_client import _client as generado
+internos = {n for n in dir(generado.Langsmith) if not n.startswith("_")}
+
+separador("qué expone el SDK")
+for etiqueta, nombre in INTERESANTES.items():
+    if nombre in publicos:
+        estado = "API pública"
+    elif nombre in internos:
+        estado = "solo por accesor PRIVADO"
+    else:
+        estado = "SOLO EN LA INTERFAZ"
+    print(f"  {etiqueta:<32} {estado}")
+
+#%%md
+Ahí está la parte incómoda, y son tres niveles distintos:
+
+- **Reglas, paneles y alertas no tienen API** en esta versión. Se configuran a mano en la
+  interfaz y no se pueden versionar, revisar en un *pull request* ni recrear en otro
+  espacio de trabajo con un script.
+- **Los *issues* existen en el cliente generado y `Client` no los publica.** Llegar a
+  ellos significa usar `client._get_langsmith_api().issues`, un accesor privado que puede
+  desaparecer sin aviso. Se puede usar para mirar; construir un proceso encima es
+  apostar.
+- Colas de anotación y evaluadores en línea sí tienen API pública, y son lo que más valor
+  tiene, así que no es mal reparto.
+
+Eso tiene una consecuencia práctica que conviene asumir desde el principio:
+
+> **Lo que configures a mano en la interfaz, escríbelo también en tu repositorio.** Un
+> fichero de texto con las reglas que existen, qué filtro usan y a dónde mandan las
+> trazas. No lo aplica nadie automáticamente, pero es la diferencia entre poder
+> reconstruir tu configuración y depender de que alguien se acuerde.
+
+Y lo que **sí** tiene API es lo que más valor tiene, así que no es mal reparto.
+
+#%%py
+@online("Lo que sí se puede automatizar, listado", trazas=0)
+def _():
+    c = cliente()
+    print("  evaluadores en línea configurados:")
+    for evaluador in c.evaluators.list().evaluators or []:
+        print(f"    {evaluador}")
+    print("\n  colas de anotación:")
+    for cola in c.list_annotation_queues():
+        print(f"    {cola.name}")
+
+#%%md
+> **Requisito que te va a saltar si autoalojas:** `client.evaluators`, `client.issues`,
+> `client.runs` y `client.threads` comprueban la versión del servidor y **exigen
+> LangSmith 0.16 o superior**. En la nube da igual; en autoalojado, es lo primero que hay
+> que mirar cuando esas propiedades fallan.
+
+#%%md
+## 2. Las tres reglas que merece la pena tener
+
+Una **regla** es un filtro sobre las trazas que entran más una acción. En la interfaz:
+*Rules → Add Rule*, con el mismo lenguaje de filtro del notebook 13.
+
+De todas las que se pueden montar, tres pagan su configuración:
+
+| Regla | Filtro | Acción | Qué resuelve |
+|---|---|---|---|
+| **1. Los fallos van al dataset** | Feedback negativo o error | Añadir a un dataset | El conjunto crece solo (nb 06) |
+| **2. Lo dudoso va a la cola** | Puntuación del juez en la franja media | Añadir a la cola de anotación | Anotas lo informativo (nb 11) |
+| **3. Los fallos silenciosos, a revisar** | Raíz correcta + descendiente con error | Añadir a la cola | La consulta del nb 01, automatizada |
+
+La tercera es la que nadie tiene y la que más rendimiento da, porque su población es
+invisible en cualquier panel.
+
+#%%py
+# Los filtros, escritos. Esto es lo que copias a la interfaz, y lo que guardas en el
+# repositorio para poder reconstruirlo.
+REGLAS = {
+    "fallos-a-dataset": {
+        "filtro": 'and(eq(feedback_key, "utilidad"), lt(feedback_score, 0.5))',
+        "solo_raices": True,
+        "accion": "añadir al dataset «tickets-dorado»",
+        "porque": "convierte una queja en un caso de prueba (nb 06)",
+    },
+    "dudosos-a-anotar": {
+        "filtro": 'and(gte(feedback_score, 0.4), lte(feedback_score, 0.6))',
+        "solo_raices": True,
+        "accion": "añadir a la cola «soporte-calidad»",
+        "porque": "los casos límite son los que informan al alinear (nb 11)",
+    },
+    "fallos-silenciosos": {
+        "filtro": 'eq(status, "error")',
+        "filtro_de_traza": 'eq(status, "success")',
+        "solo_raices": False,
+        "accion": "añadir a la cola «incidencias»",
+        "porque": "el usuario recibió respuesta y por dentro se rompió algo (nb 01)",
+    },
+}
+
+separador("las tres reglas, listas para copiar")
+for nombre, regla in REGLAS.items():
+    print(f"\n  {nombre}")
+    for clave, valor in regla.items():
+        print(f"     {clave:<16} {valor}")
+
+#%%md
+### La trampa de la regla 1
+
+«Todo lo que falla va al dataset» suena bien y **mata el conjunto en tres meses**, por lo
+que ya decía el notebook 06: acabas con 800 casos, tarda veinte minutos y nadie lo
+ejecuta.
+
+Dos cortafuegos, y los dos son de una línea:
+
+#%%py
+def merece_entrar(caso: dict, dataset_actual: list[dict], *, tope: int = 200) -> tuple[bool, str]:
+    """Antes de meter un fallo en el conjunto, dos preguntas."""
+    if len(dataset_actual) >= tope:
+        return False, f"el dataset ya tiene {tope} casos: primero quita los que no informan"
+
+    # ¿Es un fallo NUEVO o el mismo de siempre con otras palabras?
+    firma_nueva = firma(caso)
+    if any(firma(existente) == firma_nueva for existente in dataset_actual):
+        return False, "ya hay un caso equivalente en el conjunto"
+    return True, "entra"
+
+
+def firma(caso: dict) -> str:
+    """Agrupa fallos parecidos: misma categoría y mismo tipo de error.
+
+    Es una versión casera de lo que hace la agrupación en «issues» del apartado 5.
+    """
+    return f"{caso['categoria']}|{caso['tipo_de_fallo']}"
+
+
+DATASET = [
+    {"categoria": "facturacion", "tipo_de_fallo": "no da el plazo"},
+    {"categoria": "integraciones", "tipo_de_fallo": "herramienta equivocada"},
+]
+
+separador("el filtro antes de añadir")
+for caso in [
+    {"categoria": "facturacion", "tipo_de_fallo": "no da el plazo"},
+    {"categoria": "rendimiento", "tipo_de_fallo": "se inventa una cifra"},
+]:
+    entra, motivo = merece_entrar(caso, DATASET)
+    print(f"  {caso['categoria']:<16}{caso['tipo_de_fallo']:<26} "
+          f"{'ENTRA' if entra else 'no':<6} {motivo}")
+
+#%%md
+## 3. Evaluación en línea: puntuar producción sin experimentos
+
+Un experimento (módulo 2) mide **un conjunto fijo** contra un sistema. La evaluación en
+línea mide **el tráfico real**, según llega.
+
+Las dos son necesarias y responden a preguntas distintas:
+
+| | Experimento | Evaluación en línea |
+|---|---|---|
+| Sobre qué | Un dataset con referencia | Trazas de producción, sin referencia |
+| Cuándo | Antes de desplegar | Todo el rato |
+| Responde | «¿este cambio mejora?» | «¿esto sigue funcionando?» |
+| Coste | Controlado: lo lanzas tú | **Proporcional a tu tráfico** |
+
+Ese último punto es el que hunde a la gente, y por eso el apartado 4 es sobre muestreo.
+
+#%%py
+import inspect
+from langsmith._openapi_client.types import online_evaluator_create_params as parametros
+
+separador("cómo se define un evaluador en línea")
+print("  tipos:", parametros.OnlineEvaluatorType)
+print()
+print("  evaluador de CÓDIGO:")
+for campo, tipo in parametros.CreateOnlineCodeEvaluatorRequestParam.__annotations__.items():
+    print(f"     {campo}: {tipo}")
+print()
+print("  evaluador LLM:")
+for campo, tipo in parametros.CreateOnlineLlmEvaluatorRequestParam.__annotations__.items():
+    print(f"     {campo}: {tipo}")
+
+#%%md
+Dos cosas de ahí merecen párrafo propio.
+
+**El evaluador de código se sube y corre en el lado de LangSmith.** Le mandas Python y se
+ejecuta sobre tus trazas, sin pasar por tu infraestructura y **sin gastar una sola traza
+de juez**. Es la versión en producción del «agota el código antes de poner un juez» del
+notebook 08, y casi nadie sabe que existe.
+
+**El evaluador LLM no lleva el prompt dentro**: lleva `prompt_repo_handle` y
+`commit_hash_or_tag`, o sea **una referencia a un prompt del Hub**. Eso significa que el
+prompt de tu juez de producción está versionado quieras o no — y es el puente con el
+notebook 15.
+
+#%%py
+# El evaluador de código que se sube. Lo que va dentro de `code` es esto.
+EVALUADOR_DE_CODIGO = '''
+def perform_eval(run, example) -> dict:
+    """Corre en LangSmith, sobre cada traza. Cero llamadas a modelos."""
+    import re
+
+    salida = (run.outputs or {}).get("respuesta", "")
+
+    return {
+        # Las mismas comprobaciones baratas del notebook 08, ahora en producción.
+        "tiene_dato": int(bool(re.search(r"\\d", salida)) or ">" in salida),
+        "sin_correo": int(not re.search(r"[\\w.+-]+@[\\w-]+\\.[\\w.]+", salida)),
+        "longitud_ok": int(0 < len(salida) <= 400),
+    }
+'''
+
+@online("Subir un evaluador de código que corre sobre producción", trazas=0)
+def _():
+    c = cliente()
+    creado = c.evaluators.create(
+        name="comprobaciones-baratas",
+        type="code",
+        code_evaluator={"code": EVALUADOR_DE_CODIGO, "language": "python"},
+    )
+    print(f"  evaluador creado: {creado}")
+
+
+@online("Ver lo que gastan tus evaluadores LLM", trazas=0)
+def _():
+    """El endpoint que casi nadie conoce y que evita la factura sorpresa."""
+    import datetime
+
+    c = cliente()
+    inicio = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
+    gasto = c.evaluators.spend(period_start=inicio, group_by="evaluator")
+    print(f"  gasto por evaluador en los últimos 7 días: {gasto}")
+
+#%%md
+## 4. El muestreo, que es lo que lo hace pagable
+
+Un juez en línea sobre todo tu tráfico es **una traza más por petición**. Con 50.000
+peticiones al mes son 50.000 trazas de juez, además de las 50.000 tuyas.
+
+#%%py
+separador("lo que cuesta evaluar producción en línea")
+for peticiones in (1_000, 10_000, 50_000):
+    for tasa in (1.0, 0.1, 0.02):
+        evaluadas = int(peticiones * tasa)
+        print(f"  {peticiones:>7,} peticiones/mes al {tasa:>5.0%}  ->  "
+              f"{evaluadas:>7,} trazas de juez")
+    print()
+
+#%%md
+La respuesta es muestrear. Pero **no uniformemente**, por lo que ya sabes del notebook 03:
+el muestreo uniforme tira tus errores en la misma proporción que tus aciertos, y los
+errores son lo que quieres ver.
+
+El muestreo que funciona es **estratificado por lo raro**:
+
+#%%py
+def debe_evaluarse(peticion: dict, *, tasa_base: float = 0.02) -> tuple[bool, str]:
+    """Muestreo estratificado: lo raro entero, lo abundante a cuentagotas.
+
+    El determinismo importa: se decide con un hash del identificador, no con `random`.
+    Así la misma petición siempre toma la misma decisión, y dos servicios distintos
+    llegan a la misma conclusión sin hablar entre ellos.
+    """
+    if peticion.get("escalado"):
+        return True, "escalado a un humano: siempre"
+    if peticion.get("feedback_negativo"):
+        return True, "el usuario se quejó: siempre"
+    if peticion.get("vueltas", 1) > 3:
+        return True, "bucle largo: siempre"
+    if peticion.get("plan") == "enterprise":
+        return True, "cliente grande: siempre"
+
+    digito = int(hashlib.blake2b(peticion["id"].encode(), digest_size=4).hexdigest(), 16)
+    return (digito % 10_000) < tasa_base * 10_000, f"muestra base ({tasa_base:.0%})"
+
+
+# Tráfico con proporciones realistas: lo problemático es POCO. Si en tu simulación el
+# 20 % de las peticiones da un bucle largo, el muestreo «estratificado» acaba cogiendo
+# un tercio del tráfico y la lección se pierde.
+aleatorio = random.Random(4)
+TRAFICO = [{"id": f"pet-{i}",
+            "escalado": aleatorio.random() < 0.04,
+            "feedback_negativo": aleatorio.random() < 0.01,
+            "vueltas": 4 if aleatorio.random() < 0.02 else aleatorio.choice([1, 1, 1, 2]),
+            "plan": aleatorio.choice(["free"] * 20 + ["pro"] * 8 + ["enterprise"])}
+           for i in range(10_000)]
+
+elegidas = [p for p in TRAFICO if debe_evaluarse(p)[0]]
+motivos = collections.Counter(debe_evaluarse(p)[1] for p in elegidas)
+
+separador("muestreo estratificado sobre 10.000 peticiones")
+print(f"  evaluadas: {len(elegidas)} ({len(elegidas) / len(TRAFICO):.1%} del tráfico)")
+for motivo, veces in motivos.most_common():
+    print(f"     {veces:>5}  {motivo}")
+
+problemas = [p for p in TRAFICO if p["escalado"] or p["feedback_negativo"] or p["vueltas"] > 3]
+cubiertos = [p for p in problemas if debe_evaluarse(p)[0]]
+print(f"\n  peticiones problemáticas: {len(problemas)}")
+print(f"  de esas, evaluadas      : {len(cubiertos)} ({len(cubiertos) / len(problemas):.0%})")
+
+#%%md
+**El 100 % de lo problemático y el 2 % de lo normal**, por una fracción del coste de
+evaluarlo todo.
+
+Y fíjate en el reparto de motivos: la mayor parte de lo que se evalúa no viene de la
+muestra base sino de las reglas de «siempre». Eso es lo que se busca — el presupuesto se
+gasta donde hay información.
+
+Compáralo con lo que daría un muestreo uniforme al mismo coste:
+
+#%%py
+tasa_equivalente = len(elegidas) / len(TRAFICO)
+aleatorio_uniforme = random.Random(9)
+uniformes = [p for p in TRAFICO if aleatorio_uniforme.random() < tasa_equivalente]
+problemas_vistos = sum(1 for p in uniformes
+                       if p["escalado"] or p["feedback_negativo"] or p["vueltas"] > 3)
+
+separador("mismo coste, dos formas de gastarlo")
+print(f"  estratificado: {len(elegidas):>5} evaluadas, "
+      f"{len(cubiertos):>4} problemas vistos ({len(cubiertos) / len(problemas):>4.0%})")
+print(f"  uniforme     : {len(uniformes):>5} evaluadas, "
+      f"{problemas_vistos:>4} problemas vistos ({problemas_vistos / len(problemas):>4.0%})")
+
+#%%md
+> **El determinismo del hash no es un detalle de estilo.** Con `random()`, la misma
+> petición se evalúa o no según cuándo la mires, así que no puedes reproducir una
+> decisión ni hacer que dos servicios coincidan. Con un hash del identificador, la
+> decisión es una función pura de la petición: la misma respuesta siempre, en cualquier
+> máquina, sin coordinación.
+
+#%%md
+## 5. Issues: los fallos parecidos, agrupados
+
+LangSmith agrupa fallos similares en **issues**. Es la misma idea que la `firma()` casera
+del apartado 2, hecha en el servidor y con más criterio.
+
+Para qué sirve de verdad: **cincuenta trazas que fallan por la misma razón son un
+problema, no cincuenta.** Sin agrupación, tu cola de anotación se llena del mismo caso
+repetido y las personas anotan lo mismo cincuenta veces.
+
+#%%py
+from langsmith._openapi_client.types.issue import Issue
+
+separador("qué trae un issue")
+for campo in list(Issue.model_fields)[:14]:
+    print(f"  {campo}")
+
+#%%md
+Dos campos llaman la atención y merece la pena saber que existen:
+
+- **`auto_resolution_state`** y `auto_resolution_evidence`: el servidor puede proponer
+  cerrar un issue solo, con la evidencia de por qué. Está marcado como beta.
+- **`linear_sync`**: sincronización con Linear, con su propio estado de error. O sea que
+  los fallos de producción pueden convertirse en tickets del equipo sin intervención.
+
+> **Dos avisos sobre los issues, y los dos importan.** El endpoint está marcado como
+> **beta** en su propia documentación —«may change without notice»—, y además `Client`
+> no lo publica: hay que bajar al cliente generado por un accesor privado. Para mirar,
+> sí; para construir un proceso del que dependas, no.
+
+#%%py
+@online("Los fallos agrupados de tu proyecto", trazas=0)
+def _():
+    """OJO: `client.issues` no existe. Hay que bajar al cliente generado.
+
+    `_get_langsmith_api()` es privado —el guion bajo lo dice— así que esto puede dejar
+    de funcionar en cualquier versión. Va aquí porque el recurso es útil y conviene
+    saber que está; no lo metas en un proceso del que dependas.
+    """
+    api = cliente()._get_langsmith_api()
+    respuesta = api.issues.list(limit=10)
+    for issue in getattr(respuesta, "issues", None) or []:
+        print(f"  {issue.id}  {getattr(issue, 'description', '')[:60]}")
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — El coste real de evaluar en línea
+
+Calcula, para tu tráfico, cuánto cuesta cada estrategia **en trazas y en euros**, y cuál
+cabe en el plan Developer. Incluye la opción que casi nadie considera: el evaluador de
+código, que cuesta cero trazas.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def coste_mensual(peticiones: int, *, estrategia: str, tasa: float = 0.02,
+                  euros_por_traza: float = 0.0) -> dict:
+    """Trazas y euros al mes de cada forma de evaluar producción."""
+    trazas_del_sistema = peticiones          # las tuyas, siempre
+    if estrategia == "nada":
+        trazas_juez = 0
+    elif estrategia == "solo código":
+        trazas_juez = 0                      # el evaluador de código no gasta trazas
+    elif estrategia == "juez a todo":
+        trazas_juez = peticiones
+    elif estrategia == "juez muestreado":
+        trazas_juez = int(peticiones * tasa)
+    elif estrategia == "código + juez muestreado":
+        trazas_juez = int(peticiones * tasa)
+    else:
+        raise ValueError(estrategia)
+
+    total = trazas_del_sistema + trazas_juez
+    return {"trazas": total, "de_juez": trazas_juez,
+            "cabe_en_developer": total <= 5_000,
+            "euros": total * euros_por_traza}
+
+
+ESTRATEGIAS = ["nada", "solo código", "juez muestreado", "código + juez muestreado",
+               "juez a todo"]
+
+for peticiones in (2_000, 20_000):
+    separador(f"{peticiones:,} peticiones al mes")
+    print(f"{'estrategia':<28}{'trazas/mes':>12}{'de juez':>10}{'¿cabe en Developer?':>22}")
+    print("-" * 74)
+    for estrategia in ESTRATEGIAS:
+        c = coste_mensual(peticiones, estrategia=estrategia)
+        print(f"{estrategia:<28}{c['trazas']:>12,}{c['de_juez']:>10,}"
+              f"{('sí' if c['cabe_en_developer'] else 'NO'):>22}")
+    print()
+
+#%%md
+Dos lecturas que cambian decisiones:
+
+1. **Con 20.000 peticiones al mes, ninguna estrategia cabe en el plan Developer** — ni
+   siquiera no evaluar nada. El límite lo revienta tu propio tráfico, no el juez. En ese
+   punto la conversación no es «cómo evalúo barato» sino «qué muestreo aplico a las
+   trazas», que es el notebook 03.
+2. **«Solo código» cuesta exactamente lo mismo que no evaluar nada.** Es el almuerzo
+   gratis de este notebook: comprobaciones sobre el 100 % de tu tráfico, en producción,
+   por cero trazas. Si tu criterio tiene una marca formal —y el proyecto P3 mostró que a
+   veces la tiene— esto es todo lo que necesitas.
+
+</details>
+
+#%%md
+### Ejercicio 2 — La regla que se come el conjunto
+
+Simula un año de la regla «todo lo que falla va al dataset» y compárala con la versión
+con cortafuegos del apartado 2. Mide qué le pasa al conjunto y a lo que tarda.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+TIPOS_DE_FALLO = ["no da el plazo", "herramienta equivocada", "se inventa una cifra",
+                  "responde en otro idioma", "cita una fuente que no existe"]
+CATEGORIAS = ["facturacion", "integraciones", "acceso_cuenta", "rendimiento",
+              "bug_producto", "datos_privacidad", "solicitud_funcionalidad", "otros"]
+
+def un_ano(con_cortafuegos: bool, *, semilla: int = 2) -> list[dict]:
+    """Doce meses de fallos entrando en el conjunto, con y sin filtro."""
+    aleatorio = random.Random(semilla)
+    dataset, historial = [], []
+    for mes in range(1, 13):
+        # Unos 40 fallos al mes, con los tipos repitiéndose mucho —como en la realidad—.
+        for _ in range(40):
+            caso = {"categoria": aleatorio.choice(CATEGORIAS),
+                    "tipo_de_fallo": aleatorio.choice(TIPOS_DE_FALLO)}
+            if con_cortafuegos:
+                entra, _ = merece_entrar(caso, dataset, tope=200)
+            else:
+                entra = True
+            if entra:
+                dataset.append(caso)
+        historial.append({"mes": mes, "casos": len(dataset),
+                          "minutos": round(len(dataset) * 3 / 60, 1)})
+    return historial
+
+
+separador("un año de la regla «todo lo que falla entra»")
+print(f"{'mes':>5}{'sin cortafuegos':>18}{'min':>8}{'con cortafuegos':>20}{'min':>8}")
+print("-" * 62)
+sin_filtro, con_filtro = un_ano(False), un_ano(True)
+for a, b in zip(sin_filtro, con_filtro):
+    if a["mes"] % 3 == 0 or a["mes"] == 1:
+        print(f"{a['mes']:>5}{a['casos']:>18}{a['minutos']:>8}"
+              f"{b['casos']:>20}{b['minutos']:>8}")
+
+print()
+print(f"  al año: {sin_filtro[-1]['casos']} casos y {sin_filtro[-1]['minutos']} minutos "
+      f"por ejecución, frente a {con_filtro[-1]['casos']} y {con_filtro[-1]['minutos']}")
+
+#%%md
+Sin cortafuegos, en un año el conjunto pasa de cero a casi quinientos casos y de correr
+en un minuto a tardar veinticinco. Y ahí muere: **un conjunto que tarda veinticinco
+minutos no se ejecuta en cada cambio**, así que deja de detectar regresiones y se queda
+como un fichero grande que nadie mira.
+
+Con el filtro por firma, el conjunto se estabiliza en cuarenta casos —uno por
+combinación de categoría y tipo de fallo— y sigue corriendo en dos minutos el mes doce.
+
+**La regla no es «recoge todos los fallos»: es «recoge un ejemplar de cada fallo».** Los
+otros cuarenta y nueve del mismo tipo no añaden información y sí tiempo, que es
+exactamente lo que decía el notebook 06 al hablar de quitar los casos que ya nadie falla.
+
+</details>
+
+#%%md
+## 7. Resumen
+
+- **Reglas, paneles y alertas no tienen API** en esta versión: se configuran a mano.
+  Escribe en tu repositorio qué reglas existen y con qué filtro, o no podrás
+  reconstruirlas.
+- Tres reglas que pagan su configuración: los fallos al dataset, lo dudoso a la cola de
+  anotación, y **los fallos silenciosos del notebook 01** — la que nadie tiene, porque su
+  población no aparece en ningún panel.
+- «Todo lo que falla va al dataset» **mata el conjunto en un año**: de 40 a 480 casos y
+  de un minuto a veinticinco. La regla correcta es **un ejemplar de cada tipo de fallo**.
+- La **evaluación en línea** mide el tráfico real y su coste es proporcional a él. Un
+  juez a todo es una traza más por petición.
+- El **evaluador de código se sube y corre en el servidor**, sobre el 100 % de tu tráfico,
+  **por cero trazas**. Es la versión en producción del notebook 08 y casi nadie sabe que
+  existe.
+- El **juez en línea referencia un prompt del Hub**, así que su prompt está versionado
+  quieras o no. Es el puente con el notebook 15.
+- **Muestrea estratificado, no uniforme**: lo raro entero y lo abundante al 2 %. Y decide
+  con un **hash del identificador**, no con `random`, para que la decisión sea
+  reproducible y no haga falta coordinar servicios.
+- `client.evaluators` e `client.issues` exigen **LangSmith 0.16+** en autoalojado, y los
+  *issues* están marcados como beta.
+
+**Siguiente:** [`15_prompts_versionados`](15_prompts_versionados.ipynb) — el prompt es la
+parte de tu sistema que más cambia y la que peor se versiona. Y ahora, además, es de lo
+que depende tu juez de producción.
