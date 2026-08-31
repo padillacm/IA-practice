@@ -69,7 +69,7 @@ Ver [`PLAN.md`](PLAN.md) para el detalle y la justificación de cada notebook.
 |---|---|---|
 | 0 · Punto de partida | 1 | **listo** |
 | 1 · Trazas: qué se registra y qué no | 5 + 1 proyecto | **listo** |
-| 2 · Datasets y experimentos | 5 + 1 proyecto | 3 de 6 |
+| 2 · Datasets y experimentos | 5 + 1 proyecto | 4 de 6 |
 | 3 · El humano en el bucle de la calidad | 2 + 1 proyecto | pendiente |
 | 4 · Producción: mirar y actuar | 3 + 1 proyecto | pendiente |
 | 5 · Gobierno | 2 | pendiente |
@@ -78,11 +78,11 @@ Ver [`PLAN.md`](PLAN.md) para el detalle y la justificación de cada notebook.
 
 | Filtro | Resultado |
 |---|---|
-| Notebooks escritos | 10 (módulos 0 y 1 completos, módulo 2 en curso) |
+| Notebooks escritos | 11 (módulos 0 y 1 completos, módulo 2 en curso) |
 | Problemas estáticos | 0 |
-| Notebooks que se ejecutan enteros, sin clave y **con la red cortada** | 10 de 10 |
+| Notebooks que se ejecutan enteros, sin clave y **con la red cortada** | 11 de 11 |
 | Intentos de salida a `smith.langchain.com` durante esa ejecución | **0** |
-| Pruebas | 87 de 87, con la red cortada también |
+| Pruebas | 92 de 92, con la red cortada también |
 | Entornos vírgenes (`uv sync` y `pip install -r requirements.txt`) | los dos pasan |
 
 Celdas marcadas `@online`, escritas contra la firma real del SDK pero **no ejecutadas**:

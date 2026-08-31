@@ -371,3 +371,119 @@ def test_los_evaluadores_de_trayectoria_del_otro_curso_se_integran():
     esperada = con("contar_tickets")
     assert evaluador(outputs=con("contar_tickets"), reference_outputs=esperada)["score"]
     assert not evaluador(outputs=con("detalle_ticket"), reference_outputs=esperada)["score"]
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 09 · varianza y regresión
+# ------------------------------------------------------------------------------------
+
+
+def test_el_mismo_sistema_da_notas_distintas():
+    """El punto de partida del notebook 09, medido.
+
+    Quince ejecuciones idénticas sobre el mismo conjunto y notas que se separan
+    decenas de puntos. Si esto dejara de ser cierto, el notebook sobra.
+    """
+    import random
+    import statistics
+
+    ejemplos = _conjunto(30)
+
+    def sistema(semilla):
+        aleatorio = random.Random(semilla)
+        return lambda entradas: {"acierta": aleatorio.random() < 0.70}
+
+    def acierto(outputs, reference_outputs):
+        return {"key": "acierto", "score": float((outputs or {}).get("acierta", False))}
+
+    notas = [curso.resumen_del_experimento(
+                curso.experimento_local(sistema(s), ejemplos, evaluadores=[acierto]))["acierto"]
+             for s in range(15)]
+
+    assert 0.6 < statistics.mean(notas) < 0.8      # la media sí converge al valor real
+    assert max(notas) - min(notas) > 0.15          # pero cada medida suelta baila mucho
+
+
+def test_el_ruido_sigue_la_ley_de_la_raiz():
+    """`σ = √(p(1−p)/n)`, comprobado contra la medida y no contra el libro.
+
+    Con más casos, menos ruido — y la reducción no es lineal.
+    """
+    import math
+    import random
+    import statistics
+
+    def medir_ruido(n):
+        ejemplos = _conjunto(n)
+
+        def sistema(semilla):
+            aleatorio = random.Random(semilla)
+            return lambda entradas: {"acierta": aleatorio.random() < 0.70}
+
+        def acierto(outputs, reference_outputs):
+            return {"key": "acierto", "score": float((outputs or {}).get("acierta", False))}
+
+        notas = [curso.resumen_del_experimento(
+                    curso.experimento_local(sistema(s), ejemplos,
+                                            evaluadores=[acierto]))["acierto"]
+                 for s in range(15)]
+        return statistics.stdev(notas), math.sqrt(0.70 * 0.30 / n)
+
+    ruido_10, teorico_10 = medir_ruido(10)
+    ruido_200, teorico_200 = medir_ruido(200)
+
+    assert ruido_200 < ruido_10 / 2               # más casos, mucho menos ruido
+    for medido, teorico in ((ruido_10, teorico_10), (ruido_200, teorico_200)):
+        assert 0.4 < medido / teorico < 2.2, f"medido {medido} frente a teórico {teorico}"
+
+
+def test_repetir_no_aporta_nada_sobre_un_sistema_determinista():
+    """Comprobación que ahorra dinero: si el sistema es determinista, N repeticiones
+    son N veces el coste y cero información."""
+    ejemplos = _conjunto(20)
+
+    def determinista(entradas):
+        texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+        return {"acierta": "factur" in texto}
+
+    def acierto(outputs, reference_outputs):
+        return {"key": "acierto", "score": float((outputs or {}).get("acierta", False))}
+
+    por_caso: dict[str, set] = {}
+    for fila in curso.experimento_local(determinista, ejemplos, evaluadores=[acierto],
+                                        repeticiones=5):
+        clave = str(fila["example"].id)
+        for resultado in fila["evaluation_results"]["results"]:
+            por_caso.setdefault(clave, set()).add(resultado.score)
+
+    assert all(len(puntuaciones) == 1 for puntuaciones in por_caso.values())
+
+
+def test_la_banda_de_ruido_depende_del_tamano_del_conjunto():
+    """La tabla que resume el notebook 09: la MISMA diferencia es ruido o mejora
+    según cuántos casos la respalden."""
+    import math
+
+    def decidir(nueva, anterior, *, n, sigmas=2.0):
+        p = (nueva + anterior) / 2
+        banda = sigmas * math.sqrt(2 * p * (1 - p) / n)
+        if nueva - anterior < -banda:
+            return "BLOQUEA"
+        if nueva - anterior > banda:
+            return "MEJORA"
+        return "RUIDO"
+
+    assert decidir(0.78, 0.72, n=20) == "RUIDO"
+    assert decidir(0.78, 0.72, n=1000) == "MEJORA"
+    assert decidir(0.40, 0.72, n=30) == "BLOQUEA"
+
+
+def test_evaluate_comparative_permite_desordenar_las_posiciones():
+    """`randomize_order` es el arreglo directo del sesgo de posición del notebook 08."""
+    import inspect
+
+    from langsmith.evaluation import evaluate_comparative
+
+    parametros = inspect.signature(evaluate_comparative).parameters
+    assert "randomize_order" in parametros
+    assert parametros["randomize_order"].default is False     # hay que pedirlo
