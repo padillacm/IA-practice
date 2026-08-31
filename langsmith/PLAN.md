@@ -1,11 +1,15 @@
 # Plan: curso de LangSmith
 
-Documento de planificación para una rama nueva, complementaria al curso de LangGraph que
-ya está en `langgraph/` (38 notebooks, módulos 0-7).
+Plan del curso de LangSmith que vive en este directorio, complementario al curso de
+LangGraph que está en `langgraph/` (38 notebooks, módulos 0-7).
 
-> **Estado:** plan aprobado en lo esencial (cuenta Developer, formato complemento). La rama
-> todavía **no está creada** — hace falta tu visto bueno explícito para crearla y empujarla,
-> porque mi permiso actual es solo para `claude/langgraph-notebooks-course-nokcof`.
+> **Estado:** en construcción, sobre la rama `claude/langgraph-notebooks-course-nokcof`
+> —la única para la que tengo permiso—, en el directorio `langsmith/`. Fase 1 en curso:
+> infraestructura lista y verificada, notebooks 00, 01 y 02 escritos.
+>
+> Este documento se corrige a medida que el SDK desmiente cosas. Las correcciones se
+> dejan escritas y marcadas en vez de reescribirse en silencio, porque saber qué se
+> creyó y por qué era falso vale tanto como el dato bueno.
 
 ---
 
@@ -107,25 +111,42 @@ LangChain, y comparativas de terceros para la parte económica.
 Lo que sigue **ya está comprobado en este entorno, sin clave ni red**, salvo donde se indica.
 Esto es lo que va a alimentar la tabla «Detalles que sorprenden» del README del curso.
 
-### Hallazgo 1 · El SDK reconoce 51 variables de entorno, y la documentación cubre seis
+### Hallazgo 1 · El SDK lee 37 variables de entorno, y la documentación cubre seis
 
-Las conté sobre el código instalado. La mayoría no aparecen en ninguna guía, y varias
-resuelven problemas reales:
+> **Corregido al escribir el notebook 02.** Este documento decía «51». Al convertir el
+> recuento en código ejecutable, la cifra no se sostuvo. La buena, medida sobre
+> langsmith 0.11.2, es **37 nombres lógicos y 74 grafías** — cada nombre se resuelve
+> bajo `LANGSMITH_` y bajo `LANGCHAIN_`. Hay que sumar dos cosas para contarlas: las
+> escritas literalmente (`os.environ.get("LANGSMITH_...")`) y las que el SDK construye
+> en `get_env_var("NOMBRE")`. El notebook 02 trae el recuento como celda ejecutable,
+> así que envejece a la vista en vez de en silencio.
+
+La mayoría no aparecen en ninguna guía, y varias resuelven problemas reales:
 
 | Variable | Para qué | Por qué importa |
 |---|---|---|
 | `LANGSMITH_TRACING_SAMPLING_RATE` | Muestrear trazas | **La herramienta del presupuesto** (sección 2) |
 | `LANGSMITH_TEST_CACHE` | Cachear las respuestas del modelo en las pruebas | Pruebas con LLM **deterministas y gratis** en CI |
 | `LANGSMITH_TEST_TRACKING` | Correr las pruebas sin subir nada | Modo local del *plugin* de pytest |
-| `LANGSMITH_TRACING_BACKGROUND` | Enviar en primer plano | **El arreglo de las trazas que se pierden** (hallazgo 2) |
-| `LANGSMITH_REPLICAS` | Duplicar trazas a varios proyectos | Un mismo agente observado por dos equipos |
+| `LANGSMITH_HIDE_INPUTS` / `_OUTPUTS` / `_METADATA` | Mandar la forma, no el contenido | Cuando los datos no puedan salir (nb 05) |
+| `LANGSMITH_FAILED_TRACES_DIR` / `_MAX_MB` | Dónde y cuánto guardar de lo que no se pudo enviar | El arreglo de las trazas perdidas (hallazgo 2) |
 | `LANGSMITH_RUNS_ENDPOINTS` | Enviar a varios destinos | Migrar de instancia sin perder cobertura |
-| `LANGSMITH_EXCLUDE_INPUTS_ON_PATCH` | No reenviar las entradas al cerrar el run | Ahorra ancho de banda; por defecto ya está a `True` |
-| `LANGSMITH_FAILED_TRACES_MAX_MB` | Tope del buffer de trazas fallidas | Por defecto 100 MB de tu RAM |
+| `LANGSMITH_EXCLUDE_INPUTS_ON_PATCH` | No reenviar las entradas al cerrar el run | Ahorra ancho de banda |
 | `LANGSMITH_DISABLE_RUN_COMPRESSION` | Desactivar la compresión | Depurar problemas de ingesta |
 
-Da para una sección propia en el notebook 02, y varias son la respuesta a preguntas que en
-los foros se contestan con «no se puede».
+**Dos entradas de la tabla original se han caído porque no existen en el SDK instalado**,
+y conviene que quede escrito para no volver a proponerlas:
+
+- `LANGSMITH_TRACING_BACKGROUND` — no existe. Lo que controla el envío síncrono es
+  `auto_batch_tracing=False` en el constructor de `Client`.
+- `LANGSMITH_REPLICAS` — no es una variable de entorno, sino una clave de la cabecera
+  `baggage` del trazado distribuido. Las réplicas se configuran con el parámetro
+  `replicas=` de `tracing_context`.
+
+Y aparecieron dos trampas que valen más que la tabla entera, las dos silenciosas:
+`LANGSMITH_` gana siempre sobre `LANGCHAIN_`, y `get_env_var` está decorada con
+`lru_cache`, así que cambiar una variable en caliente no tiene ningún efecto. Las dos
+están en el notebook 02, reproducidas.
 
 ### Hallazgo 2 · Las trazas se pierden si el proceso muere antes de vaciar el buffer
 
@@ -140,7 +161,14 @@ Tres arreglos, con sus contrapartidas, y los tres verificados como API existente
 |---|---|
 | `wait_for_all_tracers()` antes de salir | Bloquea al final; es lo correcto en un script |
 | `client.flush()` explícito | Control fino, hay que acordarse |
-| `LANGSMITH_TRACING_BACKGROUND=false` | Añade latencia a **cada** llamada |
+| `Client(auto_batch_tracing=False)` | Envío síncrono: añade latencia a **cada** llamada |
+| `Client(tracing_error_callback=...)` | No evita la pérdida, pero **te enteras** — que es lo que hoy no pasa |
+| `LANGSMITH_FAILED_TRACES_DIR` | Deja en disco lo que no pudo enviar, para reintentarlo |
+
+Y una comprobación que ya está hecha, no leída: **con la red cortada y el trazado activo,
+una función decorada devuelve su resultado con normalidad.** El SDK se traga el fallo de
+envío y escribe una línea de log. La traza se pierde y el programa no se entera. Ese es
+el punto de partida del notebook.
 
 Conecta directamente con el notebook 28 del curso de LangGraph: un pod que recibe `SIGTERM`
 tiene exactamente este problema con sus trazas, y el drenaje que ya diseñamos allí tiene que
@@ -322,10 +350,13 @@ langsmith/
 └── ejemplos/
 ```
 
-Decisión pendiente menor: si `langsmith/` comparte `pyproject.toml` con `langgraph/` o tiene
-el suyo. **Recomiendo compartirlo** (un solo lock, un solo entorno, y los notebooks de
-LangSmith importan del curso de LangGraph sin acrobacias), con un grupo de dependencias
-`langsmith` aparte.
+> **Decidido al montar la infraestructura, y al revés de lo que decía este plan.**
+> `langsmith/` es **autocontenido**: su propio `pyproject.toml` y su propio `uv.lock`.
+> Compartirlo obligaría a convertir el repositorio en un *workspace* de uv y a mover el
+> lock ya verificado del curso de LangGraph; el ahorro sería un `uv sync` y el coste,
+> tocar infraestructura verificada y volver a validar 38 notebooks y 83 pruebas. Lo
+> único que se comparte son los datos: `ruta_datos()` los busca aquí y luego en
+> `../langgraph/data/`.
 
 ---
 
@@ -383,15 +414,15 @@ que lo repita en 14 notebooks más.
 
 ---
 
-## 9. Lo que necesito de ti para empezar
+## 9. Lo que necesito de ti
 
-1. **Permiso para crear la rama.** Propongo `claude/langsmith-notebooks-course`. Mi permiso
-   actual es solo para `claude/langgraph-notebooks-course-nokcof`, así que no la creo hasta
-   que lo digas.
-2. **Nada más.** La clave de LangSmith **no me la des**: no la necesito (escribo para los dos
-   modos y verifico el offline) y no quiero que una clave tuya acabe en un entorno efímero.
+1. **Nada para seguir.** El curso se está construyendo en `langsmith/`, sobre la rama
+   autorizada. No hace falta una rama nueva.
+2. **La clave de LangSmith no me la des.** No la necesito —escribo para los dos modos y
+   verifico el local entero— y no quiero que una clave tuya acabe en un entorno efímero.
    La pondrás tú en tu `.env`, que está en `.gitignore`.
-
-Y una pregunta abierta, por si tienes preferencia: **¿empiezo por la fase 1 completa, o
-prefieres un notebook piloto** (el `01_anatomia_de_una_traza`) para validar el tono, el
-mecanismo de los dos modos y el nivel de profundidad antes de comprometer el resto?
+3. **Cuando quieras, una pasada con tu clave.** Después de la fase 1 tiene sentido que
+   ejecutes los notebooks en modo en línea: es lo único que puede depurar las celdas
+   `@online`, que están escritas contra la firma real de cada función pero no ejecutadas.
+   Cada fallo que encuentres es un error del material, y `@online` te lo señala sin
+   romper el notebook.
