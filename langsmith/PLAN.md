@@ -3,9 +3,15 @@
 Plan del curso de LangSmith que vive en este directorio, complementario al curso de
 LangGraph que está en `langgraph/` (38 notebooks, módulos 0-7).
 
-> **Estado:** en construcción, sobre la rama `claude/langgraph-notebooks-course-nokcof`
-> —la única para la que tengo permiso—, en el directorio `langsmith/`. Fase 1 en curso:
-> infraestructura lista y verificada, notebooks 00, 01 y 02 escritos.
+> **Estado: terminado.** Las cinco fases están cerradas: 22 notebooks (módulos 0 a 5,
+> con los cuatro proyectos), 163 pruebas y 22/22 notebooks ejecutándose enteros con la
+> red cortada. Vive en la rama `claude/langgraph-notebooks-course-nokcof` —la única para
+> la que tengo permiso—, en el directorio `langsmith/`.
+>
+> Queda **una** cosa que no puedo hacer yo: pasar el curso con una clave real. Las 42
+> celdas `@online` están escritas contra la firma verificada de cada función del SDK,
+> pero no se han ejecutado contra el servicio. Están marcadas una a una y el `README`
+> dice cuáles son.
 >
 > Este documento se corrige a medida que el SDK desmiente cosas. Las correcciones se
 > dejan escritas y marcadas en vez de reescribirse en silencio, porque saber qué se
