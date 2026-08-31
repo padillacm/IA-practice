@@ -1,0 +1,541 @@
+#%%md
+# 15 · Prompts versionados
+
+**Módulo 4 · Producción** — *tiempo estimado: 70 minutos* — *consumo: 0 trazas*
+
+El prompt es la parte de tu sistema que **más cambia y peor se versiona**. Vive en una
+cadena de tres líneas dentro de un fichero, lo edita quien no toca el resto del código, y
+cuando algo va mal nadie sabe cuál estaba desplegado.
+
+Y desde el notebook 14 hay una razón nueva para tomárselo en serio: **el prompt de tu juez
+de producción es un prompt del Hub**, referenciado por *handle* y por *commit*.
+
+Al terminar sabrás:
+
+1. Cuándo el Hub mejora tu repositorio de código y **cuándo lo empeora**.
+2. Publicar, etiquetar y traerte una versión concreta.
+3. La **caché de cinco minutos** que decide cuánto tarda en desplegarse un cambio.
+4. Por qué traerse un prompt público ajeno está **desactivado por defecto**.
+5. El puente con los *assistants* del curso de LangGraph: dónde vive de verdad la versión.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import hashlib, inspect
+from utils.curso import init, online, cliente, separador
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. El Hub frente a tu repositorio
+
+La pregunta que hay que responder antes de mover nada: **¿por qué no dejar el prompt en el
+código, como todo lo demás?**
+
+| | En tu repositorio | En el Hub |
+|---|---|---|
+| Quién lo edita | Quien sabe hacer un *pull request* | **Cualquiera de tu equipo** |
+| Revisión | *Pull request* con diff | En la interfaz, sin revisión obligatoria |
+| Desplegar un cambio | Un despliegue | **Inmediato**, sin desplegar |
+| Rollback | Otro despliegue | Cambiar una etiqueta |
+| Historia | Junto al código que lo usa | Aparte del código que lo usa |
+| Probar antes | Tus pruebas | Playground |
+
+Las dos filas en negrita son las mismas: **el Hub desacopla el prompt del despliegue**. Y
+eso es exactamente su ventaja y su peligro, según cómo lo montes.
+
+**Úsalo cuando** el prompt lo escribe alguien que no despliega, cuando quieres iterar sin
+un ciclo de despliegue, o cuando —como en el notebook 14— **una funcionalidad de LangSmith
+lo exige**: el juez en línea solo acepta prompts del Hub.
+
+**No lo uses cuando** el prompt está acoplado al código que lo rodea —si cambiar el prompt
+obliga a cambiar el parser de la salida, separarlos es garantizar que se desincronicen— o
+cuando tu equipo es una persona que despliega igualmente.
+
+> **Y una cosa que hay que decidir a conciencia, no por defecto:** poner el prompt en el
+> Hub significa que **alguien puede cambiar el comportamiento de producción sin pasar por
+> tu CI**. Toda la maquinaria de los módulos 2 y 3 —la puerta, la banda de ruido, el juez
+> alineado— se salta si el cambio no pasa por ahí. El apartado 5 es sobre cómo evitarlo.
+
+#%%md
+## 2. Publicar, etiquetar, traerse
+
+El modelo es el de git: cada `push` crea un *commit*, y las **etiquetas** son lo que
+apunta a una versión concreta.
+
+#%%py
+from langsmith import Client
+
+for metodo in ("push_prompt", "create_commit", "pull_prompt", "list_prompt_commits"):
+    firma = inspect.signature(getattr(Client, metodo))
+    print(f"{metodo}:")
+    for nombre, p in firma.parameters.items():
+        if nombre != "self":
+            print(f"     {nombre}")
+    print()
+
+#%%md
+El identificador tiene tres partes, y la tercera es la que importa en producción:
+
+```
+mi-organizacion/soporte-clasificador          -> la última versión. NO uses esto en producción
+mi-organizacion/soporte-clasificador:produccion  -> la etiqueta «produccion»
+mi-organizacion/soporte-clasificador:a1b2c3d  -> un commit concreto
+```
+
+> **En producción, nunca sin etiqueta.** Sin ella cada despliegue —y cada reinicio de un
+> proceso— puede coger una versión distinta, y el día que alguien guarde un borrador en la
+> interfaz, tu producción cambia de comportamiento sin que nadie haya desplegado nada.
+
+#%%py
+from langchain_core.prompts import ChatPromptTemplate
+
+CLASIFICADOR_V1 = ChatPromptTemplate.from_messages([
+    ("system", "Clasifica el ticket en una de estas categorías: {categorias}. "
+               "Responde solo con la categoría."),
+    ("human", "Asunto: {asunto}\nMensaje: {mensaje}"),
+])
+
+separador("el prompt, como objeto")
+print("  variables que espera:", sorted(CLASIFICADOR_V1.input_variables))
+print("  mensajes:", len(CLASIFICADOR_V1.messages))
+
+@online("Publicar la primera versión y etiquetarla", trazas=0)
+def _():
+    c = cliente()
+    url = c.push_prompt(
+        "soporte-clasificador",
+        object=CLASIFICADOR_V1,
+        description="Clasificador de tickets del curso.",
+        commit_description="v1: categorías por parámetro, respuesta escueta",
+        commit_tags=["produccion"],       # la etiqueta que leerá tu aplicación
+        tags=["soporte", "clasificacion"],
+    )
+    print(f"  publicado en {url}")
+
+
+@online("Ver el historial de versiones", trazas=0)
+def _():
+    for commit in cliente().list_prompt_commits("soporte-clasificador", limit=10):
+        print(f"  {commit.commit_hash[:8]}  {commit.tags or []}")
+
+#%%md
+### El cambio y la vuelta atrás
+
+Publicar una versión nueva **no la despliega**: la despliega mover la etiqueta. Eso es lo
+que convierte un rollback en una operación de un segundo.
+
+#%%py
+CLASIFICADOR_V2 = ChatPromptTemplate.from_messages([
+    ("system", "Clasifica el ticket en una de estas categorías: {categorias}.\n"
+               "Si ninguna encaja, responde «otros». No inventes categorías.\n"
+               "Responde solo con la categoría, en minúsculas."),
+    ("human", "Asunto: {asunto}\nMensaje: {mensaje}"),
+])
+
+@online("Publicar v2 SIN desplegarla", trazas=0)
+def _():
+    c = cliente()
+    c.push_prompt("soporte-clasificador", object=CLASIFICADOR_V2,
+                  commit_description="v2: obliga a «otros» y a minúsculas",
+                  commit_tags=["candidata"])       # <- NO «produccion»
+    print("  v2 publicada como «candidata». Producción sigue en v1.")
+
+
+@online("Evaluar la candidata antes de moverla", trazas=0)
+def _():
+    """Aquí es donde el módulo 2 se engancha con este notebook."""
+    from langsmith import evaluate
+
+    c = cliente()
+    candidata = c.pull_prompt("soporte-clasificador:candidata")
+    print(f"  candidata traída: {len(candidata.messages)} mensajes")
+    print("  -> aquí va tu evaluate() del notebook 07, con la puerta del P2")
+
+
+@online("Desplegar: mover la etiqueta", trazas=0)
+def _():
+    c = cliente()
+    commits = list(c.list_prompt_commits("soporte-clasificador", limit=5))
+    candidata = next(c for c in commits if "candidata" in (c.tags or []))
+    # Publicar sobre ese mismo commit con la etiqueta de producción es el «despliegue».
+    c.push_prompt("soporte-clasificador",
+                  object=c.pull_prompt(f"soporte-clasificador:{candidata.commit_hash}"),
+                  parent_commit_hash=candidata.commit_hash,
+                  commit_tags=["produccion"])
+    print("  etiqueta «produccion» movida. Rollback: volver a mover la etiqueta.")
+
+#%%md
+## 3. La caché de cinco minutos
+
+Aquí hay un detalle de producción que no está destacado en ningún sitio y que explica una
+pregunta recurrente: *«he cambiado el prompt y no pasa nada»*.
+
+**El cliente cachea los prompts que se trae.** Con valores por defecto concretos:
+
+#%%py
+from langsmith import prompt_cache
+
+separador("la caché de prompts, por defecto")
+print(f"  entradas máximas          : {prompt_cache.DEFAULT_PROMPT_CACHE_MAX_SIZE}")
+print(f"  caducidad (ttl_seconds)   : {prompt_cache.DEFAULT_PROMPT_CACHE_TTL_SECONDS} s "
+      f"= {prompt_cache.DEFAULT_PROMPT_CACHE_TTL_SECONDS // 60} minutos")
+print(f"  refresco en segundo plano : "
+      f"{prompt_cache.DEFAULT_PROMPT_CACHE_REFRESH_INTERVAL_SECONDS} s")
+print()
+print("  firma de PromptCache:", inspect.signature(prompt_cache.PromptCache.__init__))
+
+#%%md
+O sea: **mueves la etiqueta y tu proceso puede seguir usando el prompt viejo hasta cinco
+minutos.** Y no es un fallo: es lo que evita una llamada a LangSmith en cada petición.
+
+Lo que hay que saber hacer con eso:
+
+| Situación | Qué usar |
+|---|---|
+| Producción normal | El valor por defecto. Cinco minutos de retraso es aceptable |
+| Un rollback urgente | `skip_cache=True`, o reiniciar el proceso |
+| Un proceso de larga vida que quieres que refresque antes | `configure_global_prompt_cache(ttl_seconds=60)` |
+| Pruebas y CI | `disable_prompt_cache=True`: caché en una prueba es un fallo intermitente |
+
+#%%py
+separador("las tres formas de gobernar la caché")
+print("  1. global, para todo el proceso:")
+print("       from langsmith import configure_global_prompt_cache")
+print("       configure_global_prompt_cache(max_size=200, ttl_seconds=60)")
+print()
+print("  2. por cliente:")
+print("       Client(disable_prompt_cache=True)")
+print()
+print("  3. por llamada, para el rollback urgente:")
+print("       client.pull_prompt('soporte-clasificador:produccion', skip_cache=True)")
+
+#%%py
+# Y la comprobación que conviene tener en el arranque de tu aplicación.
+def prompt_de_produccion(client, identificador: str, *, huella_esperada: str | None = None):
+    """Trae el prompt de producción y comprueba que es el que crees.
+
+    La huella es de la plantilla, no del objeto: dos versiones con el mismo texto dan la
+    misma huella aunque tengan commits distintos, que es justo lo que quieres comprobar.
+    """
+    prompt = client.pull_prompt(identificador, skip_cache=True)
+    texto = "\n".join(str(m) for m in prompt.messages)
+    huella = hashlib.blake2b(texto.encode(), digest_size=6).hexdigest()
+    if huella_esperada and huella != huella_esperada:
+        raise RuntimeError(
+            f"el prompt de producción no es el esperado: {huella} != {huella_esperada}. "
+            "Alguien movió la etiqueta sin pasar por la CI.")
+    return prompt, huella
+
+
+# En local lo comprobamos sobre el objeto, sin llamar a nadie.
+texto_v1 = "\n".join(str(m) for m in CLASIFICADOR_V1.messages)
+texto_v2 = "\n".join(str(m) for m in CLASIFICADOR_V2.messages)
+huella = lambda t: hashlib.blake2b(t.encode(), digest_size=6).hexdigest()
+
+separador("la huella distingue las versiones")
+print(f"  v1: {huella(texto_v1)}")
+print(f"  v2: {huella(texto_v2)}")
+print(f"  ¿iguales? {huella(texto_v1) == huella(texto_v2)}")
+
+#%%md
+## 4. Los prompts públicos y por qué están bloqueados
+
+Traerse el prompt público de otra persona **está desactivado por defecto**, y el motivo es
+más serio de lo que parece.
+
+#%%py
+from langsmith import Client
+from utils.curso import _SesionMuda
+
+# Sin lote en segundo plano: aquí no trazamos nada, solo pedimos un prompt.
+cliente_local = Client(api_key="local", session=_SesionMuda(), auto_batch_tracing=False)
+
+try:
+    cliente_local.pull_prompt("otra-persona/su-prompt-genial")
+except ValueError as error:
+    print("al traerse un prompt público ajeno:\n")
+    print(" ", str(error))
+
+#%%md
+«Prompts may contain untrusted serialized LangChain objects.»
+
+Un prompt del Hub **no es una cadena de texto**: es un objeto de LangChain serializado, y
+deserializar un objeto que ha escrito otra persona es ejecutar decisiones suyas en tu
+proceso. Es exactamente el mismo problema que el notebook 22 del curso de LangGraph trata
+con los *checkpoints* y `JsonPlusSerializer`: **la deserialización es una superficie de
+ataque, no un detalle de formato.**
+
+De ahí que el parámetro se llame `dangerously_pull_public_prompt` y no `allow_public`. El
+nombre es la documentación.
+
+> **Regla:** los prompts públicos, para leerlos en la interfaz e inspirarte. Si quieres
+> uno, **cópialo y publícalo en tu organización**. Cuesta un minuto y te quita el problema
+> entero.
+
+#%%md
+## 5. El puente con el curso de LangGraph, y quién manda de verdad
+
+El notebook 18 del curso de LangGraph despliega el agente en el Agent Server, con
+*assistants*: configuraciones con nombre sobre el mismo grafo. Y ahí aparece la pregunta
+que da sentido a este apartado:
+
+> Si el prompt está en el Hub **y** el assistant tiene su configuración, **¿cuál manda?**
+
+La respuesta es la incómoda: **manda el último que se lea en tiempo de ejecución**, y si no
+lo has decidido tú explícitamente, no lo sabes.
+
+Los tres montajes posibles, con su consecuencia:
+
+| Montaje | Quién manda | Consecuencia |
+|---|---|---|
+| Prompt en el código, assistant con parámetros | El código | Cambiar el prompt = desplegar. Seguro y lento |
+| Prompt en el Hub, `pull_prompt` en cada arranque | El Hub, congelado al arrancar | Cambias la etiqueta y **hasta que no reinicies, nada** |
+| Prompt en el Hub, `pull_prompt` por petición | El Hub, con 5 min de caché | Ágil, y **cualquiera puede cambiar producción** |
+
+#%%py
+MONTAJES = {
+    "en el código": {
+        "cambiar_el_prompt": "pull request + despliegue",
+        "rollback": "revertir + desplegar",
+        "puede_saltarse_la_CI": False,
+        "latencia_del_cambio": "un despliegue",
+    },
+    "Hub, leído al arrancar": {
+        "cambiar_el_prompt": "mover etiqueta + reiniciar",
+        "rollback": "mover etiqueta + reiniciar",
+        "puede_saltarse_la_CI": True,
+        "latencia_del_cambio": "un reinicio",
+    },
+    "Hub, leído por petición": {
+        "cambiar_el_prompt": "mover etiqueta",
+        "rollback": "mover etiqueta",
+        "puede_saltarse_la_CI": True,
+        "latencia_del_cambio": "hasta 5 minutos (caché)",
+    },
+}
+
+separador("los tres montajes")
+for nombre, datos in MONTAJES.items():
+    print(f"\n  {nombre}")
+    for clave, valor in datos.items():
+        print(f"     {clave:<24} {valor}")
+
+#%%md
+### La guarda que hace que el tercero sea aceptable
+
+El montaje ágil solo es defendible si **el Hub no puede saltarse tu puerta de calidad**. Y
+eso se consigue con una convención de etiquetas más una comprobación:
+
+```
+candidata   -> lo que se acaba de escribir. NADIE lo lee en producción
+produccion  -> lo único que lee tu aplicación
+```
+
+Y una tarea en la CI que hace lo que ninguna interfaz impide:
+
+#%%py
+def puerta_del_prompt(historial_de_etiquetas: list[dict]) -> list[str]:
+    """Comprueba que «produccion» solo apunta a commits que pasaron la evaluación.
+
+    `historial_de_etiquetas` es lo que devolvería `list_prompt_commits` cruzado con tus
+    experimentos: qué commit tiene la etiqueta y si hay un experimento que lo apruebe.
+    """
+    problemas = []
+    en_produccion = [c for c in historial_de_etiquetas if "produccion" in c["tags"]]
+
+    if len(en_produccion) != 1:
+        problemas.append(f"la etiqueta «produccion» apunta a {len(en_produccion)} commits")
+
+    for commit in en_produccion:
+        if not commit.get("experimento"):
+            problemas.append(f"el commit {commit['hash'][:8]} está en producción y "
+                             "NO tiene ningún experimento asociado")
+        elif not commit.get("aprobado"):
+            problemas.append(f"el commit {commit['hash'][:8]} está en producción y su "
+                             "experimento no pasó la puerta")
+    return problemas
+
+
+ESCENARIOS = {
+    "todo en orden": [
+        {"hash": "a1b2c3d4", "tags": ["produccion"], "experimento": "ci-482", "aprobado": True},
+        {"hash": "e5f6a7b8", "tags": ["candidata"], "experimento": "ci-491", "aprobado": False},
+    ],
+    "alguien movió la etiqueta a mano": [
+        {"hash": "e5f6a7b8", "tags": ["produccion", "candidata"], "experimento": None},
+    ],
+    "en producción, pero suspendió": [
+        {"hash": "c9d0e1f2", "tags": ["produccion"], "experimento": "ci-500", "aprobado": False},
+    ],
+}
+
+separador("la puerta del prompt, en la CI")
+for nombre, historial in ESCENARIOS.items():
+    problemas = puerta_del_prompt(historial)
+    print(f"\n  {nombre}: {'PASA' if not problemas else 'BLOQUEA'}")
+    for problema in problemas:
+        print(f"     - {problema}")
+
+#%%md
+Eso es lo que devuelve el control sin quitar la agilidad: **quien escriba el prompt puede
+publicarlo cuando quiera; lo que no puede es ponerlo en producción sin que haya un
+experimento que lo respalde.**
+
+Y lo que hace que funcione: la comprobación corre **periódicamente**, no solo en el
+despliegue. Porque el punto entero del Hub es que se puede cambiar sin desplegar, así que
+una comprobación que solo corre al desplegar no ve nada.
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — El prompt que cambió y nadie sabe cuándo
+
+Tienes una traza de hace tres semanas que salió mal y quieres saber **con qué versión del
+prompt se produjo**. Escribe la instrumentación que lo hace posible, y comprueba qué pasa
+si no la tienes.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def metadatos_del_prompt(prompt, identificador: str, commit_hash: str) -> dict:
+    """Lo que hay que meter en CADA traza para poder responder esa pregunta.
+
+    Va en el punto de entrada, como todo lo del notebook 02: baja solo al resto.
+    """
+    texto = "\n".join(str(m) for m in prompt.messages)
+    return {
+        "prompt_id": identificador,
+        "prompt_commit": commit_hash[:8],
+        # La huella es la garantía: si alguien reetiquetó, el commit puede coincidir y
+        # el contenido no. La huella no miente.
+        "prompt_huella": hashlib.blake2b(texto.encode(), digest_size=6).hexdigest(),
+    }
+
+
+separador("lo que lleva cada traza")
+print("  ", metadatos_del_prompt(CLASIFICADOR_V1, "soporte-clasificador", "a1b2c3d4e5f6"))
+print("  ", metadatos_del_prompt(CLASIFICADOR_V2, "soporte-clasificador", "e5f6a7b8c9d0"))
+
+#%%py
+# Y con eso, la pregunta se contesta con una consulta del notebook 13.
+CONSULTA = {
+    "project_names": ["soporte-produccion"],
+    "is_root": True,
+    "filter": 'eq(metadata_key, "prompt_commit")',
+    "start_time": "2026-08-01",
+}
+
+separador("sin esos metadatos, qué se puede saber")
+print("  la fecha de la traza    : sí")
+print("  qué prompt estaba puesto: no, salvo que el historial de etiquetas lo diga")
+print("  y el historial de etiquetas dice DÓNDE apunta ahora, no dónde apuntaba entonces")
+print()
+print("  -> por eso el commit y la huella van en los metadatos de la traza,")
+print("     no se deducen después.")
+
+#%%md
+Esa es la lección: **el Hub guarda el historial del prompt, no el historial de qué prompt
+usó cada petición.** Si mueves una etiqueta el martes, las trazas del lunes no cambian —
+pero tampoco te dicen qué tenían.
+
+Tres líneas de metadatos en el punto de entrada, y la pregunta pasa de irresoluble a un
+filtro.
+
+</details>
+
+#%%md
+### Ejercicio 2 — Cuánto tarda de verdad un rollback
+
+Mide el tiempo entre «muevo la etiqueta» y «todos mis procesos usan el prompt nuevo», con
+los valores por defecto de la caché, y compáralo con las alternativas.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def tiempo_de_rollback(estrategia: str, *, procesos: int = 12,
+                       ttl: int = prompt_cache.DEFAULT_PROMPT_CACHE_TTL_SECONDS,
+                       arranque_s: int = 40) -> dict:
+    """Peor caso hasta que TODOS los procesos sirven el prompt nuevo."""
+    if estrategia == "prompt en el código":
+        # Un despliegue completo: construir, publicar, rotar los procesos.
+        segundos = 8 * 60 + procesos * arranque_s
+        riesgo = "ninguno: pasa por la CI"
+    elif estrategia == "Hub, leído al arrancar":
+        segundos = procesos * arranque_s
+        riesgo = "hay que reiniciar; si un proceso no rota, se queda con el viejo"
+    elif estrategia == "Hub, con caché por defecto":
+        segundos = ttl
+        riesgo = "hasta que caduca, unos sirven lo viejo y otros lo nuevo"
+    elif estrategia == "Hub, ttl de 60 s":
+        segundos = 60
+        riesgo = "igual, pero más corto; una llamada más al minuto por proceso"
+    elif estrategia == "Hub, skip_cache en cada petición":
+        segundos = 0
+        riesgo = "una llamada a LangSmith POR PETICIÓN: latencia y dependencia"
+    else:
+        raise ValueError(estrategia)
+    return {"segundos": segundos, "riesgo": riesgo}
+
+
+separador("cuánto tarda un rollback de verdad")
+print(f"{'estrategia':<34}{'peor caso':>12}   riesgo")
+print("-" * 100)
+for estrategia in ("prompt en el código", "Hub, leído al arrancar",
+                   "Hub, con caché por defecto", "Hub, ttl de 60 s",
+                   "Hub, skip_cache en cada petición"):
+    r = tiempo_de_rollback(estrategia)
+    minutos = f"{r['segundos'] // 60}m {r['segundos'] % 60}s"
+    print(f"{estrategia:<34}{minutos:>12}   {r['riesgo']}")
+
+#%%md
+La fila que sorprende es la tercera: **con los valores por defecto, un rollback tarda
+hasta cinco minutos y durante ese rato tienes las dos versiones sirviendo a la vez.**
+
+Para un clasificador da igual. Para un prompt que acaba de filtrar algo que no debía,
+cinco minutos son muchos, y la respuesta correcta no es bajar el `ttl` a cero —eso es una
+llamada por petición— sino tener **el interruptor de emergencia en el código**: una
+variable de entorno que ignore el Hub y use el prompt empotrado.
+
+La versión del Hub es para iterar. La del código es la que te salva el día malo.
+
+</details>
+
+#%%md
+## 7. Resumen
+
+- El Hub **desacopla el prompt del despliegue**, y eso es su ventaja y su peligro: quien
+  edite el prompt puede cambiar producción **sin pasar por tu CI**, y toda la maquinaria
+  de los módulos 2 y 3 se salta.
+- **En producción, nunca sin etiqueta.** Publicar no despliega; despliega mover la
+  etiqueta, y por eso el rollback es una operación de un segundo.
+- **La caché de prompts caduca a los 5 minutos** por defecto (100 entradas, refresco cada
+  60 s). Explica el «he cambiado el prompt y no pasa nada», y significa que durante un
+  rollback conviven las dos versiones. `skip_cache=True` para lo urgente,
+  `disable_prompt_cache=True` en pruebas.
+- **Traerse un prompt público ajeno está bloqueado** porque un prompt es un objeto de
+  LangChain serializado: la deserialización es superficie de ataque, igual que en el
+  notebook 22 del curso de LangGraph. Cópialo a tu organización en vez de usar
+  `dangerously_pull_public_prompt`.
+- Con los *assistants* del curso de LangGraph, **decide explícitamente quién manda**. Tres
+  montajes, y el ágil solo es defendible con una convención de etiquetas y una puerta que
+  compruebe que «produccion» apunta a un commit con experimento aprobado — **ejecutada
+  periódicamente**, no solo al desplegar.
+- Mete **el commit y una huella del prompt en los metadatos de cada traza**. El Hub guarda
+  el historial del prompt, no el de qué prompt usó cada petición.
+
+**Siguiente:** [`P4 · Capstone`](P4_capstone.ipynb) — el bucle entero, de la traza de
+producción al despliegue del cambio, sobre el agente de soporte.

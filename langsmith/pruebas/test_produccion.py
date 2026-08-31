@@ -286,3 +286,140 @@ def test_la_regla_sin_cortafuegos_se_come_el_conjunto():
     assert sin_filtro > 400
     assert con_filtro <= len(categorias) * len(tipos)      # como mucho, uno de cada tipo
     assert con_filtro < sin_filtro / 5
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 15 · prompts versionados
+# ------------------------------------------------------------------------------------
+
+
+def test_la_cache_de_prompts_caduca_a_los_cinco_minutos():
+    """El notebook enseña «he cambiado el prompt y no pasa nada» como consecuencia de
+    unos valores por defecto concretos. Si el SDK los cambia, la explicación deja de
+    ser cierta y hay que reescribirla, no descubrirlo en producción."""
+    from langsmith import prompt_cache
+
+    assert prompt_cache.DEFAULT_PROMPT_CACHE_MAX_SIZE == 100
+    assert prompt_cache.DEFAULT_PROMPT_CACHE_TTL_SECONDS == 300        # cinco minutos
+    assert prompt_cache.DEFAULT_PROMPT_CACHE_REFRESH_INTERVAL_SECONDS == 60
+
+    # Y los defaults de la clase son los mismos que las constantes: el notebook imprime
+    # las constantes y habla del objeto.
+    parametros = inspect.signature(prompt_cache.PromptCache.__init__).parameters
+    assert parametros["max_size"].default == prompt_cache.DEFAULT_PROMPT_CACHE_MAX_SIZE
+    assert parametros["ttl_seconds"].default == prompt_cache.DEFAULT_PROMPT_CACHE_TTL_SECONDS
+
+
+def test_las_tres_formas_de_gobernar_la_cache_existen():
+    """Global, por cliente y por llamada. El notebook las presenta como una tabla de
+    decisión, así que las tres tienen que ser reales."""
+    import langsmith
+    from langsmith import Client
+
+    assert callable(langsmith.configure_global_prompt_cache)
+    assert "disable_prompt_cache" in inspect.signature(Client.__init__).parameters
+    assert "skip_cache" in inspect.signature(Client.pull_prompt).parameters
+
+
+def test_traerse_un_prompt_publico_ajeno_esta_bloqueado(sin_servicio):
+    """El bloqueo es el argumento entero del apartado 4: un prompt del Hub es un objeto
+    de LangChain serializado, y deserializar el de otra persona es superficie de ataque.
+    Se comprueba sin red, con la sesión muda del curso."""
+    from langsmith import Client
+
+    from utils.curso import _SesionMuda
+
+    c = Client(api_key="local", session=_SesionMuda(), auto_batch_tracing=False)
+
+    with pytest.raises(ValueError) as fallo:
+        c.pull_prompt("otra-persona/su-prompt-genial")
+
+    mensaje = str(fallo.value)
+    assert "dangerously_pull_public_prompt" in mensaje
+    assert "untrusted" in mensaje
+
+    # Y el escape es explícito y está donde el notebook dice.
+    assert "dangerously_pull_public_prompt" in inspect.signature(Client.pull_prompt).parameters
+
+
+def test_el_hub_expone_etiquetas_por_commit():
+    """«En producción, nunca sin etiqueta» solo se sostiene si se puede etiquetar un
+    commit al publicarlo y listar después qué etiquetas tiene."""
+    from langsmith import Client
+
+    publicar = inspect.signature(Client.push_prompt).parameters
+    assert "commit_tags" in publicar          # etiquetas de ESTA versión
+    assert "tags" in publicar                 # etiquetas del prompt entero
+    assert "parent_commit_hash" in publicar
+
+    assert "prompt_identifier" in inspect.signature(Client.list_prompt_commits).parameters
+
+
+def test_la_huella_del_prompt_distingue_versiones_y_no_commits():
+    """La huella del notebook es del texto, no del objeto: dos commits con el mismo
+    texto dan la misma huella. Eso es lo que detecta un reetiquetado que no cambia nada
+    y, al revés, un cambio de texto colado bajo el mismo nombre."""
+    import hashlib
+
+    from langchain_core.prompts import ChatPromptTemplate
+
+    def huella(plantilla) -> str:
+        texto = "\n".join(str(m) for m in plantilla.messages)
+        return hashlib.blake2b(texto.encode(), digest_size=6).hexdigest()
+
+    v1 = ChatPromptTemplate.from_messages([("system", "Clasifica: {categorias}.")])
+    v1_otra_vez = ChatPromptTemplate.from_messages([("system", "Clasifica: {categorias}.")])
+    v2 = ChatPromptTemplate.from_messages([("system", "Clasifica: {categorias}. Minúsculas.")])
+
+    assert huella(v1) == huella(v1_otra_vez)      # mismo texto, misma huella
+    assert huella(v1) != huella(v2)
+
+
+def test_la_puerta_del_prompt_bloquea_la_etiqueta_movida_a_mano():
+    """La guarda del apartado 5. Los tres escenarios del notebook, más el que no sale:
+    dos commits con la etiqueta «produccion» a la vez."""
+
+    def puerta(historial):
+        problemas = []
+        en_produccion = [c for c in historial if "produccion" in c["tags"]]
+        if len(en_produccion) != 1:
+            problemas.append(f"la etiqueta «produccion» apunta a {len(en_produccion)} commits")
+        for commit in en_produccion:
+            if not commit.get("experimento"):
+                problemas.append(f"{commit['hash'][:8]} sin experimento")
+            elif not commit.get("aprobado"):
+                problemas.append(f"{commit['hash'][:8]} no pasó la puerta")
+        return problemas
+
+    aprobado = {"hash": "a1b2c3d4", "tags": ["produccion"],
+                "experimento": "ci-482", "aprobado": True}
+    candidata = {"hash": "e5f6a7b8", "tags": ["candidata"],
+                 "experimento": "ci-491", "aprobado": False}
+
+    assert puerta([aprobado, candidata]) == []
+    assert puerta([{"hash": "e5f6a7b8", "tags": ["produccion", "candidata"],
+                    "experimento": None}])
+    assert puerta([{"hash": "c9d0e1f2", "tags": ["produccion"],
+                    "experimento": "ci-500", "aprobado": False}])
+    # Ninguno en producción, y dos a la vez: los dos casos que una interfaz no impide.
+    assert puerta([candidata])
+    assert puerta([aprobado, dict(candidata, tags=["produccion"])])
+
+
+def test_el_rollback_por_cache_es_mas_lento_que_reiniciar_es_falso():
+    """La fila que sorprende del ejercicio 2: con la caché por defecto el rollback tarda
+    cinco minutos, MENOS que rotar los procesos, y durante ese rato conviven las dos
+    versiones. El material afirma las dos cosas; aquí se comprueban."""
+    from langsmith import prompt_cache
+
+    ttl = prompt_cache.DEFAULT_PROMPT_CACHE_TTL_SECONDS
+    por_reinicio = 12 * 40                      # 12 procesos, 40 s de arranque
+
+    assert ttl < por_reinicio                   # la caché es más rápida que reiniciar
+    assert ttl > 60                             # y aun así, más de un minuto conviviendo
+
+    # Durante la ventana, un proceso que cacheó antes del cambio sirve lo viejo.
+    cacheado_en = {"proceso-a": 0, "proceso-b": 290}
+    cambio_en = 100
+    sirven_lo_viejo = [p for p, t in cacheado_en.items() if t < cambio_en < t + ttl]
+    assert sirven_lo_viejo == ["proceso-a"]
