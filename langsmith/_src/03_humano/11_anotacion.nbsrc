@@ -1,0 +1,589 @@
+#%%md
+# 11 · Anotación: de dónde sale la verdad
+
+**Módulo 3 · El humano en el bucle** — *tiempo estimado: 75 minutos* — *consumo: 0 trazas*
+
+El módulo 2 terminó con una deuda escrita en el notebook 08:
+
+> Un juez sin calibrar es una métrica inventada.
+
+Calibrar significa comparar contra algo que sea verdad. Y la verdad, en estas
+aplicaciones, la produce una persona mirando casos. No hay atajo — pero sí hay una forma
+de hacerlo que funciona y varias que no.
+
+Al terminar sabrás:
+
+1. Qué es una **cola de anotación** y qué cambia respecto a mandar un enlace por Slack.
+2. Escribir una **rúbrica que dos personas interpreten igual**, que es donde falla casi
+   todo el mundo.
+3. **Medir el acuerdo entre anotadores**, y por qué el porcentaje de coincidencia miente.
+4. Cuántos casos anotar, y **cuáles**.
+5. Qué hacer con los casos en los que los humanos no se ponen de acuerdo — que son los
+   más informativos.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import collections, itertools, random, statistics
+from utils.curso import init, online, cliente, separador, tickets
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. Por qué una cola y no un enlace por Slack
+
+Lo que hace todo el mundo la primera vez: coger veinte trazas raras, pegarlas en un canal
+y pedir opiniones. Funciona una vez y se muere, por cuatro razones concretas:
+
+| Problema del enlace por Slack | Lo que hace una cola |
+|---|---|
+| Nadie sabe cuáles ya se miraron | Lleva la cuenta: cada caso se asigna y se marca |
+| Cada uno puntúa lo que le parece | La **rúbrica va dentro** de la cola |
+| Las opiniones se pierden en el hilo | El feedback queda **pegado al run** |
+| No se puede medir el acuerdo | Varias personas pueden ver el mismo caso |
+
+Ese último punto es el que importa para el módulo 3: **sin dos anotadores sobre los
+mismos casos no hay forma de saber si tu criterio existe**, y si no existe, calibrar un
+juez contra él no significa nada.
+
+#%%py
+@online("Crear una cola con su rúbrica dentro", trazas=0)
+def _():
+    c = cliente()
+    cola = c.create_annotation_queue(
+        name="soporte-calidad-v1",
+        description="30 respuestas del agente, para calibrar el juez del notebook 12.",
+        # La rúbrica no es un documento aparte: viaja con la cola y la ve el anotador.
+        rubric_instructions=(
+            "Puntúa SOLO si la respuesta resuelve la consulta del cliente. "
+            "No tengas en cuenta el tono, la longitud ni el formato."
+        ),
+        rubric_items=[
+            {
+                "feedback_key": "resuelve",
+                "description": "¿La respuesta contiene lo que el cliente necesitaba?",
+                "score_descriptions": {
+                    "0": "No. Falta el dato, o el dato es incorrecto.",
+                    "1": "Sí. El cliente puede actuar con lo que se le ha dado.",
+                },
+                "is_required": True,
+            },
+            {
+                "feedback_key": "inventa",
+                "description": "¿Afirma algo que no se puede saber con los datos disponibles?",
+                "score_descriptions": {
+                    "0": "No inventa nada.",
+                    "1": "Inventa un plazo, un importe o una política.",
+                },
+                "is_required": True,
+            },
+        ],
+    )
+    print(f"  cola {cola.id} creada con {2} criterios")
+
+@online("Meter en la cola las trazas que peor puntuación implícita tienen", trazas=0)
+def _():
+    c = cliente()
+    cola = next(q for q in c.list_annotation_queues() if q.name == "soporte-calidad-v1")
+
+    # Las candidatas: trazas de producción, no ejemplos de laboratorio (nb 04).
+    candidatas = list(c.list_runs(project_name="curso-langsmith", is_root=True, limit=30))
+    c.add_runs_to_annotation_queue(cola.id, run_ids=[r.id for r in candidatas])
+    print(f"  {len(candidatas)} trazas a la cola")
+
+#%%md
+> **Detalle que ahorra discusiones:** `rubric_items` acepta `score_descriptions`, un
+> diccionario de puntuación → qué significa esa puntuación. Escribirlo es lo que separa
+> «puntúa la calidad del 1 al 5» —que cada persona interpretará a su manera— de una
+> pregunta con respuesta.
+
+#%%md
+## 2. La rúbrica: escribir para que dos personas coincidan
+
+Aquí está el trabajo de verdad, y no es técnico.
+
+Una rúbrica mala no produce datos malos: produce datos **que parecen buenos**. Cada
+anotador es coherente consigo mismo, así que todo parece en orden hasta que mides el
+acuerdo entre ellos y sale bajo.
+
+Las cuatro reglas, por orden de rendimiento:
+
+| Regla | Ejemplo malo | Ejemplo bueno |
+|---|---|---|
+| **Una pregunta por criterio** | «¿Es correcta y útil?» | Dos criterios: `correcta`, `util` |
+| **Binario o tres niveles** | «Del 1 al 5» | 0 / 1, o 0 / 0,5 / 1 con qué es cada uno |
+| **Describir cada valor** | «1 = buena» | «1 = el cliente puede actuar con lo que se le ha dado» |
+| **Decir qué NO cuenta** | (nada) | «No tengas en cuenta el tono ni la longitud» |
+
+La cuarta es la que más sube el acuerdo y la que menos gente escribe. Sin ella, la mitad
+de tus anotadores están puntuando la redacción.
+
+#%%py
+# Vamos a simular dos anotadores con criterios ligeramente distintos, para poder medir.
+# Cada uno tiene su propio sesgo, como pasa de verdad.
+CASOS = [
+    # (respuesta del agente, ¿resuelve de verdad?, ¿está bien redactada?)
+    ("Tu reembolso llega en 5 días hábiles.", True, False),
+    ("Gracias por escribirnos. Lo revisamos y te contamos.", False, True),
+    ("El cargo duplicado del 12/09 se devuelve el 17/09.", True, True),
+    ("Lamentamos las molestias. Un agente te contactará.", False, True),
+    ("Son 87 tickets de facturación abiertos.", True, False),
+    ("Entiendo tu frustración, y haremos todo lo posible.", False, True),
+    ("Puedes cambiar el plan desde Ajustes > Suscripción.", True, True),
+    ("Estamos en ello.", False, False),
+    ("Tu factura de enero está en el correo del día 3.", True, False),
+    ("Sentimos el inconveniente, revisaremos el caso pronto.", False, True),
+]
+
+def anotador_estricto(respuesta, resuelve, bien_redactada):
+    """Sigue la rúbrica: solo mira si resuelve."""
+    return int(resuelve)
+
+def anotador_despistado(respuesta, resuelve, bien_redactada):
+    """No leyó el «no tengas en cuenta el tono». Premia la buena redacción."""
+    return int(resuelve or bien_redactada)
+
+anotaciones_a = [anotador_estricto(*c) for c in CASOS]
+anotaciones_b = [anotador_despistado(*c) for c in CASOS]
+
+separador("dos anotadores, la misma rúbrica mal escrita")
+print(f"{'respuesta':<52}{'A':>3}{'B':>3}")
+print("-" * 60)
+for (respuesta, _, _), a, b in zip(CASOS, anotaciones_a, anotaciones_b):
+    marca = "" if a == b else "   <- discrepan"
+    print(f"{respuesta[:50]:<52}{a:>3}{b:>3}{marca}")
+
+#%%md
+## 3. Medir el acuerdo, y por qué el porcentaje miente
+
+La forma obvia de medir el acuerdo es contar cuántas veces coinciden. Y es engañosa.
+
+#%%py
+def acuerdo_simple(a: list[int], b: list[int]) -> float:
+    return sum(x == y for x, y in zip(a, b)) / len(a)
+
+print(f"acuerdo simple: {acuerdo_simple(anotaciones_a, anotaciones_b):.0%}")
+
+#%%md
+Un 60-80 % suena razonable. El problema es que **dos personas que puntuaran al azar ya
+coincidirían bastante**, sobre todo si una clase domina.
+
+El caso extremo lo deja claro: si el 95 % de tus casos son «sí», dos anotadores que
+respondan siempre «sí» sin mirar tienen un **100 % de acuerdo** y cero criterio.
+
+La medida que corrige eso es la **kappa de Cohen**: descuenta el acuerdo que se
+explicaría por azar.
+
+#%%py
+def kappa_de_cohen(a: list[int], b: list[int]) -> float:
+    """Acuerdo corregido por azar. 1 = perfecto, 0 = el del azar, negativo = peor que el azar."""
+    observado = acuerdo_simple(a, b)
+    n = len(a)
+    categorias = set(a) | set(b)
+    esperado = sum((a.count(c) / n) * (b.count(c) / n) for c in categorias)
+    if esperado == 1:
+        return 1.0
+    return (observado - esperado) / (1 - esperado)
+
+
+def interpretar(kappa: float) -> str:
+    """La escala de Landis y Koch, que es la que se cita en todas partes."""
+    if kappa < 0:    return "peor que el azar"
+    if kappa < 0.20: return "insignificante"
+    if kappa < 0.40: return "aceptable a duras penas"
+    if kappa < 0.60: return "moderado"
+    if kappa < 0.80: return "sustancial"
+    return "casi perfecto"
+
+
+separador("acuerdo simple frente a kappa")
+k = kappa_de_cohen(anotaciones_a, anotaciones_b)
+print(f"  acuerdo simple : {acuerdo_simple(anotaciones_a, anotaciones_b):.0%}")
+print(f"  kappa de Cohen : {k:.2f}  ({interpretar(k)})")
+
+#%%py
+# El caso que demuestra por qué hace falta kappa: una clase que domina.
+casos_faciles_a = [1] * 19 + [0]
+casos_faciles_b = [1] * 20          # el segundo anotador ni miró
+
+print("dos anotadores sobre un conjunto con el 95 % de «sí»:")
+print(f"  acuerdo simple : {acuerdo_simple(casos_faciles_a, casos_faciles_b):.0%}")
+k2 = kappa_de_cohen(casos_faciles_a, casos_faciles_b)
+print(f"  kappa de Cohen : {k2:.2f}  ({interpretar(k2)})")
+print()
+print("  -> el 95 % de acuerdo esconde que uno de los dos no está anotando")
+
+#%%md
+Un 95 % de acuerdo y una kappa cercana a cero. **El porcentaje dice que todo va bien y
+la kappa dice que uno de los dos no está mirando.**
+
+> **La regla operativa:** por debajo de **κ = 0,6** tu rúbrica no está lista, y no tiene
+> sentido calibrar un juez contra esos datos. Arregla la rúbrica antes de seguir. Es lo
+> que hace el apartado 5.
+
+#%%md
+### Más de dos anotadores
+
+Con tres o más se usa la **kappa de Fleiss**, que generaliza la idea. Pero antes de
+llegar ahí, una advertencia práctica: con dos anotadores ya tienes el 80 % de la
+información, y conseguir tres personas que anoten treinta casos es un problema
+organizativo, no estadístico.
+
+#%%py
+def kappa_de_fleiss(anotaciones: list[list[int]]) -> float:
+    """`anotaciones` es una lista por anotador, todas del mismo largo."""
+    n_anotadores = len(anotaciones)
+    n_casos = len(anotaciones[0])
+    categorias = sorted({v for fila in anotaciones for v in fila})
+
+    # Cuántos anotadores eligieron cada categoría, por caso.
+    conteos = [[sum(fila[i] == c for fila in anotaciones) for c in categorias]
+               for i in range(n_casos)]
+
+    p_por_caso = [(sum(n * n for n in fila) - n_anotadores) /
+                  (n_anotadores * (n_anotadores - 1)) for fila in conteos]
+    p_observado = sum(p_por_caso) / n_casos
+
+    p_categoria = [sum(fila[j] for fila in conteos) / (n_casos * n_anotadores)
+                   for j in range(len(categorias))]
+    p_esperado = sum(p * p for p in p_categoria)
+
+    return (p_observado - p_esperado) / (1 - p_esperado) if p_esperado != 1 else 1.0
+
+
+def anotador_muy_estricto(respuesta, resuelve, bien_redactada):
+    """Solo puntúa 1 si además da un dato concreto (una fecha, un número, un sitio)."""
+    tiene_dato = any(c.isdigit() for c in respuesta) or ">" in respuesta
+    return int(resuelve and tiene_dato)
+
+anotaciones_c = [anotador_muy_estricto(*c) for c in CASOS]
+
+k3 = kappa_de_fleiss([anotaciones_a, anotaciones_b, anotaciones_c])
+print(f"kappa de Fleiss con tres anotadores: {k3:.2f}  ({interpretar(k3)})")
+print()
+for etiqueta, (x, y) in {"A vs B": (anotaciones_a, anotaciones_b),
+                         "A vs C": (anotaciones_a, anotaciones_c),
+                         "B vs C": (anotaciones_b, anotaciones_c)}.items():
+    ki = kappa_de_cohen(x, y)
+    print(f"  {etiqueta}: κ = {ki:>5.2f}  ({interpretar(ki)})")
+
+#%%md
+Las tres parejas dicen cosas distintas, y eso **es** el diagnóstico: no hay un problema
+de «los anotadores», hay dos criterios diferentes conviviendo. El apartado 5 los separa.
+
+#%%md
+## 4. Cuántos casos, y cuáles
+
+**Cuántos.** Menos de los que crees. Para calibrar un juez con 30-50 casos bien elegidos
+tienes de sobra, y anotar 200 es la forma más rápida de que nadie vuelva a anotar nunca.
+
+La cuenta que importa no es estadística sino de personas:
+
+> Treinta casos a un minuto por caso son **media hora** de alguien. Eso se puede pedir.
+> Doscientos casos son tres horas y media, y no se va a hacer.
+
+**Cuáles.** Y aquí está la decisión que más rendimiento da. Anotar treinta casos al azar
+es tirar el tiempo: la mayoría serán fáciles y coincidiréis en todos.
+
+Lo que quieres son los casos **donde tu juez y tus datos dudan**:
+
+#%%py
+def elegir_para_anotar(candidatos: list[dict], n: int = 30) -> list[dict]:
+    """Muestra deliberada, no aleatoria. Tres tercios con propósito distinto."""
+    por_tercio = n // 3
+
+    # 1. Donde el juez duda: puntuaciones cerca del centro. Son los casos límite.
+    dudosos = sorted(candidatos, key=lambda c: abs(c["juez"] - 0.5))[:por_tercio]
+
+    # 2. Donde el juez está MUY seguro. Sirve para pillar un juez seguro y equivocado,
+    #    que es el fallo más caro y el que nadie busca.
+    seguros = sorted(candidatos, key=lambda c: -abs(c["juez"] - 0.5))[:por_tercio]
+
+    # 3. Al azar, para no quedarte ciego a lo que no se te ocurrió mirar.
+    restantes = [c for c in candidatos if c not in dudosos and c not in seguros]
+    azar = random.Random(7).sample(restantes, min(por_tercio, len(restantes)))
+
+    return dudosos + seguros + azar
+
+
+aleatorio = random.Random(3)
+candidatos = [{"id": f"run-{i}", "juez": round(aleatorio.random(), 2)} for i in range(90)]
+elegidos = elegir_para_anotar(candidatos, n=30)
+
+separador("qué 30 casos anotar de 90")
+print(f"  al azar        -> puntuaciones del juez entre "
+      f"{min(c['juez'] for c in candidatos):.2f} y {max(c['juez'] for c in candidatos):.2f}")
+print(f"  deliberada     -> {len(elegidos)} casos:")
+print(f"     10 donde el juez duda   (juez entre "
+      f"{min(c['juez'] for c in elegidos[:10]):.2f} y {max(c['juez'] for c in elegidos[:10]):.2f})")
+print(f"     10 donde está seguro    (los extremos)")
+print(f"     10 al azar              (para no quedarte ciego)")
+
+#%%md
+El tercio de «donde está muy seguro» es el que casi nadie incluye, y es el más valioso:
+**un juez que se equivoca con confianza es mucho más peligroso que uno que duda**, porque
+sus errores no llaman la atención en ningún panel.
+
+#%%md
+## 5. Los desacuerdos son la información
+
+Cuando dos anotadores discrepan, el impulso es resolverlo —votar, promediar, que decida
+el jefe— y seguir. Es tirar el dato más caro que has recogido.
+
+Un desacuerdo significa una de tres cosas, y las tres se arreglan de forma distinta:
+
+| Causa | Cómo se reconoce | Arreglo |
+|---|---|---|
+| **La rúbrica es ambigua** | Los desacuerdos se agrupan en un tipo de caso | Reescribir la rúbrica |
+| **El caso es genuinamente ambiguo** | Los dos tienen argumentos | Sacarlo del conjunto |
+| **Alguien se equivocó** | Es aislado y quien lo mira lo ve claro | Corregir y seguir |
+
+Lo que hay que hacer es **mirar los desacuerdos juntos**, no promediarlos.
+
+#%%py
+def analizar_desacuerdos(casos, a, b):
+    """Devuelve los casos en disputa, con lo que tienen en común."""
+    disputados = [(caso, xa, xb) for caso, xa, xb in zip(casos, a, b) if xa != xb]
+    return disputados
+
+
+disputados = analizar_desacuerdos(CASOS, anotaciones_a, anotaciones_b)
+
+separador(f"los {len(disputados)} casos en disputa")
+for (respuesta, resuelve, bien_redactada), xa, xb in disputados:
+    print(f"  A={xa} B={xb}  «{respuesta[:46]}»")
+    print(f"           resuelve={resuelve}  bien_redactada={bien_redactada}")
+
+#%%md
+El patrón salta a la vista: **todos los desacuerdos son respuestas bien redactadas que no
+resuelven nada.** No es que los anotadores sean malos: es que la rúbrica no dejó claro
+que la redacción no cuenta.
+
+Eso es un arreglo de rúbrica, no de anotadores. Y se puede comprobar que funcionó:
+
+#%%py
+RUBRICA_V2 = """
+Puntúa SOLO si la respuesta contiene el dato que el cliente necesita para actuar.
+
+1 = contiene el dato (una fecha, un importe, un sitio concreto, una instrucción).
+0 = no lo contiene, aunque esté bien escrita y sea amable.
+
+NO tengas en cuenta: el tono, la longitud, la cortesía ni el formato.
+Una respuesta amable que no resuelve nada es un 0.
+"""
+
+def anotador_con_rubrica_v2(respuesta, resuelve, bien_redactada):
+    """La rúbrica v2 elimina la ambigüedad, así que los dos anotadores convergen."""
+    return int(resuelve)
+
+nuevas_a = [anotador_con_rubrica_v2(*c) for c in CASOS]
+nuevas_b = [anotador_con_rubrica_v2(*c) for c in CASOS]
+
+separador("antes y después de arreglar la rúbrica")
+for etiqueta, (x, y) in {"rúbrica v1": (anotaciones_a, anotaciones_b),
+                         "rúbrica v2": (nuevas_a, nuevas_b)}.items():
+    ki = kappa_de_cohen(x, y)
+    print(f"  {etiqueta}: acuerdo {acuerdo_simple(x, y):.0%}   κ = {ki:.2f}  ({interpretar(ki)})")
+
+#%%md
+> **Nota honesta sobre esta celda:** los dos anotadores de la v2 son la misma función, así
+> que la kappa perfecta es una tautología, no una demostración. Lo que la celda enseña es
+> **el procedimiento** —cambiar la rúbrica y volver a medir—, no que esta rúbrica concreta
+> funcione. Con personas de verdad la kappa subirá algo, no a 1, y el trabajo es iterar
+> hasta pasar de 0,6.
+
+Ese bucle es el trabajo real de este módulo:
+
+```
+anotar 30 casos con dos personas
+   -> medir kappa
+   -> si κ < 0,6: mirar los desacuerdos JUNTOS, encontrar el patrón,
+                  reescribir la rúbrica, volver a anotar
+   -> si κ >= 0,6: ya tienes verdad contra la que calibrar el juez (notebook 12)
+```
+
+Normalmente hacen falta **dos o tres vueltas**. Y cada vuelta cuesta media hora de dos
+personas, que es por lo que treinta casos y no doscientos.
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — El anotador que no está anotando
+
+Escribe `diagnosticar_anotadores(anotaciones)` que reciba las anotaciones de varias
+personas y detecte los tres problemas que invalidan una ronda:
+
+1. Alguien que **responde casi siempre lo mismo** (no está mirando).
+2. Alguien que **discrepa sistemáticamente con todos** (entendió otra cosa).
+3. Un **acuerdo global bajo** (κ de Fleiss < 0,6), que es problema de la rúbrica.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def diagnosticar_anotadores(anotaciones: dict[str, list[int]]) -> list[str]:
+    nombres = list(anotaciones)
+    avisos = []
+
+    # 1. ¿Alguien responde casi siempre lo mismo?
+    for nombre in nombres:
+        valores = anotaciones[nombre]
+        frecuente = collections.Counter(valores).most_common(1)[0][1] / len(valores)
+        if frecuente > 0.9:
+            avisos.append(f"«{nombre}» responde lo mismo el {frecuente:.0%} de las veces: "
+                          "puede que no esté mirando los casos")
+
+    # 2. ¿Alguien discrepa con todos los demás, MIENTRAS los demás se entienden?
+    #    La condición doble importa: si nadie se pone de acuerdo con nadie, el problema
+    #    no es una persona, es la rúbrica —y eso lo dice la comprobación 3—.
+    for nombre in nombres:
+        otros = [n for n in nombres if n != nombre]
+        if len(otros) < 2:
+            continue
+        contra_el = [kappa_de_cohen(anotaciones[nombre], anotaciones[o]) for o in otros]
+        entre_ellos = [kappa_de_cohen(anotaciones[x], anotaciones[y])
+                       for x, y in itertools.combinations(otros, 2)]
+        if max(contra_el) < 0.3 and min(entre_ellos) > 0.6:
+            avisos.append(f"«{nombre}» no se parece a nadie (κ máx {max(contra_el):.2f}) "
+                          f"pero los demás sí entre sí (κ mín {min(entre_ellos):.2f}): "
+                          "probablemente entendió otra cosa")
+
+    # 3. ¿El acuerdo global da para calibrar?
+    if len(nombres) >= 2:
+        global_ = (kappa_de_fleiss(list(anotaciones.values())) if len(nombres) > 2
+                   else kappa_de_cohen(*anotaciones.values()))
+        if global_ < 0.6:
+            avisos.append(f"acuerdo global κ = {global_:.2f} ({interpretar(global_)}): "
+                          "la rúbrica no está lista, no calibres nada todavía")
+    return avisos
+
+
+def anotador_por_longitud(respuesta, resuelve, bien_redactada):
+    """Un tercer criterio distinto: puntúa la respuesta larga. Nadie escribió que no."""
+    return int(len(respuesta) > 45)
+
+anotaciones_d = [anotador_por_longitud(*c) for c in CASOS]
+
+separador("1) rúbrica ambigua: tres criterios distintos conviviendo")
+for aviso in diagnosticar_anotadores({"ana": anotaciones_a, "luis": anotaciones_b,
+                                      "sara": anotaciones_d}):
+    print("  [AVISO]", aviso)
+
+separador("2) una persona desalineada, mientras las demás sí se entienden")
+for aviso in diagnosticar_anotadores({"ana": nuevas_a, "luis": nuevas_b,
+                                      "marta": [1] * len(CASOS)}):
+    print("  [AVISO]", aviso)
+
+separador("3) ronda sana")
+print("  ", diagnosticar_anotadores({"ana": nuevas_a, "luis": nuevas_b})
+      or "sin avisos: se puede calibrar")
+
+#%%md
+Fíjate en la diferencia entre los dos primeros casos, porque es todo el diagnóstico:
+
+- En el **primero** nadie se entiende con nadie, y **no se señala a nadie en concreto**.
+  Correcto: cuando las tres personas discrepan entre sí, el problema no es una persona,
+  es que la rúbrica admite tres lecturas. El único aviso es el global.
+- En el **segundo** dos coinciden y una tercera no. Ahí sí se la señala — «marta» pulsó
+  «sí» diez veces sin mirar, que es el fallo más frecuente de todos.
+
+Distinguirlos importa porque **los arreglos son opuestos**: en un caso se reescribe la
+rúbrica, en el otro se habla con una persona. Un diagnóstico que marcara a todo el mundo
+en los dos casos no serviría para decidir nada, y esa es la razón de la condición doble
+del código: para acusar a alguien de desalineado, **los demás tienen que entenderse
+entre sí**.
+
+</details>
+
+#%%md
+### Ejercicio 2 — Cuántos anotadores hacen falta de verdad
+
+Con dos anotadores, tu «verdad» es su acuerdo. ¿Cuánto cambia si añades un tercero?
+
+Simula anotadores con una probabilidad de error individual y mide **cuánto se acerca a la
+verdad** el consenso de 1, 2, 3 y 5 personas. Decide con eso cuántas pedir.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def simular_consenso(n_anotadores: int, *, error: float = 0.15,
+                     casos: int = 200, semilla: int = 0) -> float:
+    """Precisión del consenso por mayoría frente a la verdad, con anotadores falibles."""
+    aleatorio = random.Random(semilla)
+    verdad = [aleatorio.randint(0, 1) for _ in range(casos)]
+
+    aciertos = 0
+    for real in verdad:
+        votos = [real if aleatorio.random() > error else 1 - real
+                 for _ in range(n_anotadores)]
+        favor = sum(votos)
+        if favor * 2 == len(votos):
+            # Empate. Con un número par de anotadores pasa a menudo, y hay que decidir
+            # algo: aquí se echa a suertes, que es lo mismo que decir «este caso no lo
+            # sabemos». En la vida real lo rompe una persona mirando (apartado 5).
+            consenso = aleatorio.randint(0, 1)
+        else:
+            consenso = int(favor * 2 > len(votos))
+        aciertos += int(consenso == real)
+    return aciertos / casos
+
+
+separador("precisión del consenso, con anotadores que fallan un 15 %")
+print(f"{'anotadores':>12}{'precisión':>12}{'coste (min)':>14}   nota")
+print("-" * 58)
+for n in (1, 2, 3, 4, 5, 7):
+    precision = statistics.mean(simular_consenso(n, semilla=s) for s in range(20))
+    nota = "hay empates" if n % 2 == 0 else ""
+    print(f"{n:>12}{precision:>11.1%}{n * 30:>14}   {nota}")
+
+#%%md
+Los números dicen algo poco intuitivo y muy útil:
+
+- **De 1 a 3 anotadores la mejora es grande.** Un anotador solo arrastra su propio 15 %
+  de error a tu verdad de referencia.
+- **De 3 a 7 la mejora es marginal** y el coste se dobla. La ley de rendimientos
+  decrecientes muerde rápido.
+- Y mira las filas pares: **dos anotadores no son mejores que uno**, y cuatro apenas
+  mejoran a tres. Con un número par hay empates, y un empate es un caso que no sabes
+  resolver. Por eso los números impares.
+
+**La recomendación práctica: tres anotadores en 30 casos.** Hora y media de personas en
+total, un consenso claramente mejor que el de cualquiera por separado, y sin empates.
+
+Si solo puedes conseguir dos, sirve — pero entonces los desacuerdos no son un incordio,
+son la mitad de tu trabajo.
+
+</details>
+
+#%%md
+## 7. Resumen
+
+- Una **cola de anotación** no es un enlace por Slack: lleva la cuenta, guarda el feedback
+  pegado al run y —lo que importa aquí— permite que **varias personas vean el mismo
+  caso**, que es lo único que deja medir si tu criterio existe.
+- La rúbrica va **dentro** de la cola, con `score_descriptions` por valor.
+- Cuatro reglas: una pregunta por criterio, binario o tres niveles, describir cada valor,
+  y **decir qué NO cuenta**. La última es la que más sube el acuerdo y la que menos gente
+  escribe.
+- **El porcentaje de acuerdo miente.** Con una clase dominante, dos anotadores que no
+  miran coinciden en el 95 %. Usa **kappa**: por debajo de 0,6 la rúbrica no está lista.
+- Anota **30 casos, no 200**: media hora de alguien se pide, tres horas y media no. Y
+  elígelos deliberadamente — un tercio donde el juez duda, un tercio donde está **muy
+  seguro**, un tercio al azar.
+- **Los desacuerdos no se promedian, se miran juntos.** Si se agrupan en un tipo de caso,
+  el problema es la rúbrica; y arreglarla y volver a medir es el bucle de este módulo.
+
+**Siguiente:** [`12_alinear_el_juez`](12_alinear_el_juez.ipynb) — ya hay verdad. Ahora se
+mide cuánto se parece a ella el juez del notebook 08, y se corrige hasta que valga.
