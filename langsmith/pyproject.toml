@@ -1,0 +1,66 @@
+# Curso de LangSmith — complemento del curso de LangGraph que vive en `../langgraph/`.
+#
+# Este fichero es la única fuente de verdad de las dependencias. `requirements.txt` se
+# genera desde `uv.lock` con `_tools/exportar_requisitos.py`, para quien no use uv.
+#
+# El curso es autocontenido a propósito: tiene su propio entorno y su propio lock. La
+# alternativa —un workspace de uv compartido con el curso de LangGraph— ahorraría un
+# `uv sync` a cambio de mover el lock ya verificado de aquel curso, y no compensa.
+# Lo único que se comparte son los datos: `utils/curso.py` los busca aquí y, si no
+# están, en `../langgraph/data/`.
+
+[project]
+name = "curso-langsmith"
+version = "0.1.0"
+description = "Curso de LangSmith en español: trazas, evaluación y operación de aplicaciones con LLM"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+
+dependencies = [
+    # El objeto del curso.
+    "langsmith>=0.11,<0.12",
+
+    # El curso instrumenta la aplicación del curso de LangGraph, así que necesita
+    # las mismas piezas. Las versiones son las que allí quedaron verificadas.
+    "langgraph>=1.2,<2",
+    "langchain>=1.3,<2",
+    "langchain-core>=1.6,<2",
+    "langchain-openai>=1.6,<2",
+
+    # Evaluadores listos para usar. `openevals` trae los jueces LLM de propósito
+    # general; `agentevals`, los de trayectoria que ya usa el notebook 27 de LangGraph
+    # y que el módulo 2 mete dentro de `evaluate()`.
+    "openevals>=0.1",
+    "agentevals>=0.0.9",
+
+    # Manipulación de los tickets y de los resultados de los experimentos.
+    "pandas>=2.2",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.24",
+]
+
+# El plugin de pytest de LangSmith con la caché de peticiones al modelo (notebook 10).
+# El extra `vcr` es lo que hace que `LANGSMITH_TEST_CACHE` sirva de algo.
+pruebas-con-modelo = [
+    "langsmith[vcr]>=0.11,<0.12",
+    "openai>=1.50",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+testpaths = ["pruebas"]
+asyncio_mode = "auto"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["utils"]

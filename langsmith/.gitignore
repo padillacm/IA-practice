@@ -1,0 +1,15 @@
+.env
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Caché de peticiones al modelo del plugin de pytest (notebook 10). Esta SÍ suele
+# versionarse en un proyecto real —es lo que hace las pruebas deterministas y gratis—
+# pero aquí no, porque se genera con tu clave y contiene tus respuestas.
+pruebas/cassettes/
+
+# Entornos y cachés de uv
+.venv/
+.uv/
+# uv.lock SÍ se versiona: es lo que hace reproducible el curso.
