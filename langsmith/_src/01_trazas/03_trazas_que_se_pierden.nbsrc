@@ -1,0 +1,508 @@
+#%%md
+# 03 · Trazas que se pierden
+
+**Módulo 1 · Trazas** — *tiempo estimado: 70 minutos* — *consumo: 0 trazas*
+
+Los dos notebooks anteriores dan por hecho que la traza llega. Este va de que **muchas
+veces no llega**, y de que tu aplicación no se entera.
+
+Es, con diferencia, el problema número uno en los foros: *«he puesto todo bien y no me
+aparecen las trazas»*. Casi nunca es un fallo — es el diseño, y hay que conocerlo.
+
+El notebook se ejecuta **entero sin clave y sin red**. Trae un servicio de LangSmith
+simulado con el que el SDK habla de verdad, y que se puede tirar a voluntad para ver qué
+se pierde y cómo enterarse.
+
+Al terminar sabrás:
+
+1. Por qué las trazas son **best-effort por diseño**, y por qué eso es correcto.
+2. Las **cuatro formas** de perder una traza, y cuál te va a tocar a ti.
+3. **Cómo enterarte** de que las estás perdiendo — que hoy no lo estás.
+4. Los cuatro remedios, con su coste.
+5. Que el **muestreo es por traza completa**, nunca media traza.
+6. Los límites que muerden, incluido el que explica las «trazas incompletas».
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import (init, online, cliente, separador,
+                         servicio_simulado, registro_del_sdk)
+from langsmith import traceable
+
+init(silencioso=True)
+print("listo · con servicio simulado, no hace falta clave")
+
+#%%md
+## 1. El diseño: la traza no debe tumbarte la aplicación
+
+Empecemos por la decisión de diseño, porque todo lo demás se deduce de ella.
+
+Tu aplicación atiende a un cliente. LangSmith es una herramienta de observación. Si el
+servicio de observación tiene un mal día, **¿qué debe pasar?**
+
+Hay dos respuestas y solo una es defendible:
+
+| Opción | Consecuencia |
+|---|---|
+| La petición falla | Tu disponibilidad queda atada a la de un servicio auxiliar |
+| **La petición sigue y la traza se pierde** | Pierdes observabilidad, no clientes |
+
+LangSmith eligió la segunda, y es la correcta. El envío va por su cuenta, los errores se
+capturan, se escribe una línea de log y la vida continúa.
+
+**La contrapartida es exactamente el problema de este notebook:** el mecanismo que evita
+que un fallo de LangSmith te tumbe es el mismo que hace que pierdas trazas sin enterarte.
+
+Vamos a verlo. Este es un servicio caído y una función trazada:
+
+#%%py
+@traceable(run_type="tool")
+def consultar_saldo(cliente_id: str) -> float:
+    return 42.0
+
+@traceable(run_type="chain", name="atender")
+def atender(cliente_id: str) -> str:
+    return f"Tu saldo es {consultar_saldo(cliente_id)} euros."
+
+with servicio_simulado(falla=True) as servicio:
+    # Capturamos el log del SDK en vez de dejar que se imprima. No es para esconderlo
+    # —lo miramos entero en el apartado 3— sino para que se lea lo que importa ahora.
+    with registro_del_sdk() as lineas_de_log:
+        with servicio.trazando():
+            respuesta = atender("acme")
+        servicio.cliente.flush()
+
+print("lo que recibe el cliente:", respuesta)
+print()
+separador("lo que pasó por debajo")
+servicio.resumen()
+
+#%%md
+La aplicación funcionó perfectamente. Devolvió la respuesta correcta, sin excepciones,
+sin latencia añadida. Y **no llegó ni un run**.
+
+Si esto fuera producción, tu panel de LangSmith estaría vacío y tú estarías revisando la
+clave de API. La clave está bien: lo que pasa es que las trazas se perdieron y nadie te
+lo dijo.
+
+#%%md
+## 2. Las cuatro formas de perderlas
+
+Puestas en el orden en que te van a tocar:
+
+| # | Cómo | A quién le pasa | ¿Aviso? |
+|---|---|---|---|
+| 1 | **El proceso muere antes de vaciar la cola** | Serverless, scripts, jobs de CI, contenedores que reciben `SIGTERM` | Ninguno |
+| 2 | **El servicio falla o no se alcanza** | Todos, alguna vez | Una línea de log |
+| 3 | **Tú las descartaste** con muestreo | Quien produce más de lo que cabe en su plan | Es lo esperado |
+| 4 | **Superaron un límite** de tamaño | Cargas grandes: documentos, imágenes, PDFs | Un 413, o nada visible |
+
+La 1 es la que se lleva la palma, y merece su propio apartado.
+
+#%%md
+### La forma nº 1: el proceso que muere con la cola llena
+
+Por defecto, el SDK **acumula runs y los manda en lotes desde un hilo de fondo**. Es lo
+que hace que trazar no añada latencia. También es lo que hace que, si tu proceso termina
+antes de que ese hilo haya vaciado la cola, **lo que quede dentro se va con él**.
+
+Dónde muerde:
+
+- **Funciones serverless.** El entorno congela el proceso en cuanto devuelves. El hilo de
+  fondo no vuelve a correr.
+- **Scripts y jobs de CI.** Terminan y salen.
+- **Contenedores en Kubernetes.** Reciben `SIGTERM` y tienen unos segundos.
+- **Notebooks.** Reiniciar el kernel se lleva lo que hubiera pendiente.
+
+> **El cruce con el curso de LangGraph.** El notebook 28 de aquel curso diseña un
+> drenaje ordenado ante `SIGTERM`: dejar de aceptar trabajo nuevo, terminar lo que está
+> en vuelo, cerrar. Ese drenaje **también tiene que vaciar el buffer de trazas**, y ese
+> detalle no aparece en ninguna guía de las dos herramientas. Un pod que drena bien sus
+> peticiones y mal sus trazas te deja sin la observabilidad justo del momento en que más
+> falta hace: el despliegue.
+
+#%%md
+## 3. Cómo enterarte
+
+Esta es la parte que cambia las cosas, porque el estado por defecto es **no enterarte**.
+
+Hay dos mecanismos, y conviene conocer los dos porque ninguno lo ve todo.
+
+### 3.1 La línea de log
+
+El SDK escribe en el logger `langsmith`. Eso es todo lo que produce tu aplicación cuando
+pierde una traza. Vamos a capturarla y mirarla como dato:
+
+#%%py
+with servicio_simulado(falla=True) as servicio:
+    with registro_del_sdk() as lineas:
+        with servicio.trazando():
+            atender("acme")
+        servicio.cliente.flush()
+
+print("todo lo que tu aplicación dijo al perder la traza:\n")
+for linea in lineas:
+    print("  ", linea[:120])
+
+#%%md
+Dos líneas, una `ERROR` y una `WARNING`, entre los miles de líneas de log de una
+aplicación en producción. **Si no las estás vigilando, no existen.**
+
+La consecuencia práctica es una regla de operación que casi nadie tiene puesta:
+
+> Añade una alerta sobre el logger `langsmith` a nivel `ERROR`. Es una línea de
+> configuración y es la diferencia entre enterarte hoy o dentro de tres semanas.
+
+### 3.2 `tracing_error_callback`
+
+Mejor que vigilar logs: el `Client` acepta una función que se llama con cada error de
+envío. Con eso puedes contar los fallos, exponerlos como métrica o encender una alarma.
+
+#%%py
+with servicio_simulado(falla=True) as servicio:
+    # `servicio_simulado` ya lo conecta a `servicio.errores`; en tu código sería:
+    #     Client(tracing_error_callback=lambda e: metricas.incr("langsmith.fallos"))
+    with registro_del_sdk():
+        with servicio.trazando():
+            atender("acme")
+        servicio.cliente.flush()
+
+print("peticiones rechazadas por el servicio :", len(servicio.rechazados))
+print("errores que llegaron al callback      :", len(servicio.errores))
+for e in servicio.errores:
+    print("   ", type(e).__name__, str(e)[:80])
+
+#%%md
+Y aquí una advertencia honesta, porque los números de arriba no cuadran: **el callback
+no ve todos los fallos.** El servicio rechazó cuatro peticiones y al callback llegaron
+dos. Mirando cuáles, se ve el patrón:
+
+#%%py
+print("peticiones que el servicio rechazó, por método:")
+for metodo, url in servicio.rechazados:
+    print(f"   {metodo:<6} {url.split('smith.langchain.com')[-1][:40]}")
+
+print("\nlas que llegaron al callback:")
+for e in servicio.errores:
+    metodo = "POST" if "POST" in str(e) else "PATCH" if "PATCH" in str(e) else "?"
+    print(f"   {metodo}")
+
+#%%md
+**El callback ve los `POST` —abrir un run— y no los `PATCH` —cerrarlo con su salida—.**
+Que es justo al revés de lo conveniente: un run que se abre y no se cierra queda «en
+curso» para siempre en la interfaz, y ese es el fallo que más querrías detectar.
+
+Así que la recomendación real es **poner los dos**: el callback para tener una métrica, y
+la alerta sobre el log para no perderte lo que el callback no ve. Ninguno de los dos
+solo es suficiente.
+
+#%%md
+## 4. Los cuatro remedios, con su coste
+
+Ninguno es gratis. Elige según dónde corra tu código.
+
+| Remedio | Qué hace | Coste | Cuándo |
+|---|---|---|---|
+| `client.flush()` | Vacía la cola ahora | Bloquea lo que tarde | Antes de salir de un script o una función serverless |
+| `wait_for_all_tracers()` | Espera a todos los tracers de LangChain | Igual, pero cubre también las cadenas y grafos | Igual, si usas LangChain |
+| `Client(auto_batch_tracing=False)` | Envío **síncrono** | Latencia en **cada** llamada | Cuando el proceso es tan corto que no hay «antes de salir» |
+| `LANGSMITH_FAILED_TRACES_DIR` | Deja en disco lo que no se pudo enviar | Disco, y hay que reintentarlo tú | Cuando el servicio es inestable y no quieres perder nada |
+
+Los dos primeros son lo normal. El tercero es el martillo. El cuarto es el que casi nadie
+conoce y el que salva los datos.
+
+#%%py
+# Demostración del remedio 1: el mismo código, con el servicio sano, vaciando a mano.
+with servicio_simulado() as servicio:
+    with servicio.trazando():
+        atender("acme")
+    # Sin este flush, lo que hubiera en la cola dependería de cuándo termine el proceso.
+    servicio.cliente.flush()
+
+print("con el servicio sano y flush explícito:")
+servicio.resumen()
+
+#%%md
+```python
+# El patrón para una función serverless. Las tres líneas que faltan en casi todo el
+# código de ejemplo que circula por ahí.
+from langsmith import Client
+from langchain_core.tracers.langchain import wait_for_all_tracers
+
+cliente = Client()
+
+def handler(evento, contexto):
+    try:
+        return atender(evento["cliente_id"])
+    finally:
+        wait_for_all_tracers()   # las cadenas y grafos de LangChain
+        cliente.flush()          # lo que hayas trazado con @traceable
+```
+
+El `finally` no es adorno: si la petición falla, esa es **justo** la traza que quieres
+conservar.
+
+#%%md
+## 5. El muestreo: nunca vas a ver media traza
+
+Cuando produces más trazas de las que caben en tu plan, la respuesta es muestrear:
+`LANGSMITH_TRACING_SAMPLING_RATE` entre 0 y 1, o `tracing_sampling_rate` en el `Client`.
+
+La duda razonable es: si tiro una moneda por cada run, ¿no acabaré con trazas a medias,
+que son peores que ninguna?
+
+**No, y el diseño es cuidadoso.** La decisión se toma **una vez por traza**, en la raíz,
+y se recuerda; los descendientes siguen la decisión de su traza. Vamos a comprobarlo
+sobre seiscientas trazas.
+
+#%%py
+import uuid
+
+def traza_de_mentira(n_hijos: int = 3) -> list[dict]:
+    """Una traza como la que el SDK mandaría: la raíz y sus hijos, con el mismo trace_id."""
+    tid = uuid.uuid4()
+    runs = [{"id": tid, "trace_id": tid, "name": "raiz"}]
+    runs += [{"id": uuid.uuid4(), "trace_id": tid, "name": f"hijo{i}"} for i in range(n_hijos)]
+    return runs
+
+print(f"{'tasa':>6} | {'completas':>10} | {'descartadas':>12} | {'PARCIALES':>10}")
+print("-" * 48)
+for tasa in (0.0, 0.25, 0.5, 1.0):
+    with servicio_simulado(muestreo=tasa) as servicio:
+        completas = descartadas = parciales = 0
+        for _ in range(200):
+            runs = traza_de_mentira()
+            pasan = servicio.cliente._filter_for_sampling(runs)
+            if len(pasan) == len(runs):
+                completas += 1
+            elif not pasan:
+                descartadas += 1
+            else:
+                parciales += 1
+        print(f"{tasa:>6} | {completas:>10} | {descartadas:>12} | {parciales:>10}")
+
+#%%md
+Ochocientas trazas, **cero parciales**. Es una garantía fuerte y se puede confiar en ella.
+
+Dos consecuencias prácticas:
+
+1. **Muestrear es seguro.** Con `0.1` ves el 10 % de tus peticiones **enteras**, que es
+   infinitamente más útil que el 10 % de los runs de todas.
+2. **El presupuesto se controla con una variable.** Si el notebook 00 te dejó preocupado
+   por las 5.000 trazas, esta es la respuesta: instrumenta todo y manda una fracción.
+
+Y una que no es tan obvia: **los errores no se muestrean solos**. Si muestreas al 10 %,
+pierdes el 90 % de tus fallos también. Si lo que te importa son los fallos, no muestrees
+a ciegas — decide por petición y quédate con las que fallaron (ejercicio 2).
+
+#%%py
+# El SDK valida el rango, que es más de lo que hacen muchas bibliotecas.
+from langsmith import Client
+from utils.curso import _SesionMuda
+
+for valor in (-0.1, 1.5):
+    try:
+        Client(api_key="x", tracing_sampling_rate=valor, session=_SesionMuda())
+        print(f"  {valor}: aceptado (!)")
+    except Exception as e:
+        print(f"  {valor}: {type(e).__name__} — {str(e)[:70]}")
+
+#%%md
+## 6. Los límites que muerden
+
+Números de agosto de 2026; compruébalos antes de decidir nada con ellos.
+
+| Límite | Valor | Qué pasa al pasarse |
+|---|---|---|
+| Trazas al mes (Developer sin pago) | **5.000** | Dejan de ingerirse |
+| Retención (Developer) | **1 mes** | Desaparecen |
+| Tamaño de una traza | ~300 MB | La ingesta devuelve **413** |
+| **Tamaño para mostrarla en la interfaz** | **~20 MB** | **Se muestra recortada** |
+| Buffer en memoria de trazas fallidas | ~100 MB | Se descarta lo más viejo |
+
+El de las 20 MB es el que provoca más confusión y el que menos se documenta: **una traza
+puede haberse guardado entera y aun así verse incompleta en el navegador**, porque la
+interfaz no baja más de ese tamaño. Si has instrumentado un RAG que mete veinte
+documentos largos en cada run, lo vas a pisar.
+
+El arreglo no es subir el límite —no se puede— sino no meter ahí lo que no hace falta:
+en vez del texto completo de cada documento, su identificador y su puntuación. Eso además
+resuelve medio problema del notebook 05.
+
+#%%py
+@online("Ver el consumo de trazas de tu cuenta", trazas=0)
+def _():
+    # `list_projects` trae estadísticas por proyecto: es la forma barata de ver
+    # cuánto llevas gastado del mes sin abrir la interfaz.
+    for p in cliente().list_projects(limit=10):
+        print(f"  {p.name}: {getattr(p, 'run_count', '?')} runs")
+
+#%%md
+## 7. Ejercicios
+
+### Ejercicio 1 — El detector de trazas perdidas
+
+Escribe una función `enviar_y_comprobar(fn, servicio)` que ejecute `fn` trazando contra
+`servicio`, vacíe la cola y **devuelva cuántos runs se perdieron**, comparando lo que se
+intentó enviar con lo que llegó.
+
+Pruébala con el servicio sano y con uno que se cae a mitad (`cae_tras=2`).
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def enviar_y_comprobar(fn, servicio):
+    """Ejecuta `fn` trazando y devuelve el balance de lo enviado frente a lo llegado."""
+    with servicio.trazando():
+        resultado = fn()
+    servicio.cliente.flush()
+    return {
+        "resultado": resultado,
+        "peticiones": len(servicio.peticiones),
+        "rechazadas": len(servicio.rechazados),
+        "runs_recibidos": len(servicio.recibidos),
+        "nombres": servicio.nombres_recibidos,
+    }
+
+
+for etiqueta, kwargs in [("servicio sano", {}),
+                         ("se cae tras 2 peticiones", {"cae_tras": 2}),
+                         ("caído del todo", {"falla": True})]:
+    with servicio_simulado(**kwargs) as s:
+        with registro_del_sdk():                     # silenciamos el log para leer mejor
+            balance = enviar_y_comprobar(lambda: atender("acme"), s)
+    metodos = [m for m, _ in s.rechazados]
+    print(f"{etiqueta:>26}: {balance['runs_recibidos']} runs abiertos "
+          f"{balance['nombres']}, rechazadas: {metodos or 'ninguna'}")
+
+#%%md
+El caso interesante es el del medio, y fíjate bien: **llegaron los dos runs y se
+rechazaron los dos `PATCH`**. O sea, una traza a medias en el servidor. Los runs existen,
+tienen sus entradas, y **nunca se cerraron**: en la interfaz aparecerán «en curso» para
+siempre, sin salida, sin duración y sin error.
+
+Es peor que perderla entera, porque parece que hay datos.
+
+Es peor que perderla entera, y es el caso realista: los servicios no se caen del todo,
+se degradan. Por eso la comprobación no puede ser «¿llegó algo?» sino «¿llegó todo?».
+
+</details>
+
+#%%md
+### Ejercicio 2 — Muestreo que no tira los fallos
+
+El apartado 5 deja un problema abierto: muestrear al 10 % tira también el 90 % de tus
+errores, que es justo lo contrario de lo que quieres.
+
+Escribe `atender_con_muestreo_inteligente(ticket, tasa)` que trace **siempre** las
+peticiones que fallan y solo una fracción de las que van bien. Compruébalo con 100
+peticiones de las que fallan 5.
+
+*Pista: la decisión se toma por petición, con `tracing_context(enabled=...)`. No hace
+falta muestreo del `Client`.*
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import random
+from langsmith.run_helpers import tracing_context
+
+@traceable(run_type="chain", name="procesar")
+def procesar(ticket: dict) -> str:
+    if ticket["rompe"]:
+        raise ValueError("no se pudo procesar")
+    return "ok"
+
+
+def atender_con_muestreo_inteligente(ticket, servicio, tasa=0.1, aleatorio=None):
+    """Traza siempre los fallos y una fracción de los aciertos.
+
+    El truco: se ejecuta SIN trazar; si falla, se vuelve a ejecutar trazando. Funciona
+    porque en este caso reintentar es barato. Cuando no lo sea —una llamada al modelo—
+    la alternativa es trazar siempre y decidir el envío al cerrar, que es lo que hacen
+    las reglas del módulo 4 en el servidor.
+    """
+    aleatorio = aleatorio or random
+    muestreado = aleatorio.random() < tasa
+    try:
+        with tracing_context(enabled=muestreado, client=servicio.cliente):
+            return procesar(ticket), muestreado
+    except ValueError:
+        if not muestreado:                    # falló y no lo estábamos trazando
+            try:
+                with tracing_context(enabled=True, client=servicio.cliente):
+                    procesar(ticket)
+            except ValueError:
+                pass
+        return None, True
+
+
+tickets = [{"id": i, "rompe": i % 20 == 0} for i in range(100)]   # 5 fallos
+
+with servicio_simulado() as s:
+    aleatorio = random.Random(1)
+    trazados_ok = trazados_mal = 0
+    for t in tickets:
+        _, trazado = atender_con_muestreo_inteligente(t, s, tasa=0.1, aleatorio=aleatorio)
+        if trazado:
+            if t["rompe"]:
+                trazados_mal += 1
+            else:
+                trazados_ok += 1
+    s.cliente.flush()
+
+fallos_totales = sum(1 for t in tickets if t["rompe"])
+print(f"peticiones             : {len(tickets)}")
+print(f"fallos                 : {fallos_totales}")
+print(f"fallos trazados        : {trazados_mal}  ({100 * trazados_mal / fallos_totales:.0f} %)")
+print(f"aciertos trazados      : {trazados_ok}  (de {len(tickets) - fallos_totales}, tasa objetivo 10 %)")
+print(f"runs que llegaron      : {len(s.recibidos)}")
+
+#%%md
+El 100 % de los fallos y aproximadamente el 10 % de los aciertos. Con un muestreo ciego
+al 10 % habrías conservado uno de los cinco fallos, de media, y te habrías quedado sin
+saber por qué falla tu aplicación mientras pagas por ver conversaciones que fueron bien.
+
+**La lección general, que vale más que el código:** el muestreo uniforme es el que viene
+de fábrica, no el que quieres. Lo que quieres es conservar entero lo raro —los errores,
+la cola de latencia, un cliente concreto— y muestrear lo abundante. El módulo 4 hace esto
+mismo desde el lado del servidor, sin tocar tu código, con reglas.
+
+</details>
+
+#%%md
+## 8. Resumen
+
+- Las trazas son **best-effort por diseño**, y es la decisión correcta: pierdes
+  observabilidad, no clientes. La contrapartida es que las pierdes sin enterarte.
+- **Cuatro formas de perderlas**: el proceso muere con la cola llena (la más frecuente,
+  y la que le toca a serverless, CI y a cualquier pod que reciba `SIGTERM`), el servicio
+  falla, tú las muestreaste, o superaron un límite.
+- **Cómo enterarte**: una alerta sobre el logger `langsmith` a nivel `ERROR` **y**
+  `tracing_error_callback`. Los dos, porque el callback no ve todos los fallos.
+- **Los remedios**: `flush()` y `wait_for_all_tracers()` antes de salir,
+  `auto_batch_tracing=False` si no hay un «antes de salir», y
+  `LANGSMITH_FAILED_TRACES_DIR` para no perder nada.
+- El drenaje ante `SIGTERM` del notebook 28 del curso de LangGraph **tiene que incluir el
+  vaciado del buffer de trazas**. Sin eso te quedas sin observabilidad justo durante el
+  despliegue.
+- **El muestreo es por traza completa**: cero parciales en ochocientas. Muestrear es
+  seguro — pero el muestreo uniforme tira tus errores, así que decide por petición.
+- El límite de **20 MB para mostrar** una traza explica las quejas de «traza incompleta»
+  aunque el dato esté guardado. No metas documentos enteros en los runs.
+
+**Siguiente:** [`04_hilos_y_realimentacion`](04_hilos_y_realimentacion.ipynb) — el
+`thread_id` de LangSmith frente al de LangGraph, que no son lo mismo, y cómo recoger la
+opinión del usuario final sobre una respuesta.

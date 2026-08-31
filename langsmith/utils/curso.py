@@ -512,3 +512,188 @@ def traza_local(nombre: str = "bloque"):
         raiz = RunTree(name=nombre, run_type="chain", inputs={}, client=mudo)
         with tracing_context(enabled="local", parent=raiz, client=mudo):
             yield _Traza(raiz)
+
+
+# --------------------------------------------------------------------------------------
+# Un servicio de LangSmith simulado, para el notebook 03
+# --------------------------------------------------------------------------------------
+#
+# El notebook 03 va de trazas que se pierden. Enseñarlo sin poder perder ninguna sería
+# ridículo, así que en vez de describir el problema se monta un servicio de mentira que
+# se puede tirar a voluntad y contar qué llegó y qué no.
+#
+# Es un servicio de verdad en lo único que importa aquí: el SDK habla con él por su
+# camino normal —`Client`, cola de envío, reintentos, callbacks de error— sin saber que
+# al otro lado no hay nadie. Lo que no hace es nada de lo que LangSmith hace de verdad:
+# no guarda, no indexa, no calcula coste. Solo acusa recibo o falla.
+
+
+class _ServicioSimulado:
+    """Lo que devuelve `servicio_simulado()`. Ver ahí la documentación."""
+
+    def __init__(self, *, falla: bool, cae_tras: int | None) -> None:
+        self.falla = falla
+        self.cae_tras = cae_tras
+        self.peticiones: list[tuple[str, str]] = []
+        self.recibidos: list[dict] = []
+        self.rechazados: list[tuple[str, str]] = []
+        self.errores: list[Exception] = []
+        self.cliente: Any = None
+
+    # -- lo que ve el usuario del notebook ---------------------------------------------
+
+    @property
+    def nombres_recibidos(self) -> list[str]:
+        """Los nombres de los runs que llegaron al servicio."""
+        return [r.get("name", "?") for r in self.recibidos]
+
+    def resumen(self) -> None:
+        print(f"  peticiones que salieron : {len(self.peticiones)}")
+        print(f"  runs que llegaron       : {len(self.recibidos)} {self.nombres_recibidos}")
+        print(f"  peticiones rechazadas   : {len(self.rechazados)}")
+        print(f"  errores de envío vistos : {len(self.errores)}")
+
+    # -- las tripas --------------------------------------------------------------------
+
+    def _debe_fallar(self) -> bool:
+        if self.cae_tras is not None:
+            return len(self.peticiones) > self.cae_tras
+        return self.falla
+
+    def _anotar(self, method: str, url: str, cuerpo: Any) -> bool:
+        import json
+
+        self.peticiones.append((str(method), str(url)))
+        if self._debe_fallar():
+            self.rechazados.append((str(method), str(url)))
+            return False
+        if str(method).upper() == "POST" and cuerpo:
+            try:
+                datos = json.loads(cuerpo)
+            except (TypeError, ValueError):
+                return True
+            for run in datos if isinstance(datos, list) else [datos]:
+                if isinstance(run, dict) and "name" in run:
+                    self.recibidos.append(run)
+        return True
+
+
+class _SesionDeServicio(_SesionMuda):
+    """La sesión que habla con el `_ServicioSimulado` en vez de con la red."""
+
+    def __init__(self, servicio: _ServicioSimulado) -> None:
+        super().__init__()
+        self._servicio = servicio
+
+    def request(self, method, url, *args, **kwargs):
+        aceptado = self._servicio._anotar(method, url, kwargs.get("data"))
+        return self._respuesta(method, url, aceptado)
+
+    def send(self, request, **kwargs):
+        aceptado = self._servicio._anotar(
+            getattr(request, "method", "?"), getattr(request, "url", "?"),
+            getattr(request, "body", None))
+        return self._respuesta(getattr(request, "method", "?"),
+                               getattr(request, "url", "?"), aceptado)
+
+    def _respuesta(self, method, url, aceptado=True):  # type: ignore[override]
+        import requests
+
+        r = requests.Response()
+        r.status_code = 200 if aceptado else 503
+        r._content = b"{}" if aceptado else b'{"detail":"servicio no disponible"}'
+        r.headers["Content-Type"] = "application/json"
+        r.url = str(url)
+        r.request = None
+        return r
+
+
+@contextlib.contextmanager
+def servicio_simulado(*, falla: bool = False, cae_tras: int | None = None,
+                      muestreo: float | None = None):
+    """Un LangSmith de mentira con el que el SDK habla de verdad.
+
+    Sirve para enseñar en local lo que solo se ve cuando el servicio falla:
+
+        with servicio_simulado(falla=True) as servicio:
+            with servicio.trazando():
+                responder("un ticket")
+            servicio.cliente.flush()
+
+        servicio.resumen()
+
+    Parámetros:
+        falla: si es `True`, el servicio responde 503 a todo desde el principio.
+        cae_tras: acepta las primeras N peticiones y falla a partir de ahí. Sirve para
+            el caso realista —el servicio se cae a mitad— en vez del binario.
+        muestreo: la tasa de `tracing_sampling_rate` del `Client`, entre 0 y 1.
+
+    Lo que se puede mirar después: `peticiones`, `recibidos`, `nombres_recibidos`,
+    `rechazados` y `errores` —estos últimos son los que el SDK pasó a
+    `tracing_error_callback`, que es la única forma de enterarse de que se pierden
+    trazas—.
+
+    Sin reintentos, para que las cuentas del notebook salgan claras: `retry_config`
+    va a cero. En producción sí hay reintentos, y eso es parte de por qué el problema
+    es escurridizo.
+    """
+    from langsmith import Client
+    from langsmith.run_helpers import tracing_context
+    from langsmith.schemas import LangSmithInfo
+    from urllib3.util import Retry
+
+    servicio = _ServicioSimulado(falla=falla, cae_tras=cae_tras)
+    cliente = Client(
+        api_key="servicio-simulado",
+        auto_batch_tracing=False,
+        session=_SesionDeServicio(servicio),
+        retry_config=Retry(total=0),
+        tracing_sampling_rate=muestreo,
+        tracing_error_callback=servicio.errores.append,
+    )
+    cliente._info = LangSmithInfo()
+    servicio.cliente = cliente
+
+    def trazando(**kwargs):
+        return tracing_context(enabled=True, client=cliente, **kwargs)
+
+    servicio.trazando = trazando  # type: ignore[attr-defined]
+    yield servicio
+
+
+@contextlib.contextmanager
+def registro_del_sdk(nivel: int = 30):
+    """Captura lo que el SDK de LangSmith escribe en el log, en vez de imprimirlo.
+
+        with registro_del_sdk() as lineas:
+            ...
+
+        for linea in lineas:
+            print(linea)
+
+    Existe porque **esa línea de log es lo único que tu aplicación produce cuando pierde
+    una traza**. Verla como dato, y no como ruido que pasa por la consola, es la mitad
+    de la lección del notebook 03.
+    """
+    import logging
+
+    lineas: list[str] = []
+
+    class _Recolector(logging.Handler):
+        def emit(self, registro: logging.LogRecord) -> None:
+            lineas.append(f"[{registro.levelname}] {registro.getMessage()}")
+
+    recolector = _Recolector(level=nivel)
+    afectados = [logging.getLogger("langsmith"),
+                 logging.getLogger("langsmith.client"),
+                 logging.getLogger("langchain_core.tracers.core")]
+    estado = [(lg, lg.handlers[:], lg.propagate) for lg in afectados]
+    try:
+        for lg in afectados:
+            lg.handlers = [recolector]
+            lg.propagate = False
+        yield lineas
+    finally:
+        for lg, handlers, propaga in estado:
+            lg.handlers = handlers
+            lg.propagate = propaga

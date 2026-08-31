@@ -389,3 +389,164 @@ def test_el_sdk_lee_mas_variables_de_las_documentadas():
     for imprescindible in ("TRACING", "API_KEY", "PROJECT", "ENDPOINT",
                            "TRACING_SAMPLING_RATE", "TEST_CACHE", "HIDE_INPUTS"):
         assert imprescindible in logicos
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 03 · trazas que se pierden
+# ------------------------------------------------------------------------------------
+
+
+def test_la_aplicacion_sigue_aunque_el_servicio_este_caido():
+    """La decisión de diseño de la que se deduce todo el notebook 03.
+
+    Pierdes observabilidad, no clientes. Es lo correcto — y es lo que hace que
+    pierdas trazas sin enterarte.
+    """
+    from langsmith import traceable
+
+    @traceable(run_type="chain")
+    def atender(x):
+        return f"respuesta para {x}"
+
+    with curso.servicio_simulado(falla=True) as servicio:
+        with curso.registro_del_sdk():
+            with servicio.trazando():
+                resultado = atender("acme")
+            servicio.cliente.flush()
+
+    assert resultado == "respuesta para acme"     # la aplicación no se enteró
+    assert servicio.recibidos == []               # y no llegó nada
+    assert servicio.rechazados                    # aunque sí se intentó
+
+
+def test_con_el_servicio_sano_las_trazas_llegan():
+    """El control del anterior: si no llegara nada nunca, la prueba no valdría."""
+    from langsmith import traceable
+
+    @traceable(run_type="tool")
+    def hijo():
+        return 1
+
+    @traceable(run_type="chain")
+    def raiz():
+        return hijo()
+
+    with curso.servicio_simulado() as servicio:
+        with servicio.trazando():
+            raiz()
+        servicio.cliente.flush()
+
+    assert set(servicio.nombres_recibidos) == {"raiz", "hijo"}
+    assert servicio.errores == []
+
+
+def test_un_servicio_que_se_degrada_deja_trazas_a_medias():
+    """El caso realista: los servicios no se caen del todo, se degradan.
+
+    Los runs se abren (POST) y no se cierran (PATCH): quedan «en curso» para siempre.
+    Es peor que perderlos, porque parece que hay datos.
+    """
+    from langsmith import traceable
+
+    @traceable(run_type="tool")
+    def hijo():
+        return 1
+
+    @traceable(run_type="chain")
+    def raiz():
+        return hijo()
+
+    with curso.servicio_simulado(cae_tras=2) as servicio:
+        with curso.registro_del_sdk():
+            with servicio.trazando():
+                raiz()
+            servicio.cliente.flush()
+
+    assert len(servicio.recibidos) == 2                          # se abrieron
+    assert {m for m, _ in servicio.rechazados} == {"PATCH"}      # no se cerraron
+
+
+def test_el_callback_de_error_no_ve_todos_los_fallos():
+    """Advertencia del notebook 03: ve los POST y no los PATCH.
+
+    Justo al revés de lo conveniente. Por eso el material recomienda poner también
+    una alerta sobre el log.
+    """
+    from langsmith import traceable
+
+    @traceable(run_type="chain")
+    def raiz():
+        return 1
+
+    with curso.servicio_simulado(falla=True) as servicio:
+        with curso.registro_del_sdk():
+            with servicio.trazando():
+                raiz()
+            servicio.cliente.flush()
+
+    metodos_rechazados = {m for m, _ in servicio.rechazados}
+    assert metodos_rechazados == {"POST", "PATCH"}
+    assert len(servicio.errores) < len(servicio.rechazados)
+    assert all("POST" in str(e) for e in servicio.errores)
+
+
+def test_el_sdk_deja_constancia_en_el_log():
+    """Esa línea es lo ÚNICO que produce tu aplicación al perder una traza."""
+    from langsmith import traceable
+
+    @traceable(run_type="chain")
+    def raiz():
+        return 1
+
+    with curso.servicio_simulado(falla=True) as servicio:
+        with curso.registro_del_sdk() as lineas:
+            with servicio.trazando():
+                raiz()
+            servicio.cliente.flush()
+
+    assert lineas
+    assert any(l.startswith("[ERROR]") for l in lineas)
+
+
+def test_el_muestreo_nunca_deja_media_traza():
+    """La garantía del apartado 5, sobre 800 trazas.
+
+    Si esto dejara de cumplirse, muestrear pasaría a ser peligroso y el notebook
+    estaría dando un mal consejo.
+    """
+    import uuid
+
+    def traza(n_hijos=3):
+        tid = uuid.uuid4()
+        runs = [{"id": tid, "trace_id": tid, "name": "raiz"}]
+        runs += [{"id": uuid.uuid4(), "trace_id": tid, "name": f"h{i}"} for i in range(n_hijos)]
+        return runs
+
+    for tasa in (0.0, 0.25, 0.5, 1.0):
+        with curso.servicio_simulado(muestreo=tasa) as servicio:
+            for _ in range(200):
+                runs = traza()
+                pasan = servicio.cliente._filter_for_sampling(runs)
+                assert len(pasan) in (0, len(runs)), f"traza parcial con tasa {tasa}"
+
+
+def test_el_muestreo_valida_su_rango():
+    import pytest as _pytest
+
+    from langsmith import Client
+
+    for valor in (-0.1, 1.5):
+        with _pytest.raises(Exception, match="between 0 and 1"):
+            Client(api_key="x", tracing_sampling_rate=valor, session=curso._SesionMuda())
+
+
+def test_flush_existe_y_wait_for_all_tracers_tambien():
+    """Los dos remedios del apartado 4, que el notebook recomienda sin poder probarlos
+    contra el servicio real. Al menos que existan y con la firma esperada."""
+    import inspect
+
+    from langchain_core.tracers.langchain import wait_for_all_tracers
+    from langsmith import Client
+
+    assert "timeout" in inspect.signature(Client.flush).parameters
+    assert inspect.signature(wait_for_all_tracers).parameters == {}
