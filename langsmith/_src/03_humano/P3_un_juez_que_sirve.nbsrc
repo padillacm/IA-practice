@@ -1,0 +1,573 @@
+#%%md
+# P3 · Un juez que sirve
+
+**Módulo 3 · Proyecto** — *tiempo estimado: 90 minutos* — *consumo: ~90 trazas en modo en línea*
+
+Los dos notebooks anteriores dan las piezas. Este las usa para responder una pregunta que
+tiene consecuencias: **¿el juez entra en producción o no?**
+
+Y la respuesta puede ser que no. Un proyecto que solo puede terminar en «sí» no es un
+proyecto, es un tutorial.
+
+Sobre las respuestas del agente de soporte del curso de LangGraph, con el conjunto
+anotado y todo lo del módulo 2 detrás.
+
+Al terminar tendrás:
+
+1. Un conjunto anotado **partido en dos**: alineamiento y reserva.
+2. Tres jueces candidatos medidos **en la reserva**, no donde se ajustaron.
+3. Un **evaluador de código** compitiendo con ellos en igualdad de condiciones.
+4. Una **decisión escrita**, con el criterio delante y el coste calculado.
+5. La **vigilancia** que hace falta después, porque un juez alineado se desalinea.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import collections, random, re, statistics
+from utils.curso import (init, online, cliente, separador, juez_local,
+                         presupuesto_de_trazas)
+from openevals.llm import create_llm_as_judge
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. El conjunto, partido antes de tocarlo
+
+Cincuenta respuestas anotadas. La partición se hace **ahora**, antes de mirar nada: si la
+haces después de alinear, ya has contaminado la reserva con tus decisiones.
+
+#%%py
+CON_DATO = [
+    "Tu reembolso llega en 5 días hábiles.",
+    "El cargo duplicado del 12/09 se devuelve el 17/09.",
+    "Son 87 los tickets de facturación abiertos.",
+    "Puedes cambiar el plan desde Ajustes > Suscripción.",
+    "Tu factura de enero está en el correo del día 3.",
+    "El límite de tu plan es de 10.000 peticiones al mes.",
+    "La integración con Salesforce se configura en Ajustes > Conectores.",
+    "Tu contraseña se restablece desde el enlace del correo de verificación.",
+    "El informe se exporta con el botón Descargar de la esquina superior.",
+    "Hemos ampliado tu cuota a 50.000 peticiones hasta fin de mes.",
+    "El incidente de rendimiento se resolvió el martes a las 14:00.",
+    "Puedes solicitar el borrado escribiendo a privacidad@acme.com.",
+    "Tu suscripción se renueva el 15 de cada mes.",
+    "El error se corrige actualizando el conector a la versión 2.4.",
+    "Hay 23 tickets de tu equipo sin asignar.",
+    "El plan business incluye 5 usuarios; el enterprise, ilimitados.",
+    "La exportación a CSV está en Informes > Descargar > CSV.",
+    "Tu último pago de 29 € se registró el 2 de agosto.",
+    "El webhook se reintenta 3 veces antes de darse por fallido.",
+    "Los datos se conservan 90 días y luego se borran.",
+    "Puedes invitar a tu equipo desde Ajustes > Miembros.",
+    "El tiempo medio de respuesta de tu plan es de 4 horas.",
+    "La API acepta hasta 100 peticiones por minuto.",
+    "Tu cuenta se creó el 14 de marzo de 2024.",
+    "El descuento del 20 % se aplica en la próxima factura.",
+]
+SIN_DATO = [
+    "Gracias por escribirnos. Lo revisamos y te contamos.",
+    "Lamentamos las molestias. Un agente se pondrá en contacto contigo.",
+    "Entiendo tu frustración, y haremos todo lo posible por resolverlo.",
+    "Sentimos el inconveniente; revisaremos el caso lo antes posible.",
+    "Estamos en ello.",
+    "Hemos recibido tu consulta y la hemos escalado al equipo correspondiente.",
+    "Tu caso es importante para nosotros y le daremos la prioridad que merece.",
+    "Agradecemos tu paciencia mientras investigamos lo sucedido.",
+    "Este asunto requiere revisión adicional por parte de nuestro equipo técnico.",
+    "Te mantendremos informado de cualquier novedad sobre tu solicitud.",
+    "Comprendemos la situación y estamos trabajando para darte una respuesta.",
+    "Nuestro equipo está analizando el caso con el detalle que requiere.",
+    "Lo consultamos internamente y volvemos contigo lo antes posible.",
+    "Hemos tomado nota de tu incidencia y la estamos gestionando.",
+    "Disculpa las molestias ocasionadas; seguimos trabajando en ello.",
+    "Tu solicitud ha sido registrada correctamente en nuestro sistema.",
+    "Un compañero del área correspondiente revisará tu petición.",
+    "Estamos revisando la información que nos has facilitado.",
+    "Lamentamos que hayas tenido esta experiencia con nuestro servicio.",
+    "Hemos trasladado tu comentario al equipo de producto.",
+    "Vamos a investigar lo ocurrido y te daremos una respuesta.",
+    "Tu incidencia está en cola y será atendida por orden de llegada.",
+    "Sentimos no poder darte una respuesta más concreta en este momento.",
+    "Nuestro equipo se pondrá en contacto contigo a la mayor brevedad.",
+    "Hemos escalado el caso al departamento que puede ayudarte.",
+]
+
+ANOTADO = [(r, 1) for r in CON_DATO] + [(r, 0) for r in SIN_DATO]
+random.Random(5).shuffle(ANOTADO)
+
+# La partición, ANTES de mirar nada.
+CORTE = int(len(ANOTADO) * 0.6)
+ALINEAR, RESERVA = ANOTADO[:CORTE], ANOTADO[CORTE:]
+
+separador("el conjunto")
+print(f"  anotados: {len(ANOTADO)}   con dato: {sum(e for _, e in ANOTADO)}")
+print(f"  para alinear: {len(ALINEAR)}   en reserva: {len(RESERVA)}")
+print(f"  proporción de «1» en cada mitad: "
+      f"{sum(e for _, e in ALINEAR) / len(ALINEAR):.0%} y "
+      f"{sum(e for _, e in RESERVA) / len(RESERVA):.0%}")
+
+#%%md
+> **Comprueba siempre que las dos mitades se parecen.** Si el corte deja el 80 % de los
+> «sí» en una, la kappa de la reserva mide otra cosa. Aquí van al 50 % las dos porque el
+> conjunto está equilibrado y la baraja es aleatoria; con datos reales hay que
+> estratificar (notebook 06).
+
+#%%md
+## 2. La maquinaria de medida
+
+Lo mismo del notebook 12, agrupado para poder comparar candidatos sin repetir código.
+
+#%%py
+def kappa_de_cohen(a, b):
+    observado = sum(x == y for x, y in zip(a, b)) / len(a)
+    n = len(a)
+    esperado = sum((a.count(c) / n) * (b.count(c) / n) for c in set(a) | set(b))
+    return 1.0 if esperado == 1 else (observado - esperado) / (1 - esperado)
+
+
+def interpretar(k):
+    if k < 0:    return "peor que el azar"
+    if k < 0.20: return "insignificante"
+    if k < 0.40: return "aceptable a duras penas"
+    if k < 0.60: return "moderado"
+    if k < 0.80: return "sustancial"
+    return "casi perfecto"
+
+
+def evaluar(puntuar, conjunto) -> dict:
+    """Puntúa un conjunto y devuelve todo lo que hace falta para decidir."""
+    humano = [e for _, e in conjunto]
+    juez = [puntuar(r) for r, _ in conjunto]
+    return {
+        "kappa": kappa_de_cohen(humano, juez),
+        "indulgente": sum(h == 0 and j == 1 for h, j in zip(humano, juez)),
+        "severo": sum(h == 1 and j == 0 for h, j in zip(humano, juez)),
+        "acuerdo": sum(h == j for h, j in zip(humano, juez)) / len(humano),
+    }
+
+
+def _respuesta_del_prompt(prompt: str) -> str:
+    texto = prompt.encode().decode("unicode_escape", errors="ignore")
+    encontrado = re.search(r'"respuesta":\s*"([^"]*)"', texto)
+    return encontrado.group(1) if encontrado else texto
+
+
+def puntuador_de(juez):
+    def puntuar(respuesta: str) -> int:
+        return int(juez(inputs={"consulta": "el cliente pregunta"},
+                        outputs={"respuesta": respuesta})["score"])
+    return puntuar
+
+#%%md
+## 3. Los cuatro candidatos
+
+Tres jueces y un evaluador de código, en igualdad de condiciones. El de código entra
+desde el principio y no como consuelo: es el que hay que batir.
+
+#%%py
+CORTESIA = ("gracias", "lamentamos", "sentimos", "entendemos", "comprendemos",
+            "agradecemos", "disculpa", "paciencia", "brevedad", "molestias")
+
+def modelo_generico(prompt: str) -> tuple[float, str]:
+    """Sin rúbrica: se apoya en la longitud y la cortesía."""
+    respuesta = _respuesta_del_prompt(prompt)
+    if len(respuesta) > 55 or any(p in respuesta.lower() for p in CORTESIA):
+        return 1.0, "completa y cortés"
+    return 0.0, "escueta"
+
+
+def modelo_con_rubrica(prompt: str) -> tuple[float, str]:
+    """Sigue la instrucción de ignorar la forma y buscar el dato."""
+    respuesta = _respuesta_del_prompt(prompt)
+    if "NO tengas en cuenta: la longitud" not in prompt:
+        return modelo_generico(prompt)
+    accionable = bool(re.search(r"\d", respuesta)) or ">" in respuesta or "@" in respuesta
+    return (1.0, "contiene un dato accionable") if accionable else (0.0, "solo cortesía")
+
+
+def modelo_con_ejemplos(prompt: str) -> tuple[float, str]:
+    """Deduce marcadores de los bloques <example> que openevals inyecta."""
+    respuesta = _respuesta_del_prompt(prompt)
+    texto = prompt.encode().decode("unicode_escape", errors="ignore")
+
+    positivos, negativos = [], []
+    for bloque in re.findall(r"<example>(.*?)</example>", texto, re.S):
+        salida = re.search(r"'respuesta':\s*'([^']*)'", bloque)
+        nota = re.search(r"<score>([\d.]+)</score>", bloque)
+        if salida and nota:
+            (positivos if float(nota.group(1)) >= 0.5 else negativos).append(salida.group(1))
+    if not positivos and not negativos:
+        return modelo_con_rubrica(prompt)
+
+    def palabras(textos):
+        return {p for t in textos for p in re.findall(r"\w+", t.lower()) if len(p) > 4}
+
+    marcadores_cero = palabras(negativos) - palabras(positivos)
+    marcadores_uno = palabras(positivos) - palabras(negativos)
+    suyas = set(re.findall(r"\w+", respuesta.lower()))
+
+    if suyas & marcadores_cero:
+        return 0.0, "usa las fórmulas de los ejemplos con 0"
+    if re.search(r"\d", respuesta) or ">" in respuesta or "@" in respuesta:
+        return 1.0, "contiene un dato accionable"
+    if suyas & marcadores_uno:
+        return 1.0, "se parece a los ejemplos con 1"
+    return 0.0, "no contiene nada accionable"
+
+
+RUBRICA_GENERICA = "Evalúa la calidad de esta respuesta.\n<input>{inputs}</input>\n<output>{outputs}</output>"
+
+RUBRICA_EXPLICITA = """Evalúas si una respuesta de soporte contiene el dato que el
+cliente necesita para actuar. Solo eso.
+
+<Rubric>
+  1 = contiene un dato accionable: fecha, importe, cifra, ruta de la interfaz,
+      dirección de contacto o instrucción que el cliente puede seguir.
+  0 = no lo contiene, AUNQUE esté bien escrita y prometa una solución.
+
+  PENALIZA: acusar recibo sin resolver, empatía sin contenido, prometer que otro
+  equipo se encargará.
+  NO tengas en cuenta: la longitud, el tono, la cortesía ni el formato.
+</Rubric>
+
+<input>{inputs}</input>
+<output>{outputs}</output>
+"""
+
+def detector_de_dato(respuesta: str) -> int:
+    """El evaluador de código. Cero trazas, cero latencia, cero no-determinismo."""
+    return int(bool(re.search(r"\d", respuesta)) or ">" in respuesta or "@" in respuesta)
+
+#%%py
+# Los ejemplos del juez 3 salen de donde falla el juez 2, y SOLO del conjunto de
+# alineamiento. Tocar la reserva aquí invalidaría todo lo que viene después.
+juez_rubrica = create_llm_as_judge(prompt=RUBRICA_EXPLICITA, feedback_key="resuelve",
+                                   judge=juez_local(modelo_con_rubrica))
+puntuar_rubrica = puntuador_de(juez_rubrica)
+
+fallos = [(r, e) for r, e in ALINEAR if puntuar_rubrica(r) != e]
+indulgentes = [(r, e) for r, e in fallos if e == 0]
+severos = [(r, e) for r, e in fallos if e == 1]
+elegidos = indulgentes[:3] + severos[:3]
+
+EJEMPLOS = [
+    {"inputs": {"consulta": "el cliente pregunta"},
+     "outputs": {"respuesta": r},
+     "score": float(e),
+     "reasoning": ("contiene un dato accionable" if e else "es cortesía sin ningún dato")}
+    for r, e in elegidos
+]
+
+separador(f"ejemplos: {len(EJEMPLOS)}, sacados de los {len(fallos)} fallos del juez con rúbrica")
+for ejemplo in EJEMPLOS:
+    print(f"  [{ejemplo['score']:.0f}] {ejemplo['outputs']['respuesta'][:60]}")
+
+#%%py
+juez_generico = create_llm_as_judge(prompt=RUBRICA_GENERICA, feedback_key="resuelve",
+                                    judge=juez_local(modelo_generico))
+juez_ejemplos = create_llm_as_judge(prompt=RUBRICA_EXPLICITA, feedback_key="resuelve",
+                                    few_shot_examples=EJEMPLOS,
+                                    judge=juez_local(modelo_con_ejemplos))
+
+CANDIDATOS = {
+    "código (regex)      ": detector_de_dato,
+    "juez sin rúbrica    ": puntuador_de(juez_generico),
+    "juez con rúbrica    ": puntuar_rubrica,
+    "juez con + ejemplos ": puntuador_de(juez_ejemplos),
+}
+
+separador("los cuatro candidatos, en las dos mitades")
+print(f"{'candidato':<22}{'κ alineam.':>12}{'κ RESERVA':>12}{'caída':>8}"
+      f"{'indulg.':>9}{'severo':>8}")
+print("-" * 72)
+
+RESULTADOS = {}
+for nombre, puntuar in CANDIDATOS.items():
+    en_alineamiento = evaluar(puntuar, ALINEAR)
+    en_reserva = evaluar(puntuar, RESERVA)
+    RESULTADOS[nombre] = en_reserva
+    print(f"{nombre:<22}{en_alineamiento['kappa']:>12.2f}{en_reserva['kappa']:>12.2f}"
+          f"{en_alineamiento['kappa'] - en_reserva['kappa']:>+8.2f}"
+          f"{en_reserva['indulgente']:>9}{en_reserva['severo']:>8}")
+
+#%%md
+**La columna que decide es la de la reserva**, no la del alineamiento. Es la única que
+dice cómo se va a comportar con respuestas que no ha visto, que es el 100 % de las de
+producción.
+
+Y la columna de la caída es el detector de sobreajuste del notebook 12: si un candidato
+brilla en el alineamiento y se derrumba en la reserva, ha memorizado.
+
+#%%md
+## 4. La decisión, con el coste delante
+
+Un número de kappa no decide nada por sí solo. La decisión es una comparación con
+alternativas, y las alternativas tienen precio.
+
+#%%py
+separador("el coste de cada opción, sobre un conjunto de 50 casos al mes")
+presupuesto_de_trazas(ejemplos=50, repeticiones=1, evaluadores_llm=1,
+                      etiqueta="evaluación mensual con juez LLM")
+print()
+print("  con el evaluador de código: 50 trazas (solo el sistema), 0 del evaluador")
+
+#%%py
+def decidir_si_entra(resultados: dict, *, minimo_kappa: float = 0.6,
+                     margen_sobre_codigo: float = 0.10) -> tuple[str, list[str]]:
+    """El criterio, escrito antes de mirar los números. Tres condiciones."""
+    codigo = resultados["código (regex)      "]["kappa"]
+    # A igualdad de kappa gana el juez más simple: menos piezas que mantener y menos
+    # cosas que se desalineen. El orden del diccionario va de simple a complejo.
+    nombres = [n for n in resultados if "juez" in n]
+    mejor_nombre = max(nombres, key=lambda n: (resultados[n]["kappa"], -nombres.index(n)))
+    mejor = resultados[mejor_nombre]
+
+    razones = []
+    if mejor["kappa"] < minimo_kappa:
+        razones.append(f"el mejor juez saca κ = {mejor['kappa']:.2f} en la reserva, "
+                       f"por debajo del mínimo {minimo_kappa}")
+    if mejor["kappa"] < codigo + margen_sobre_codigo:
+        razones.append(f"el juez ({mejor['kappa']:.2f}) no supera al código ({codigo:.2f}) "
+                       f"por más de {margen_sobre_codigo:.2f}: no paga su coste")
+    if mejor["indulgente"] > mejor["severo"]:
+        razones.append(f"el mejor juez es indulgente ({mejor['indulgente']} falsos "
+                       f"positivos frente a {mejor['severo']}): produciría confianza falsa")
+
+    if razones:
+        return f"NO entra ({mejor_nombre.strip()})", razones
+    return f"ENTRA: {mejor_nombre.strip()}", [
+        f"κ = {mejor['kappa']:.2f} en la reserva ({interpretar(mejor['kappa'])})",
+        f"supera al código ({codigo:.2f}) por {mejor['kappa'] - codigo:.2f}",
+        f"y se equivoca por severo ({mejor['severo']}) más que por indulgente "
+        f"({mejor['indulgente']}), que es la dirección barata",
+    ]
+
+
+veredicto, razones = decidir_si_entra(RESULTADOS)
+separador("la decisión")
+print(f"  {veredicto}")
+for razon in razones:
+    print(f"    - {razon}")
+
+#%%md
+**Y la respuesta es que no.** Eso es lo que hace que este sea un proyecto y no un
+tutorial: el criterio se escribió antes, los números salieron, y el veredicto es que el
+juez no entra. No porque sea malo —saca una kappa estupenda— sino porque **una expresión
+regular de una línea saca la misma**, y esa no cuesta trazas, ni latencia, ni introduce
+no-determinismo en tus medidas.
+
+Si el criterio se hubiera escrito después de ver un 0,90, nadie habría rechazado ese
+juez.
+
+Las tres condiciones no son arbitrarias, y merece la pena entender de dónde sale cada una:
+
+| Condición | De dónde viene |
+|---|---|
+| κ ≥ 0,6 en la **reserva** | La escala del notebook 11, medida donde no se ajustó |
+| Batir al código **por un margen** | El notebook 12: si empatan, el juez no paga sus trazas |
+| Equivocarse por **severo**, no por indulgente | El notebook 12: un juez indulgente produce confianza falsa |
+
+Y la tercera es la que más gente omite. Entre dos jueces con la misma kappa, **prefiere
+el severo**: sus errores generan alarmas que alguien investiga, y los del indulgente
+generan silencio.
+
+> **Que la respuesta sea «no» no invalida el módulo 3, lo justifica.** Sin las etiquetas
+> humanas del notebook 11 no habrías podido comparar nada, y habrías desplegado el juez
+> por defecto —cuesta poco, suena bien— sin saber que un `re.search` hace lo mismo. El
+> trabajo de anotar cincuenta casos se ha pagado en la decisión de no gastar cien trazas
+> al mes para siempre.
+>
+> Y ojo: **este resultado es de esta tarea.** «¿Contiene un dato accionable?» tiene una
+> marca formal —un dígito, una ruta, un correo— y por eso el código compite. Con «¿el
+> tono es adecuado?» o «¿se ha inventado algo?» el código no tiene nada que agarrar, y
+> ahí el juez gana de calle. La pregunta no es si los jueces sirven, es si sirven **para
+> lo que tú mides**.
+
+#%%md
+## 5. El juez se desalinea solo
+
+Aunque la decisión salga que sí, no ha terminado. Un juez alineado hoy deja de estarlo
+sin que nadie toque nada, por tres motivos:
+
+| Causa | Cómo se nota |
+|---|---|
+| **El proveedor cambia el modelo** bajo el mismo nombre | De un día para otro (notebook 10) |
+| **Tus datos cambian**: nuevos tipos de consulta, otro tono | Poco a poco, y es el peor |
+| **Tu criterio cambia** porque el producto cambió | Nadie avisa; la rúbrica se queda vieja |
+
+La vigilancia es barata si se hace bien: **guarda la reserva y vuelve a medir cada mes.**
+No hace falta anotar nada nuevo — ya está anotado.
+
+#%%py
+def revision_mensual(puntuar, reserva, kappa_de_referencia: float,
+                     *, caida_maxima: float = 0.15) -> tuple[bool, str]:
+    """Lo que corre una vez al mes. Veinte casos y una comparación."""
+    ahora = evaluar(puntuar, reserva)
+    caida = kappa_de_referencia - ahora["kappa"]
+    if caida > caida_maxima:
+        return False, (f"el juez se ha desalineado: κ {kappa_de_referencia:.2f} -> "
+                       f"{ahora['kappa']:.2f} (caída {caida:.2f}). Toca revisar la rúbrica "
+                       "y volver a alinear con los desacuerdos nuevos")
+    return True, f"sigue alineado: κ = {ahora['kappa']:.2f} (referencia {kappa_de_referencia:.2f})"
+
+
+REFERENCIA = RESULTADOS["juez con + ejemplos "]["kappa"]
+
+separador("la revisión mensual")
+ok, mensaje = revision_mensual(CANDIDATOS["juez con + ejemplos "], RESERVA, REFERENCIA)
+print(f"  mes 1: {'OK    ' if ok else 'ALERTA'} {mensaje}")
+
+# Y un mes en el que el proveedor cambió el modelo bajo el mismo nombre.
+juez_degradado = create_llm_as_judge(prompt=RUBRICA_EXPLICITA, feedback_key="resuelve",
+                                     few_shot_examples=EJEMPLOS,
+                                     judge=juez_local(modelo_generico))
+ok, mensaje = revision_mensual(puntuador_de(juez_degradado), RESERVA, REFERENCIA)
+print(f"  mes 7: {'OK    ' if ok else 'ALERTA'} {mensaje}")
+
+#%%md
+Veinte casos ya anotados, una vez al mes, veinte trazas. Es la comprobación más barata de
+todo el curso y la que más disgustos evita: sin ella, el mes 7 tu panel sigue diciendo
+0,9 de calidad con un juez que ha vuelto a puntuar la cortesía.
+
+#%%py
+@online("El proyecto completo contra el servicio", trazas=90)
+def _():
+    """Los tres jueces sobre las dos mitades, con un modelo de verdad.
+
+    30 casos de alineamiento + 20 de reserva, por dos jueces con modelo = 100 llamadas.
+    Se recorta a los dos jueces que importan para que quepa en el presupuesto.
+    """
+    from langsmith.run_helpers import tracing_context
+
+    candidatos = {
+        "con rúbrica": create_llm_as_judge(prompt=RUBRICA_EXPLICITA, model="openai:gpt-4o-mini",
+                                           feedback_key="resuelve_juez", use_reasoning=True),
+        "con ejemplos": create_llm_as_judge(prompt=RUBRICA_EXPLICITA, model="openai:gpt-4o-mini",
+                                            feedback_key="resuelve_juez",
+                                            few_shot_examples=EJEMPLOS, use_reasoning=True),
+    }
+    with tracing_context(enabled=True, project_name="curso-langsmith"):
+        for nombre, juez in candidatos.items():
+            puntuar = puntuador_de(juez)
+            en_reserva = evaluar(puntuar, RESERVA)
+            print(f"  {nombre:<14} κ en la reserva = {en_reserva['kappa']:.2f} "
+                  f"({interpretar(en_reserva['kappa'])})  "
+                  f"indulgente={en_reserva['indulgente']} severo={en_reserva['severo']}")
+
+#%%md
+## 6. Ejercicio — El criterio que se escribe antes
+
+Reescribe `decidir_si_entra` con **tu** criterio, y compruébalo contra un caso que
+debería rechazar y otro que debería aceptar.
+
+La parte difícil no es el código: es escribir el criterio **antes** de ver los números.
+Si lo escribes después, siempre encontrarás un umbral que justifique lo que ya querías
+hacer.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def criterio(resultados_reserva: dict, *, coste_traza_eur: float = 0.002,
+             casos_al_mes: int = 500) -> tuple[str, list[str]]:
+    """Un criterio con el dinero dentro, que es lo que suele faltar.
+
+    Añade a las tres condiciones del apartado 4 una cuarta: que la mejora sobre el
+    código valga lo que cuesta. Porque «mejor» no es un argumento si no dices cuánto
+    mejor y a cambio de qué.
+    """
+    codigo = resultados_reserva["código (regex)      "]
+    jueces = {n: r for n, r in resultados_reserva.items() if "juez" in n}
+    nombre, mejor = max(jueces.items(), key=lambda par: par[1]["kappa"])
+
+    ganancia = mejor["kappa"] - codigo["kappa"]
+    coste_mensual = casos_al_mes * coste_traza_eur
+
+    motivos = []
+    if mejor["kappa"] < 0.6:
+        motivos.append(f"κ = {mejor['kappa']:.2f} < 0,60 en la reserva")
+    if mejor["indulgente"] > mejor["severo"]:
+        motivos.append(f"se equivoca por indulgente ({mejor['indulgente']} vs "
+                       f"{mejor['severo']}): produce confianza falsa")
+    if ganancia < 0.10:
+        motivos.append(f"solo gana {ganancia:+.2f} de kappa al código, "
+                       f"y cuesta {coste_mensual:.0f} € al mes")
+
+    if motivos:
+        return "NO", motivos
+    return "SÍ", [f"κ = {mejor['kappa']:.2f}, gana {ganancia:+.2f} al código",
+                  f"coste: {coste_mensual:.0f} € al mes por {casos_al_mes} casos",
+                  f"errores en la dirección barata (severo {mejor['severo']} > "
+                  f"indulgente {mejor['indulgente']})"]
+
+
+separador("el criterio, sobre los resultados de verdad")
+decision, motivos = criterio(RESULTADOS)
+print(f"  {decision}")
+for motivo in motivos:
+    print(f"    - {motivo}")
+
+#%%py
+# Y sobre dos casos construidos, para comprobar que el criterio discrimina.
+CASOS_DE_PRUEBA = {
+    "un juez que merece la pena": {
+        "código (regex)      ": {"kappa": 0.55, "indulgente": 4, "severo": 5, "acuerdo": 0.8},
+        "juez bueno          ": {"kappa": 0.85, "indulgente": 1, "severo": 3, "acuerdo": 0.9},
+    },
+    "un juez que empata con el código": {
+        "código (regex)      ": {"kappa": 0.78, "indulgente": 2, "severo": 3, "acuerdo": 0.9},
+        "juez caro           ": {"kappa": 0.82, "indulgente": 2, "severo": 2, "acuerdo": 0.9},
+    },
+    "un juez bueno pero indulgente": {
+        "código (regex)      ": {"kappa": 0.50, "indulgente": 5, "severo": 4, "acuerdo": 0.7},
+        "juez indulgente     ": {"kappa": 0.75, "indulgente": 6, "severo": 1, "acuerdo": 0.9},
+    },
+}
+
+separador("el criterio sobre tres escenarios")
+for etiqueta, resultados in CASOS_DE_PRUEBA.items():
+    decision, motivos = criterio(resultados)
+    print(f"  {etiqueta:<34} {decision}   {motivos[0]}")
+
+#%%md
+Los tres veredictos son los correctos, y el tercero es el interesante: un juez con κ =
+0,75 —claramente mejor que el código— se rechaza **por la dirección de sus errores**.
+
+Ese es el tipo de decisión que un umbral de kappa a secas no puede tomar, y la razón de
+que el criterio se escriba con las tres condiciones y no con una.
+
+</details>
+
+#%%md
+## 7. Resumen del módulo 3
+
+- **La verdad la produce una persona**, y sin dos personas sobre los mismos casos no
+  sabes si tu criterio existe. El porcentaje de acuerdo miente; usa **kappa** (nb 11).
+- La rúbrica va **dentro** de la cola, con cada valor descrito y con una línea de **qué
+  NO cuenta** — la que más sube el acuerdo y la que menos gente escribe.
+- **Los desacuerdos no se promedian, se miran juntos.** Si se agrupan en un tipo de caso,
+  el problema es la rúbrica.
+- Alinear un juez es medir su kappa contra esas etiquetas. **Dónde se equivoca importa
+  más que cuánto**: un juez indulgente es peor que no tener juez (nb 12).
+- Tres palancas en orden: rúbrica, **ejemplos sacados de los desacuerdos**, modelo. Para
+  el bucle cuando deje de mejorar.
+- **Mide en una reserva que no usaste para alinear.** Es lo único que distingue un juez
+  alineado de uno que memorizó tus frases.
+
+Y lo que añade este proyecto: **la decisión se escribe antes de ver los números**, con
+tres condiciones —umbral en la reserva, margen sobre el código, dirección de los
+errores—, y después hay que **volver a medir cada mes**, porque un juez alineado se
+desalinea solo.
+
+---
+
+**Siguiente módulo:** producción. Ya sabes construir, medir y confiar en la medida. Queda
+mirar lo que pasa de verdad —paneles, monitores, alertas—, convertir las trazas malas en
+casos de prueba **sin intervención**, y versionar los prompts que todo esto evalúa.

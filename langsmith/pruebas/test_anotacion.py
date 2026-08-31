@@ -322,3 +322,99 @@ def test_un_evaluador_de_codigo_puede_bastar():
     codigo = [int(bool(re.search(r"\d", r)) or ">" in r) for r, _ in respuestas]
 
     assert kappa_de_cohen(humano, codigo) >= 0.7
+
+
+# ------------------------------------------------------------------------------------
+# Proyecto P3 · la decisión de si el juez entra
+# ------------------------------------------------------------------------------------
+
+
+def _decidir(resultados, *, minimo_kappa=0.6, margen_sobre_codigo=0.10):
+    """El criterio del proyecto P3, con sus tres condiciones."""
+    codigo = resultados["codigo"]["kappa"]
+    nombres = [n for n in resultados if n != "codigo"]
+    mejor_nombre = max(nombres, key=lambda n: (resultados[n]["kappa"], -nombres.index(n)))
+    mejor = resultados[mejor_nombre]
+
+    razones = []
+    if mejor["kappa"] < minimo_kappa:
+        razones.append("por debajo del umbral")
+    if mejor["kappa"] < codigo + margen_sobre_codigo:
+        razones.append("no supera al código")
+    if mejor["indulgente"] > mejor["severo"]:
+        razones.append("indulgente")
+    return ("NO" if razones else "SI"), razones
+
+
+def test_un_juez_que_empata_con_el_codigo_no_entra():
+    """El desenlace del proyecto P3, y la razón de que sea un proyecto y no un tutorial.
+
+    El juez no es malo —saca una kappa estupenda—: es que una expresión regular saca la
+    misma, y esa no cuesta trazas ni mete no-determinismo.
+    """
+    decision, razones = _decidir({
+        "codigo": {"kappa": 0.90, "indulgente": 0, "severo": 1},
+        "juez": {"kappa": 0.90, "indulgente": 0, "severo": 1},
+    })
+    assert decision == "NO"
+    assert "no supera al código" in razones
+
+
+def test_un_juez_claramente_mejor_si_entra():
+    decision, razones = _decidir({
+        "codigo": {"kappa": 0.55, "indulgente": 4, "severo": 5},
+        "juez": {"kappa": 0.85, "indulgente": 1, "severo": 3},
+    })
+    assert decision == "SI"
+    assert razones == []
+
+
+def test_un_juez_bueno_pero_indulgente_no_entra():
+    """La condición que más gente omite: entre dos con la misma kappa, prefiere el
+    severo. Los errores del severo generan alarmas; los del indulgente, silencio."""
+    decision, razones = _decidir({
+        "codigo": {"kappa": 0.50, "indulgente": 5, "severo": 4},
+        "juez": {"kappa": 0.75, "indulgente": 6, "severo": 1},
+    })
+    assert decision == "NO"
+    assert "indulgente" in razones
+
+
+def test_a_igualdad_de_kappa_gana_el_juez_mas_simple():
+    """Menos piezas que mantener y menos cosas que se desalineen."""
+    resultados = {
+        "codigo": {"kappa": 0.40, "indulgente": 3, "severo": 3},
+        "juez simple": {"kappa": 0.80, "indulgente": 1, "severo": 3},
+        "juez complejo": {"kappa": 0.80, "indulgente": 1, "severo": 3},
+    }
+    nombres = [n for n in resultados if n != "codigo"]
+    mejor = max(nombres, key=lambda n: (resultados[n]["kappa"], -nombres.index(n)))
+    assert mejor == "juez simple"
+
+
+def test_la_revision_mensual_detecta_la_desalineacion():
+    """Un juez alineado se desalinea solo: el proveedor cambia el modelo, tus datos
+    cambian, tu criterio cambia. Veinte casos ya anotados, una vez al mes."""
+    def revision(kappa_ahora, kappa_referencia, *, caida_maxima=0.15):
+        return (kappa_referencia - kappa_ahora) <= caida_maxima
+
+    assert revision(0.88, 0.90)          # variación normal
+    assert not revision(0.60, 0.90)      # caída de 0,30: alerta
+    assert not revision(-0.33, 0.90)     # el modelo cambió bajo el mismo nombre
+
+
+def test_la_particion_se_hace_antes_y_las_mitades_se_parecen():
+    """Si el corte deja casi todos los «sí» en una mitad, la kappa de la reserva mide
+    otra cosa. Hay que comprobarlo antes de fiarse del número."""
+    import random
+
+    anotado = [(f"con dato {i}", 1) for i in range(25)] + \
+              [(f"sin dato {i}", 0) for i in range(25)]
+    random.Random(5).shuffle(anotado)
+
+    corte = int(len(anotado) * 0.6)
+    alinear, reserva = anotado[:corte], anotado[corte:]
+
+    proporcion_a = sum(e for _, e in alinear) / len(alinear)
+    proporcion_r = sum(e for _, e in reserva) / len(reserva)
+    assert abs(proporcion_a - proporcion_r) < 0.15
