@@ -1,0 +1,482 @@
+#%%md
+# 16 · Organización y accesos
+
+**Módulo 5 · Gobierno** — *tiempo estimado: 60 minutos* — *consumo: 0 trazas*
+
+Los cuatro módulos anteriores dan por hecho algo que no lo es: que **todo el mundo puede
+ver todas las trazas**. En una cuenta de una persona eso es verdad y no importa. En cuanto
+sois cinco, cambia: hay trazas con datos de clientes reales, hay quien no debería
+ejecutar experimentos que cuestan dinero, y hay claves que llevan dos años sin rotarse.
+
+Este notebook responde a tres preguntas concretas, y las responde **ejecutando**:
+
+1. ¿Qué decide a qué datos llega una clave, y cómo se cambia?
+2. ¿Qué parte del gobierno se puede tocar desde el SDK, y cuál **no está ahí en absoluto**?
+3. ¿Por dónde se escapan las trazas sin que ningún permiso lo impida?
+
+La tercera es la que da problemas de verdad.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import inspect, os, warnings
+from utils.curso import init, online, cliente, separador, _SesionMuda
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. La jerarquía, y cuánta de ella ve el SDK
+
+LangSmith tiene tres niveles:
+
+```
+Organización            facturación, SSO, quién puede crear espacios
+└── Espacio de trabajo  («workspace», «tenant» en la API): usuarios, roles, claves
+    └── Proyecto        donde caen las trazas
+```
+
+El curso entero ha vivido en el tercer nivel. Los dos de arriba deciden quién llega hasta
+allí, y **el SDK apenas los toca**. Esto no es una opinión: se puede comprobar.
+
+#%%py
+from langsmith import Client
+
+c = Client(api_key="local", session=_SesionMuda(), auto_batch_tracing=False)
+
+separador("recursos que expone el cliente moderno")
+api = c._get_langsmith_api()          # accesor privado: el cliente generado del OpenAPI
+recursos = sorted(n for n in dir(api)
+                  if not n.startswith("_") and n not in
+                  {"api_key", "auth_headers", "base_url", "close", "copy", "custom_auth",
+                   "default_headers", "default_query", "delete", "get", "get_api_list",
+                   "is_closed", "max_retries", "patch", "platform_headers", "post", "put",
+                   "qs", "request", "timeout", "user_agent", "with_options",
+                   "with_raw_response", "with_streaming_response"})
+print("  ", recursos)
+
+print()
+for concepto in ("organization", "workspace", "role", "member", "user", "api_key", "audit"):
+    hay = [r for r in recursos if concepto.replace("_", "") in r.replace("_", "")]
+    print(f"  {concepto:<14}: {hay or '— no existe en el SDK —'}")
+
+#%%md
+> **Lo primero que hay que saber del gobierno en LangSmith:** casi todo se hace **en la
+> interfaz**. Ni organizaciones, ni espacios de trabajo, ni roles, ni usuarios, ni claves,
+> ni registro de auditoría tienen recurso en el SDK.
+>
+> Eso tiene una consecuencia práctica que conviene aceptar pronto: **el gobierno no se
+> puede versionar en tu repositorio**. No hay un `terraform apply` que reconstruya tus
+> permisos. Lo que sí puedes versionar es la *comprobación* de que siguen siendo los que
+> acordasteis — y de eso va el apartado 4.
+
+#%%md
+## 2. La clave decide a qué datos llegas
+
+Hay dos tipos de clave, y la diferencia importa desde la primera línea de código:
+
+| | Clave de espacio de trabajo | Clave de servicio (organización) |
+|---|---|---|
+| Alcance | **Un** espacio | **Todos** los de la organización |
+| Elegir espacio | No hace falta | **Obligatorio**: si no, no sabe dónde escribir |
+| Para qué | Una aplicación, un entorno | Automatizaciones que cruzan espacios |
+| Riesgo si se filtra | Un espacio | **Todo** |
+
+Y lo que hace la elección es una variable de entorno que acaba en una cabecera HTTP.
+Se ve:
+
+#%%py
+import langsmith.utils as lu
+
+def cabeceras(**entorno) -> dict:
+    """Crea un cliente con ese entorno y devuelve las cabeceras que enviaría."""
+    previo = {k: os.environ.get(k) for k in entorno}
+    os.environ.update({k: v for k, v in entorno.items() if v is not None})
+    for k, v in entorno.items():
+        if v is None:
+            os.environ.pop(k, None)
+    lu.get_env_var.cache_clear()            # está cacheada: sin esto, no ves el cambio
+    try:
+        return dict(Client(api_key="lsv2_pt_EJEMPLO", session=_SesionMuda(),
+                           auto_batch_tracing=False)._headers)
+    finally:
+        for k, v in previo.items():
+            os.environ[k] = v if v is not None else ""
+            if v is None:
+                os.environ.pop(k, None)
+        lu.get_env_var.cache_clear()
+
+
+separador("sin elegir espacio de trabajo")
+for k, v in cabeceras(LANGSMITH_WORKSPACE_ID=None).items():
+    print(f"  {k}: {v}")
+
+print()
+separador("con LANGSMITH_WORKSPACE_ID")
+for k, v in cabeceras(LANGSMITH_WORKSPACE_ID="11111111-2222-3333-4444-555555555555").items():
+    print(f"  {k}: {v}")
+
+#%%md
+`LANGSMITH_WORKSPACE_ID` viaja como **`X-Tenant-Id`**, y solo aparece si la pones. Sin
+ella el servidor usa el espacio por defecto de la clave — que con una clave de servicio no
+está definido.
+
+De ahí la regla operativa:
+
+> **Con clave de servicio, `LANGSMITH_WORKSPACE_ID` es obligatoria y no debe tener valor
+> por defecto en tu código.** Un `os.getenv("LANGSMITH_WORKSPACE_ID", ALGO)` es cómo se
+> acaban escribiendo las trazas de producción en el espacio de pruebas de alguien.
+
+#%%py
+# Y una comprobación de arranque que cuesta cuatro líneas y evita esa clase de fallo.
+def comprobar_alcance(client, *, espacio_esperado: str | None = None) -> None:
+    """Falla al arrancar, no en la primera traza escrita en el sitio equivocado."""
+    if espacio_esperado is None:
+        return
+    if client.workspace_id is None:
+        raise RuntimeError(
+            "esta aplicación exige un espacio de trabajo explícito y no hay ninguno: "
+            "pon LANGSMITH_WORKSPACE_ID")
+    if str(client.workspace_id) != espacio_esperado:
+        raise RuntimeError(f"espacio equivocado: {client.workspace_id} != {espacio_esperado}")
+
+
+separador("la comprobación de arranque")
+for descripcion, entorno, esperado in [
+    ("sin espacio, sin exigirlo", {"LANGSMITH_WORKSPACE_ID": None}, None),
+    ("sin espacio, exigiéndolo", {"LANGSMITH_WORKSPACE_ID": None}, "aaaa-bbbb"),
+    ("con el espacio correcto", {"LANGSMITH_WORKSPACE_ID": "aaaa-bbbb"}, "aaaa-bbbb"),
+    ("con OTRO espacio", {"LANGSMITH_WORKSPACE_ID": "cccc-dddd"}, "aaaa-bbbb"),
+]:
+    previo = os.environ.get("LANGSMITH_WORKSPACE_ID")
+    valor = entorno["LANGSMITH_WORKSPACE_ID"]
+    os.environ.pop("LANGSMITH_WORKSPACE_ID", None) if valor is None else \
+        os.environ.update({"LANGSMITH_WORKSPACE_ID": valor})
+    lu.get_env_var.cache_clear()
+    cliente_prueba = Client(api_key="local", session=_SesionMuda(), auto_batch_tracing=False)
+    try:
+        comprobar_alcance(cliente_prueba, espacio_esperado=esperado)
+        print(f"  {descripcion:<30} arranca")
+    except RuntimeError as error:
+        print(f"  {descripcion:<30} FALLA: {error}")
+    os.environ.pop("LANGSMITH_WORKSPACE_ID", None)
+    if previo is not None:
+        os.environ["LANGSMITH_WORKSPACE_ID"] = previo
+    lu.get_env_var.cache_clear()
+
+#%%md
+## 3. Dónde está la clave, en claro
+
+El notebook 05 fue sobre lo que no debe salir en las trazas. Este apartado es sobre lo que
+no debe salir **de tu proceso**, y tiene una respuesta corta y medible.
+
+#%%py
+secreta = "lsv2_pt_ESTA_ES_LA_CLAVE_Y_NO_DEBE_APARECER"
+espia = Client(api_key=secreta, session=_SesionMuda(), auto_batch_tracing=False)
+
+separador("¿por dónde se ve la clave?")
+sitios = {
+    "repr(client)": repr(espia),
+    "str(client)": str(espia),
+    "client.api_key": espia.api_key,
+    "client._headers": str(dict(espia._headers)),
+}
+for donde, valor in sitios.items():
+    fuga = "SÍ" if "ESTA_ES_LA_CLAVE" in str(valor) else "no"
+    print(f"  {donde:<20} ¿se ve? {fuga:<4} {str(valor)[:56]}")
+
+import traceback
+try:
+    espia.read_dataset(dataset_name="no-existe")
+except Exception:
+    rastro = traceback.format_exc()
+print(f"\n  en un traceback     ¿se ve? {'SÍ' if 'ESTA_ES_LA_CLAVE' in rastro else 'no'}")
+
+#%%md
+El SDK protege lo que se imprime por accidente —`repr`, `str`, los *tracebacks*— y **no
+protege los dos sitios a los que llegarías depurando**: `client.api_key` y
+`client._headers`.
+
+Eso no es un fallo del SDK, es el reparto normal: la clave tiene que estar en algún sitio.
+Lo que sí es tuyo:
+
+| Práctica | Por qué |
+|---|---|
+| Nunca `print(client._headers)` en código que se queda | Acaba en los registros, y los registros los ve más gente que las trazas |
+| Nunca la clave en el `metadata` de una traza | El notebook 05: `hide_inputs` no toca los metadatos |
+| Una clave por aplicación y entorno | Rotar una no tumba las demás |
+| Rotación con fecha en el calendario | «Cuando haga falta» es «nunca» |
+
+#%%py
+# Lo que sí se puede automatizar sin que exista API de claves: el inventario.
+INVENTARIO = [
+    {"nombre": "app-produccion",   "espacio": "produccion", "tipo": "espacio",
+     "creada": "2026-01-15", "ultimo_uso": "2026-08-31"},
+    {"nombre": "ci-evaluaciones",  "espacio": "produccion", "tipo": "espacio",
+     "creada": "2026-02-02", "ultimo_uso": "2026-08-30"},
+    {"nombre": "migracion-datos",  "espacio": "todos",      "tipo": "servicio",
+     "creada": "2025-11-08", "ultimo_uso": "2025-11-09"},
+    {"nombre": "portatil-de-alba", "espacio": "pruebas",    "tipo": "espacio",
+     "creada": "2025-09-30", "ultimo_uso": "2026-03-11"},
+]
+
+import datetime
+
+HOY = datetime.date(2026, 8, 31)
+
+
+def revisar_claves(inventario, *, dias_sin_uso: int = 90, dias_de_vida: int = 180) -> list[str]:
+    """La revisión trimestral, escrita como código para que se ejecute sola."""
+    avisos = []
+    for clave in inventario:
+        sin_usar = (HOY - datetime.date.fromisoformat(clave["ultimo_uso"])).days
+        edad = (HOY - datetime.date.fromisoformat(clave["creada"])).days
+        if sin_usar > dias_sin_uso:
+            avisos.append(f"«{clave['nombre']}» lleva {sin_usar} días sin usarse: bórrala")
+        if edad > dias_de_vida and sin_usar <= dias_sin_uso:
+            avisos.append(f"«{clave['nombre']}» tiene {edad} días: toca rotarla")
+        if clave["tipo"] == "servicio" and sin_usar > 30:
+            avisos.append(f"«{clave['nombre']}» es de SERVICIO (toda la organización) y "
+                          f"lleva {sin_usar} días parada: es la peor de todas")
+    return avisos
+
+
+separador("revisión trimestral de claves")
+for aviso in revisar_claves(INVENTARIO):
+    print(f"  - {aviso}")
+
+#%%md
+## 4. La fuga que no pasa por permisos
+
+Y aquí está lo que de verdad hay que saberse de este notebook.
+
+Todo el apartado anterior va de quién entra en el espacio de trabajo. Pero hay una función
+del SDK que **crea un enlace público a una traza**, y ese enlace no pregunta por espacios,
+ni por roles, ni por quién eres: funciona para cualquiera que lo tenga.
+
+#%%py
+separador("la API de compartir")
+for metodo in ("share_run", "unshare_run", "read_run_shared_link", "run_is_shared",
+               "share_dataset", "unshare_dataset"):
+    funcion = getattr(Client, metodo, None)
+    print(f"  {metodo:<24}{inspect.signature(funcion) if funcion else '— no existe —'}")
+
+#%%py
+# Y lo que devuelve `share_run` no es un permiso: es una URL. Además, toda esta API
+# está en retirada, y el aviso solo aparece al LLAMARLA — no al leer su firma.
+import uuid
+
+with warnings.catch_warnings(record=True) as avisos:
+    warnings.simplefilter("always")
+    try:
+        c.share_run(str(uuid.uuid4()))
+    except Exception:
+        pass            # la sesión muda no devuelve una URL; da igual, el aviso ya saltó
+
+separador("el aviso que salta al llamarla")
+for aviso in avisos:
+    if issubclass(aviso.category, DeprecationWarning):
+        print(" ", str(aviso.message))
+
+#%%py
+# La API nueva, y una asimetría que conviene mirar dos veces.
+c_nuevo = Client(api_key="local", session=_SesionMuda(), auto_batch_tracing=False)
+
+separador("la API nueva de compartir")
+print("  crear :", str(inspect.signature(c_nuevo.runs.share.create)).split(",")[0] + ", ...)")
+print("  borrar:", str(inspect.signature(c_nuevo.runs.share.delete)).split(",")[0] + ", ...)")
+print()
+print("  Se comparte por run_id y se DEJA de compartir por trace_id.")
+print("  Lo público no es la llamada que compartiste: es la traza entera que la contiene.")
+print("  Es decir: compartes un paso y publicas todo lo que ese paso llevaba dentro,")
+print("  incluidos los prompts, las entradas del usuario y las llamadas a herramientas.")
+
+#%%md
+> **La regla:** *compartir una traza es publicarla.* No hay caducidad automática, no hay
+> lista de quién la ha visto, y el enlace sobrevive a que la persona que lo creó se vaya
+> de la empresa.
+>
+> Si necesitas enseñarle una traza a alguien de fuera, la opción segura es una captura o
+> un extracto, no un enlace. Y si usas el enlace, **apúntalo para poder retirarlo**.
+
+#%%py
+# La auditoría que sí se puede automatizar: qué hay publicado ahora mismo.
+@online("¿Qué trazas nuestras son públicas?", trazas=0)
+def _():
+    """`run_is_shared` responde por traza. No hay un «lístame todo lo compartido», así
+    que la auditoría hay que montarla sobre las trazas que te importan."""
+    c = cliente()
+    publicas = []
+    for run in c.list_runs(project_name="soporte-produccion", is_root=True, limit=200):
+        if c.run_is_shared(run.id):
+            publicas.append((run.id, c.read_run_shared_link(run.id)))
+    print(f"  trazas públicas: {len(publicas)}")
+    for run_id, enlace in publicas[:10]:
+        print(f"    {run_id}  {enlace}")
+    print("  -> revisa esta lista cada trimestre, con las claves.")
+
+#%%md
+## 5. Los proyectos como única frontera que sabes expresar
+
+Con lo anterior sobre la mesa, queda una decisión de diseño que sí está en tus manos y que
+la mayoría toma por descuido: **qué va en qué proyecto**.
+
+Es la única separación que tu código puede expresar, y en la práctica es la que decide
+quién ve qué, porque los permisos finos se dan por espacio de trabajo, no por proyecto.
+
+#%%py
+DECISIONES = [
+    ("un proyecto por entorno (prod / pre / local)",
+     "sí, siempre", "mezclar entornos hace inútil cualquier métrica del nb 13"),
+    ("un proyecto por servicio",
+     "sí, si son equipos distintos", "el panel y las alertas son por proyecto"),
+    ("un proyecto por cliente final",
+     "solo si te lo exige un contrato", "multiplica los proyectos y rompe las métricas agregadas"),
+    ("un proyecto por experimento",
+     "no", "los experimentos ya tienen su propio espacio; esto solo hace ruido"),
+    ("un proyecto por rama de git",
+     "no", "se acumulan y nadie los borra; usa metadatos y filtra (nb 13)"),
+]
+
+separador("qué separar en proyectos distintos")
+print(f"  {'separación':<46}{'¿hacerlo?':<34}por qué")
+print("  " + "-" * 124)
+for separacion, veredicto, motivo in DECISIONES:
+    print(f"  {separacion:<46}{veredicto:<34}{motivo}")
+
+#%%py
+# Y si de verdad necesitas aislamiento por cliente, esto es lo que sí funciona:
+separador("aislamiento de verdad, por orden de coste")
+NIVELES = [
+    ("metadatos + filtros", "gratis", "NO aísla: quien ve el proyecto lo ve todo"),
+    ("proyectos separados", "gratis", "separa paneles y alertas; NO separa permisos"),
+    ("espacios de trabajo separados", "según plan", "sí aísla: es la frontera de permisos"),
+    ("organizaciones separadas", "caro", "aísla también facturación y SSO"),
+]
+print(f"  {'mecanismo':<34}{'coste':<16}qué consigue de verdad")
+print("  " + "-" * 96)
+for mecanismo, coste, efecto in NIVELES:
+    print(f"  {mecanismo:<34}{coste:<16}{efecto}")
+print()
+print("  La frontera de permisos es el ESPACIO DE TRABAJO. Todo lo que esté por debajo")
+print("  es organización, no aislamiento — por muy bien que quede en un diagrama.")
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — La clave que se coló en el repositorio
+
+Alguien ha subido una clave a un repositorio público. Escribe la lista de lo que hay que
+hacer, **en orden**, y di qué parte se puede automatizar con lo que hay en el SDK.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+INCIDENTE = [
+    (1, "Revocar la clave en la interfaz", "no", "no hay API de claves: es a mano, y es lo primero"),
+    (2, "Crear la sustituta y desplegarla", "parcial", "el despliegue sí; crearla, no"),
+    (3, "Mirar qué alcance tenía", "sí", "client.workspace_id y el tipo de clave lo dicen"),
+    (4, "Revisar el registro de auditoría", "no", "solo en la interfaz, y solo en planes con auditoría"),
+    (5, "Comprobar qué trazas son públicas", "sí", "run_is_shared sobre las trazas del periodo"),
+    (6, "Borrar del historial de git", "sí", "es tu repositorio, no LangSmith"),
+    (7, "Rotar TAMBIÉN las claves del modelo", "sí", "si estaban en el mismo fichero, están igual de expuestas"),
+]
+
+separador("una clave filtrada, en orden")
+print(f"  {'#':<4}{'paso':<44}{'¿automatizable?':<18}con qué")
+print("  " + "-" * 110)
+for n, paso, automatizable, con_que in INCIDENTE:
+    print(f"  {n:<4}{paso:<44}{automatizable:<18}{con_que}")
+
+print()
+print("  Lo importante del orden: revocar va ANTES que investigar. Mientras investigas,")
+print("  la clave sigue funcionando.")
+print()
+print("  Y el paso 7 es el que más se olvida: una clave de LangSmith filtrada expone")
+print("  tus trazas; las claves del modelo que estaban en el mismo .env exponen tu")
+print("  factura entera y no las protege ningún permiso de LangSmith.")
+
+#%%md
+Y el detalle que hace que esto no vuelva a pasar, que no está en la lista porque no es un
+paso del incidente: **`.env` en `.gitignore` y `.env.example` con marcadores**. Es
+exactamente lo que hace este curso; míralo si quieres el patrón.
+
+</details>
+
+#%%md
+### Ejercicio 2 — El experimento que nadie debería poder lanzar
+
+Tu conjunto dorado tiene 400 casos y un juez LLM. Alguien lo lanza tres veces en una tarde
+mientras prueba cosas. Calcula el daño y decide dónde se pone la barrera.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+from utils.curso import presupuesto_de_trazas
+
+separador("el daño")
+presupuesto_de_trazas(ejemplos=400, repeticiones=3, evaluadores_llm=1,
+                      etiqueta="tres pasadas del dorado en una tarde")
+
+BARRERAS = [
+    ("permisos de LangSmith", "no sirve", "quien puede evaluar puede evaluar; no hay cuota por usuario"),
+    ("clave sin permiso de escritura", "no sirve", "un experimento escribe: o puede o no puede trabajar"),
+    ("presupuesto en el código", "SÍ", "presupuesto_de_trazas() antes de evaluate(), y aborta"),
+    ("dorado pequeño para iterar", "SÍ", "40 casos para probar, 400 para la puerta de CI"),
+    ("evaluación solo en CI", "SÍ", "nadie lanza el conjunto grande desde su portátil"),
+    ("alerta de consumo", "parcial", "avisa tarde, pero avisa"),
+]
+
+print()
+separador("dónde se pone la barrera")
+print(f"  {'barrera':<38}{'¿funciona?':<14}por qué")
+print("  " + "-" * 108)
+for barrera, veredicto, motivo in BARRERAS:
+    print(f"  {barrera:<38}{veredicto:<14}{motivo}")
+
+print()
+print("  Las tres que funcionan son de tu código, no de LangSmith. Es el mismo patrón")
+print("  del notebook entero: el gobierno que puedes automatizar es el que escribes tú.")
+
+#%%md
+La conclusión incómoda del ejercicio es que **el control de gasto no es un permiso**. Si
+alguien puede evaluar, puede gastarse el presupuesto del mes en una tarde, y ninguna
+configuración de LangSmith lo impide.
+
+Lo que sí lo impide es que el conjunto grande viva **solo** en la CI, y que el que se
+lanza a mano sea el de 40 casos del P2.
+
+</details>
+
+#%%md
+## 7. Resumen
+
+- La jerarquía es **organización → espacio de trabajo → proyecto**, y la frontera de
+  permisos es el **espacio de trabajo**. Separar por proyectos organiza paneles; no aísla.
+- **El gobierno no está en el SDK**: ni organizaciones, ni espacios, ni roles, ni usuarios,
+  ni claves, ni auditoría tienen recurso. Se hace en la interfaz, y por eso no se puede
+  versionar — lo que sí puedes versionar es la comprobación de que sigue como acordasteis.
+- `LANGSMITH_WORKSPACE_ID` viaja como **`X-Tenant-Id`** y solo se envía si la pones. Con
+  una clave de servicio es obligatoria, y **no debe tener valor por defecto** en tu código.
+- La clave **no** se ve en `repr`, `str` ni en los *tracebacks*; **sí** en `client.api_key`
+  y en `client._headers`. No imprimas ninguno de los dos en código que se queda.
+- **Compartir una traza es publicarla.** El enlace ignora espacios y roles, no caduca, y no
+  hay lista de quién lo ha visto. Se comparte por `run_id` y se retira por `trace_id`:
+  lo público es la traza entera, con sus prompts y sus entradas.
+- El **control de gasto no es un permiso**. Las barreras que funcionan —presupuesto en el
+  código, dorado pequeño para iterar, conjunto grande solo en CI— las escribes tú.
+
+**Siguiente:** [`17 · Retención y cumplimiento`](17_retencion_y_cumplimiento.ipynb) —
+cuánto se guarda, qué lo alarga sin que te enteres, y qué hay que poder borrar.

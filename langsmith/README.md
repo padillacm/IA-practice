@@ -72,22 +72,22 @@ Ver [`PLAN.md`](PLAN.md) para el detalle y la justificación de cada notebook.
 | 2 · Datasets y experimentos | 5 + 1 proyecto | **listo** |
 | 3 · El humano en el bucle de la calidad | 2 + 1 proyecto | **listo** |
 | 4 · Producción: mirar y actuar | 3 + 1 proyecto | **listo** |
-| 5 · Gobierno | 2 | pendiente |
+| 5 · Gobierno | 2 | **listo** |
 
 ## Estado de la verificación
 
 | Filtro | Resultado |
 |---|---|
-| Notebooks escritos | 20 (módulos 0 a 4 completos) |
+| Notebooks escritos | 22 (el curso entero: módulos 0 a 5) |
 | Problemas estáticos | 0 |
-| Notebooks que se ejecutan enteros, sin clave y **con la red cortada** | 20 de 20 |
+| Notebooks que se ejecutan enteros, sin clave y **con la red cortada** | 22 de 22 |
 | Intentos de salida a `smith.langchain.com` durante esa ejecución | **0** |
-| Pruebas | 151 de 151, con la red cortada también |
+| Pruebas | 163 de 163, con la red cortada también |
 | Entornos vírgenes (`uv sync` y `pip install -r requirements.txt`) | los dos pasan |
 
 Celdas marcadas `@online`, escritas contra la firma real del SDK pero **no ejecutadas**:
-están en los notebooks 00, 02, 03, 04, 05, 06, 07, 08, 09, 11, 12, 13, 14, 15 y en los
-cuatro proyectos, señaladas una a una: 40 celdas en total.
+están en los notebooks 00, 02, 03, 04, 05, 06, 07, 08, 09, 11, 12, 13, 14, 15, 16, 17 y
+en los cuatro proyectos, señaladas una a una: 42 celdas en total.
 
 El módulo 2 se ejecuta entero en local gracias a dos mecanismos del SDK que amplían lo
 verificable mucho más allá de lo previsto: `tracing_context(enabled="local")` construye

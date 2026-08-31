@@ -1,0 +1,507 @@
+#%%md
+# 17 · Retención y cumplimiento
+
+**Módulo 5 · Gobierno** — *tiempo estimado: 70 minutos* — *consumo: 0 trazas*
+
+Un cliente escribe: «borrad todos mis datos». Tu código de aplicación sabe hacerlo —el
+notebook 30 del curso de LangGraph lo trata— pero hay una copia de todo lo que ese cliente
+escribió en un sitio del que nadie se acuerda: **las trazas**.
+
+Este notebook responde a tres preguntas y la tercera no tiene la respuesta que esperas:
+
+1. ¿Cuánto tiempo se guarda una traza, y qué la alarga **sin que te enteres**?
+2. ¿Qué se puede borrar desde el SDK?
+3. ¿Se puede borrar **una traza**?
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import inspect, time, uuid, warnings
+from utils.curso import (init, online, cliente, separador, servicio_simulado,
+                         presupuesto_de_trazas, _SesionMuda)
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. Las dos retenciones
+
+LangSmith guarda las trazas en dos regímenes, y la diferencia es de precio:
+
+| | Retención base | Retención extendida |
+|---|---|---|
+| Cuánto dura | Días (14 en el plan Developer) | Meses (400 días) |
+| Qué cuesta | Lo básico | **Bastante más por traza** |
+| Para qué | Depurar lo de esta semana | Conjuntos, auditoría, tendencias |
+
+Lo que hay que saber de verdad no es la tabla: es **qué pasa una traza de un régimen al
+otro**. Y ahí hay un parámetro del SDK con un valor por defecto que sorprende.
+
+#%%py
+from langsmith import Client
+from langsmith.schemas import FeedbackCreate
+
+parametros = inspect.signature(Client.create_feedback).parameters
+
+separador("el parámetro que cambia la retención")
+print(f"  create_feedback(..., extend_trace_retention={parametros['extend_trace_retention'].default})")
+print()
+campo = FeedbackCreate.model_fields["extend_trace_retention"]
+print("  y en el esquema que viaja al servidor:")
+print(f"     por defecto : {campo.default}")
+print()
+print("  y lo que el propio SDK escribe justo debajo del campo:")
+fuente = inspect.getsource(FeedbackCreate).splitlines()
+posicion = next(i for i, l in enumerate(fuente) if "extend_trace_retention" in l)
+print("    ", fuente[posicion + 1].strip())
+
+#%%md
+El SDK lo dice con todas las letras en el esquema: *«When true, extend trace retention as a
+**side effect** of creating this feedback.»*
+
+Traducido a lo que significa para el curso:
+
+> **Cada vez que dejas realimentación en una traza, la asciendes a retención extendida.**
+> Y realimentación es: el pulgar del notebook 04, cada anotación del módulo 3, cada
+> puntuación de un juez en línea del notebook 14, y cada corrección que escribe una
+> persona en la cola.
+
+No es un fallo: tiene todo el sentido que la traza que has anotado no desaparezca en dos
+semanas. Lo que importa es que **sepas que está pasando**, porque decide tu factura.
+
+#%%py
+# Y esto no es una lectura de la documentación: se ve en la petición.
+def campo_de_retencion(valor: bool) -> dict:
+    """Manda una realimentación a un LangSmith simulado y mira qué llegó."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with servicio_simulado() as servicio:
+            run_id = uuid.uuid4()
+            servicio.cliente.create_feedback(
+                run_id, key="correcto", score=1,
+                trace_id=run_id, session_id=uuid.uuid4(),
+                extend_trace_retention=valor)
+            time.sleep(0.3)
+            return servicio.recibidos[0]
+
+
+separador("lo que llega al servidor en cada realimentación")
+for valor in (True, False):
+    cuerpo = campo_de_retencion(valor)
+    print(f"  extend_trace_retention={str(valor):<6} -> el POST /feedback lleva "
+          f"«extend_trace_retention»: {cuerpo['extend_trace_retention']}")
+print()
+print("  Va en TODAS las realimentaciones. El valor por defecto es True.")
+
+#%%md
+### Cuánto cuesta eso, en trazas de verdad
+
+Con los números del módulo 4: un juez en línea sobre el 5 % del tráfico escribe una
+realimentación por traza muestreada, y **cada una asciende su traza**.
+
+#%%py
+def ascensos_al_mes(*, peticiones_al_dia: int, muestreo: float,
+                    anotadas_a_mano_al_dia: int = 0) -> dict:
+    """Cuántas trazas acaban en retención extendida por la vía de la realimentación."""
+    del_juez = peticiones_al_dia * muestreo * 30
+    del_humano = anotadas_a_mano_al_dia * 30
+    return {"por el juez en línea": round(del_juez),
+            "por anotación humana": round(del_humano),
+            "total ascendidas": round(del_juez + del_humano),
+            "ascensos por cada traza": (del_juez + del_humano) / (peticiones_al_dia * 30)}
+
+
+separador("trazas que suben a retención extendida al mes")
+for descripcion, ajustes in [
+    ("equipo pequeño, juez al 5 %", dict(peticiones_al_dia=500, muestreo=0.05,
+                                          anotadas_a_mano_al_dia=10)),
+    ("el mismo, con el juez al 100 %", dict(peticiones_al_dia=500, muestreo=1.0,
+                                            anotadas_a_mano_al_dia=10)),
+    ("producción seria, juez al 2 %", dict(peticiones_al_dia=20_000, muestreo=0.02,
+                                           anotadas_a_mano_al_dia=40)),
+]:
+    datos = ascensos_al_mes(**ajustes)
+    print(f"\n  {descripcion}")
+    for clave, valor in datos.items():
+        print(f"     {clave:<26}{valor:>10,.0f}" if not clave.startswith("ascensos por")
+              else f"     {clave:<26}{valor:>9.2f}x")
+
+#%%md
+La fila del medio es la que hay que mirar: **un juez en línea al 100 % no multiplica tu
+coste de evaluación, multiplica tu coste de almacenamiento**, porque asciende todas las
+trazas que puntúa. Su ratio pasa de 1 —hay trazas que suben dos veces, una por el juez y
+otra por la persona— y eso significa exactamente lo que parece: se está guardando todo,
+durante mucho más tiempo. Es una razón más —además de la del notebook 14— para muestrear.
+
+Y si de verdad quieres puntuar sin ascender:
+
+```python
+client.create_feedback(run_id, key="calidad", score=0.8,
+                       extend_trace_retention=False)   # puntúa y deja que caduque
+```
+
+#%%md
+## 2. La trampa del TTL
+
+Buscando cómo controlar la retención desde el código, lo primero que aparece es una
+variable de entorno con «TTL» en el nombre. **No es lo que parece.**
+
+#%%py
+from langsmith._internal.otel import _otel_exporter
+
+separador("la única variable con «TTL» del SDK")
+firma = inspect.signature(_otel_exporter.OTELExporter.__init__)
+print(f"  OTELExporter(span_ttl_seconds={firma.parameters['span_ttl_seconds'].default})")
+print()
+documentacion = inspect.getdoc(_otel_exporter.OTELExporter.__init__)
+for linea in documentacion.splitlines():
+    if "ttl" in linea.lower():
+        print("  ", linea.strip())
+
+#%%md
+> `LANGSMITH_OTEL_SPAN_TTL_SECONDS` es **el tiempo que el exportador guarda en memoria una
+> traza incompleta** antes de rendirse. Una hora por defecto. No tiene absolutamente nada
+> que ver con cuánto se guardan tus datos en LangSmith.
+
+Dos consecuencias, las dos útiles:
+
+1. **No busques más:** la retención no se configura desde el SDK. Es del plan y del espacio
+   de trabajo, y se toca en la interfaz.
+2. Si usas el exportador de OpenTelemetry y tienes trazas de más de una hora —un agente
+   largo, una tarea por lotes—, **esa variable sí te afecta**: la traza se corta.
+
+#%%md
+## 3. Lo que se puede borrar
+
+Aquí llega la respuesta que descoloca. Este es el inventario completo de borrado del SDK:
+
+#%%py
+separador("todo lo que el SDK sabe borrar")
+for nombre in sorted(n for n in dir(Client) if n.startswith("delete")):
+    print(f"  {nombre}{inspect.signature(getattr(Client, nombre))}")
+
+print()
+print(f"  ¿existe Client.delete_run?  {hasattr(Client, 'delete_run')}")
+print(f"  ¿existe Client.delete_trace? {hasattr(Client, 'delete_trace')}")
+
+#%%py
+# Y por si el cliente moderno lo escondiera en otro sitio, se mira ahí también.
+c = Client(api_key="local", session=_SesionMuda(), auto_batch_tracing=False)
+
+separador("¿y en los recursos nuevos?")
+for recurso in ("runs", "traces", "threads", "public", "datasets"):
+    objeto = getattr(c, recurso)
+    publicos = [n for n in dir(objeto) if "delete" in n and not n.startswith("_")]
+    print(f"  c.{recurso:<12}{publicos or '— nada —'}")
+print()
+print("  (`_delete` sí aparece, pero es el verbo HTTP del cliente generado,")
+print("   no un método para borrar una traza.)")
+
+#%%md
+> **No se puede borrar una traza.** Ni desde el SDK antiguo, ni desde el nuevo, ni de una
+> en una, ni por lotes.
+>
+> **La unidad de borrado es el proyecto.** `delete_project` es todo lo que hay, y se lleva
+> por delante todas las trazas que contiene.
+
+Esto cambia el diseño entero de cómo cumples con una solicitud de supresión, y conviene
+verlo antes de necesitarlo, no después.
+
+#%%py
+# Y un matiz que se pasa por alto: hay borrados que no borran.
+separador("borrar no siempre borra")
+documentacion = inspect.getdoc(Client.delete_examples)
+for linea in documentacion.splitlines():
+    if "delete" in linea.lower():
+        print("  ", linea.strip())
+print()
+print("  delete_examples(..., hard_delete=False) por defecto: es un borrado BLANDO.")
+print("  El ejemplo desaparece de tus listados y sigue estando.")
+print("  Si el borrado es para cumplir con una solicitud de supresión, hard_delete=True.")
+
+#%%md
+## 4. Entonces, ¿cómo se cumple una solicitud de supresión?
+
+Con lo anterior sobre la mesa, la respuesta tiene tres partes y solo una es de LangSmith.
+
+#%%py
+ESTRATEGIAS = [
+    {"nombre": "No escribirlo nunca",
+     "cuando": "siempre que puedas",
+     "como": "anonimizador del nb 05: los datos personales no llegan a salir del proceso",
+     "coste_despues": "cero: no hay nada que borrar",
+     "pega": "pierdes el dato para depurar, y hay que decidir qué es personal ANTES"},
+    {"nombre": "Seudonimizar y guardar la tabla aparte",
+     "cuando": "necesitas poder mirar un caso concreto",
+     "como": "en la traza va cliente_8f21; la tabla que traduce vive en tu base de datos",
+     "coste_despues": "borras la fila de tu tabla y la traza queda anónima de verdad",
+     "pega": "hay que mantener la tabla, y es ella la que hay que proteger"},
+    {"nombre": "Un proyecto por partición borrable",
+     "cuando": "un contrato te obliga a borrar por cliente",
+     "como": "proyecto por cliente o por mes; delete_project es la única palanca que hay",
+     "coste_despues": "borras el proyecto entero, con lo bueno dentro",
+     "pega": "multiplica proyectos y rompe las métricas agregadas (nb 16)"},
+    {"nombre": "Retención corta y punto",
+     "cuando": "no necesitas trazas viejas",
+     "como": "retención base, y NO asciendas trazas con realimentación sin pensarlo",
+     "coste_despues": "esperar: caduca solo",
+     "pega": "no sirve para una solicitud con plazo; el RGPD da un mes, no dos semanas"},
+]
+
+separador("cuatro maneras de poder borrar, por orden de eficacia")
+for e in ESTRATEGIAS:
+    print(f"\n  {e['nombre'].upper()}   ({e['cuando']})")
+    print(f"     cómo    : {e['como']}")
+    print(f"     después : {e['coste_despues']}")
+    print(f"     pega    : {e['pega']}")
+
+#%%md
+Fíjate en el orden: **la única estrategia que sale gratis es la que se decide antes de
+escribir la primera traza.** Todas las demás son formas de pagar por no haberlo decidido.
+
+Es la misma forma del notebook 05, y por eso los dos notebooks del módulo 5 acaban donde
+acaba el 05: lo que no sale del proceso no hay que gobernarlo después.
+
+#%%py
+# La comprobación operativa, para tenerla escrita antes de que llegue la solicitud.
+def plan_de_supresion(*, hay_anonimizador: bool, hay_tabla_de_seudonimos: bool,
+                      proyectos_por_cliente: bool, dias_de_retencion: int) -> dict:
+    """¿Podemos cumplir una solicitud de supresión en el plazo legal de 30 días?"""
+    if hay_anonimizador:
+        return {"puedes": True, "como": "nada que borrar: nunca salió del proceso",
+                "plazo": "inmediato"}
+    if hay_tabla_de_seudonimos:
+        return {"puedes": True, "como": "borrar la fila de la tabla; la traza queda anónima",
+                "plazo": "inmediato"}
+    if proyectos_por_cliente:
+        return {"puedes": True, "como": "delete_project(project_name=f'cliente-{id}')",
+                "plazo": "inmediato, perdiendo también lo que querías conservar"}
+    if dias_de_retencion <= 30:
+        return {"puedes": True, "como": "esperar a que caduque, y confirmarlo por escrito",
+                "plazo": f"{dias_de_retencion} días — cabe en el plazo, pero JUSTO"}
+    return {"puedes": False,
+            "como": "no hay palanca: no existe delete_run y el proyecto es compartido",
+            "plazo": "—"}
+
+
+separador("¿podemos cumplir?")
+ESCENARIOS = [
+    ("como está el curso (anonimizador del nb 05)",
+     dict(hay_anonimizador=True, hay_tabla_de_seudonimos=False,
+          proyectos_por_cliente=False, dias_de_retencion=14)),
+    ("sin anonimizador, con tabla de seudónimos",
+     dict(hay_anonimizador=False, hay_tabla_de_seudonimos=True,
+          proyectos_por_cliente=False, dias_de_retencion=400)),
+    ("un proyecto por cliente",
+     dict(hay_anonimizador=False, hay_tabla_de_seudonimos=False,
+          proyectos_por_cliente=True, dias_de_retencion=400)),
+    ("nada de lo anterior, retención base de 14 días",
+     dict(hay_anonimizador=False, hay_tabla_de_seudonimos=False,
+          proyectos_por_cliente=False, dias_de_retencion=14)),
+    ("nada de lo anterior, retención extendida",
+     dict(hay_anonimizador=False, hay_tabla_de_seudonimos=False,
+          proyectos_por_cliente=False, dias_de_retencion=400)),
+]
+for descripcion, ajustes in ESCENARIOS:
+    resultado = plan_de_supresion(**ajustes)
+    marca = "sí " if resultado["puedes"] else "NO "
+    print(f"\n  {marca} {descripcion}")
+    print(f"       {resultado['como']}")
+    print(f"       plazo: {resultado['plazo']}")
+
+#%%md
+El último escenario es el habitual, y es el que hay que evitar: **sin anonimizador, sin
+seudónimos, sin particiones y con retención extendida, no hay nada que hacer.** Y la
+retención extendida, como vimos en el apartado 1, **se activa sola** en cuanto alguien
+anota una traza.
+
+#%%md
+## 5. Lo que el notebook 30 del curso de LangGraph no borra
+
+El notebook 30 de la otra mitad del curso trata el borrado desde el lado de la aplicación:
+los *checkpoints* del grafo, el estado del hilo, la memoria a largo plazo. Todo eso lo
+borra tu código porque vive en tu base de datos.
+
+Las trazas no. Y son una copia bastante fiel de lo mismo.
+
+#%%py
+CAPAS = [
+    ("mensajes del hilo", "tu base de datos", "sí, tu código", "nb 30 de LangGraph"),
+    ("checkpoints del grafo", "tu base de datos", "sí, tu código", "nb 30 de LangGraph"),
+    ("memoria a largo plazo (store)", "tu base de datos", "sí, tu código", "nb 30 de LangGraph"),
+    ("trazas de las peticiones", "LangSmith", "NO por traza: solo el proyecto entero", "este notebook"),
+    ("ejemplos de datasets", "LangSmith", "sí, con hard_delete=True", "este notebook"),
+    ("realimentación y anotaciones", "LangSmith", "sí, delete_feedback", "este notebook"),
+    ("prompts del Hub", "LangSmith", "sí, delete_prompt", "nb 15"),
+    ("enlaces públicos que alguien creó", "LangSmith", "sí, si sabes cuáles son", "nb 16"),
+]
+
+separador("dónde queda una copia de lo que escribió tu cliente")
+print(f"  {'capa':<34}{'dónde vive':<19}{'¿se puede borrar?':<40}dónde se trata")
+print("  " + "-" * 121)
+for capa, donde, borrable, referencia in CAPAS:
+    print(f"  {capa:<34}{donde:<19}{borrable:<40}{referencia}")
+
+print()
+print("  Las cuatro primeras filas son el notebook 30. Las cuatro siguientes son")
+print("  el módulo 5. Una solicitud de supresión que solo cubra las primeras cuatro")
+print("  está incompleta, y el que se dé cuenta será una auditoría.")
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — La anotación que salió cara
+
+Un equipo anota a mano 50 trazas al día para el módulo 3, durante seis meses. Calcula
+cuántas trazas acaban en retención extendida y decide si eso es un problema o el precio
+correcto de tener un conjunto dorado.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+separador("seis meses anotando")
+al_dia, meses = 50, 6
+ascendidas = al_dia * 30 * meses
+print(f"  trazas ascendidas a retención extendida: {ascendidas:,}")
+print(f"  y de ellas, las que acaban en el conjunto dorado: 40 (P2)")
+print(f"  ratio: {40 / ascendidas:.2%}")
+print()
+print("  La pregunta correcta no es «¿es caro?», es «¿por qué se anotaron 9.000")
+print("  para quedarse con 40?». Y la respuesta es el notebook 14: sin cortafuegos,")
+print("  la cola de anotación se llena de copias del mismo caso.")
+
+print()
+separador("lo que sí es el precio correcto")
+print("  Anotar 11 casos distintos (P4) y ascender 11 trazas: eso es barato y útil.")
+print("  Anotar 9.000 trazas que son 200 casos: eso es pagar almacenamiento por")
+print("  el fallo de no deduplicar.")
+print()
+print("  Y si de verdad quieres anotar mucho sin ascender nada:")
+print("     client.create_feedback(run_id, key='revisado', score=1,")
+print("                            extend_trace_retention=False)")
+print("  Pero entonces la traza caduca y tu anotación se queda sin el caso al que")
+print("  se refería. Por eso el valor por defecto es True: casi siempre es el correcto.")
+
+#%%md
+La conclusión no es «desactiva la extensión». Es que **el coste de retención es una
+consecuencia directa de cuánto deduplicas antes de anotar**, y eso ya lo decidiste en el
+módulo 4 sin saber que también decidía esto.
+
+</details>
+
+#%%md
+### Ejercicio 2 — Escribe la política, en código
+
+Escribe la comprobación que corre en tu CI y falla si el proyecto ha dejado de cumplir la
+política de retención que acordasteis. Piensa qué se puede comprobar de verdad.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+POLITICA = {
+    "proyectos_permitidos": {"soporte-produccion", "soporte-pre", "soporte-local"},
+    "anonimizador_obligatorio": True,
+    "trazas_publicas_permitidas": 0,
+    "dias_de_retencion_maximos": 30,
+}
+
+
+def auditar(*, proyectos: set[str], hay_anonimizador: bool, publicas: int,
+            dias_de_retencion: int, politica: dict = POLITICA) -> list[str]:
+    """Lo que se puede comprobar sin API de gobierno: el estado, no la configuración."""
+    fallos = []
+    sobran = proyectos - politica["proyectos_permitidos"]
+    if sobran:
+        fallos.append(f"proyectos no declarados: {sorted(sobran)} — ¿quién los creó y qué hay dentro?")
+    if politica["anonimizador_obligatorio"] and not hay_anonimizador:
+        fallos.append("el cliente no lleva anonimizador: se están escribiendo datos en claro")
+    if publicas > politica["trazas_publicas_permitidas"]:
+        fallos.append(f"{publicas} trazas públicas (permitidas: "
+                      f"{politica['trazas_publicas_permitidas']})")
+    if dias_de_retencion > politica["dias_de_retencion_maximos"]:
+        fallos.append(f"retención de {dias_de_retencion} días > "
+                      f"{politica['dias_de_retencion_maximos']} acordados")
+    return fallos
+
+
+separador("la auditoría, sobre dos estados")
+for descripcion, estado in [
+    ("como debería estar", dict(proyectos={"soporte-produccion", "soporte-pre"},
+                                hay_anonimizador=True, publicas=0, dias_de_retencion=14)),
+    ("tres meses después", dict(proyectos={"soporte-produccion", "soporte-pre",
+                                           "pruebas-de-alba", "demo-cliente-grande"},
+                                hay_anonimizador=False, publicas=3, dias_de_retencion=400)),
+]:
+    fallos = auditar(**estado)
+    print(f"\n  {descripcion}: {'PASA' if not fallos else 'FALLA'}")
+    for fallo in fallos:
+        print(f"     - {fallo}")
+
+#%%py
+@online("De dónde sale cada dato de la auditoría", trazas=0)
+def _():
+    """Los cuatro valores que la auditoría necesita, y de dónde se sacan de verdad."""
+    c = cliente()
+
+    proyectos = {p.name for p in c.list_projects(limit=100)}
+    print(f"  proyectos            : {len(proyectos)} — de list_projects()")
+
+    publicas = sum(1 for run in c.list_runs(project_name="soporte-produccion",
+                                            is_root=True, limit=200)
+                   if c.run_is_shared(run.id))
+    print(f"  trazas públicas      : {publicas} — de run_is_shared() (nb 16)")
+
+    print("  anonimizador         : de TU código, no de la API: comprueba que el")
+    print("                         cliente que arranca la aplicación lleva `anonymizer`")
+    print("  días de retención    : de la interfaz. No hay endpoint. Escríbelo en la")
+    print("                         política y revísalo a mano cada trimestre.")
+
+#%%md
+Las dos últimas filas son la lección del módulo entero: **la mitad de tu auditoría la
+puedes automatizar y la otra mitad no**, porque el gobierno de LangSmith no tiene API.
+
+Lo que sí puedes hacer siempre es **escribir la política como código**, aunque dos de sus
+comprobaciones sean una persona mirando una pantalla. Una política escrita en un
+documento se olvida; una que falla en la CI, no.
+
+</details>
+
+#%%md
+## 7. Resumen del módulo 5
+
+- La jerarquía es **organización → espacio de trabajo → proyecto**, y la frontera de
+  permisos es el espacio de trabajo. El SDK **no tiene** organizaciones, roles, usuarios,
+  claves ni auditoría: eso se hace en la interfaz y no se puede versionar (nb 16).
+- **Compartir una traza es publicarla**: el enlace ignora permisos, no caduca y no dice
+  quién lo ha visto (nb 16).
+- **Cada realimentación asciende su traza a retención extendida.** Va en el POST, el valor
+  por defecto es `True`, y afecta a todo el módulo 3 y al juez en línea del 14.
+  `extend_trace_retention=False` si puntúas mucho y no quieres guardarlo.
+- **`LANGSMITH_OTEL_SPAN_TTL_SECONDS` no es retención**: es cuánto espera el exportador a
+  una traza incompleta. La retención no se toca desde el SDK.
+- **No existe `delete_run`.** La unidad de borrado es el proyecto. Y `delete_examples` es
+  blando por defecto: para cumplir de verdad, `hard_delete=True`.
+- Por eso la única estrategia barata de cumplimiento es **la que se decide antes**: no
+  escribir el dato (anonimizador del nb 05) o seudonimizarlo. Todo lo demás es pagar por
+  no haberlo decidido.
+
+---
+
+## Y con esto, el curso
+
+Empezó con una pregunta —«¿qué está haciendo mi agente?»— y termina en otra que no se
+parece: «¿qué estamos guardando de nuestros usuarios, y podríamos borrarlo?».
+
+Las dos se contestan con la misma traza. Esa es toda la idea.
