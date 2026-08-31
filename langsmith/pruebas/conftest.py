@@ -24,9 +24,20 @@ def sin_servicio(monkeypatch):
     no queremos que una prueba mande trazas de verdad. Las pruebas que quieran simular
     el modo en línea ponen la variable ellas, con `monkeypatch`.
     """
-    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
-    monkeypatch.delenv("LANGCHAIN_API_KEY", raising=False)
+    for variable in ("LANGSMITH_API_KEY", "LANGCHAIN_API_KEY",
+                     "LANGSMITH_PROJECT", "LANGCHAIN_PROJECT"):
+        monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LANGSMITH_TRACING", "false")
+
+    # `get_env_var` está decorada con `lru_cache`, así que el valor que leyó una prueba
+    # se lo encuentra la siguiente. Es la misma trampa que enseña el notebook 02, y aquí
+    # provoca pruebas que pasan solas y fallan en la suite —dependientes del orden—,
+    # que son las peores de diagnosticar. Se vacía antes y después de cada una.
+    from langsmith import utils as lu
+
+    lu.get_env_var.cache_clear()
+    yield
+    lu.get_env_var.cache_clear()
 
 
 @pytest.fixture

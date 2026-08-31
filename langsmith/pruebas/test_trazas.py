@@ -263,3 +263,129 @@ def test_los_tiempos_permiten_repartir_la_latencia():
     total = duracion(t.principales[0])
     parcial = duracion(next(r for _, r in t.recorrer() if r.name == "lento"))
     assert 0.5 < parcial / total <= 1.0
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 02 · instrumentación
+# ------------------------------------------------------------------------------------
+
+
+def test_langgraph_se_instrumenta_solo():
+    """El argumento de peso de la herramienta, como prueba.
+
+    Ni un decorador, y sale la jerarquía con los `run_type` correctos.
+    """
+    from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langgraph.graph import END, START, StateGraph
+    from typing_extensions import TypedDict
+
+    modelo = FakeMessagesListChatModel(responses=[AIMessage("facturacion")])
+
+    class Estado(TypedDict):
+        messages: list
+        categoria: str
+
+    def clasificar(estado):
+        return {"categoria": modelo.invoke(estado["messages"]).text}
+
+    g = StateGraph(Estado)
+    g.add_node("clasificar", clasificar)
+    g.add_edge(START, "clasificar")
+    g.add_edge("clasificar", END)
+    app = g.compile()
+
+    with curso.traza_local() as t:
+        app.invoke({"messages": [HumanMessage("hola")], "categoria": ""})
+
+    nombres = {r.name for _, r in t.recorrer()}
+    tipos = {r.run_type for _, r in t.recorrer()}
+    assert "clasificar" in nombres
+    assert "llm" in tipos          # la llamada al modelo se marca sola
+
+
+def test_las_variables_de_entorno_se_leen_con_los_dos_prefijos(monkeypatch):
+    """`LANGSMITH_` gana siempre sobre `LANGCHAIN_`, esté donde esté."""
+    from langsmith import utils as lu
+
+    lu.get_env_var.cache_clear()
+    monkeypatch.setenv("LANGCHAIN_PROJECT", "el-viejo")
+    assert lu.get_env_var("PROJECT") == "el-viejo"
+
+    lu.get_env_var.cache_clear()
+    monkeypatch.setenv("LANGSMITH_PROJECT", "el-nuevo")
+    assert lu.get_env_var("PROJECT") == "el-nuevo"
+    lu.get_env_var.cache_clear()
+
+
+def test_get_env_var_esta_cacheada(monkeypatch):
+    """La trampa que provoca el «he puesto la variable y no pasa nada» de los foros."""
+    from langsmith import utils as lu
+
+    lu.get_env_var.cache_clear()
+    monkeypatch.setenv("LANGSMITH_PROJECT", "antes")
+    assert lu.get_env_var("PROJECT") == "antes"
+
+    monkeypatch.setenv("LANGSMITH_PROJECT", "despues")
+    assert lu.get_env_var("PROJECT") == "antes"      # el cambio NO se ve
+
+    lu.get_env_var.cache_clear()
+    assert lu.get_env_var("PROJECT") == "despues"    # hasta vaciar la caché
+    lu.get_env_var.cache_clear()
+
+
+def test_langsmith_extra_usa_name_e_ignora_run_name_en_silencio():
+    """La tercera trampa silenciosa del módulo: una clave mal escrita no da error."""
+    from langsmith import traceable
+
+    @traceable
+    def ejemplo(x):
+        return x
+
+    with curso.traza_local() as bien:
+        ejemplo(1, langsmith_extra={"name": "MI-NOMBRE"})
+    assert bien.principales[0].name == "MI-NOMBRE"
+
+    with curso.traza_local() as mal:
+        ejemplo(1, langsmith_extra={"run_name": "MI-NOMBRE"})
+    assert mal.principales[0].name == "ejemplo"      # ignorado, sin aviso
+
+
+def test_los_envoltorios_de_sdk_existen_con_la_firma_esperada():
+    """El notebook 02 los enseña sin poder llamarlos: al menos que existan."""
+    import inspect
+
+    from langsmith import wrappers
+
+    for nombre in ("wrap_openai", "wrap_anthropic", "wrap_gemini"):
+        fn = getattr(wrappers, nombre)
+        assert "client" in inspect.signature(fn).parameters
+        assert "tracing_extra" in inspect.signature(fn).parameters
+
+
+def test_el_sdk_lee_mas_variables_de_las_documentadas():
+    """Fija la cifra que afirma el notebook 02, para que envejezca de forma visible."""
+    import pathlib
+    import re
+
+    import langsmith
+
+    raiz = pathlib.Path(langsmith.__file__).parent
+    literales, dinamicas = set(), set()
+    for fichero in raiz.rglob("*.py"):
+        texto = fichero.read_text(encoding="utf-8", errors="ignore")
+        literales |= set(re.findall(
+            r'(?:os\.environ\.get|os\.getenv|os\.environ\[)\(?\s*["\']'
+            r'(LANGSMITH_[A-Z0-9_]+|LANGCHAIN_[A-Z0-9_]+)["\']', texto))
+        for patron in (r'get_env_var\(\s*["\']([a-zA-Z0-9_]+)["\']',
+                       r'get_bool_env_var\(\s*["\']([a-zA-Z0-9_]+)["\']',
+                       r'get_str_env_var\(\s*["\']([a-zA-Z0-9_]+)["\']',
+                       r'is_env_var_truish\(\s*["\']([a-zA-Z0-9_]+)["\']'):
+            dinamicas |= set(re.findall(patron, texto))
+
+    logicos = {v.split("_", 1)[1] for v in literales} | {d.upper() for d in dinamicas}
+    # El notebook dice «37 lógicas, 74 grafías». Si el SDK cambia mucho, esto avisa.
+    assert 30 <= len(logicos) <= 45, f"el SDK ahora lee {len(logicos)}: actualiza el nb 02"
+    for imprescindible in ("TRACING", "API_KEY", "PROJECT", "ENDPOINT",
+                           "TRACING_SAMPLING_RATE", "TEST_CACHE", "HIDE_INPUTS"):
+        assert imprescindible in logicos

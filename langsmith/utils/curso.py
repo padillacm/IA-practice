@@ -414,19 +414,67 @@ def _corto(valor: Any, ancho: int = 44) -> str:
     return texto if len(texto) <= ancho else texto[: ancho - 1] + "…"
 
 
-def _cliente_mudo():
-    """Un `Client` que no sale a la red ni siquiera a preguntar por sus capacidades.
+class _SesionMuda:
+    """Una sesión de `requests` que responde 200 a todo sin tocar la red.
 
-    `Client.info` sondea `GET /info` la primera vez que se usa, para saber de qué es
-    capaz el servidor. Ese sondeo sí sale a la red, falla y escribe un aviso feo en
-    mitad de la salida del notebook. Se evita presembrando `client._info`, que es lo
-    primero que comprueba la propiedad. No es API pública, así que vive aquí y solo
-    aquí: si cambia, se arregla en un sitio.
+    Es el corte definitivo, y hace falta por una razón que conviene conocer porque
+    también te afecta a ti: **`tracing_context(enabled="local")` solo gobierna el
+    camino de `@traceable`.** El tracer de callbacks de LangChain —el que instrumenta
+    solo tus grafos de LangGraph y tus cadenas— es otro camino, y ese intenta enviar
+    igual. Sin esto, ejecutar un grafo dentro de `traza_local()` llena la salida de
+    errores de conexión.
+
+    Cortando en el transporte da igual qué camino lo intente: no sale nada.
+    """
+
+    def __init__(self) -> None:
+        import requests
+
+        self.headers: dict[str, str] = {}
+        self.auth = None
+        self.cookies = requests.cookies.RequestsCookieJar()
+        self.peticiones: list[tuple[str, str]] = []
+
+    def request(self, method, url, *args, **kwargs):
+        return self._respuesta(method, url)
+
+    def send(self, request, **kwargs):
+        return self._respuesta(getattr(request, "method", "?"), getattr(request, "url", "?"))
+
+    def _respuesta(self, method, url):
+        import requests
+
+        self.peticiones.append((str(method), str(url)))
+        r = requests.Response()
+        r.status_code = 200
+        r._content = b"{}"
+        r.headers["Content-Type"] = "application/json"
+        r.request = None
+        return r
+
+    def mount(self, *args, **kwargs):
+        return None
+
+    def close(self):
+        return None
+
+
+def _cliente_mudo():
+    """Un `Client` que no sale a la red por ningún camino.
+
+    Dos cortes, y los dos hacen falta:
+
+    1. **`_info` presembrado.** `Client.info` sondea `GET /info` la primera vez que se
+       usa, para saber de qué es capaz el servidor. Ese sondeo sale a la red, falla y
+       escribe un aviso en mitad de la salida. Presembrarlo es lo primero que comprueba
+       la propiedad. No es API pública, así que vive aquí y solo aquí.
+    2. **Una sesión muda.** Ver `_SesionMuda`: el tracer de callbacks de LangChain no
+       respeta `enabled="local"` e intenta enviar de todas formas.
     """
     from langsmith import Client
     from langsmith.schemas import LangSmithInfo
 
-    c = Client(api_key="local-sin-servicio", auto_batch_tracing=False)
+    c = Client(api_key="local-sin-servicio", auto_batch_tracing=False, session=_SesionMuda())
     c._info = LangSmithInfo()
     return c
 

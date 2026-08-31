@@ -67,8 +67,8 @@ Ver [`PLAN.md`](PLAN.md) para el detalle y la justificación de cada notebook.
 
 | Módulo | Notebooks | Estado |
 |---|---|---|
-| 0 · Punto de partida | 1 | en construcción |
-| 1 · Trazas: qué se registra y qué no | 5 + 1 proyecto | en construcción |
+| 0 · Punto de partida | 1 | **listo** |
+| 1 · Trazas: qué se registra y qué no | 5 + 1 proyecto | 2 de 6 |
 | 2 · Datasets y experimentos | 5 + 1 proyecto | pendiente |
 | 3 · El humano en el bucle de la calidad | 2 + 1 proyecto | pendiente |
 | 4 · Producción: mirar y actuar | 3 + 1 proyecto | pendiente |
