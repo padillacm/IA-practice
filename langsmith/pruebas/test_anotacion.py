@@ -202,3 +202,123 @@ def test_un_numero_par_de_anotadores_no_mejora_al_impar_anterior():
     uno, dos, tres = media(1), media(2), media(3)
     assert abs(dos - uno) < 0.03        # el segundo anotador no aporta
     assert tres > uno + 0.05            # el tercero sí
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 12 · alinear el juez
+# ------------------------------------------------------------------------------------
+
+
+def test_los_ejemplos_del_juez_llegan_a_su_prompt():
+    """El mecanismo del que depende la palanca 2, que es la más potente del notebook 12.
+
+    `openevals` inyecta cada ejemplo como un bloque <example> con entrada, salida,
+    razonamiento y puntuación. Si eso cambiara, la técnica del notebook deja de funcionar.
+    """
+    from openevals.llm import create_llm_as_judge
+
+    from utils import curso
+
+    capturado = {}
+
+    def espia(texto):
+        capturado["prompt"] = texto
+        return 1.0, "ok"
+
+    juez = create_llm_as_judge(
+        prompt="RUBRICA\n{inputs}\n{outputs}",
+        judge=curso.juez_local(espia),
+        feedback_key="x",
+        few_shot_examples=[
+            {"inputs": {"m": "¿cuándo?"}, "outputs": {"r": "En 5 días."},
+             "score": 1.0, "reasoning": "contiene el dato"},
+            {"inputs": {"m": "¿cuándo?"}, "outputs": {"r": "Lo revisamos."},
+             "score": 0.0, "reasoning": "no contiene el dato"},
+        ],
+    )
+    juez(inputs={"m": "hola"}, outputs={"r": "adios"})
+
+    prompt = capturado["prompt"]
+    assert prompt.count("<example>") == 2
+    assert "<score>1.0</score>" in prompt
+    assert "<score>0.0</score>" in prompt
+    assert "contiene el dato" in prompt
+
+
+def test_la_matriz_de_confusion_distingue_indulgente_de_severo():
+    """Dónde se equivoca el juez importa más que cuánto, y los dos errores no cuestan
+    lo mismo: el indulgente produce confianza."""
+    humano = [1, 1, 0, 0, 1, 0]
+    indulgente = [1, 1, 1, 1, 1, 1]      # aprueba todo
+    severo = [0, 0, 0, 0, 0, 0]          # suspende todo
+
+    def matriz(h, j):
+        return (sum(x == 0 and y == 1 for x, y in zip(h, j)),
+                sum(x == 1 and y == 0 for x, y in zip(h, j)))
+
+    assert matriz(humano, indulgente) == (3, 0)
+    assert matriz(humano, severo) == (0, 3)
+
+
+def test_los_ejemplos_se_cogen_de_los_dos_tipos_de_error():
+    """Solo indulgentes y el juez se vuelve severo; solo severos y al revés."""
+    respuestas = [f"r{i}" for i in range(8)]
+    humano = [1, 1, 1, 1, 0, 0, 0, 0]
+    juez = [0, 0, 1, 1, 1, 1, 0, 0]      # 2 severos y 2 indulgentes
+
+    indulgentes = [(r, h) for r, h, j in zip(respuestas, humano, juez) if h == 0 and j == 1]
+    severos = [(r, h) for r, h, j in zip(respuestas, humano, juez) if h == 1 and j == 0]
+
+    mitad = 4 // 2
+    elegidos = indulgentes[:mitad] + severos[:mitad]
+
+    assert len(elegidos) == 4
+    assert sum(1 for _, h in elegidos if h == 0) == 2
+    assert sum(1 for _, h in elegidos if h == 1) == 2
+
+
+def test_un_juez_que_memoriza_se_hunde_fuera_de_su_conjunto():
+    """El ejercicio 2 del notebook 12, y la razón de reservar parte del conjunto.
+
+    Un juez que solo reconoce las frases que vio saca una kappa decente sobre ellas y
+    se derrumba en cuanto ve una nueva. Por dentro no se distingue de uno alineado.
+    """
+    vistas = {"tiene el dato: 5 días": 1, "solo cortesía": 0}
+
+    def juez_que_memoriza(respuesta):
+        return vistas.get(respuesta, 1)      # lo que no conoce, lo aprueba
+
+    dentro = list(vistas)
+    humano_dentro = [vistas[r] for r in dentro]
+    juez_dentro = [juez_que_memoriza(r) for r in dentro]
+
+    fuera = ["otra con dato: 3 días", "otra de cortesía", "más cortesía", "dato: 7 euros"]
+    humano_fuera = [1, 0, 0, 1]
+    juez_fuera = [juez_que_memoriza(r) for r in fuera]
+
+    assert kappa_de_cohen(humano_dentro, juez_dentro) == pytest.approx(1.0)
+    assert kappa_de_cohen(humano_fuera, juez_fuera) <= 0.0
+
+
+def test_un_evaluador_de_codigo_puede_bastar():
+    """El número que hay que mirar antes de meter un juez en producción.
+
+    En tareas donde «bueno» tiene una marca formal, dos líneas de expresión regular
+    sacan una kappa comparable a la del juez, gratis y sin no-determinismo.
+    """
+    import re
+
+    respuestas = [
+        ("Tu reembolso llega en 5 días hábiles.", 1),
+        ("El cargo del 12/09 se devuelve el 17/09.", 1),
+        ("Puedes cambiarlo desde Ajustes > Suscripción.", 1),
+        ("Son 87 tickets abiertos.", 1),
+        ("Gracias por escribirnos, lo revisamos.", 0),
+        ("Lamentamos las molestias, te contactaremos.", 0),
+        ("Estamos en ello.", 0),
+        ("Entendemos tu frustración y lo solucionaremos.", 0),
+    ]
+    humano = [e for _, e in respuestas]
+    codigo = [int(bool(re.search(r"\d", r)) or ">" in r) for r, _ in respuestas]
+
+    assert kappa_de_cohen(humano, codigo) >= 0.7

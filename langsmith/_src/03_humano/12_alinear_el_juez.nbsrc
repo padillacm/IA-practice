@@ -1,0 +1,736 @@
+#%%md
+# 12 · Alinear el juez
+
+**Módulo 3 · El humano en el bucle** — *tiempo estimado: 85 minutos* — *consumo: ~30 trazas en modo en línea*
+
+El notebook 11 produjo lo que faltaba: **treinta casos con una etiqueta humana de fiar**,
+con una kappa por encima de 0,6 entre anotadores.
+
+Ahora la pregunta que el notebook 08 dejó abierta: **¿se parece tu juez a eso?**
+
+Al terminar sabrás:
+
+1. Medir el acuerdo juez–humano con la misma kappa del notebook 11.
+2. Por qué **dónde** se equivoca importa más que cuánto.
+3. Las **tres palancas** para arreglar un juez, en orden de potencia — y el orden no es
+   el que parece.
+4. Usar **ejemplos en el prompt** sacados de los desacuerdos, que es la más potente.
+5. Cuándo rendirse y **no usar un juez** para eso.
+
+El notebook se ejecuta entero: el juez local del notebook 08 corre la maquinaria real de
+`openevals`, así que las tres palancas se pueden aplicar y medir aquí mismo.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import collections, re
+from utils.curso import init, online, cliente, separador, juez_local
+from openevals.llm import create_llm_as_judge
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. El conjunto anotado
+
+Treinta respuestas del agente de soporte, cada una con su etiqueta humana: **¿contiene el
+dato que el cliente necesita para actuar?** Es la rúbrica v2 del notebook 11.
+
+#%%py
+# (respuesta, etiqueta humana). 1 = contiene el dato; 0 = no, aunque esté bien escrita.
+ANOTADO = [
+    ("Tu reembolso llega en 5 días hábiles.", 1),
+    ("El cargo duplicado del 12/09 se devuelve el 17/09.", 1),
+    ("Son 87 los tickets de facturación abiertos.", 1),
+    ("Puedes cambiar el plan desde Ajustes > Suscripción.", 1),
+    ("Tu factura de enero está en el correo del día 3.", 1),
+    ("El límite de tu plan es de 10.000 peticiones al mes.", 1),
+    ("La integración con Salesforce se configura en Ajustes > Conectores.", 1),
+    ("Tu contraseña se restablece desde el enlace del correo de verificación.", 1),
+    ("El informe se exporta con el botón Descargar de la esquina superior.", 1),
+    ("Hemos ampliado tu cuota a 50.000 peticiones hasta fin de mes.", 1),
+    ("El incidente de rendimiento se resolvió el martes a las 14:00.", 1),
+    ("Puedes solicitar el borrado de tus datos escribiendo a privacidad@acme.com.", 1),
+    ("Tu suscripción se renueva el 15 de cada mes.", 1),
+    ("El error se corrige actualizando el conector a la versión 2.4.", 1),
+    ("Hay 23 tickets de tu equipo sin asignar.", 1),
+    ("Gracias por escribirnos. Lo revisamos y te contamos.", 0),
+    ("Lamentamos las molestias. Un agente se pondrá en contacto contigo.", 0),
+    ("Entiendo tu frustración, y haremos todo lo posible por resolverlo.", 0),
+    ("Sentimos el inconveniente; revisaremos el caso lo antes posible.", 0),
+    ("Estamos en ello.", 0),
+    ("Hemos recibido tu consulta y la hemos escalado al equipo correspondiente.", 0),
+    ("Tu caso es importante para nosotros y le daremos la prioridad que merece.", 0),
+    ("Agradecemos tu paciencia mientras investigamos lo sucedido.", 0),
+    ("Este asunto requiere revisión adicional por parte de nuestro equipo técnico.", 0),
+    ("Te mantendremos informado de cualquier novedad sobre tu solicitud.", 0),
+    ("Comprendemos la situación y estamos trabajando para darte una respuesta.", 0),
+    ("Nuestro equipo está analizando el caso con el detalle que requiere.", 0),
+    ("Lo consultamos internamente y volvemos contigo lo antes posible.", 0),
+    ("Hemos tomado nota de tu incidencia y la estamos gestionando.", 0),
+    ("Disculpa las molestias ocasionadas; seguimos trabajando en ello.", 0),
+]
+
+RESPUESTAS = [r for r, _ in ANOTADO]
+HUMANO = [e for _, e in ANOTADO]
+
+separador("el conjunto anotado del notebook 11")
+print(f"  casos: {len(ANOTADO)}")
+print(f"  con el dato (1): {sum(HUMANO)}   sin el dato (0): {len(HUMANO) - sum(HUMANO)}")
+print(f"  longitud media de los «1»: "
+      f"{sum(len(r) for r, e in ANOTADO if e) / sum(HUMANO):.0f} caracteres")
+print(f"  longitud media de los «0»: "
+      f"{sum(len(r) for r, e in ANOTADO if not e) / (len(HUMANO) - sum(HUMANO)):.0f} caracteres")
+
+#%%md
+Fíjate en las dos últimas líneas, porque van a explicar todo lo que viene: **las
+respuestas que no resuelven nada son, de media, más largas**. Son las corteses.
+
+Eso significa que un juez con sesgo de longitud —el del notebook 08— no va a equivocarse
+un poco: se va a equivocar **sistemáticamente y al revés**.
+
+#%%md
+## 2. El juez v1, y la medida que importa
+
+Montamos el juez con la rúbrica genérica del notebook 08 y medimos.
+
+#%%py
+def kappa_de_cohen(a: list[int], b: list[int]) -> float:
+    observado = sum(x == y for x, y in zip(a, b)) / len(a)
+    n = len(a)
+    esperado = sum((a.count(c) / n) * (b.count(c) / n) for c in set(a) | set(b))
+    return 1.0 if esperado == 1 else (observado - esperado) / (1 - esperado)
+
+
+def interpretar(k: float) -> str:
+    if k < 0:    return "peor que el azar"
+    if k < 0.20: return "insignificante"
+    if k < 0.40: return "aceptable a duras penas"
+    if k < 0.60: return "moderado"
+    if k < 0.80: return "sustancial"
+    return "casi perfecto"
+
+
+RUBRICA_V1 = """Evalúa la calidad de esta respuesta de atención al cliente.
+
+<input>{inputs}</input>
+<output>{outputs}</output>
+"""
+
+def modelo_con_sesgo_de_longitud(prompt: str) -> tuple[float, str]:
+    """Simula un modelo al que solo le has dicho «evalúa la calidad».
+
+    Sin criterio explícito, se apoya en señales superficiales: la extensión y la
+    cortesía. No es una caricatura — es el comportamiento documentado de los jueces
+    LLM sin rúbrica (notebook 08).
+    """
+    respuesta = _respuesta_del_prompt(prompt)
+    señales = sum(p in respuesta.lower() for p in
+                  ("gracias", "lamentamos", "sentimos", "entendemos", "comprendemos",
+                   "agradecemos", "disculpa", "equipo", "prioridad"))
+    return (1.0, "completa y cortés") if len(respuesta) > 55 or señales else (0.0, "escueta")
+
+
+def _respuesta_del_prompt(prompt: str) -> str:
+    """Saca la respuesta evaluada del prompt que `openevals` monta.
+
+    Los acentos vienen escapados (`d\\u00edas`), como avisa el notebook 08.
+    """
+    texto = prompt.encode().decode("unicode_escape", errors="ignore")
+    encontrado = re.search(r'"respuesta":\s*"([^"]*)"', texto)
+    return encontrado.group(1) if encontrado else texto
+
+
+def puntuar_con(juez) -> list[int]:
+    return [int(juez(inputs={"consulta": "el cliente pregunta"},
+                     outputs={"respuesta": respuesta})["score"])
+            for respuesta in RESPUESTAS]
+
+
+juez_v1 = create_llm_as_judge(prompt=RUBRICA_V1, feedback_key="resuelve",
+                              judge=juez_local(modelo_con_sesgo_de_longitud))
+JUEZ_V1 = puntuar_con(juez_v1)
+
+separador("juez v1 frente a los humanos")
+acuerdo = sum(a == b for a, b in zip(HUMANO, JUEZ_V1)) / len(HUMANO)
+k1 = kappa_de_cohen(HUMANO, JUEZ_V1)
+print(f"  acuerdo simple : {acuerdo:.0%}")
+print(f"  kappa          : {k1:.2f}  ({interpretar(k1)})")
+
+#%%md
+## 3. Dónde se equivoca importa más que cuánto
+
+Una kappa baja dice que hay un problema. La **matriz de confusión** dice cuál, y los dos
+tipos de error cuestan cosas distintas.
+
+#%%py
+def matriz(humano: list[int], juez: list[int]) -> dict:
+    return {
+        "acuerdo_en_si": sum(h == 1 and j == 1 for h, j in zip(humano, juez)),
+        "acuerdo_en_no": sum(h == 0 and j == 0 for h, j in zip(humano, juez)),
+        # El juez aprueba lo que el humano suspende: falso positivo.
+        "juez_indulgente": sum(h == 0 and j == 1 for h, j in zip(humano, juez)),
+        # El juez suspende lo que el humano aprueba: falso negativo.
+        "juez_severo": sum(h == 1 and j == 0 for h, j in zip(humano, juez)),
+    }
+
+
+def mostrar_matriz(humano, juez, etiqueta):
+    m = matriz(humano, juez)
+    print(f"  {etiqueta}")
+    print(f"                     juez=0   juez=1")
+    print(f"    humano=0  {m['acuerdo_en_no']:>10}{m['juez_indulgente']:>9}"
+          f"   <- indulgente: {m['juez_indulgente']}")
+    print(f"    humano=1  {m['juez_severo']:>10}{m['acuerdo_en_si']:>9}"
+          f"   <- severo: {m['juez_severo']}")
+    return m
+
+
+separador("la matriz del juez v1")
+m1 = mostrar_matriz(HUMANO, JUEZ_V1, "v1 (rúbrica genérica)")
+
+#%%md
+El error no está repartido: el juez es **indulgente**. Aprueba respuestas corteses que no
+resuelven nada, porque son largas y educadas.
+
+Y esa dirección es la cara:
+
+| Tipo de error | Qué provoca | Coste |
+|---|---|---|
+| **Juez indulgente** (aprueba lo malo) | Tu panel dice que todo va bien | **Alto.** No te enteras de nada, y optimizas hacia lo que el juez premia |
+| **Juez severo** (suspende lo bueno) | Ruido, alarmas de más | Medio. Molesta, pero se investiga y se descubre |
+
+> Un juez indulgente es **peor que no tener juez**, porque produce confianza. Sin juez
+> sabes que no sabes; con un juez indulgente crees que sabes.
+
+Y aquí el efecto se realimenta: si optimizas el prompt del agente contra este juez, el
+agente aprenderá a ser cortés y largo. En tres iteraciones tendrás un sistema que no
+resuelve nada con un panel impecable.
+
+#%%md
+## 4. Las tres palancas, en orden de potencia
+
+Para arreglar un juez solo hay tres cosas que tocar. Y el orden importa, porque la
+primera es gratis y la última es cara.
+
+| Palanca | Coste | Cuánto suele mover |
+|---|---|---|
+| 1. **La rúbrica** | Gratis | Mucho, si estaba mal escrita |
+| 2. **Ejemplos en el prompt** | Casi gratis, salen de tus desacuerdos | **Lo que más**, y es la que menos se usa |
+| 3. **El modelo** | Caro y lento | Poco, si las otras dos están mal |
+
+Lo que hace casi todo el mundo es empezar por la tercera. Vamos por orden.
+
+### Palanca 1 · La rúbrica
+
+#%%py
+RUBRICA_V2 = """Evalúas si una respuesta de soporte contiene el dato que el cliente
+necesita para actuar. Solo eso.
+
+<Rubric>
+  1 = la respuesta contiene un dato accionable: una fecha, un importe, una cifra, una
+      ruta concreta de la interfaz o una instrucción que el cliente puede seguir.
+  0 = no lo contiene, AUNQUE esté bien escrita, sea amable y prometa una solución.
+
+  PENALIZA explícitamente:
+  - Acusar recibo sin resolver («lo revisamos», «te contamos»).
+  - Empatía sin contenido («entendemos tu frustración»).
+  - Prometer que otro equipo se encargará.
+
+  NO tengas en cuenta: la longitud, el tono, la cortesía ni el formato.
+  Una respuesta larga y amable que no da el dato es un 0.
+</Rubric>
+
+<input>{inputs}</input>
+<output>{outputs}</output>
+"""
+
+def modelo_que_lee_la_rubrica(prompt: str) -> tuple[float, str]:
+    """Simula un modelo que SÍ sigue las instrucciones que le das.
+
+    Si la rúbrica le dice que ignore la longitud y penalice el acuse de recibo, lo hace.
+    Es lo que se espera de un modelo capaz — y comprobar que el tuyo lo hace es
+    exactamente para lo que sirve medir la kappa.
+    """
+    respuesta = _respuesta_del_prompt(prompt)
+    ignora_longitud = "NO tengas en cuenta: la longitud" in prompt
+    if not ignora_longitud:
+        return modelo_con_sesgo_de_longitud(prompt)
+
+    tiene_dato = bool(re.search(r"\d", respuesta)) or ">" in respuesta
+    return ((1.0, "contiene un dato accionable") if tiene_dato
+            else (0.0, "no contiene ningún dato accionable"))
+
+
+juez_v2 = create_llm_as_judge(prompt=RUBRICA_V2, feedback_key="resuelve",
+                              judge=juez_local(modelo_que_lee_la_rubrica))
+JUEZ_V2 = puntuar_con(juez_v2)
+
+separador("v1 frente a v2")
+for etiqueta, puntuaciones in [("v1 (genérica)", JUEZ_V1), ("v2 (rúbrica explícita)", JUEZ_V2)]:
+    k = kappa_de_cohen(HUMANO, puntuaciones)
+    m = matriz(HUMANO, puntuaciones)
+    print(f"  {etiqueta:<24} κ = {k:>5.2f} ({interpretar(k):<22}) "
+          f"indulgente={m['juez_indulgente']} severo={m['juez_severo']}")
+
+#%%md
+Salto grande, y **gratis**: solo se ha reescrito un texto.
+
+Pero fíjate en que la dirección del error se ha dado la vuelta: ahora el juez es
+**severo**. Ha pasado a exigir un dígito, y hay respuestas accionables que no lo llevan
+—«Puedes cambiar el plan desde Ajustes > Suscripción»— o que sí y no las coge.
+
+Eso es lo normal después de la primera vuelta: la rúbrica arregla el problema grande y
+deja uno más fino. El problema fino es lo que arregla la palanca 2.
+
+#%%md
+### Palanca 2 · Ejemplos en el prompt, sacados de los desacuerdos
+
+Aquí está la parte que más rendimiento da y la que casi nadie usa.
+
+`create_llm_as_judge` acepta `few_shot_examples`. Cada ejemplo lleva una entrada, una
+salida, una **puntuación** y un **razonamiento**, y se inyectan en el prompt del juez:
+
+#%%py
+def ver_prompt_del_juez(few_shot):
+    capturado = {}
+    juez = create_llm_as_judge(
+        prompt="RÚBRICA\n<input>{inputs}</input>\n<output>{outputs}</output>",
+        feedback_key="x", few_shot_examples=few_shot,
+        judge=juez_local(lambda t: (capturado.setdefault("prompt", t), 1.0)[1] and (1.0, "ok")))
+    juez(inputs={"consulta": "x"}, outputs={"respuesta": "y"})
+    return capturado["prompt"]
+
+
+print(ver_prompt_del_juez([
+    {"inputs": {"consulta": "¿cuándo llega?"},
+     "outputs": {"respuesta": "Puedes cambiarlo desde Ajustes > Suscripción."},
+     "score": 1.0, "reasoning": "da una ruta concreta que el cliente puede seguir"},
+])[:600])
+
+#%%md
+Y lo importante: **los ejemplos no se inventan, se cogen de donde el juez falló.**
+
+Ese es el bucle completo del módulo 3, y es lo que hace que el trabajo del notebook 11
+—anotar treinta casos— se pague solo:
+
+```
+anotar  ->  medir el desacuerdo  ->  los desacuerdos SON los ejemplos  ->  medir otra vez
+```
+
+#%%py
+def ejemplos_de_los_desacuerdos(humano, juez, respuestas, *, maximo: int = 4):
+    """Coge los casos donde el juez falló y los convierte en ejemplos para su prompt.
+
+    Se cogen a partes iguales de los dos tipos de error: si solo metes los indulgentes,
+    el juez se vuelve severo, y al revés. Es el error clásico de esta técnica.
+    """
+    indulgentes = [(r, h) for r, h, j in zip(respuestas, humano, juez) if h == 0 and j == 1]
+    severos = [(r, h) for r, h, j in zip(respuestas, humano, juez) if h == 1 and j == 0]
+
+    # Mitad y mitad cuando hay de los dos; si de un tipo hay pocos, se completa con el
+    # otro en vez de desaprovechar el hueco. Lo que no se hace nunca es coger solo de
+    # un tipo pudiendo equilibrar.
+    mitad = maximo // 2
+    elegidos = indulgentes[:mitad] + severos[:mitad]
+    if len(elegidos) < maximo:
+        sobrantes = indulgentes[mitad:] + severos[mitad:]
+        elegidos += sobrantes[: maximo - len(elegidos)]
+    return [
+        {"inputs": {"consulta": "el cliente pregunta"},
+         "outputs": {"respuesta": respuesta},
+         "score": float(etiqueta),
+         "reasoning": ("contiene un dato accionable que el cliente puede seguir"
+                       if etiqueta else "es cortesía sin ningún dato accionable")}
+        for respuesta, etiqueta in elegidos
+    ]
+
+
+EJEMPLOS = ejemplos_de_los_desacuerdos(HUMANO, JUEZ_V2, RESPUESTAS)
+
+separador(f"los {len(EJEMPLOS)} ejemplos, sacados de donde v2 falló")
+for ejemplo in EJEMPLOS:
+    print(f"  [{ejemplo['score']:.0f}] {ejemplo['outputs']['respuesta'][:58]}")
+
+#%%py
+def modelo_que_aprende_de_los_ejemplos(prompt: str) -> tuple[float, str]:
+    """Simula el aprendizaje en contexto: deduce la regla de los ejemplos del prompt.
+
+    No finge nada: LEE los bloques <example> que `openevals` ha inyectado y saca de
+    ellos qué señales llevan a 1 y cuáles a 0. Es una simulación honesta de lo que un
+    modelo hace con ejemplos bien elegidos.
+    """
+    respuesta = _respuesta_del_prompt(prompt)
+    texto = prompt.encode().decode("unicode_escape", errors="ignore")
+
+    positivos, negativos = [], []
+    for bloque in re.findall(r"<example>(.*?)</example>", texto, re.S):
+        salida = re.search(r"'respuesta':\s*'([^']*)'", bloque)
+        nota = re.search(r"<score>([\d.]+)</score>", bloque)
+        if salida and nota:
+            (positivos if float(nota.group(1)) >= 0.5 else negativos).append(salida.group(1))
+
+    if not positivos and not negativos:
+        return modelo_que_lee_la_rubrica(prompt)
+
+    # Lo que el modelo "aprende": qué palabras aparecen en los 0 y no en los 1.
+    def palabras(textos):
+        return {p for t in textos for p in re.findall(r"\w+", t.lower()) if len(p) > 4}
+
+    marcadores_de_cero = palabras(negativos) - palabras(positivos)
+    marcadores_de_uno = palabras(positivos) - palabras(negativos)
+
+    palabras_respuesta = set(re.findall(r"\w+", respuesta.lower()))
+    if palabras_respuesta & marcadores_de_cero:
+        return 0.0, "usa las mismas fórmulas que los ejemplos puntuados con 0"
+    if bool(re.search(r"\d", respuesta)) or ">" in respuesta:
+        return 1.0, "contiene un dato accionable"
+    if palabras_respuesta & marcadores_de_uno:
+        return 1.0, "se parece a los ejemplos puntuados con 1"
+    return 0.0, "no contiene nada accionable"
+
+
+juez_v3 = create_llm_as_judge(prompt=RUBRICA_V2, feedback_key="resuelve",
+                              few_shot_examples=EJEMPLOS,
+                              judge=juez_local(modelo_que_aprende_de_los_ejemplos))
+JUEZ_V3 = puntuar_con(juez_v3)
+
+separador("las tres versiones")
+for etiqueta, puntuaciones in [("v1  rúbrica genérica ", JUEZ_V1),
+                               ("v2  rúbrica explícita", JUEZ_V2),
+                               (f"v3  + {len(EJEMPLOS)} ejemplos     ", JUEZ_V3)]:
+    k = kappa_de_cohen(HUMANO, puntuaciones)
+    m = matriz(HUMANO, puntuaciones)
+    print(f"  {etiqueta}  κ = {k:>5.2f} ({interpretar(k):<22}) "
+          f"indulgente={m['juez_indulgente']} severo={m['juez_severo']}")
+
+#%%md
+> **Sobre la honestidad de esta demostración.** Los tres «modelos» de arriba son
+> funciones deterministas que leen el prompt y reaccionan a lo que hay dentro: el
+> primero se fija en la longitud, el segundo obedece la instrucción de no hacerlo, el
+> tercero deduce las palabras marcadoras de los bloques `<example>` que `openevals`
+> inyecta de verdad.
+>
+> Lo que la celda demuestra es **el procedimiento y la maquinaria**, que son reales. Lo
+> que no puede demostrar es cuánto sube la kappa con tu modelo y tus datos: eso solo lo
+> dice ejecutarlo, y es la celda `@online` de abajo.
+
+### Palanca 3 · El modelo
+
+Si con rúbrica y ejemplos no llegas a κ ≥ 0,6, entonces sí: prueba un modelo mayor. Pero
+en ese orden, porque un modelo mayor con una rúbrica ambigua sigue sin saber qué quieres.
+
+#%%py
+@online("Alinear el juez con un modelo de verdad", trazas=30)
+def _():
+    """El bucle completo, contra un modelo real. Una traza por caso y por vuelta."""
+    from langsmith.run_helpers import tracing_context
+
+    juez = create_llm_as_judge(prompt=RUBRICA_V2, feedback_key="resuelve_juez",
+                               model="openai:gpt-4o-mini",
+                               few_shot_examples=EJEMPLOS, use_reasoning=True)
+
+    with tracing_context(enabled=True, project_name="curso-langsmith"):
+        puntuaciones = [int(juez(inputs={"consulta": "el cliente pregunta"},
+                                 outputs={"respuesta": r})["score"])
+                        for r in RESPUESTAS]
+
+    k = kappa_de_cohen(HUMANO, puntuaciones)
+    print(f"  kappa juez-humano con el modelo real: {k:.2f} ({interpretar(k)})")
+    m = matriz(HUMANO, puntuaciones)
+    print(f"  indulgente={m['juez_indulgente']}  severo={m['juez_severo']}")
+    if k < 0.6:
+        print("  -> otra vuelta: coge los nuevos desacuerdos como ejemplos")
+
+#%%md
+## 5. El Align Evaluator de LangSmith
+
+Todo lo anterior a mano. LangSmith trae este bucle como funcionalidad, y merece la pena
+saber que existe porque quita la parte aburrida:
+
+```
+seleccionar ejecuciones  ->  etiquetarlas a mano  ->  probar el prompt del juez
+      ->  ver dónde discrepa  ->  refinar  ->  volver a probar
+```
+
+Lo que aporta sobre hacerlo aquí: guarda las versiones del prompt del juez, enseña la
+matriz de confusión sin que la escribas, y deja la comparación al lado del histórico.
+
+Lo que **no** cambia: sigues necesitando las etiquetas humanas del notebook 11, y sigue
+sin decirte si tu rúbrica es ambigua — eso lo dice la kappa entre anotadores.
+
+#%%py
+@online("Registrar las etiquetas humanas para poder alinear en la interfaz", trazas=0)
+def _():
+    """El puente: las anotaciones tienen que estar EN LangSmith, pegadas a los runs.
+
+    Con una clave por origen (notebook 04): `resuelve_humano` y `resuelve_juez`, nunca
+    la misma para los dos, o el panel promedia cosas que no se pueden promediar.
+    """
+    c = cliente()
+    ejecuciones = list(c.list_runs(project_name="curso-langsmith", is_root=True,
+                                   limit=len(ANOTADO)))
+    for ejecucion, (_, etiqueta) in zip(ejecuciones, ANOTADO):
+        c.create_feedback(run_id=ejecucion.id, key="resuelve_humano", score=float(etiqueta),
+                          comment="anotación de la ronda del notebook 11")
+    print(f"  {len(ejecuciones)} anotaciones humanas registradas")
+
+#%%md
+## 6. Cuándo rendirse
+
+No todo se puede juzgar con un LLM, y saber cuándo parar ahorra semanas.
+
+**Señales de que no vas a alinear ese juez:**
+
+| Señal | Qué significa |
+|---|---|
+| κ entre **humanos** por debajo de 0,6 | El problema no es el juez: tu criterio no existe todavía (nb 11) |
+| Tres vueltas sin pasar de 0,4 | Lo que quieres medir depende de contexto que el juez no ve |
+| El juez acierta en los casos fáciles y falla en todos los límite | Está memorizando la forma, no aplicando el criterio |
+| Hace falta conocimiento de tu dominio que no está en el prompt | Métemelo en el prompt o cambia de método |
+
+**Y las alternativas**, que suelen ser mejores de lo que parece:
+
+- **Un evaluador de código** que capture *parte* del criterio. «¿Contiene un dígito o una
+  ruta?» no es la corrección, pero correlaciona, es gratis y es determinista.
+- **Comparación por pares** (notebook 09): «¿cuál de estas dos es mejor?» es una pregunta
+  mucho más fácil para un modelo que «¿cuánto de buena es esta?».
+- **Anotación humana muestreada**: cincuenta casos al mes puntuados por una persona te
+  dan una métrica lenta pero de verdad, y cuesta menos que tres semanas alineando un juez.
+
+#%%py
+# Un evaluador de código que captura parte del criterio, para comparar.
+def detector_de_dato(respuesta: str) -> int:
+    tiene_cifra = bool(re.search(r"\d", respuesta))
+    tiene_ruta = ">" in respuesta or "@" in respuesta
+    return int(tiene_cifra or tiene_ruta)
+
+
+CODIGO = [detector_de_dato(r) for r in RESPUESTAS]
+
+separador("¿hace falta un juez para esto?")
+for etiqueta, puntuaciones, coste in [
+    ("evaluador de código (0 trazas)", CODIGO, "0"),
+    ("juez v3 (1 traza por caso)    ", JUEZ_V3, str(len(RESPUESTAS))),
+]:
+    k = kappa_de_cohen(HUMANO, puntuaciones)
+    print(f"  {etiqueta}  κ = {k:.2f} ({interpretar(k)})   trazas: {coste}")
+
+#%%md
+Ese es el número que hay que mirar antes de meter un juez en producción. Si una expresión
+regular de dos líneas saca una kappa parecida a la del juez, **el juez no está pagando su
+coste** — ni en trazas, ni en latencia, ni en el no-determinismo que mete en tus medidas.
+
+Y no es un caso rebuscado: en tareas donde «bueno» tiene una marca formal —contiene una
+cifra, cita una fuente, devuelve JSON válido— el código suele ganar.
+
+#%%md
+## 7. Ejercicios
+
+### Ejercicio 1 — El bucle de alineamiento, automático
+
+Escribe `alinear(juez_inicial, humano, respuestas, vueltas=3)` que ejecute el bucle
+completo: medir, coger los desacuerdos como ejemplos, volver a medir. Que pare cuando
+κ ≥ 0,6 o cuando deje de mejorar.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def alinear(*, humano, respuestas, rubrica, modelo_simulado, vueltas=4, objetivo=0.6):
+    """El bucle del módulo 3, con las dos condiciones de parada que importan."""
+    ejemplos, historial = [], []
+
+    for vuelta in range(1, vueltas + 1):
+        juez = create_llm_as_judge(prompt=rubrica, feedback_key="resuelve",
+                                   few_shot_examples=ejemplos or None,
+                                   judge=juez_local(modelo_simulado))
+        puntuaciones = [int(juez(inputs={"consulta": "el cliente pregunta"},
+                                 outputs={"respuesta": r})["score"]) for r in respuestas]
+        k = kappa_de_cohen(humano, puntuaciones)
+        m = matriz(humano, puntuaciones)
+        historial.append({"vuelta": vuelta, "ejemplos": len(ejemplos), "kappa": k,
+                          "indulgente": m["juez_indulgente"], "severo": m["juez_severo"]})
+
+        if k >= objetivo:
+            historial[-1]["parada"] = "objetivo alcanzado"
+            break
+        if len(historial) > 1 and k <= historial[-2]["kappa"] + 0.01:
+            historial[-1]["parada"] = "dejó de mejorar: cambia de palanca"
+            break
+
+        nuevos = ejemplos_de_los_desacuerdos(humano, puntuaciones, respuestas, maximo=4)
+        if not nuevos:
+            historial[-1]["parada"] = "sin desacuerdos que usar"
+            break
+        ejemplos = ejemplos + nuevos
+
+    return historial
+
+
+separador("el bucle, empezando por la rúbrica genérica")
+for paso in alinear(humano=HUMANO, respuestas=RESPUESTAS, rubrica=RUBRICA_V1,
+                    modelo_simulado=modelo_que_aprende_de_los_ejemplos):
+    print(f"  vuelta {paso['vuelta']}  ejemplos={paso['ejemplos']:>2}  "
+          f"κ={paso['kappa']:>5.2f}  indulgente={paso['indulgente']} severo={paso['severo']}"
+          f"   {paso.get('parada', '')}")
+
+print()
+separador("el mismo bucle, con la rúbrica ya arreglada")
+for paso in alinear(humano=HUMANO, respuestas=RESPUESTAS, rubrica=RUBRICA_V2,
+                    modelo_simulado=modelo_que_aprende_de_los_ejemplos):
+    print(f"  vuelta {paso['vuelta']}  ejemplos={paso['ejemplos']:>2}  "
+          f"κ={paso['kappa']:>5.2f}  indulgente={paso['indulgente']} severo={paso['severo']}"
+          f"   {paso.get('parada', '')}")
+
+#%%md
+Las dos condiciones de parada son las que hacen útil el bucle:
+
+- **«objetivo alcanzado»** — ya puedes usar el juez, y sabes con qué margen.
+- **«dejó de mejorar»** — más ejemplos no van a arreglarlo. Toca cambiar de palanca:
+  otra rúbrica, otro modelo, o rendirse y usar código (apartado 6).
+
+Sin la segunda, el bucle se convierte en meter ejemplos hasta que algo pase. Y con
+suficientes ejemplos un juez acaba memorizando tu conjunto en vez de aprender tu
+criterio — que es exactamente el problema que tenías al principio, con otra cara.
+
+</details>
+
+#%%md
+### Ejercicio 2 — El juez que se rompe fuera de su conjunto
+
+Comprueba lo que acabo de decir: **mide el juez alineado sobre casos que no vio.**
+
+Divide el conjunto en dos mitades, alinea con la primera y mide con la segunda. Compara
+con la kappa que sacaba sobre los casos con los que se alineó.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import random
+
+indices = list(range(len(ANOTADO)))
+random.Random(11).shuffle(indices)
+mitad = len(indices) // 2
+ENTRENA, PRUEBA = indices[:mitad], indices[mitad:]
+
+def subconjunto(idx):
+    return [RESPUESTAS[i] for i in idx], [HUMANO[i] for i in idx]
+
+resp_entrena, hum_entrena = subconjunto(ENTRENA)
+resp_prueba, hum_prueba = subconjunto(PRUEBA)
+
+
+def modelo_que_memoriza(prompt: str) -> tuple[float, str]:
+    """El fallo del que avisa el apartado 7, escrito a propósito.
+
+    En vez de deducir la regla de los ejemplos, se queda con las frases: si la respuesta
+    es EXACTAMENTE una de las que vio, la clava; si no, se cae a su sesgo de siempre.
+    Es lo que hace un juez sobrecargado de ejemplos, y por fuera no se distingue de uno
+    que ha aprendido — salvo midiendo donde no vio nada.
+    """
+    respuesta = _respuesta_del_prompt(prompt)
+    texto = prompt.encode().decode("unicode_escape", errors="ignore")
+
+    for bloque in re.findall(r"<example>(.*?)</example>", texto, re.S):
+        salida = re.search(r"'respuesta':\s*'([^']*)'", bloque)
+        nota = re.search(r"<score>([\d.]+)</score>", bloque)
+        if salida and nota and salida.group(1).strip() == respuesta.strip():
+            return float(nota.group(1)), "lo he visto en los ejemplos"
+    return modelo_con_sesgo_de_longitud(prompt)
+
+
+def kappa_de(juez, respuestas, humano):
+    puntuaciones = [int(juez(inputs={"consulta": "el cliente pregunta"},
+                             outputs={"respuesta": r})["score"]) for r in respuestas]
+    return kappa_de_cohen(humano, puntuaciones), puntuaciones
+
+
+def alinear_y_medir_fuera(modelo_simulado, *, rubrica=RUBRICA_V1, n_ejemplos=8):
+    """Alinea con la primera mitad y mide en las dos. La diferencia es el diagnóstico."""
+    base = create_llm_as_judge(prompt=rubrica, feedback_key="resuelve",
+                               judge=juez_local(modelo_simulado))
+    _, puntuaciones = kappa_de(base, resp_entrena, hum_entrena)
+    ejemplos = ejemplos_de_los_desacuerdos(hum_entrena, puntuaciones, resp_entrena,
+                                           maximo=n_ejemplos)
+
+    alineado = create_llm_as_judge(prompt=rubrica, feedback_key="resuelve",
+                                   few_shot_examples=ejemplos,
+                                   judge=juez_local(modelo_simulado))
+    dentro, _ = kappa_de(alineado, resp_entrena, hum_entrena)
+    fuera, _ = kappa_de(alineado, resp_prueba, hum_prueba)
+    return len(ejemplos), dentro, fuera
+
+
+separador("dos jueces que por dentro no se parecen en nada")
+print(f"{'juez':<34}{'ejemplos':>9}{'κ dentro':>10}{'κ fuera':>9}{'caída':>8}")
+print("-" * 70)
+for etiqueta, modelo in [("deduce la regla de los ejemplos", modelo_que_aprende_de_los_ejemplos),
+                         ("memoriza las frases           ", modelo_que_memoriza)]:
+    n, dentro, fuera = alinear_y_medir_fuera(modelo)
+    print(f"{etiqueta:<34}{n:>9}{dentro:>10.2f}{fuera:>9.2f}{dentro - fuera:>+8.2f}")
+
+#%%md
+Mira solo la columna «κ dentro», que es lo que casi todo el mundo mide: los dos rondan
+el 0,5, y ninguno parece gran cosa. Con esa columna sola, dirías que hacen falta más
+ejemplos para los dos.
+
+La columna de la derecha dice que son cosas opuestas:
+
+- El que **deduce la regla** sube fuera. Lo que aprendió de los ejemplos vale para casos
+  que no vio, que es la definición de haber aprendido algo.
+- El que **memoriza** se hunde por debajo del azar en cuanto ve una frase nueva. Sus
+  aciertos de la izquierda eran las frases que tenía delante, copiadas.
+
+Y en producción **todas** las frases son nuevas. Si a ese segundo juez le hubieras metido
+más ejemplos hasta que la columna izquierda llegara a 1,00 —que es lo que invita a hacer
+un bucle sin la condición de parada del ejercicio anterior—, habrías desplegado un juez
+peor que tirar una moneda, con un informe de alineamiento impecable.
+
+**Reserva siempre una parte del conjunto anotado y no la uses para alinear.** Es el mismo
+principio de toda la evaluación —no midas con lo que ajustaste— y aquí se olvida
+constantemente, porque anotar cuesta y da pena no usarlo todo.
+
+Con treinta casos partidos en dos, cada mitad son quince, y la kappa de quince casos es
+ruidosa (notebook 09). Si vas a alinear en serio, **anota cuarenta o cincuenta** para
+poder reservar veinte.
+
+#%%md
+</details>
+
+#%%md
+## 8. Resumen
+
+- Alinear un juez es medir su **kappa contra las etiquetas humanas**, con la misma
+  función del notebook 11.
+- **Dónde se equivoca importa más que cuánto.** Un juez **indulgente** —aprueba lo malo—
+  es peor que no tener juez, porque produce confianza y porque optimizas hacia lo que
+  premia.
+- Tres palancas, en este orden: **rúbrica** (gratis, mucho efecto si estaba mal),
+  **ejemplos en el prompt** (casi gratis, lo que más mueve, lo que menos se usa),
+  **el modelo** (caro, y no arregla una rúbrica ambigua).
+- **Los ejemplos salen de los desacuerdos**, a partes iguales de los dos tipos de error.
+  Solo indulgentes y el juez se vuelve severo; solo severos y al revés.
+- Ese bucle es lo que paga el trabajo de anotar del notebook 11: anotar → medir →
+  desacuerdos → ejemplos → medir.
+- **Para el bucle cuando deje de mejorar.** Meter ejemplos hasta que algo pase acaba con
+  un juez que memoriza tu conjunto.
+- **Mide fuera del conjunto con el que alineaste.** La caída entre dentro y fuera es lo
+  único que distingue un juez alineado de uno que aprendió treinta frases.
+- Y antes de todo esto: **compara con un evaluador de código**. Si dos líneas de
+  expresión regular sacan una kappa parecida, el juez no está pagando su coste.
+
+**Siguiente:** [`P3 · Un juez que sirve`](P3_un_juez_que_sirve.ipynb) — el bucle entero
+sobre el agente de soporte, con el conjunto anotado, las tres palancas y la decisión
+final de si el juez entra en producción o no.
