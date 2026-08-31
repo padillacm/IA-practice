@@ -1,0 +1,530 @@
+#%%md
+# 10 · Pruebas con modelo en la integración continua
+
+**Módulo 2 · Datasets y experimentos** — *tiempo estimado: 70 minutos* — *consumo: 0 trazas*
+
+El curso de LangGraph deja esto abierto, y a propósito: su integración continua ejecuta
+los 38 notebooks con **un modelo falso**. Eso comprueba que la estructura funciona —que
+los nodos encajan, que nada se rompió al actualizar una dependencia— y **no comprueba
+nada sobre la calidad**, porque el modelo falso siempre responde lo mismo.
+
+La alternativa obvia —llamar al modelo de verdad en cada *pull request*— tiene tres
+problemas que la matan:
+
+| Problema | Consecuencia |
+|---|---|
+| **Cuesta dinero** | Cada `push` paga. Alguien lo desactiva en el segundo mes |
+| **Es lenta** | Minutos por cada ejecución |
+| **No es determinista** | Pruebas que fallan un martes sin motivo. La gente deja de mirarlas |
+
+Y ese tercer problema es el que las mata de verdad: una prueba que falla a veces se
+acaba ignorando, y una prueba ignorada es peor que no tenerla.
+
+Al terminar sabrás:
+
+1. El *plugin* de pytest de LangSmith y qué añade a una prueba normal.
+2. `langsmith.expect`, para afirmar sobre texto sin comparar cadenas exactas.
+3. La **caché de peticiones**: grabar una vez, repetir siempre. Con el proveedor
+   apagado, demostrado aquí.
+4. **Una trampa que hace que la combinación documentada no funcione**, y cómo salir.
+5. Qué se debe cachear y qué no.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import shutil
+import requests
+from utils.curso import (init, separador, servidor_de_modelo, cache_de_pruebas, online)
+
+init(silencioso=True)
+
+CACHE = pathlib.Path("_cache_del_notebook")
+shutil.rmtree(CACHE, ignore_errors=True)
+CACHE.mkdir(exist_ok=True)
+print("listo · vamos a levantar un proveedor de modelo de mentira y apagarlo a mitad")
+
+#%%md
+## 1. El plugin de pytest
+
+`langsmith` registra un *plugin* de pytest al instalarse. No hay que configurar nada:
+
+#%%py
+import importlib.metadata as metadata
+
+for distribucion in metadata.distributions():
+    for punto in distribucion.entry_points:
+        if punto.group == "pytest11" and "langsmith" in punto.value:
+            print(f"  {distribucion.metadata['Name']}: {punto.name} -> {punto.value}")
+
+#%%md
+Con él, `@pytest.mark.langsmith` convierte una prueba normal en un **caso de un
+experimento**:
+
+```python
+import pytest
+from langsmith import testing as t
+
+@pytest.mark.langsmith
+def test_clasifica_una_factura():
+    entrada = "Me habéis cobrado dos veces"
+    t.log_inputs({"mensaje": entrada})
+
+    resultado = mi_clasificador(entrada)
+
+    t.log_outputs({"categoria": resultado})
+    t.log_reference_outputs({"categoria": "facturacion"})
+    assert resultado == "facturacion"
+```
+
+Lo que aporta sobre un `assert` a secas:
+
+- Cada ejecución de la suite es **un experimento** en LangSmith, con su historial.
+- `log_inputs` / `log_outputs` / `log_reference_outputs` hacen que la prueba **sea**
+  un caso de dataset, sin mantener el dataset aparte.
+- `log_feedback` deja registrar métricas que no son booleanas al lado del `assert`.
+
+O sea, es el puente entre «tengo pruebas» y «tengo evaluación»: **las mismas pruebas de
+siempre, con historial**.
+
+#%%md
+## 2. `langsmith.expect`: afirmar sobre texto
+
+`assert respuesta == "..."` no sirve para texto libre. `expect` da comparadores que sí.
+
+#%%py
+from langsmith import expect
+
+REFERENCIA = "Tu reembolso llega en 5 días hábiles."
+CANDIDATAS = {
+    "idéntica":     "Tu reembolso llega en 5 días hábiles.",
+    "sin tildes":   "Tu reembolso llega en 5 dias habiles.",
+    "reformulada":  "El reembolso estará disponible en cinco días laborables.",
+    "equivocada":   "Los reembolsos no se pueden solicitar.",
+}
+
+print("distancia de edición contra la referencia:")
+for etiqueta, candidata in CANDIDATAS.items():
+    print(f"  {etiqueta:<12} {expect.edit_distance(candidata, REFERENCIA).value:.3f}")
+
+#%%md
+| Comparador | Qué mide | ¿Llama a un modelo? |
+|---|---|---|
+| `expect.edit_distance` | Letras | No |
+| `expect.embedding_distance` | Significado | **Sí**, a un modelo de embeddings |
+| `expect.score` | Un número que calculas tú | No |
+| `expect.value` | Igualdad, con registro | No |
+
+Fíjate en la fila «reformulada»: dice exactamente lo mismo con otras palabras y su
+distancia de edición es alta. Para ese caso hace falta `embedding_distance`… **que
+llama a un modelo**, y con eso volvemos al problema del principio.
+
+Que es justo lo que resuelve el apartado siguiente.
+
+#%%md
+## 3. La caché: llamar una vez, repetir siempre
+
+La idea es la de las pruebas de siempre con servicios externos: **grabar la conversación
+HTTP la primera vez y reproducirla después**. LangSmith lo trae integrado sobre `vcr`.
+
+Vamos a demostrarlo de la forma más convincente posible: grabamos una llamada, **apagamos
+el servidor**, y la volvemos a hacer.
+
+#%%py
+with servidor_de_modelo({"categoria": "facturacion", "confianza": 0.94}) as proveedor:
+
+    separador("1ª ejecución · el proveedor está vivo")
+    with cache_de_pruebas(CACHE / "clasificacion.yaml"):
+        respuesta = requests.post(proveedor.url, json={"mensaje": "cobro duplicado"})
+        print("  respuesta:", respuesta.json())
+    print("  llamadas que ha recibido el proveedor:", proveedor.llamadas)
+    print("  grabado:", sorted(p.name for p in CACHE.rglob("*") if p.is_file()))
+
+    proveedor.apagar()
+    separador("proveedor APAGADO")
+
+    separador("2ª ejecución · el mismo código")
+    with cache_de_pruebas(CACHE / "clasificacion.yaml"):
+        respuesta = requests.post(proveedor.url, json={"mensaje": "cobro duplicado"})
+        print("  respuesta:", respuesta.json())
+    print("  llamadas que ha recibido el proveedor:", proveedor.llamadas,
+          " <- no ha subido: vino de la caché")
+
+#%%md
+El mismo código, la misma respuesta, **y el proveedor no existe**.
+
+Eso es lo que convierte una prueba con LLM en una prueba de verdad:
+
+- **Determinista.** La misma respuesta siempre, así que no falla los martes.
+- **Gratis.** Después de la primera vez no se paga nada.
+- **Rápida.** Leer un fichero, no esperar a un modelo.
+- **Versionada.** El fichero grabado va al repositorio, así que **la respuesta del modelo
+  entra en la revisión de código** — y si alguien la cambia, se ve en el diff.
+
+Ese último punto es el que más gente pasa por alto y el que más valor tiene: convierte
+«el modelo respondió otra cosa» en una línea de un *pull request*.
+
+#%%py
+# Qué hay dentro del fichero grabado.
+grabado = (CACHE / "clasificacion.yaml").read_text(encoding="utf-8")
+print(grabado[:700])
+
+#%%md
+## 4. La trampa: la combinación documentada no funciona
+
+Aquí va lo que descubrí montando este notebook, y que no está documentado.
+
+La forma que dicta la documentación es el decorador más la variable de entorno:
+
+```bash
+LANGSMITH_TEST_CACHE=tests/cassettes  pytest
+```
+
+Y como en la CI no quieres subir nada, lo natural es añadir la otra variable:
+
+```bash
+LANGSMITH_TEST_CACHE=tests/cassettes  LANGSMITH_TEST_TRACKING=false  pytest
+```
+
+**Con esas dos juntas, la caché no se activa.** Ni error, ni aviso: las pruebas pasan,
+llaman al modelo de verdad todas las veces, y no se graba nada.
+
+El motivo está en el código del decorador:
+
+#%%py
+import inspect
+from langsmith.testing import _internal
+
+fuente = inspect.getsource(_internal.test)
+inicio = fuente.index("disable_tracking = ")
+print(fuente[inicio:inicio + 640])
+
+#%%md
+Ahí está: `if disable_tracking: return func(...)`. Con el seguimiento apagado, el
+decorador **llama a tu función directamente** y todo lo que envuelve —incluido el
+contexto de la caché— se queda sin ejecutar.
+
+O sea que por el camino del decorador, **«no subir nada» y «cachear las llamadas» son
+incompatibles**. Y la primera es innegociable en una CI sin clave.
+
+### La salida
+
+La caché no es exclusiva del decorador: es un **contexto suelto**, y ese sí funciona con
+el seguimiento apagado. Es lo que usa `cache_de_pruebas` del apartado 3:
+
+```python
+from langsmith import utils as lu
+
+with lu.with_optional_cache("cassettes/mi_prueba.yaml"):
+    respuesta = llamar_al_modelo("...")
+```
+
+Con eso montas una *fixture* de pytest de cinco líneas que da lo que prometía la
+documentación, sin depender de tener clave:
+
+#%%py
+EJEMPLO_DE_CONFTEST = '''
+# conftest.py — la caché como fixture, sin depender del decorador ni de una clave.
+import pathlib
+import pytest
+from langsmith import utils as lu
+
+CASSETTES = pathlib.Path(__file__).parent / "cassettes"
+
+
+@pytest.fixture
+def cache_del_modelo(request):
+    """Graba las llamadas HTTP la primera vez y las repite después.
+
+    Una grabación por prueba, con el nombre de la prueba: así el diff de un pull
+    request dice exactamente qué respuesta del modelo cambió.
+    """
+    CASSETTES.mkdir(exist_ok=True)
+    with lu.with_optional_cache(str(CASSETTES / f"{request.node.name}.yaml")):
+        yield
+
+
+# test_clasificacion.py
+def test_clasifica_una_factura(cache_del_modelo):
+    resultado = mi_clasificador("Me habéis cobrado dos veces")
+    assert resultado == "facturacion"
+'''
+print(EJEMPLO_DE_CONFTEST)
+
+#%%md
+Y en la CI, dos trabajos distintos, que es la parte que casi nadie separa:
+
+| Trabajo | Cuándo | Qué hace |
+|---|---|---|
+| **Pruebas** | En cada *pull request* | Corre con las grabaciones. Gratis, rápido, determinista |
+| **Refrescar grabaciones** | Semanal, o a mano | Borra las grabaciones y las regenera con el modelo de verdad. **Si alguna cambia, es una alerta** |
+
+El segundo es el que evita el fallo del método: una suite que solo lee grabaciones te
+protege de las regresiones de **tu código** y no ve nada cuando **el proveedor cambia el
+modelo bajo el mismo nombre**. El trabajo semanal es el que detecta eso, y su salida no
+es «pasa o falla» sino **un diff**.
+
+#%%md
+## 5. Qué cachear y qué no
+
+Una grabación es un fichero con **todo** lo que se mandó y se recibió. Eso trae dos
+problemas que hay que resolver antes de meterlas en el repositorio.
+
+#%%md
+**Problema 1: los secretos.** Una llamada a un proveedor lleva
+`Authorization: Bearer sk-...` en las cabeceras. Si eso se graba y se sube al
+repositorio, acabas de publicar tu clave. Vamos a comprobar qué pasa.
+
+#%%py
+CACHE_SECRETO = CACHE / "secretos"
+shutil.rmtree(CACHE_SECRETO, ignore_errors=True)
+CACHE_SECRETO.mkdir(parents=True)
+
+with servidor_de_modelo({"categoria": "facturacion"}) as proveedor:
+    with cache_de_pruebas(CACHE_SECRETO / "con_clave.yaml"):
+        requests.post(proveedor.url,
+                      json={"mensaje": "cobro duplicado"},
+                      headers={"Authorization": "Bearer sk-proj-ESTO-ES-MI-CLAVE",
+                               "X-Cliente": "acme-s-a"})
+
+texto = (CACHE_SECRETO / "con_clave.yaml").read_text(encoding="utf-8")
+print("¿aparece la clave en la grabación? ", "sk-proj-ESTO-ES-MI-CLAVE" in texto)
+print("¿aparece la otra cabecera?         ", "acme-s-a" in texto)
+print()
+print("el bloque de la petición, tal y como quedó grabado:")
+dentro = False
+for linea in texto.splitlines():
+    if linea.startswith("- request:"):
+        dentro = True
+    elif dentro and linea.lstrip().startswith("response:"):
+        break
+    if dentro:
+        print("   ", linea.rstrip()[:80])
+
+#%%md
+En esta versión del SDK las cabeceras de la petición **no se graban**, así que la clave
+no se filtra. Bien.
+
+Pero eso es una propiedad de esta versión, no una garantía del formato: `vcr` graba
+cabeceras por defecto y LangSmith las filtra con `filter_request_headers`, una lista de
+nombres conocidos. La regla que hay que aplicar no depende de que esa lista esté al día:
+
+> **Mira la primera grabación antes de subirla.** Una vez, con los ojos. Y añade una
+> comprobación en la CI que falle si aparece algo con pinta de secreto —las reglas de
+> fábrica del anonimizador del notebook 05 sirven tal cual para esto.
+
+**Problema 2: lo que cambia solo.** Una grabación se busca por la petición. Si tu
+petición lleva una marca de tiempo, un identificador aleatorio o el contenido de un
+fichero que cambia, **nunca encontrará la grabación** y volverá a llamar al modelo sin
+decirte nada. Los síntomas: la CI empieza a tardar y a costar dinero otra vez.
+
+| Cachear | No cachear |
+|---|---|
+| Llamadas al modelo con entrada fija | Nada que lleve fecha, hora o un id aleatorio en la petición |
+| Llamadas a embeddings | Llamadas cuya respuesta quieras comprobar que sigue viva |
+| APIs externas estables | Tu propia API en desarrollo |
+
+#%%py
+# El chequeo que evita el segundo problema: ¿la petición es estable?
+import json
+import re
+
+VOLATILES = (re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:"), re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-"),
+             re.compile(r'"timestamp"'), re.compile(r'"request_id"'))
+
+def peticion_cacheable(cuerpo: dict) -> list[str]:
+    """Avisa de lo que hará que la grabación no se encuentre nunca."""
+    texto = json.dumps(cuerpo, sort_keys=True)
+    return [p.pattern for p in VOLATILES if p.search(texto)]
+
+
+for etiqueta, cuerpo in [
+    ("estable", {"mensaje": "cobro duplicado", "modelo": "gpt-4o-mini"}),
+    ("con marca de tiempo", {"mensaje": "cobro duplicado", "timestamp": "2026-08-31T10:00:00"}),
+    ("con id aleatorio", {"mensaje": "x", "request_id": "3f2a9c1b-77de-4a11-9f00-1122"}),
+]:
+    problemas = peticion_cacheable(cuerpo)
+    print(f"  {etiqueta:<22} {'cacheable' if not problemas else 'NO: ' + str(problemas)}")
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — La prueba que no se entera
+
+Monta una prueba con caché sobre el servidor de mentira, y comprueba **lo que la caché
+no ve**: cambia la respuesta del proveedor y verifica que la prueba sigue pasando con la
+respuesta vieja.
+
+Después escribe la comprobación que sí lo detectaría.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+CACHE_EJ = CACHE / "ejercicio"
+shutil.rmtree(CACHE_EJ, ignore_errors=True)
+CACHE_EJ.mkdir(parents=True)
+
+def clasificar_con(url: str) -> str:
+    return requests.post(url, json={"mensaje": "cobro duplicado"}).json()["categoria"]
+
+
+with servidor_de_modelo({"categoria": "facturacion"}) as proveedor:
+
+    separador("1) grabamos, con el proveedor respondiendo «facturacion»")
+    with cache_de_pruebas(CACHE_EJ / "clasifica.yaml"):
+        print("   la prueba ve:", clasificar_con(proveedor.url))
+
+    separador("2) el proveedor cambia de opinión")
+    proveedor.cambiar_respuesta({"categoria": "otros"})
+    print("   sin caché, la realidad es ahora:", clasificar_con(proveedor.url))
+
+    separador("3) la prueba, con caché")
+    with cache_de_pruebas(CACHE_EJ / "clasifica.yaml"):
+        print("   la prueba SIGUE viendo:", clasificar_con(proveedor.url),
+              " <- de la caché")
+
+#%%md
+La prueba pasa. El proveedor ha cambiado de opinión y la suite no se entera, porque está
+leyendo un fichero.
+
+**Esa es la contrapartida del método, y hay que asumirla a conciencia:** una suite
+cacheada protege de las regresiones de *tu código* y es ciega a los cambios del
+*proveedor*. Que es exactamente lo que quieres el 95 % del tiempo —no quieres que tu
+*pull request* falle porque el proveedor ajustó un modelo— y no lo que quieres el 5 %
+restante.
+
+La comprobación que sí lo detecta es el trabajo semanal del apartado 4: borrar la
+grabación, regenerarla contra el modelo de verdad, y **comparar**.
+
+#%%py
+def refrescar_y_comparar(ruta_cache: pathlib.Path, llamar) -> dict:
+    """Regenera la grabación con el proveedor de verdad y la compara con la anterior.
+
+    Su salida no es «pasa o falla»: es un diff que una persona tiene que mirar.
+    """
+    anterior = ruta_cache.read_text(encoding="utf-8") if ruta_cache.exists() else ""
+    ruta_cache.unlink(missing_ok=True)
+    with cache_de_pruebas(ruta_cache):
+        respuesta = llamar()
+    return {"cambio": anterior != ruta_cache.read_text(encoding="utf-8"),
+            "respuesta": respuesta}
+
+
+with servidor_de_modelo({"categoria": "facturacion"}) as proveedor:
+    with cache_de_pruebas(CACHE_EJ / "semanal.yaml"):
+        clasificar_con(proveedor.url)                    # grabación de la semana pasada
+
+    proveedor.cambiar_respuesta({"categoria": "otros"})   # el proveedor se actualiza
+    informe = refrescar_y_comparar(CACHE_EJ / "semanal.yaml",
+                                   lambda: clasificar_con(proveedor.url))
+
+print(f"  ¿ha cambiado la respuesta del proveedor? {informe['cambio']}")
+print(f"  lo que responde ahora                  : {informe['respuesta']}")
+print()
+print("  -> esto es una alerta para una persona, no un fallo de la CI")
+
+#%%md
+</details>
+
+#%%md
+### Ejercicio 2 — Cuánto ahorra de verdad
+
+Mide el ahorro de la caché en las tres dimensiones que importan: **llamadas, tiempo y
+determinismo**. Ejecuta veinte pruebas con y sin caché sobre un proveedor con latencia.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import time
+
+CACHE_MED = CACHE / "medicion"
+shutil.rmtree(CACHE_MED, ignore_errors=True)
+CACHE_MED.mkdir(parents=True)
+
+CASOS = [f"caso-{i}" for i in range(20)]
+
+# `latencia` es lo que hace que la medida signifique algo: contra un servidor local
+# instantáneo, leer un fichero es MÁS lento que la llamada. Un modelo de verdad tarda
+# cientos de milisegundos; 20 ms es conservador.
+with servidor_de_modelo({"categoria": "facturacion"}, latencia=0.02) as proveedor:
+
+    def suite(usar_cache: bool) -> tuple[float, int]:
+        inicio = time.time()
+        antes = proveedor.llamadas
+        for caso in CASOS:
+            if usar_cache:
+                with cache_de_pruebas(CACHE_MED / f"{caso}.yaml"):
+                    requests.post(proveedor.url, json={"mensaje": caso})
+            else:
+                requests.post(proveedor.url, json={"mensaje": caso})
+        return time.time() - inicio, proveedor.llamadas - antes
+
+    t_sin, llamadas_sin = suite(usar_cache=False)
+    t_grabando, llamadas_grabando = suite(usar_cache=True)     # primera vez: graba
+    t_cacheado, llamadas_cacheado = suite(usar_cache=True)     # segunda: repite
+
+separador("veinte pruebas, tres formas")
+print(f"  sin caché          : {llamadas_sin:>2} llamadas al proveedor, {t_sin:.3f} s")
+print(f"  con caché (grabando): {llamadas_grabando:>2} llamadas al proveedor, {t_grabando:.3f} s")
+print(f"  con caché (leyendo) : {llamadas_cacheado:>2} llamadas al proveedor, {t_cacheado:.3f} s")
+print()
+print(f"  a partir de la 2ª ejecución: {llamadas_cacheado} llamadas de {len(CASOS)}")
+print(f"  con un modelo real a 0,002 € por llamada y 40 push al mes:")
+ahorro = 40 * len(CASOS) * 0.002
+print(f"     sin caché: {ahorro:.2f} € al mes  ->  con caché: {40 * 0 * 0.002:.2f} €")
+
+#%%md
+Cero llamadas a partir de la segunda ejecución, y por tanto cero euros y cero varianza.
+
+El ahorro en dinero de este ejemplo es pequeño porque el conjunto es pequeño. **El
+ahorro que importa no es ese**: es que la suite pasa a ser determinista, y por tanto
+alguien la mira cuando falla. Una prueba con LLM sin caché acaba desactivada; el coste
+real de no cachear es quedarse sin pruebas.
+
+#%%py
+# Limpieza: las grabaciones de este notebook no van al repositorio.
+shutil.rmtree(CACHE, ignore_errors=True)
+print("grabaciones del notebook borradas")
+
+#%%md
+</details>
+
+#%%md
+## 7. Resumen
+
+- La CI del curso de LangGraph usa un modelo falso: comprueba estructura, no calidad.
+  Este notebook cierra ese hueco.
+- El *plugin* de pytest se registra solo. `@pytest.mark.langsmith` más
+  `log_inputs`/`log_outputs`/`log_reference_outputs` convierte **tus pruebas de siempre
+  en un experimento con historial**, sin mantener un dataset aparte.
+- `expect.edit_distance` y `expect.embedding_distance` permiten afirmar sobre texto libre.
+  El segundo llama a un modelo.
+- **La caché de peticiones** convierte una prueba con LLM en una prueba de verdad:
+  determinista, gratis, rápida y **versionada** — la respuesta del modelo entra en el
+  diff del *pull request*.
+- **Trampa comprobada:** por el camino del decorador, `LANGSMITH_TEST_TRACKING=false`
+  hace que se llame a tu función directamente y **la caché no llega a activarse**. Sin
+  error y sin aviso. La salida es usar `with_optional_cache(...)` como contexto suelto,
+  en una *fixture* de cinco líneas.
+- **Dos trabajos en la CI**: uno que corre con las grabaciones en cada *pull request*, y
+  otro semanal que las regenera contra el modelo de verdad. El segundo es el único que
+  ve que el proveedor cambió el modelo bajo el mismo nombre, y su salida es un diff, no
+  un fallo.
+- **Mira la primera grabación antes de subirla** (cabeceras con la clave), y no caches
+  peticiones que lleven fechas o identificadores aleatorios: nunca encontrarán su
+  grabación y volverán a llamar al modelo en silencio.
+
+**Siguiente:** [`P2 · Conjunto dorado de tickets`](P2_conjunto_dorado.ipynb) — el módulo
+entero aplicado sobre los 400 tickets: línea base, experimento, detección de regresión y
+la puerta de CI completa.

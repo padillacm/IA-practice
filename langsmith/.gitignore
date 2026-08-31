@@ -13,3 +13,8 @@ pruebas/cassettes/
 .venv/
 .uv/
 # uv.lock SÍ se versiona: es lo que hace reproducible el curso.
+
+# Grabaciones que genera el notebook 10 mientras se ejecuta. Se borran solas al final,
+# pero si se interrumpe a mitad no queremos que acaben en el repositorio.
+langsmith/_cache_del_notebook/
+_cache_del_notebook/

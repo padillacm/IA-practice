@@ -1084,3 +1084,101 @@ def _claves_del_esquema(schema) -> list[str]:
     if isinstance(schema, dict):
         return list((schema.get("properties") or {}))
     return list(getattr(schema, "model_fields", {}) or {})
+
+
+# --------------------------------------------------------------------------------------
+# Un "proveedor de modelo" de mentira, para el notebook 10
+# --------------------------------------------------------------------------------------
+
+
+@contextlib.contextmanager
+def servidor_de_modelo(respuesta: dict | None = None, *, latencia: float = 0.0):
+    """Levanta un servidor HTTP local que hace de proveedor de modelo.
+
+        with servidor_de_modelo(latencia=0.02) as servidor:
+            requests.post(servidor.url, json={"mensaje": "..."})
+            print(servidor.llamadas)
+            servidor.apagar()          # y ahora comprueba que tu caché funciona
+
+    `latencia` hace que cada respuesta tarde lo que le pides. Sin eso, medir el ahorro
+    de una caché contra un servidor local no dice nada: un modelo de verdad tarda
+    cientos de milisegundos y el disco no.
+
+    Existe porque el notebook 10 va de **no llamar al modelo dos veces**, y eso no se
+    puede enseñar sin poder contar las llamadas y sin poder apagar al proveedor a mitad.
+    Un servidor de verdad, en `127.0.0.1`, con un contador.
+    """
+    import http.server
+    import json
+    import socketserver
+    import threading
+    import time
+
+    estado = {"n": 0, "cuerpo": json.dumps(respuesta or {"categoria": "facturacion"}).encode()}
+
+    class _Manejador(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802  (lo exige la clase base)
+            estado["n"] += 1
+            if latencia:
+                time.sleep(latencia)      # para que medir el ahorro tenga sentido
+            cuerpo = estado["cuerpo"]
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(cuerpo)))
+            self.end_headers()
+            self.wfile.write(cuerpo)
+
+        def log_message(self, *args):
+            pass       # sin ruido en la salida del notebook
+
+    servidor_http = socketserver.TCPServer(("127.0.0.1", 0), _Manejador)
+    threading.Thread(target=servidor_http.serve_forever, daemon=True).start()
+
+    class _Servidor:
+        url = f"http://127.0.0.1:{servidor_http.server_address[1]}/v1/chat"
+        apagado = False
+
+        @property
+        def llamadas(self) -> int:
+            return estado["n"]
+
+        def cambiar_respuesta(self, nueva: dict) -> None:
+            """El proveedor cambia de opinión, sin cambiar de dirección.
+
+            Es lo que pasa de verdad cuando un proveedor ajusta un modelo bajo el mismo
+            nombre, y lo que el notebook 10 necesita para enseñar que una suite cacheada
+            no se entera.
+            """
+            estado["cuerpo"] = json.dumps(nueva).encode()
+
+        def apagar(self) -> None:
+            if not self.apagado:
+                servidor_http.shutdown()
+                servidor_http.server_close()
+                self.apagado = True
+
+    referencia = _Servidor()
+    try:
+        yield referencia
+    finally:
+        referencia.apagar()
+
+
+def cache_de_pruebas(ruta):
+    """La caché de peticiones de LangSmith, como contexto suelto.
+
+        with cache_de_pruebas("cassettes/mi_prueba.yaml"):
+            respuesta = llamar_al_modelo("...")
+
+    La primera vez llama de verdad y graba; a partir de ahí repite lo grabado, aunque el
+    proveedor esté caído. Es `langsmith.utils.with_optional_cache`, que el SDK usa por
+    dentro para el decorador de pruebas y que **también sirve suelto**.
+
+    Eso importa más de lo que parece, y es el hallazgo del notebook 10: por el camino del
+    decorador, poner `LANGSMITH_TEST_TRACKING=false` hace que se llame a tu función
+    directamente y **la caché no llega a activarse**. O sea que «no subir nada» y
+    «cachear las llamadas» son incompatibles por ahí. Suelto, no.
+    """
+    from langsmith import utils as lu
+
+    return lu.with_optional_cache(str(ruta))
