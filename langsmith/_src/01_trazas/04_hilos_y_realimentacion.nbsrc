@@ -1,0 +1,507 @@
+#%%md
+# 04 · Hilos y realimentación
+
+**Módulo 1 · Trazas** — *tiempo estimado: 65 minutos* — *consumo: ~4 trazas en modo en línea*
+
+Hasta aquí una traza era una petición aislada. Pero una conversación son muchas
+peticiones, y la pregunta «¿esta respuesta fue buena?» no se contesta mirando una sola.
+
+Este notebook cubre las dos piezas que faltan para cerrar el módulo:
+
+1. **Hilos**: cómo se agrupan las trazas de una misma conversación — y la relación con
+   el `thread_id` de LangGraph, que resulta no ser la que yo esperaba.
+2. **Realimentación**: cómo entra en LangSmith la opinión sobre una respuesta, venga de
+   tu código, de un humano o del usuario final desde su navegador.
+
+Sin realimentación, LangSmith es un visor de logs caro. Con ella, es el punto de partida
+del módulo 2.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import init, online, cliente, traza_local, separador
+from langsmith import traceable
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. Qué es un hilo para LangSmith
+
+Del notebook 01: **run ⊂ traza ⊂ hilo**. Una traza es una petición; un hilo es la
+conversación entera.
+
+LangSmith no tiene un objeto «hilo» que crear. Un hilo **es** el conjunto de trazas que
+comparten un identificador, y ese identificador sale de los **metadatos** de la raíz.
+El servidor mira, por este orden, tres claves:
+
+```
+session_id  ·  thread_id  ·  conversation_id
+```
+
+Cualquiera de las tres vale. Si pones una, tienes hilo; si no pones ninguna, cada
+petición es una isla y la vista de conversación te sale vacía.
+
+> Las tres claves son intercambiables, y eso genera una confusión de nombres que hay que
+> tener clara: **el «proyecto» de LangSmith se llama `session` en la API** (verás
+> `session_id` y `session_name` en el modelo de datos refiriéndose al proyecto). El
+> `session_id` de los metadatos, en cambio, es el hilo. Son cosas distintas con el mismo
+> nombre. Yo uso siempre `thread_id` para no pisarlo.
+
+#%%md
+## 2. LangGraph y LangSmith: sí se conectan solos
+
+Aquí esperaba encontrar trabajo manual y me equivocaba, así que conviene comprobarlo en
+vez de creerme.
+
+LangGraph tiene su propio `thread_id`: el del *checkpointer*, el que identifica la
+conversación persistida (notebook 06 del curso de LangGraph). Va en `configurable`, no
+en los metadatos, y sirve para otra cosa — recuperar el estado, no agrupar trazas.
+
+La pregunta es si ese identificador llega a LangSmith. Vamos a mirarlo.
+
+#%%py
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import InMemorySaver
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+
+modelo = FakeMessagesListChatModel(responses=[
+    AIMessage("Reviso tu factura."), AIMessage("Confirmado: te devolvemos 29 euros."),
+])
+
+class Conversacion(TypedDict):
+    messages: list
+
+def responder(estado: Conversacion) -> dict:
+    return {"messages": estado["messages"] + [modelo.invoke(estado["messages"])]}
+
+constructor = StateGraph(Conversacion)
+constructor.add_node("responder", responder)
+constructor.add_edge(START, "responder")
+constructor.add_edge("responder", END)
+agente = constructor.compile(checkpointer=InMemorySaver())
+
+# El thread_id de LangGraph: el del checkpointer.
+configuracion = {"configurable": {"thread_id": "conversacion-42"}}
+
+with traza_local() as t:
+    agente.invoke({"messages": [HumanMessage("Me habéis cobrado dos veces")]}, configuracion)
+
+separador("los metadatos de cada run")
+for profundidad, run in t.recorrer():
+    hilo = run.extra.get("metadata", {}).get("thread_id", "— sin thread_id —")
+    print(f"{'  ' * profundidad}{run.name}: thread_id = {hilo}")
+
+#%%md
+**Sí llega, y a todos los runs.** El `thread_id` que le das al *checkpointer* aparece en
+los metadatos, que es exactamente donde LangSmith lo busca para agrupar el hilo.
+
+O sea que con LangGraph **no hay nada que hacer**: si usas un *checkpointer* con
+`thread_id`, tu vista de conversación funciona sola. Es otra de esas cosas que se pagan
+al usar las dos herramientas de la misma casa.
+
+> Comprobado con LangGraph 1.2 y langchain-core 1.6. Es un comportamiento que depende de
+> la integración, no del protocolo, así que la prueba `test_langgraph_propaga_el_thread_id`
+> del curso lo vigila: si un día deja de propagarse, salta ahí y no en tu producción.
+
+#%%md
+## 3. Sin LangGraph, lo pones tú
+
+Con `@traceable` a secas no hay nadie que lo propague. Y aquí es donde importa lo del
+notebook 01: **basta ponerlo en el punto de entrada**, porque los metadatos bajan solos.
+
+#%%py
+@traceable(run_type="llm")
+def generar(mensajes: list[str]) -> str:
+    return "Confirmado: te devolvemos 29 euros."
+
+@traceable(run_type="chain", name="turno")
+def turno(mensajes: list[str]) -> str:
+    return generar(mensajes)
+
+
+def atender_turno(mensaje: str, id_conversacion: str, historial: list[str]) -> str:
+    """El punto de entrada. Aquí y solo aquí se decide a qué hilo pertenece el turno."""
+    return turno(historial + [mensaje],
+                 langsmith_extra={"metadata": {"thread_id": id_conversacion}})
+
+
+historial: list[str] = []
+with traza_local() as t:
+    for mensaje in ["Me habéis cobrado dos veces", "¿Cuándo llega la devolución?"]:
+        respuesta = atender_turno(mensaje, "conversacion-77", historial)
+        historial += [mensaje, respuesta]
+
+print(f"trazas de primer nivel (turnos): {len(t.principales)}")
+for run in t.principales:
+    print(f"  {run.name}: thread_id={run.extra['metadata']['thread_id']}")
+print()
+print("y baja a los hijos:")
+for profundidad, run in t.recorrer():
+    print(f"  {'  ' * profundidad}{run.name}: {run.extra['metadata'].get('thread_id')}")
+
+#%%md
+Dos trazas distintas —dos turnos— con el mismo `thread_id`. Eso es un hilo.
+
+**El error que se comete siempre:** poner el `thread_id` solo en el run del modelo, o en
+un nodo intermedio. LangSmith agrupa por el de la **raíz**. Si lo pones dentro, el hilo
+sale vacío aunque el dato esté en la traza.
+
+#%%md
+## 4. Leer un hilo de vuelta
+
+Dos APIs, y conviene saber por qué hay dos.
+
+#%%py
+import inspect
+from langsmith import Client
+from langsmith._openapi_client.resources.threads import AsyncThreadsResource
+
+# La clásica. Sigue funcionando, pero está marcada para desaparecer.
+aviso = inspect.getdoc(Client.read_thread) or ""
+print("read_thread —lo que dice su propia documentación:")
+for linea in aviso.splitlines():
+    if "Deprecated" in linea or "removed" in linea or "Use " in linea:
+        print("   ", linea.strip())
+
+# La nueva. Ojo al segundo parámetro, que es obligatorio y no es el nombre.
+print("\nthreads.list_traces —sus parámetros:")
+parametros = inspect.signature(AsyncThreadsResource.list_traces).parameters
+for nombre, p in parametros.items():
+    if nombre == "self":
+        continue
+    obligatorio = "obligatorio" if p.default is inspect.Parameter.empty else "opcional"
+    print(f"    {nombre:<12} {obligatorio}")
+
+#%%md
+| API | Estado | Toma |
+|---|---|---|
+| `client.read_thread(thread_id=..., project_name=...)` | **Obsoleta**, se retira después del 31 de enero de 2027 | Nombre de proyecto |
+| `client.threads.list_traces(thread_id, project_id=...)` | La nueva | **UUID del proyecto**, no su nombre |
+
+El cambio de `project_name` a `project_id` es la pega práctica: si tienes el nombre —que
+es lo normal, es lo que pones en `LANGSMITH_PROJECT`— hay que traducirlo antes con
+`read_project(project_name=...)`. Merece un ayudante de dos líneas.
+
+#%%py
+@online("Leer un hilo con las dos APIs", trazas=0)
+def _():
+    c = cliente()
+    proyecto = c.read_project(project_name="curso-langsmith")
+
+    print("con la API nueva:")
+    pagina = c.threads.list_traces("conversacion-77", project_id=str(proyecto.id))
+    for traza in getattr(pagina, "traces", []) or []:
+        print("   ", traza)
+
+    print("\ncon la obsoleta (mismo resultado, otro camino):")
+    for run in c.read_thread(thread_id="conversacion-77", project_name="curso-langsmith"):
+        print(f"    {run.name}  {run.start_time}")
+
+#%%md
+## 5. Realimentación: la pieza que convierte esto en medida
+
+Una traza dice **qué pasó**. La realimentación dice **si estuvo bien**, y sin eso no hay
+nada que evaluar.
+
+En LangSmith la realimentación es un objeto que se cuelga de un run:
+
+| Campo | Para qué |
+|---|---|
+| `key` | El nombre de la métrica: `"utilidad"`, `"correccion"`, `"pulgar"` |
+| `score` | Un número. **Es el que se agrega y sale en los paneles** |
+| `value` | Un valor libre: texto, categoría, diccionario |
+| `comment` | Explicación en prosa. Oro puro para entender el porqué |
+| `correction` | **La respuesta que debería haber dado.** El campo más infravalorado |
+| `feedback_source_type` | `api` (lo mandó tu código o un humano) o `model` (lo dijo un juez LLM) |
+
+#%%py
+@online("Puntuar una respuesta", trazas=0)
+def _():
+    c = cliente()
+    # En tu código, `run_id` sale de `get_current_run_tree().id` dentro de la petición,
+    # o del identificador que devolviste al cliente.
+    c.create_feedback(
+        run_id="<el uuid del run>",
+        key="utilidad",
+        score=0.0,
+        comment="Contestó la política general en vez del caso del cliente.",
+        correction={"respuesta": "Tu cargo duplicado del 12/09 se devuelve el 17/09."},
+    )
+
+#%%md
+### El campo `correction`, y por qué importa más de lo que parece
+
+Cuando alguien puntúa mal una respuesta, lo natural es guardar el `score` y el `comment`.
+Pero si además guardas **cuál era la respuesta buena**, acabas de crear un caso de prueba
+sin ningún trabajo extra.
+
+Ese es el bucle del notebook 00, y es literalmente esto:
+
+```
+respuesta mala  ->  alguien la corrige  ->  correction
+                 ->  el par (entrada, correction) es un ejemplo de dataset
+                 ->  el dataset detecta la regresión la próxima vez
+```
+
+El módulo 2 recoge estas correcciones con `create_example_from_run`. Que el campo esté
+relleno o vacío es la diferencia entre tener un conjunto de pruebas que crece solo y
+tener que sentarse a escribirlo.
+
+#%%md
+### Tres orígenes, y hay que distinguirlos
+
+| Origen | Cómo llega | Qué vale |
+|---|---|---|
+| **Tu código** | `create_feedback` desde el servidor | Señales objetivas: ¿se parseó?, ¿el usuario reintentó?, ¿escaló a un humano? |
+| **Un humano** | Colas de anotación (módulo 3) | La verdad, y es cara |
+| **Un juez LLM** | `feedback_source_type="model"` | Barata y escalable, y **no vale nada hasta que la alineas** (módulo 3) |
+
+Mezclarlas en la misma `key` arruina las dos: el panel promedia la opinión del juez con
+la del humano y ya no sabes qué estás mirando. **Una `key` por origen**: `utilidad_humana`,
+`utilidad_juez`. Es la regla que más se salta la gente y la que más cuesta deshacer.
+
+#%%md
+## 6. Que puntúe el usuario final, sin darle tu clave
+
+El caso real: quieres los pulgares arriba/abajo de tu aplicación web. El navegador no
+puede llevar tu `LANGSMITH_API_KEY`.
+
+La solución del SDK es un **token prefirmado**: tu servidor lo crea junto con la
+respuesta, se lo manda al navegador, y el navegador puntúa con él y nada más.
+
+#%%py
+@online("Crear un token prefirmado y usarlo", trazas=0)
+def _():
+    import datetime
+    c = cliente()
+
+    # --- en tu servidor, al responder ---
+    token = c.create_presigned_feedback_token(
+        run_id="<el uuid del run>",
+        feedback_key="pulgar",
+        expiration=datetime.timedelta(hours=24),
+        feedback_config={"type": "categorical",
+                         "categories": [{"value": 1, "label": "útil"},
+                                        {"value": 0, "label": "no útil"}]},
+    )
+    print("al navegador le mandas:", token.url, "| caduca:", token.expires_at)
+
+    # --- lo que hace el navegador (o tu servidor en su nombre) ---
+    c.create_feedback_from_token(token.url, score=1, comment="justo lo que necesitaba")
+
+#%%md
+Tres detalles que ahorran una tarde:
+
+- **Caduca**, y por defecto en **3 horas**. Para un pulgar dentro de un correo de
+  seguimiento eso es poquísimo: pon `expiration` a días.
+- **Un token es para un run y una `key`.** Si quieres pulgar y comentario por separado,
+  son dos tokens — o `create_presigned_feedback_tokens`, en plural, para pedirlos de golpe.
+- **`feedback_config` solo cuenta la primera vez** que se usa esa `key`. Define ahí si es
+  continua, categórica o texto libre; después ya no se cambia sin ensuciar el histórico.
+
+#%%md
+### Qué preguntar, que es más difícil que cómo
+
+El pulgar arriba/abajo es lo fácil de implementar y lo peor de interpretar:
+
+- **Casi nadie lo pulsa.** Tasas de respuesta del 1-2 % son normales, y quien pulsa está
+  enfadado. Tu media no mide calidad, mide indignación.
+- **No dice qué falló.** Un pulgar abajo puede ser una respuesta incorrecta, lenta, mal
+  redactada o correcta pero no lo que el usuario quería.
+
+Señales **implícitas** que tu código ya conoce y valen más:
+
+| Señal | Qué sugiere | Cómo se registra |
+|---|---|---|
+| El usuario reformula la pregunta | La respuesta no sirvió | `key="reformulada"`, `score=0` |
+| Copia la respuesta | Le sirvió | `key="copiada"`, `score=1` |
+| Escala a un humano | Fallo claro | `key="escalado"`, `score=0` |
+| Cierra sin leer | Sospechoso | `key="abandono"` |
+
+Ninguna necesita que el usuario haga nada, todas se recogen desde el mismo sitio, y
+juntas dan una señal mucho más densa que el pulgar. **Empieza por estas.**
+
+#%%md
+## 7. Ejercicios
+
+### Ejercicio 1 — El hilo que no se agrupa
+
+El código de abajo pone el `thread_id`, pero la vista de conversación saldría vacía.
+Encuentra por qué —usando la traza, no leyendo el código— y arréglalo.
+
+#%%py
+@traceable(run_type="llm")
+def modelo_de_turno(mensajes: list[str]) -> str:
+    return "respuesta"
+
+@traceable(run_type="chain", name="turno_roto")
+def turno_roto(mensajes: list[str], id_conversacion: str) -> str:
+    # El thread_id se pone... en algún sitio.
+    return modelo_de_turno(mensajes,
+                           langsmith_extra={"metadata": {"thread_id": id_conversacion}})
+
+with traza_local() as t_roto:
+    turno_roto(["hola"], "conversacion-99")
+
+# Tu diagnóstico aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def diagnosticar_hilo(traza):
+    """LangSmith agrupa por el thread_id de la RAÍZ. Comprobemos dónde está."""
+    problemas = []
+    for raiz in traza.principales:
+        if "thread_id" not in raiz.extra.get("metadata", {}):
+            descendientes = [r.name for p, r in traza.recorrer()
+                             if p > 0 and "thread_id" in r.extra.get("metadata", {})]
+            if descendientes:
+                problemas.append(
+                    f"«{raiz.name}» no tiene thread_id, pero sus descendientes sí "
+                    f"{descendientes}: se puso demasiado abajo")
+            else:
+                problemas.append(f"«{raiz.name}» no tiene thread_id en ninguna parte")
+    return problemas
+
+
+print("=== diagnóstico ===")
+for p in diagnosticar_hilo(t_roto):
+    print("  [AVISO]", p)
+
+# El arreglo: al punto de entrada, donde baja solo a todo lo demás.
+@traceable(run_type="chain", name="turno_arreglado")
+def turno_arreglado(mensajes: list[str]) -> str:
+    return modelo_de_turno(mensajes)
+
+with traza_local() as t_bien:
+    turno_arreglado(["hola"], langsmith_extra={"metadata": {"thread_id": "conversacion-99"}})
+
+print("\n=== tras el arreglo ===")
+print("  problemas:", diagnosticar_hilo(t_bien) or "ninguno")
+for profundidad, run in t_bien.recorrer():
+    print(f"  {'  ' * profundidad}{run.name}: {run.extra['metadata'].get('thread_id')}")
+
+#%%md
+El dato estaba en la traza todo el tiempo. Sencillamente no estaba **donde LangSmith
+mira**, y no hay ningún error que te lo diga: subes las trazas, la vista de conversación
+sale vacía, y no hay nada que investigar salvo esto.
+
+Es la cuarta trampa silenciosa del módulo, después de las tres del notebook 02.
+
+</details>
+
+#%%md
+### Ejercicio 2 — Realimentación implícita desde la traza
+
+Escribe `senales_implicitas(traza)` que deduzca realimentación **sin preguntarle a
+nadie**, a partir de lo que ya hay en la traza:
+
+- Si algún run terminó con error → `key="fallo_interno"`, `score=0`.
+- Si la traza tardó más de un umbral → `key="lenta"`, `score=0`.
+- Si un run llamado `escalar_a_humano` se ejecutó → `key="escalado"`, `score=0`.
+- Si nada de lo anterior → `key="sin_incidencias"`, `score=1`.
+
+Devuelve la lista de diccionarios listos para `create_feedback`.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import time
+
+def senales_implicitas(traza, *, umbral_segundos: float = 0.1) -> list[dict]:
+    """Realimentación deducida de la traza, sin preguntar a nadie."""
+    senales = []
+    for raiz in traza.principales:
+        run_id = str(raiz.id)
+        duracion = (raiz.end_time - raiz.start_time).total_seconds()
+        descendientes = [r for _, r in traza.recorrer() if r is not raiz]
+
+        con_error = [r.name for r in descendientes if r.error]
+        if con_error:
+            senales.append({"run_id": run_id, "key": "fallo_interno", "score": 0,
+                            "comment": f"runs con error: {con_error}"})
+
+        if duracion > umbral_segundos:
+            senales.append({"run_id": run_id, "key": "lenta", "score": 0,
+                            "comment": f"{duracion:.2f} s (umbral {umbral_segundos} s)"})
+
+        if any(r.name == "escalar_a_humano" for r in descendientes):
+            senales.append({"run_id": run_id, "key": "escalado", "score": 0})
+
+        if not con_error and duracion <= umbral_segundos:
+            senales.append({"run_id": run_id, "key": "sin_incidencias", "score": 1})
+    return senales
+
+
+@traceable(run_type="tool", name="escalar_a_humano")
+def escalar_a_humano(motivo: str) -> str:
+    return "cola-de-agentes"
+
+@traceable(run_type="tool")
+def consultar_api():
+    raise ConnectionError("503")
+
+@traceable(run_type="chain", name="atender")
+def atender(pregunta: str) -> str:
+    try:
+        consultar_api()
+    except ConnectionError:
+        escalar_a_humano("la api de facturación no responde")
+    time.sleep(0.15)
+    return "Te atenderá un agente."
+
+with traza_local() as t:
+    atender("cobro duplicado")
+
+for senal in senales_implicitas(t):
+    print(f"  {senal['key']:<16} score={senal['score']}  {senal.get('comment', '')}")
+
+#%%md
+Tres señales negativas de una petición que **el usuario vio terminar bien**: recibió su
+respuesta, no hubo excepción, nadie pulsó nada. Y sin embargo la API interna falló, hubo
+que escalar y tardó más de la cuenta.
+
+Ese es el argumento entero de este apartado: **la realimentación más útil no se pide, se
+deduce**. El pulgar lo pulsa el 1 %; esto lo tienes en el 100 % de las peticiones, gratis,
+y desde el primer día.
+
+En el módulo 4 esto mismo se convierte en una regla que corre en el servidor sobre todas
+las trazas, sin tocar tu código.
+
+</details>
+
+#%%md
+## 8. Resumen
+
+- Un **hilo** es el conjunto de trazas que comparten `thread_id` (o `session_id`, o
+  `conversation_id`) **en los metadatos de la raíz**. Ponerlo más abajo no agrupa nada y
+  no da ningún error.
+- **LangGraph propaga su `thread_id` a los metadatos automáticamente**, así que con un
+  *checkpointer* la vista de conversación funciona sola. Comprobado, no supuesto.
+- Sin LangGraph lo pones tú, **en el punto de entrada**, y baja al resto solo.
+- `read_thread()` está obsoleta (se retira tras enero de 2027) en favor de
+  `client.threads.list_traces()`, que pide el **UUID** del proyecto y no su nombre.
+- La **realimentación** es lo que convierte un visor de trazas en una medida. El campo
+  `correction` es el más infravalorado: convierte una queja en un caso de prueba.
+- **Una `key` por origen** —código, humano, juez— o los paneles promedian cosas que no
+  se pueden promediar.
+- Para que puntúe el usuario final, **tokens prefirmados**; caducan en 3 horas por
+  defecto, que suele ser poco.
+- El pulgar lo pulsa el 1 % y mide indignación. **Las señales implícitas** —reformuló,
+  copió, escaló, falló por dentro— las tienes en el 100 % de las peticiones y valen más.
+
+**Siguiente:** [`05_lo_que_no_debe_salir`](05_lo_que_no_debe_salir.ipynb) — cierra el
+módulo con la pregunta incómoda: hemos estado mandando entradas y salidas enteras a un
+servicio de terceros, y hay cosas que no pueden salir.

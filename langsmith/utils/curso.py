@@ -430,8 +430,21 @@ class _SesionMuda:
     def __init__(self) -> None:
         import requests
 
+        # Estos atributos existen porque partes del SDK los leen del objeto sesión
+        # antes de usarlo. `trust_env` en concreto lo consulta el cliente HTTP nuevo
+        # (`client.threads`, del notebook 04): sin él, acceder a esa propiedad lanza
+        # un `AttributeError` que parece decir que la funcionalidad no existe.
         self.headers: dict[str, str] = {}
         self.auth = None
+        self.trust_env = False
+        self.verify = True
+        self.cert = None
+        self.proxies: dict[str, str] = {}
+        self.params: dict[str, str] = {}
+        self.stream = False
+        self.max_redirects = 0
+        self.adapters: dict[str, Any] = {}
+        self.hooks: dict[str, list] = {"response": []}
         self.cookies = requests.cookies.RequestsCookieJar()
         self.peticiones: list[tuple[str, str]] = []
 

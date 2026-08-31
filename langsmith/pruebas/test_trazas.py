@@ -550,3 +550,138 @@ def test_flush_existe_y_wait_for_all_tracers_tambien():
 
     assert "timeout" in inspect.signature(Client.flush).parameters
     assert inspect.signature(wait_for_all_tracers).parameters == {}
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 04 · hilos y realimentación
+# ------------------------------------------------------------------------------------
+
+
+def test_langgraph_propaga_el_thread_id():
+    """La afirmación central del notebook 04, y va contra lo que yo esperaba.
+
+    El `thread_id` que le das al checkpointer de LangGraph aparece en los metadatos de
+    LangSmith, que es donde el servidor lo busca para agrupar el hilo. O sea que la
+    vista de conversación funciona sola.
+
+    Es un comportamiento de la integración, no del protocolo: si un día deja de
+    propagarse, el notebook pasa a mentir. Que salte aquí y no en tu producción.
+    """
+    from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+    from langchain_core.messages import AIMessage, HumanMessage
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.graph import END, START, StateGraph
+    from typing_extensions import TypedDict
+
+    modelo = FakeMessagesListChatModel(responses=[AIMessage("hola")])
+
+    class Conversacion(TypedDict):
+        messages: list
+
+    def responder(estado):
+        return {"messages": estado["messages"] + [modelo.invoke(estado["messages"])]}
+
+    g = StateGraph(Conversacion)
+    g.add_node("responder", responder)
+    g.add_edge(START, "responder")
+    g.add_edge("responder", END)
+    agente = g.compile(checkpointer=InMemorySaver())
+
+    with curso.traza_local() as t:
+        agente.invoke({"messages": [HumanMessage("hola")]},
+                      {"configurable": {"thread_id": "conversacion-42"}})
+
+    for _, run in t.recorrer():
+        assert run.extra["metadata"].get("thread_id") == "conversacion-42", run.name
+
+
+def test_el_thread_id_de_la_raiz_baja_a_todo_el_arbol():
+    """Sin LangGraph lo pones tú, en el punto de entrada, y baja solo."""
+    from langsmith import traceable
+
+    @traceable(run_type="llm")
+    def generar(m):
+        return "r"
+
+    @traceable(run_type="chain")
+    def turno(m):
+        return generar(m)
+
+    with curso.traza_local() as t:
+        turno(["hola"], langsmith_extra={"metadata": {"thread_id": "conv-77"}})
+
+    assert all(r.extra["metadata"].get("thread_id") == "conv-77" for _, r in t.recorrer())
+
+
+def test_dos_turnos_del_mismo_hilo_son_dos_trazas():
+    """Un hilo no es una traza larga: son varias trazas con el mismo identificador."""
+    from langsmith import traceable
+
+    @traceable(run_type="chain")
+    def turno(m):
+        return "r"
+
+    with curso.traza_local() as t:
+        for mensaje in ("uno", "dos"):
+            turno(mensaje, langsmith_extra={"metadata": {"thread_id": "conv-1"}})
+
+    assert len(t.principales) == 2
+    assert {r.extra["metadata"]["thread_id"] for r in t.principales} == {"conv-1"}
+
+
+def test_el_thread_id_puesto_abajo_no_llega_a_la_raiz():
+    """La cuarta trampa silenciosa del módulo: el dato está y el hilo sale vacío."""
+    from langsmith import traceable
+
+    @traceable(run_type="llm")
+    def generar(m):
+        return "r"
+
+    @traceable(run_type="chain")
+    def turno_roto(m):
+        return generar(m, langsmith_extra={"metadata": {"thread_id": "conv-99"}})
+
+    with curso.traza_local() as t:
+        turno_roto(["hola"])
+
+    raiz = t.principales[0]
+    assert "thread_id" not in raiz.extra["metadata"]          # la raíz no lo tiene
+    assert raiz.child_runs[0].extra["metadata"]["thread_id"] == "conv-99"   # el hijo sí
+
+
+def test_la_api_de_realimentacion_tiene_los_campos_que_ensena_el_notebook():
+    """El módulo 2 depende de `correction`: si desapareciera, el bucle del curso se rompe."""
+    import inspect
+
+    from langsmith import Client
+
+    parametros = inspect.signature(Client.create_feedback).parameters
+    for campo in ("run_id", "key", "score", "value", "comment", "correction",
+                  "feedback_source_type"):
+        assert campo in parametros, campo
+
+
+def test_los_tokens_prefirmados_existen_con_su_caducidad():
+    import inspect
+
+    from langsmith import Client
+
+    firma = inspect.signature(Client.create_presigned_feedback_token).parameters
+    assert {"run_id", "feedback_key", "expiration", "feedback_config"} <= set(firma)
+    assert "token_or_url" in inspect.signature(Client.create_feedback_from_token).parameters
+
+
+def test_read_thread_esta_obsoleta_y_la_nueva_pide_el_uuid():
+    """El notebook 04 avisa de las dos cosas. Que envejezcan a la vista."""
+    import inspect
+
+    from langsmith import Client
+    from langsmith._openapi_client.resources.threads import AsyncThreadsResource
+
+    documentacion = inspect.getdoc(Client.read_thread) or ""
+    assert "Deprecated" in documentacion
+    assert "threads.list_traces" in documentacion
+
+    parametros = inspect.signature(AsyncThreadsResource.list_traces).parameters
+    assert parametros["project_id"].default is inspect.Parameter.empty  # obligatorio
+    assert "project_name" not in parametros                             # y no vale el nombre
