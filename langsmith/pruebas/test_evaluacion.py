@@ -487,3 +487,82 @@ def test_evaluate_comparative_permite_desordenar_las_posiciones():
     parametros = inspect.signature(evaluate_comparative).parameters
     assert "randomize_order" in parametros
     assert parametros["randomize_order"].default is False     # hay que pedirlo
+
+
+# ------------------------------------------------------------------------------------
+# Proyecto P2 · el conjunto dorado
+# ------------------------------------------------------------------------------------
+
+
+def test_el_conjunto_de_400_tickets_tiene_duplicados():
+    """No es un ejemplo inventado para el proyecto: el dato real los trae.
+
+    Si un día se limpian, el P2 pasa a enseñar una revisión que no encuentra nada y hay
+    que reescribir ese apartado. Que salte aquí.
+    """
+    import collections
+
+    muestra = curso.tickets(40)
+    claves = collections.Counter((t["asunto"], t["mensaje"]) for t in muestra)
+    assert max(claves.values()) > 1
+
+
+def test_quitar_duplicados_deja_el_conjunto_limpio():
+    import collections
+
+    ejemplos = _conjunto(40)
+
+    vistos, limpios = set(), []
+    for ejemplo in ejemplos:
+        clave = tuple(sorted((k, str(v)) for k, v in ejemplo.inputs.items()))
+        if clave not in vistos:
+            vistos.add(clave)
+            limpios.append(ejemplo)
+
+    assert len(limpios) < len(ejemplos)
+    repetidos = collections.Counter(
+        tuple(sorted((k, str(v)) for k, v in e.inputs.items())) for e in limpios)
+    assert max(repetidos.values()) == 1
+
+
+def test_el_sistema_de_reglas_bate_al_perezoso_con_claridad():
+    """La línea base del P2: sesenta palabras clave y un `in`.
+
+    Es la cifra que hay que enseñar al lado del resultado de cualquier LLM, y la que
+    dice si el LLM está justificando su coste.
+    """
+    import collections
+
+    muestra = curso.tickets(40)
+    ejemplos = curso.ejemplos_locales(muestra, entradas=("asunto", "mensaje"),
+                                      salidas=("categoria",))
+    mayoritaria = collections.Counter(t["categoria"] for t in muestra).most_common(1)[0][0]
+
+    pistas = {
+        "facturacion": ("factur", "cobr", "cargo", "pago", "reembolso", "tarifa", "cif"),
+        "integraciones": ("integra", "conect", "api", "webhook", "salesforce", "sincron"),
+        "acceso_cuenta": ("contraseñ", "acceso", "login", "sesión", "verificaci"),
+        "rendimiento": ("lent", "tarda", "rendimiento", "timeout", "cuelga"),
+        "bug_producto": ("error", "fallo", "bug", "no funciona", "desaparec",
+                         "sale vacía", "en blanco", "antes funcionaba"),
+        "datos_privacidad": ("privacidad", "rgpd", "datos personales", "retención"),
+        "solicitud_funcionalidad": ("sería genial", "podríais", "nos vendría bien",
+                                    "necesitaríamos", "echamos de menos", "hoja de ruta"),
+    }
+
+    def reglas(entradas):
+        texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+        puntos = {c: sum(p in texto for p in ps) for c, ps in pistas.items()}
+        mejor = max(puntos, key=puntos.get)
+        return {"categoria": mejor if puntos[mejor] else "otros"}
+
+    def nota(sistema):
+        return curso.resumen_del_experimento(
+            curso.experimento_local(sistema, ejemplos, evaluadores=[_acierto]))["acierto"]
+
+    nota_perezoso = nota(lambda e: {"categoria": mayoritaria})
+    nota_reglas = nota(reglas)
+
+    assert nota_perezoso < 0.25
+    assert nota_reglas > 0.6
+    assert nota_reglas > nota_perezoso * 3

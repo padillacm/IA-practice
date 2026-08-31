@@ -1,0 +1,590 @@
+#%%md
+# P2 · Conjunto dorado de tickets
+
+**Módulo 2 · Proyecto** — *tiempo estimado: 95 minutos* — *consumo: ~60 trazas en modo en línea*
+
+Los cinco notebooks anteriores enseñan piezas sueltas. Este las junta en lo único que
+importa: **un ciclo de evaluación que alguien pueda mantener durante un año sin
+abandonarlo.**
+
+Sobre los 400 tickets etiquetados del curso de LangGraph, y con el agente de soporte que
+ya instrumentaste en P1.
+
+Al terminar tendrás:
+
+1. Un **conjunto dorado** construido a conciencia, con su comprobación de que discrimina.
+2. Una **línea base honesta**: el modelo tonto y el sistema de reglas, antes del LLM.
+3. La **tolerancia medida** de tu propio conjunto — no un umbral inventado.
+4. Una **regresión real detectada**, y una falsa alarma rechazada.
+5. Una **puerta de CI completa**, con todo lo que los notebooks 07, 09 y 10 dicen que
+   hay que comprobar.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+import collections, contextlib, io, json, math, statistics
+from utils.curso import (init, online, cliente, separador, tickets, ejemplos_locales,
+                         experimento_local, resumen_del_experimento, presupuesto_de_trazas)
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. El conjunto dorado
+
+«Dorado» quiere decir dos cosas: que las etiquetas son de fiar y que **el conjunto
+discrimina**. La segunda es la que se olvida.
+
+Decisiones, con su motivo:
+
+| Decisión | Elección | Por qué |
+|---|---|---|
+| Tamaño | **40 casos** | El punto del notebook 06: bastante para no ser ruido puro, poco para correrlo en cada cambio |
+| Muestra | **Estratificada** por categoría | Si no, mides lo que hubo en enero (nb 06) |
+| `outputs` | Solo `categoria` | Lo que va ahí es lo que el evaluador compara (nb 06) |
+| `metadata` | Plan, canal, prioridad, sentimiento | Para poder cortar los resultados después |
+| Versión | Fijada, etiquetada `v1` | Sin eso, dos experimentos no son comparables (nb 09) |
+
+#%%py
+MUESTRA = tickets(40)
+DORADO = ejemplos_locales(MUESTRA, entradas=("asunto", "mensaje"), salidas=("categoria",))
+
+separador("el conjunto dorado")
+print(f"  casos: {len(DORADO)}")
+print("  por categoría:", dict(collections.Counter(t["categoria"] for t in MUESTRA)))
+print("  por plan     :", dict(collections.Counter(t["plan_cliente"] for t in MUESTRA)))
+
+#%%py
+# La revisión del notebook 06, antes de confiar en él.
+CATEGORIAS = sorted({t["categoria"] for t in tickets()})
+
+def revisar(ejemplos, vocabulario) -> list[str]:
+    avisos = []
+    vistos = collections.Counter(
+        tuple(sorted((k, str(v)) for k, v in e.inputs.items())) for e in ejemplos)
+    if repetidos := [n for n, veces in vistos.items() if veces > 1]:
+        avisos.append(f"{len(repetidos)} entrada(s) duplicada(s)")
+    if fuera := {v for e in ejemplos for v in e.outputs.values() if v not in vocabulario}:
+        avisos.append(f"referencias fuera del vocabulario: {sorted(fuera)}")
+    conteo = collections.Counter(e.outputs["categoria"] for e in ejemplos)
+    mayor, veces = conteo.most_common(1)[0]
+    if veces > len(ejemplos) / 2:
+        avisos.append(f"«{mayor}» es el {100 * veces // len(ejemplos)} % del conjunto")
+    return avisos
+
+print("revisión del conjunto recién construido:", revisar(DORADO, set(CATEGORIAS)))
+
+#%%md
+Y ahí está: **el conjunto real trae un duplicado**. No es un ejemplo inventado para el
+notebook — son los 400 tickets de verdad, y dentro hay dos con el mismo asunto y casi el
+mismo mensaje.
+
+Es exactamente para lo que sirve la revisión. Un caso duplicado **pesa el doble** en la
+media sin que nadie lo decida, y si además es fácil, infla la nota. Lo quitamos.
+
+#%%py
+def sin_duplicados(ejemplos):
+    """Quita los ejemplos con las mismas entradas, conservando el primero."""
+    vistos, limpios = set(), []
+    for ejemplo in ejemplos:
+        clave = tuple(sorted((k, str(v)) for k, v in ejemplo.inputs.items()))
+        if clave not in vistos:
+            vistos.add(clave)
+            limpios.append(ejemplo)
+    return limpios
+
+
+DORADO = sin_duplicados(DORADO)
+print(f"  casos tras quitar duplicados: {len(DORADO)}")
+print("  revisión:", revisar(DORADO, set(CATEGORIAS)) or "sin avisos")
+
+#%%md
+## 2. La línea base: lo que hay que batir
+
+Antes de medir nada con LLM, dos referencias. Sin ellas, cualquier número parece bueno.
+
+#%%py
+def acierto(outputs: dict, reference_outputs: dict) -> dict:
+    # `.get()`, no índice: el notebook 07 explica por qué esto no es un detalle.
+    return {"key": "acierto",
+            "score": float((outputs or {}).get("categoria") == reference_outputs["categoria"])}
+
+
+def f1_macro(outputs: list, reference_outputs: list) -> dict:
+    """La métrica de verdad de un clasificador desequilibrado (nb 07)."""
+    f1s = []
+    for clase in {r["categoria"] for r in reference_outputs}:
+        vp = sum((o or {}).get("categoria") == clase and r["categoria"] == clase
+                 for o, r in zip(outputs, reference_outputs))
+        fp = sum((o or {}).get("categoria") == clase and r["categoria"] != clase
+                 for o, r in zip(outputs, reference_outputs))
+        fn = sum((o or {}).get("categoria") != clase and r["categoria"] == clase
+                 for o, r in zip(outputs, reference_outputs))
+        precision = vp / (vp + fp) if vp + fp else 0.0
+        cobertura = vp / (vp + fn) if vp + fn else 0.0
+        f1s.append(2 * precision * cobertura / (precision + cobertura)
+                   if precision + cobertura else 0.0)
+    return {"key": "f1_macro", "score": sum(f1s) / len(f1s)}
+
+
+MAYORITARIA = collections.Counter(t["categoria"] for t in MUESTRA).most_common(1)[0][0]
+
+def sistema_perezoso(entradas: dict) -> dict:
+    return {"categoria": MAYORITARIA}
+
+
+PISTAS = {
+    "facturacion": ("factur", "cobr", "cargo", "pago", "reembolso", "tarifa", "precio", "cif"),
+    "integraciones": ("integra", "conect", "api", "webhook", "salesforce", "sincron"),
+    "acceso_cuenta": ("contraseñ", "acceso", "login", "sesión", "verificaci", "recuperaci"),
+    "rendimiento": ("lent", "tarda", "rendimiento", "timeout", "cuelga", "segundos"),
+    "bug_producto": ("error", "fallo", "bug", "no funciona", "roto", "desaparec",
+                     "sale vacía", "0 bytes", "en blanco", "se pierden", "antes funcionaba"),
+    "datos_privacidad": ("privacidad", "rgpd", "datos personales", "borrar mis", "retención"),
+    "solicitud_funcionalidad": ("sería genial", "podríais", "propuesta", "sugerencia",
+                                "nos vendría bien", "necesitaríamos", "echamos de menos",
+                                "hoja de ruta", "me gustaría", "estaría bien", "falta filtrar"),
+}
+
+def sistema_reglas(entradas: dict) -> dict:
+    texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+    puntos = {c: sum(p in texto for p in pistas) for c, pistas in PISTAS.items()}
+    mejor = max(puntos, key=puntos.get)
+    return {"categoria": mejor if puntos[mejor] else "otros"}
+
+
+def medir(sistema, conjunto=None) -> dict:
+    """Todo lo que hay que mirar de un experimento, no solo la media (nb 07)."""
+    conjunto = conjunto if conjunto is not None else DORADO
+    with contextlib.redirect_stderr(io.StringIO()):
+        resultados = experimento_local(sistema, conjunto, evaluadores=[acierto],
+                                       evaluadores_de_resumen=[f1_macro])
+        filas = list(resultados)
+        medias = resumen_del_experimento(resultados)
+        puntuados = sum(1 for f in filas for r in f["evaluation_results"]["results"]
+                        if r.key == "acierto" and r.score is not None)
+    return {"casos": len(filas),
+            "reventados": sum(1 for f in filas if f["run"].error),
+            "cobertura": puntuados / len(filas),
+            "acierto": medias.get("acierto", 0.0),
+            "f1_macro": medias.get("f1_macro (resumen)", 0.0)}
+
+
+separador("la línea base")
+BASE = {}
+for nombre, sistema in [(f"perezoso (siempre «{MAYORITARIA}»)", sistema_perezoso),
+                        ("reglas (unas 60 palabras clave)", sistema_reglas)]:
+    BASE[nombre] = medir(sistema)
+    d = BASE[nombre]
+    print(f"  {nombre:<36} acierto {d['acierto']:.0%}   f1_macro {d['f1_macro']:.2f}")
+
+#%%md
+Ese segundo número es el que hay que llevar a la reunión: **sesenta palabras clave y un
+`in`**. Cualquier sistema con LLM que no lo bata con claridad no está justificando su
+coste, su latencia ni su no-determinismo.
+
+Casi nadie enseña esta cifra al lado del resultado del modelo, y es la más informativa
+de las dos.
+
+#%%md
+## 3. La tolerancia, medida en tu conjunto
+
+El notebook 09 dice que hay que comparar contra una banda, no contra un umbral. La banda
+sale de tu conjunto, no de un libro. Vamos a medirla.
+
+#%%py
+import random
+
+def sistema_ruidoso(acierto_real: float, semilla: int):
+    """Un sistema cuyo acierto real conocemos, para medir el ruido del conjunto."""
+    aleatorio = random.Random(semilla)
+    return lambda entradas: {"categoria": (
+        DORADO[0].outputs["categoria"] if aleatorio.random() < acierto_real else "___fallo___")}
+
+
+# El acierto real de este sistema no importa; lo que medimos es cuánto baila la MEDIDA.
+notas = []
+for semilla in range(15):
+    aleatorio = random.Random(semilla)
+    def sistema(entradas, _a=aleatorio):
+        return {"categoria": "acierto" if _a.random() < 0.60 else "fallo"}
+    def evaluador(outputs, reference_outputs):
+        return {"key": "acierto", "score": float((outputs or {}).get("categoria") == "acierto")}
+    with contextlib.redirect_stderr(io.StringIO()):
+        r = experimento_local(sistema, DORADO, evaluadores=[evaluador])
+        notas.append(resumen_del_experimento(r)["acierto"])
+
+SIGMA = statistics.stdev(notas)
+BANDA = 2 * SIGMA * math.sqrt(2)      # dos experimentos, dos ruidos
+
+separador(f"el ruido de ESTE conjunto de {len(DORADO)} casos")
+print(f"  15 medidas del mismo sistema: {min(notas):.0%} a {max(notas):.0%}")
+print(f"  desviación típica (σ)       : {SIGMA:.3f}")
+print(f"  banda de decisión (2σ√2)    : ±{BANDA:.1%}")
+print()
+print(f"  -> en este conjunto, una diferencia menor de {BANDA:.0%} NO es una mejora")
+
+#%%md
+Ese número, y no otro, es el que hay que poner en la puerta de la CI. **Sale de medir,
+no de elegir un umbral bonito.**
+
+Y da la primera conclusión incómoda del proyecto: con 40 casos hacen falta diferencias
+grandes para poder afirmar nada. Si tu trabajo consiste en mejorar dos puntos por
+iteración, este conjunto no te va a servir para demostrarlo — y ampliarlo cuesta trazas
+(notebook 09).
+
+#%%md
+## 4. Una regresión de verdad y una falsa alarma
+
+Ahora el caso de uso real. Dos cambios en el sistema de reglas: uno que rompe algo y otro
+cosmético. La puerta tiene que distinguirlos.
+
+#%%py
+def sistema_con_regresion(entradas: dict) -> dict:
+    """Alguien 'limpió' las pistas y se llevó por delante dos categorías.
+
+    Es el cambio típico que rompe cosas: parece una mejora de mantenimiento.
+    """
+    pistas = {c: p for c, p in PISTAS.items()
+              if c not in ("bug_producto", "solicitud_funcionalidad")}
+    texto = f"{entradas.get('asunto', '')} {entradas.get('mensaje', '')}".lower()
+    puntos = {c: sum(p in texto for p in ps) for c, ps in pistas.items()}
+    mejor = max(puntos, key=puntos.get)
+    return {"categoria": mejor if puntos[mejor] else "otros"}
+
+
+def sistema_cosmetico(entradas: dict) -> dict:
+    """Mismo comportamiento, otro orden de comprobación. No debería cambiar nada."""
+    texto = f"{entradas.get('mensaje', '')} {entradas.get('asunto', '')}".lower()
+    puntos = {c: sum(p in texto for p in pistas) for c, pistas in PISTAS.items()}
+    mejor = max(puntos, key=puntos.get)
+    return {"categoria": mejor if puntos[mejor] else "otros"}
+
+
+def decidir(nueva: float, anterior: float, banda: float) -> tuple[str, str]:
+    diferencia = nueva - anterior
+    if diferencia < -banda:
+        return "BLOQUEA", f"regresión de {abs(diferencia):.1%} (banda ±{banda:.1%})"
+    if diferencia > banda:
+        return "MEJORA", f"mejora de {diferencia:.1%} (banda ±{banda:.1%})"
+    return "RUIDO", f"diferencia de {diferencia:+.1%} dentro de la banda ±{banda:.1%}"
+
+
+REFERENCIA = BASE["reglas (unas 60 palabras clave)"]["acierto"]
+
+separador("dos cambios, un veredicto para cada uno")
+for nombre, sistema in [("cambio cosmético  ", sistema_cosmetico),
+                        ("«limpieza» de pistas", sistema_con_regresion)]:
+    datos = medir(sistema)
+    veredicto, razon = decidir(datos["acierto"], REFERENCIA, BANDA)
+    print(f"  {nombre}: {datos['acierto']:.0%}  ->  {veredicto:<8} {razon}")
+
+#%%md
+Y ahora lo que la media no dice, que es lo que hay que mirar antes de desplegar
+(notebook 07): **qué casos concretos cambiaron.**
+
+#%%py
+def casos_que_cambian(antes, despues, conjunto):
+    def por_caso(sistema):
+        with contextlib.redirect_stderr(io.StringIO()):
+            filas = list(experimento_local(sistema, conjunto, evaluadores=[acierto]))
+        return {str(f["example"].id): (f["evaluation_results"]["results"][0].score
+                                       if f["evaluation_results"]["results"] else None)
+                for f in filas}, {str(f["example"].id): f["example"] for f in filas}
+
+    a, ejemplos = por_caso(antes)
+    b, _ = por_caso(despues)
+    arreglados = [k for k in a if not a[k] and b.get(k)]
+    rotos = [k for k in a if a[k] and not b.get(k)]
+    return arreglados, rotos, ejemplos
+
+
+arreglados, rotos, ejemplos = casos_que_cambian(sistema_reglas, sistema_con_regresion, DORADO)
+print(f"  arreglados: {len(arreglados)}   ROTOS: {len(rotos)}")
+print("\n  qué se rompió, por categoría:")
+for categoria, veces in collections.Counter(
+        ejemplos[k].outputs["categoria"] for k in rotos).most_common():
+    print(f"    {categoria:<26} {veces}")
+
+#%%md
+El desglose señala exactamente las dos categorías que alguien borró. Eso es lo que
+convierte «ha bajado el acierto» en «alguien quitó las pistas de `bug_producto` y
+`solicitud_funcionalidad`», que es un mensaje sobre el que se puede actuar.
+
+#%%md
+## 5. La puerta de la CI, completa
+
+Todo junto. Las comprobaciones vienen de los tres notebooks del módulo y el orden
+importa: **primero se valida la medida, después se mira el número.**
+
+#%%py
+def puerta_de_ci(sistema, *, referencia: float, banda: float,
+                 esperadas: set[str] = frozenset({"acierto", "f1_macro"}),
+                 minimo_absoluto: float = 0.0) -> tuple[bool, list[str]]:
+    """La puerta que este proyecto entrega. Cinco comprobaciones, en este orden."""
+    datos = medir(sistema)
+    problemas = []
+
+    # 1. ¿Están todas las métricas? Un juez caído desaparece sin avisar (nb 07).
+    faltan = set(esperadas) - {k for k in datos if k in esperadas}
+    if faltan:
+        problemas.append(f"métricas ausentes: {sorted(faltan)}")
+
+    # 2. ¿Reventó algún caso? (nb 07)
+    if datos["reventados"]:
+        problemas.append(f"{datos['reventados']} caso(s) reventaron")
+
+    # 3. ¿Se puntuaron todos? Si no, la media es de otro conjunto más fácil (nb 07).
+    if datos["cobertura"] < 1.0:
+        problemas.append(f"cobertura {datos['cobertura']:.0%}: la media no es del conjunto")
+
+    if problemas:
+        return False, problemas          # la medida no vale: ni se mira el número
+
+    # 4. Un suelo absoluto: por debajo de la línea base no se despliega.
+    if datos["acierto"] < minimo_absoluto:
+        problemas.append(f"acierto {datos['acierto']:.0%} por debajo del suelo "
+                         f"{minimo_absoluto:.0%}")
+
+    # 5. Y la comparación con banda (nb 09).
+    veredicto, razon = decidir(datos["acierto"], referencia, banda)
+    if veredicto == "BLOQUEA":
+        problemas.append(razon)
+
+    return not problemas, problemas or [f"{veredicto}: {razon}"]
+
+
+SUELO = BASE[f"perezoso (siempre «{MAYORITARIA}»)"]["acierto"]
+
+separador("la puerta sobre cuatro sistemas")
+for nombre, sistema in [
+    ("reglas (la referencia)", sistema_reglas),
+    ("cambio cosmético      ", sistema_cosmetico),
+    ("«limpieza» de pistas  ", sistema_con_regresion),
+    ("el perezoso           ", sistema_perezoso),
+]:
+    pasa, mensajes = puerta_de_ci(sistema, referencia=REFERENCIA, banda=BANDA,
+                                  minimo_absoluto=SUELO + 0.10)
+    print(f"  {nombre}  {'PASA   ' if pasa else 'BLOQUEA'}  {mensajes[0]}")
+
+#%%md
+Cuatro sistemas, cuatro veredictos correctos. Y fíjate en el último: el perezoso se
+bloquea por el **suelo absoluto**, no por la banda — porque contra una referencia mala,
+una banda ancha lo dejaría pasar.
+
+Las dos comprobaciones son distintas y hacen falta las dos:
+
+- **La banda** protege de las regresiones respecto a lo que tenías. Es relativa.
+- **El suelo** —aquí, la nota del perezoso más diez puntos— protege de que *lo que
+  tenías* sea malo. Si tu referencia se degrada poco a poco, cada paso cae dentro de la
+  banda y la puerta nunca dice nada; el suelo sí. Es absoluto y no se mueve.
+
+Y la banda de este conjunto es ancha —casi veinticuatro puntos— porque cuarenta casos son
+pocos. Eso significa que la puerta **deja pasar regresiones de veinte puntos**, y hay que
+saberlo: no es un fallo de la puerta, es lo que da de sí el conjunto (nb 09).
+
+#%%md
+## 6. Llevarlo a tu cuenta
+
+Todo lo anterior corre en local. Esto es lo mismo contra el servicio, con el presupuesto
+por delante.
+
+#%%py
+presupuesto_de_trazas(ejemplos=len(DORADO), repeticiones=1, evaluadores_llm=0,
+                      etiqueta="una pasada del conjunto dorado, sin juez")
+print()
+presupuesto_de_trazas(ejemplos=len(DORADO), repeticiones=1, evaluadores_llm=1,
+                      etiqueta="la misma, con un juez LLM")
+
+#%%py
+@online("Subir el conjunto dorado y etiquetarlo v1", trazas=0)
+def _():
+    c = cliente()
+    conjunto = c.create_dataset(
+        dataset_name="tickets-dorado",
+        description=f"{len(DORADO)} tickets estratificados. Proyecto P2 del curso.",
+        data_type="kv",
+    )
+    c.create_examples(
+        dataset_id=conjunto.id,
+        examples=[{"inputs": e.inputs, "outputs": e.outputs, "metadata": e.metadata}
+                  for e in DORADO],
+    )
+    c.update_dataset_tag(dataset_id=conjunto.id, as_of="latest", tag="v1")
+    print(f"  dataset {conjunto.id}, {len(DORADO)} ejemplos, etiquetado v1")
+
+
+@online("Ejecutar la línea base como experimentos comparables", trazas=40)
+def _():
+    from langsmith import evaluate
+
+    c = cliente()
+    for nombre, sistema in [("perezoso", sistema_perezoso), ("reglas", sistema_reglas)]:
+        evaluate(
+            sistema,
+            data=c.list_examples(dataset_name="tickets-dorado", as_of="v1"),  # versión fija
+            evaluators=[acierto],
+            summary_evaluators=[f1_macro],
+            experiment_prefix=f"linea-base-{nombre}",
+            metadata={"tipo": "linea-base", "sistema": nombre, "conjunto": "v1"},
+            max_concurrency=4,
+            client=c,
+        )
+    print("  en la interfaz: selecciona los dos experimentos -> Compare")
+
+#%%md
+## 7. El fichero que te llevas
+
+Esto es lo que va a tu repositorio. Cuatro piezas, y ninguna depende de las otras tres
+para tener sentido.
+
+#%%py
+PLANTILLA = f"""
+# evaluacion/puerta.py - lo que corre en cada pull request.
+#
+# Cuatro decisiones, todas tomadas midiendo y no eligiendo. Los numeros de abajo son
+# los que ha medido este notebook sobre este conjunto; recalculalos con el tuyo.
+#   - el conjunto: {len(DORADO)} casos estratificados, version fijada
+#   - el suelo:    el perezoso mas margen, para que la referencia no se degrade sola
+#   - la banda:    medida sobre este conjunto, no un umbral bonito
+#   - el orden:    primero se valida la medida, despues se mira el numero
+
+CONJUNTO   = "tickets-dorado"
+VERSION    = "v1"           # sin esto no comparas dos sistemas, sino dos examenes
+BANDA      = {BANDA:.3f}         # medido: 2 sigma raiz(2) sobre este conjunto
+SUELO      = {SUELO + 0.10:.3f}         # el perezoso ({SUELO:.0%}) mas 10 puntos
+ESPERADAS  = {{"acierto", "f1_macro"}}
+
+
+def main() -> int:
+    resultados = evaluate(
+        mi_sistema,
+        data=cliente.list_examples(dataset_name=CONJUNTO, as_of=VERSION),
+        evaluators=[acierto],
+        summary_evaluators=[f1_macro],
+        experiment_prefix="ci",
+        metadata={{"commit": os.environ["GIT_SHA"]}},
+        max_concurrency=4,
+    )
+    pasa, mensajes = puerta_de_ci(resultados, referencia=nota_de_main(),
+                                  banda=BANDA, minimo_absoluto=SUELO,
+                                  esperadas=ESPERADAS)
+    for mensaje in mensajes:
+        print(mensaje)
+    return 0 if pasa else 1
+"""
+print(PLANTILLA)
+
+#%%md
+Y las tres tareas de mantenimiento que hacen que esto siga vivo dentro de un año. Sin
+ellas, cualquier conjunto de evaluación se muere:
+
+| Cada cuánto | Qué | Por qué |
+|---|---|---|
+| **Cada regresión de producción** | El caso entra en el conjunto (nb 06, `create_example_from_run`) | Es lo que hace que crezca solo |
+| **Cada trimestre** | Quitar los casos que llevan ocho experimentos sin fallar (nb 06) | Un caso que nadie falla no mide nada y sí cuesta |
+| **Cada vez que el conjunto crezca** | **Recalcular la banda** | La banda depende de `n`. Con más casos es más estrecha, y si no la recalculas estás siendo más laxo de lo necesario |
+
+La tercera es la que nadie hace, y es gratis: son las quince ejecuciones del apartado 3.
+
+#%%md
+## 8. Ejercicio
+
+Amplía el conjunto dorado a 80 casos, **recalcula la banda**, y comprueba qué cambia:
+¿el cambio cosmético sigue siendo ruido? ¿La regresión sigue bloqueando? ¿Aparece alguna
+diferencia que antes no se podía afirmar?
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+MUESTRA_80 = tickets(80)
+DORADO_80 = ejemplos_locales(MUESTRA_80, entradas=("asunto", "mensaje"),
+                             salidas=("categoria",))
+
+def banda_de(conjunto, *, muestras: int = 15, acierto_simulado: float = 0.60) -> float:
+    notas = []
+    for semilla in range(muestras):
+        aleatorio = random.Random(semilla)
+        def sistema(entradas, _a=aleatorio):
+            return {"categoria": "acierto" if _a.random() < acierto_simulado else "fallo"}
+        def evaluador(outputs, reference_outputs):
+            return {"key": "acierto",
+                    "score": float((outputs or {}).get("categoria") == "acierto")}
+        with contextlib.redirect_stderr(io.StringIO()):
+            r = experimento_local(sistema, conjunto, evaluadores=[evaluador])
+            notas.append(resumen_del_experimento(r)["acierto"])
+    return 2 * statistics.stdev(notas) * math.sqrt(2)
+
+
+BANDA_80 = banda_de(DORADO_80)
+
+separador(f"{len(DORADO)} casos frente a {len(DORADO_80)}")
+print(f"  banda con 40 casos: ±{BANDA:.1%}")
+print(f"  banda con 80 casos: ±{BANDA_80:.1%}")
+print(f"  reducción         : {100 * (1 - BANDA_80 / BANDA):.0f} %"
+      f"  (la teoría predice ~{100 * (1 - 1 / math.sqrt(2)):.0f} % al doblar n)")
+
+#%%py
+referencia_80 = medir(sistema_reglas, DORADO_80)["acierto"]
+
+separador("los mismos cambios, con el conjunto grande")
+for nombre, sistema in [("cambio cosmético    ", sistema_cosmetico),
+                        ("«limpieza» de pistas", sistema_con_regresion)]:
+    for etiqueta, conjunto, ref, banda in [
+        ("40", DORADO, REFERENCIA, BANDA),
+        ("80", DORADO_80, referencia_80, BANDA_80),
+    ]:
+        datos = medir(sistema, conjunto)
+        veredicto, razon = decidir(datos["acierto"], ref, banda)
+        print(f"  {nombre} con {etiqueta} casos: {datos['acierto']:.0%}  {veredicto:<8} {razon}")
+    print()
+
+#%%md
+Tres cosas que sacar de esa tabla:
+
+1. **La banda se estrecha con la raíz de `n`**, como predice el notebook 09. Doblar el
+   conjunto no dobla la precisión: la mejora en un 30 % aproximadamente.
+2. **El cambio cosmético sigue siendo ruido** en los dos. Correcto: no cambió nada.
+3. **La regresión sigue bloqueando**, y con el conjunto grande el mensaje es más
+   preciso: la misma caída, medida con menos incertidumbre.
+
+Y lo que hay que decidir con eso delante: **doblar el conjunto dobla el coste de cada
+ejecución** —80 trazas en vez de 40, o 160 con juez— a cambio de un 30 % de precisión.
+Si tus cambios son grandes, no compensa. Si estás peleando por cinco puntos, ni con 80
+casos llegas (notebook 09), así que la respuesta tampoco es ampliar: es cambiar de
+método —comparación por pares, o mirar casos concretos—.
+
+</details>
+
+#%%md
+## 9. Resumen del módulo 2
+
+- Un **dataset** son `inputs`, `outputs` y `metadata`, y la muestra importa más que el
+  tamaño. **Fija la versión** o no comparas dos sistemas, sino dos exámenes (nb 06).
+- Un **experimento** es objetivo × dataset × evaluadores. Un sistema que revienta saca
+  mejor nota de la que merece, y la guarda que sale natural —`(outputs or {})`— **no
+  guarda nada**: hay que acceder con `.get()` y mirar la cobertura (nb 07).
+- **Agota el código antes de poner un juez.** Un juez cuesta una traza por caso y tiene
+  cuatro sesgos conocidos que no dan error. Un juez sin calibrar es una métrica inventada
+  (nb 08).
+- **Mide el ruido de tu conjunto** y compara contra una banda calculada. Con un
+  presupuesto normal solo puedes detectar mejoras grandes, y eso es aritmética (nb 09).
+- **Cachea las llamadas al modelo** para tener pruebas deterministas y gratis — con el
+  contexto suelto, no con el decorador (nb 10).
+
+Y lo que este proyecto añade: **todo eso se junta en una puerta de veinte líneas** que
+valida la medida antes de mirar el número, y en tres tareas de mantenimiento sin las
+cuales el conjunto se muere en seis meses.
+
+---
+
+**Siguiente módulo:** el humano en el bucle de la calidad. El notebook 08 dejó una deuda
+—«un juez sin calibrar es una métrica inventada»— y el módulo 3 va de pagarla: anotar a
+mano, medir el acuerdo con el juez, y corregirlo hasta que valga.
