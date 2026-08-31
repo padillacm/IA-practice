@@ -734,3 +734,113 @@ def registro_del_sdk(nivel: int = 30):
         for lg, handlers, propaga in estado:
             lg.handlers = handlers
             lg.propagate = propaga
+
+
+# --------------------------------------------------------------------------------------
+# El agente del curso de LangGraph
+# --------------------------------------------------------------------------------------
+
+
+class ModeloGuionizado:
+    """Un modelo de chat falso que **sí sabe pedir herramientas**.
+
+    Los modelos falsos de LangChain que vienen de serie no implementan `bind_tools`, y
+    sin eso un agente con `ToolNode` no llega a ejecutar ninguna herramienta: la traza
+    sale plana y el proyecto P1 no tendría nada que enseñar.
+
+    Se le da un guion —una respuesta por turno— y devuelve cada una en orden. Una
+    entrada puede ser:
+
+        "texto"                                  -> responde con ese texto
+        ("contar_tickets", {"categoria": "x"})   -> pide esa herramienta
+
+    Lleva `usage_metadata` con cifras fijas para que las cuentas de tokens y coste del
+    módulo 4 tengan de dónde salir.
+    """
+
+    def __new__(cls, guion, **kwargs):
+        from langchain_core.callbacks import CallbackManagerForLLMRun
+        from langchain_core.language_models import BaseChatModel
+        from langchain_core.messages import AIMessage
+        from langchain_core.outputs import ChatGeneration, ChatResult
+
+        class ModeloGuionizado(BaseChatModel):
+            guion: list = []
+            turno: int = 0
+            llamadas: int = 0
+
+            @property
+            def _llm_type(self) -> str:
+                return "guionizado-curso"
+
+            def _generate(self, messages, stop=None,
+                          run_manager: CallbackManagerForLLMRun | None = None, **kw):
+                paso = self.guion[min(self.turno, len(self.guion) - 1)]
+                object.__setattr__(self, "turno", self.turno + 1)
+                object.__setattr__(self, "llamadas", self.llamadas + 1)
+
+                uso = {"input_tokens": 100 + 20 * self.turno, "output_tokens": 25,
+                       "total_tokens": 125 + 20 * self.turno}
+                if isinstance(paso, tuple):
+                    nombre, argumentos = paso
+                    mensaje = AIMessage(
+                        "",
+                        tool_calls=[{"name": nombre, "args": argumentos,
+                                     "id": f"llamada-{self.turno}", "type": "tool_call"}],
+                        usage_metadata=uso,
+                    )
+                else:
+                    mensaje = AIMessage(str(paso), usage_metadata=uso)
+                return ChatResult(generations=[ChatGeneration(message=mensaje)])
+
+            def bind_tools(self, tools, **kw):
+                return self
+
+        return ModeloGuionizado(guion=list(guion), **kwargs)
+
+
+def agente_de_soporte(guion: list | None = None):
+    """Importa y compila el agente de soporte del curso de LangGraph, con modelo falso.
+
+    Es la aplicación que instrumenta el proyecto P1: el mismo agente de `mi_agente/`,
+    con sus herramientas sobre los 400 tickets etiquetados y su `ToolNode`.
+
+    Hay un detalle de importación que hay que hacer bien y no es evidente. `grafo.py`
+    escribe `from langchain.chat_models import init_chat_model` **en el momento de
+    importarse**, así que el nombre queda enlazado a la función real. Parchear el módulo
+    después no sirve de nada: hay que hacerlo **antes** del primer import, y por eso este
+    ayudante existe en vez de tres líneas en el notebook.
+
+    Devuelve `(grafo_compilado, modelo)`. El modelo es un `ModeloGuionizado`, así que
+    puedes hacerle pedir herramientas y comprobar cuántas veces se le llamó.
+    """
+    import sys
+
+    despliegue = RAIZ.parent / "langgraph" / "despliegue"
+    if not despliegue.exists():
+        raise FileNotFoundError(
+            f"No encuentro el agente del curso de LangGraph en {despliegue}.\n"
+            "El proyecto P1 lo necesita: es la aplicación que se instrumenta."
+        )
+    if str(despliegue) not in sys.path:
+        sys.path.insert(0, str(despliegue))
+
+    modelo = ModeloGuionizado(guion or [
+        ("contar_tickets", {"categoria": "facturacion"}),
+        "He mirado los datos: hay 87 tickets de facturación.",
+    ])
+
+    # El parche, ANTES de importar el grafo. `bind_tools` sobre el modelo falso devuelve
+    # el propio modelo, que es lo que hace que el grafo se ejecute sin llamar a nadie.
+    import langchain.chat_models as chat_models
+
+    original = chat_models.init_chat_model
+    chat_models.init_chat_model = lambda *a, **k: modelo
+    try:
+        for modulo in [m for m in sys.modules if m.startswith("mi_agente")]:
+            del sys.modules[modulo]
+        from mi_agente.grafo import construir
+
+        return construir(), modelo
+    finally:
+        chat_models.init_chat_model = original
