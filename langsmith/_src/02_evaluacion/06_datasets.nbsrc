@@ -11,7 +11,8 @@ Al terminar sabrás:
 1. Qué es un dataset en LangSmith y **qué no** conviene meter dentro.
 2. Construir uno bien: cuántos casos, cuáles, y por qué la muestra importa más que el tamaño.
 3. Los tres tipos (`kv`, `chat`, `llm`) y cuándo cada uno.
-4. **Versionar** el dataset, que es lo que hace que dos experimentos se puedan comparar.
+4. **Versionar** el dataset, que es lo que hace que dos experimentos se puedan comparar,
+   y partirlo con ***splits*** para que tu reserva no se invalide sola.
 5. El bucle que cierra el curso: `create_example_from_run` — de una traza de producción
    a un caso de prueba.
 
@@ -251,6 +252,143 @@ evaluate(
 
 **Si no pasas `as_of`, coges la última.** Que es lo cómodo y lo que hace que tres meses
 después no sepas contra qué mediste.
+
+#%%md
+### Splits: la reserva que no se te pierde
+
+Un dataset no se usa entero para todo. La partición que hace falta la vas a necesitar dos
+veces en este curso —en el notebook 12 para alinear un juez y en el P3 para medirlo en
+una reserva— y **hay dos formas de hacerla**.
+
+La primera es la que sale sola: partir la lista en Python.
+
+#%%py
+import random
+
+TODOS = tickets(40)
+azar = random.Random(7)
+mezclados = azar.sample(TODOS, len(TODOS))
+ajuste, reserva = mezclados[:30], mezclados[30:]
+
+separador("la partición a mano")
+print(f"  ajuste : {len(ajuste)} casos")
+print(f"  reserva: {len(reserva)} casos")
+print()
+print("  Y todo lo que la sostiene es esa semilla. Cambia el 7, cambia la partición.")
+print("  Cámbiala sin darte cuenta y tu «reserva» ya contiene casos con los que ajustaste,")
+print("  que es exactamente el fallo que la reserva existía para impedir.")
+
+#%%py
+# Y esto es lo que le pasa a esa partición en cuanto el conjunto crece — que crecerá,
+# es lo que hace el bucle del apartado 5.
+def partir(casos, *, semilla: int = 7, proporcion: float = 0.75) -> tuple[set, set]:
+    mezcla = random.Random(semilla).sample(casos, len(casos))
+    corte = round(len(casos) * proporcion)
+    return ({c["id_ticket"] for c in mezcla[:corte]},
+            {c["id_ticket"] for c in mezcla[corte:]})
+
+
+ajuste_1, reserva_1 = partir(TODOS)
+ajuste_2, reserva_2 = partir(TODOS + tickets(8, categoria="bug_producto"))
+
+separador("la misma semilla, ocho casos más")
+print(f"  reserva antes  : {len(reserva_1)} casos")
+print(f"  reserva después: {len(reserva_2)} casos")
+print(f"  casos que siguen en la reserva: {len(reserva_1 & reserva_2)} de {len(reserva_1)}")
+print()
+print(f"  casos de la reserva NUEVA que estaban en el AJUSTE viejo: "
+      f"{len(reserva_2 & ajuste_1)}")
+print()
+print("  Es decir: añades ocho casos, no tocas la semilla, y tu reserva pasa a estar")
+print("  hecha en su mayoría de casos que ya usaste para ajustar. Nada falla, nada")
+print("  avisa, y la medida en la reserva deja de significar lo que crees.")
+
+#%%md
+La segunda es la que LangSmith tiene y casi nadie usa: **los *splits* viven en el dataset**,
+no en tu código. Son una etiqueta por ejemplo, y `list_examples` filtra por ellas.
+
+#%%py
+@online("Partir el dataset en el servidor, de una vez para siempre", trazas=0)
+def _():
+    c = cliente()
+    ejemplos_del_servidor = list(c.list_examples(dataset_name="tickets-clasificacion"))
+    azar_servidor = random.Random(7)
+    mezcla = azar_servidor.sample(ejemplos_del_servidor, len(ejemplos_del_servidor))
+
+    c.update_dataset_splits(dataset_name="tickets-clasificacion", split_name="ajuste",
+                            example_ids=[e.id for e in mezcla[:30]])
+    c.update_dataset_splits(dataset_name="tickets-clasificacion", split_name="reserva",
+                            example_ids=[e.id for e in mezcla[30:]])
+
+    print("  splits:", c.list_dataset_splits(dataset_name="tickets-clasificacion"))
+
+    # Y a partir de aquí, la reserva es la misma para todo el mundo y en todas partes.
+    reserva_del_servidor = list(c.list_examples(dataset_name="tickets-clasificacion",
+                                                splits=["reserva"]))
+    print(f"  la reserva tiene {len(reserva_del_servidor)} casos, y los mismos mañana")
+
+#%%md
+La diferencia no es de comodidad, es de **corrección**:
+
+| | Partición en tu código | *Splits* en el dataset |
+|---|---|---|
+| Dónde vive | En una semilla de tu script | En el dataset, junto a los datos |
+| Si alguien más evalúa | Tiene otra partición | La misma |
+| Si añades casos nuevos | **Se recoloca todo**: lo acabas de ver arriba | Los nuevos no están en ningún split hasta que los pongas |
+| Si cambias la semilla | Silencio, y una reserva inválida | No aplica |
+| Para filtrar al evaluar | Pasas tú la lista | `list_examples(..., splits=["reserva"])` |
+
+La tercera fila es la grave, y es la que acabamos de medir: **una partición por semilla
+se invalida cada vez que el dataset crece**, y nada te avisa. Sigue devolviendo una lista
+del tamaño correcto y sigue llamándose reserva.
+
+> **Regla:** si tu conjunto va a crecer —y va a crecer, es lo que hace el bucle del
+> apartado 5— la partición va en el dataset. El P3 de este curso la hace en Python porque
+> tiene que ejecutarse sin servicio; **en tu sistema real, hazla con `splits`**.
+
+#%%md
+### Qué cambió entre dos versiones
+
+Y el complemento de las versiones, que responde a la pregunta que se hace siempre después
+de una regresión rara: *«¿tocó alguien el conjunto?»*.
+
+#%%py
+@online("Comparar dos versiones del conjunto", trazas=0)
+def _():
+    diferencia = cliente().diff_dataset_versions(
+        dataset_name="tickets-clasificacion", from_version="v1", to_version="latest")
+    print(f"  ejemplos añadidos    : {len(diferencia.examples_added)}")
+    print(f"  ejemplos modificados : {len(diferencia.examples_modified)}")
+    print(f"  ejemplos borrados    : {len(diferencia.examples_removed)}")
+    print()
+    print("  Con esto, «el acierto bajó 8 puntos» tiene dos explicaciones posibles y")
+    print("  puedes distinguirlas: cambió el sistema, o cambió el examen.")
+
+#%%md
+### Y la vía rápida para empezar
+
+Si lo que tienes es un CSV de casos etiquetados —que es lo que tiene casi todo el mundo—
+no hace falta construir los ejemplos a mano:
+
+#%%py
+@online("Un dataset desde un CSV o un DataFrame", trazas=0)
+def _():
+    from utils.curso import ruta_datos
+
+    c = cliente()
+    c.upload_csv(
+        csv_file=str(ruta_datos("tickets_soporte.csv")),
+        input_keys=["asunto", "mensaje"],
+        output_keys=["categoria"],
+        name="tickets-desde-csv",
+        description="Los 400 tickets, subidos de una vez.",
+    )
+    print("  subido. Y con un DataFrame en memoria: upload_dataframe(df, ...)")
+    print("  Y en el otro sentido, para el día que quieras afinar un modelo con esto:")
+    print("     client.read_dataset_openai_finetuning(dataset_name=...)  -> JSONL")
+    print()
+    print("  Ojo: sube LAS 400 FILAS. Lo que el apartado 3 dice sobre muestrear")
+    print("  sigue aplicando — un CSV entero es cómodo, no es un conjunto de evaluación.")
 
 #%%md
 ## 5. El bucle: de una traza de producción a un caso de prueba

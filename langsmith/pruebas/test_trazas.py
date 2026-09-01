@@ -685,3 +685,41 @@ def test_read_thread_esta_obsoleta_y_la_nueva_pide_el_uuid():
     parametros = inspect.signature(AsyncThreadsResource.list_traces).parameters
     assert parametros["project_id"].default is inspect.Parameter.empty  # obligatorio
     assert "project_name" not in parametros                             # y no vale el nombre
+
+
+def test_la_api_de_ingesta_a_pelo_son_dos_peticiones(sin_servicio):
+    """El apartado 7 del notebook 02: trazar desde un servicio que no es Python es un
+    POST para abrir y un PATCH para cerrar. Es lo que hace el SDK por dentro, y lo que
+    tendría que hacer tu servicio en Go."""
+    import datetime
+    import time
+    import uuid
+    import warnings
+
+    from utils.curso import servicio_simulado
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with servicio_simulado() as servicio:
+            id_ejecucion = uuid.uuid4()
+            inicio = datetime.datetime.now(datetime.timezone.utc)
+            servicio.cliente.create_run(
+                name="clasificar-ticket", run_type="chain",
+                inputs={"asunto": "Cobro duplicado"}, project_name="servicio-en-go",
+                id=id_ejecucion, trace_id=id_ejecucion,
+                dotted_order=f"{inicio.strftime('%Y%m%dT%H%M%S%fZ')}{id_ejecucion}",
+                start_time=inicio)
+            servicio.cliente.update_run(
+                id_ejecucion, outputs={"categoria": "facturacion"},
+                end_time=datetime.datetime.now(datetime.timezone.utc))
+            time.sleep(0.4)
+
+            metodos = [m for m, _ in servicio.peticiones]
+            assert metodos == ["POST", "PATCH"], servicio.peticiones
+            assert servicio.peticiones[0][1].endswith("/runs")
+            assert str(id_ejecucion) in servicio.peticiones[1][1]
+
+            cuerpo = servicio.recibidos[0]
+            assert cuerpo["name"] == "clasificar-ticket"
+            assert cuerpo["trace_id"] == str(id_ejecucion)      # la raíz se apunta a sí misma
+            assert cuerpo["dotted_order"].endswith(str(id_ejecucion))

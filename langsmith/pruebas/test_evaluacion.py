@@ -566,3 +566,150 @@ def test_el_sistema_de_reglas_bate_al_perezoso_con_claridad():
     assert nota_perezoso < 0.25
     assert nota_reglas > 0.6
     assert nota_reglas > nota_perezoso * 3
+
+
+# ------------------------------------------------------------------------------------
+# Notebook 07 · error_handling y aevaluate  |  Notebook 06 · splits
+# ------------------------------------------------------------------------------------
+
+
+def test_error_handling_ignore_no_salta_el_caso_sino_que_lo_desliga(sin_servicio):
+    """El hallazgo del apartado 4 bis del notebook 07: `error_handling="ignore"` no se
+    salta la fila ni cambia tu media. Lo que hace es no ligar la ejecución fallida a su
+    ejemplo, así que el SERVIDOR la deja fuera del experimento y publica otra nota.
+
+    Si el SDK cambiara esto, el notebook enseñaría una diferencia que ya no existe."""
+    import contextlib
+    import io
+
+    from utils.curso import (ejemplos_locales, experimento_local, tickets)
+
+    conjunto = ejemplos_locales(tickets(32), entradas=("asunto", "mensaje"),
+                                salidas=("categoria",))
+
+    def fragil(entradas):
+        if len(entradas["mensaje"]) > 155:
+            raise ValueError("mensaje demasiado largo")
+        return {"categoria": "facturacion"}
+
+    def acierto(outputs, reference_outputs):
+        return {"key": "acierto",
+                "score": float(outputs.get("categoria") == reference_outputs.get("categoria"))}
+
+    medidas = {}
+    for manejo in ("log", "ignore"):
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            filas = list(experimento_local(fragil, conjunto, evaluadores=[acierto],
+                                           error_handling=manejo))
+        con_error = [f for f in filas if f["run"].error]
+        medidas[manejo] = {
+            "filas": len(filas),
+            "con_error": len(con_error),
+            "ligadas": sum(1 for f in con_error if f["run"].reference_example_id is not None),
+            "puntos": sum(x.score for f in filas
+                          for x in f["evaluation_results"]["results"] if x.score is not None),
+        }
+
+    log, ignora = medidas["log"], medidas["ignore"]
+    assert log["con_error"] > 0, "el sistema frágil tiene que reventar en algún caso"
+
+    # Ni se salta filas ni cambia lo que tú calculas.
+    assert log["filas"] == ignora["filas"]
+    assert log["puntos"] == ignora["puntos"]
+
+    # Lo único que cambia: si las fallidas quedan ligadas a su ejemplo.
+    assert log["ligadas"] == log["con_error"]
+    assert ignora["ligadas"] == 0
+
+    # Y por eso el denominador del servidor es menor, y su nota mayor.
+    denominador_servidor = ignora["filas"] - ignora["con_error"]
+    assert ignora["puntos"] / denominador_servidor > log["puntos"] / log["filas"]
+
+
+def test_aevaluate_corre_sin_servicio_y_la_concurrencia_cero_no_es_ilimitada(sin_servicio):
+    """`aevaluate` es lo que necesita cualquiera con un objetivo async, y funciona con
+    `upload_results=False` igual que su hermana. Y `max_concurrency=0` significa NINGUNA
+    concurrencia, no «sin límite» — que es al revés de lo que casi todo el mundo asume."""
+    import asyncio
+    import contextlib
+    import io
+    import time
+    import warnings
+
+    from langsmith import aevaluate
+
+    from utils.curso import _cliente_mudo, ejemplos_locales, tickets
+
+    conjunto = ejemplos_locales(tickets(16), entradas=("asunto", "mensaje"),
+                                salidas=("categoria",))
+
+    async def objetivo(entradas):
+        await asyncio.sleep(0.02)
+        return {"categoria": "facturacion"}
+
+    def acierto(outputs, reference_outputs):
+        return {"key": "acierto",
+                "score": float(outputs.get("categoria") == reference_outputs.get("categoria"))}
+
+    async def correr(concurrencia):
+        inicio = time.perf_counter()
+        with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            warnings.simplefilter("ignore")
+            resultados = await aevaluate(objetivo, data=conjunto, evaluators=[acierto],
+                                         max_concurrency=concurrencia,
+                                         upload_results=False, client=_cliente_mudo())
+            filas = [f async for f in resultados]
+        return time.perf_counter() - inicio, len(filas)
+
+    en_serie, n_serie = asyncio.run(correr(0))
+    en_paralelo, n_paralelo = asyncio.run(correr(8))
+
+    assert n_serie == n_paralelo == len(conjunto)
+    assert en_serie > en_paralelo * 2, (en_serie, en_paralelo)
+    # 16 casos × 20 ms en serie no baja de ~0,3 s: la concurrencia 0 es de verdad serie.
+    assert en_serie > 0.25
+
+
+def test_una_particion_por_semilla_se_invalida_al_crecer_el_conjunto():
+    """El argumento de los *splits* del notebook 06, medido: añades ocho casos, no tocas
+    la semilla, y la mayoría de tu «reserva» pasa a ser gente con la que ajustaste."""
+    import random
+
+    from utils.curso import tickets
+
+    def partir(casos, *, semilla=7, proporcion=0.75):
+        mezcla = random.Random(semilla).sample(casos, len(casos))
+        corte = round(len(casos) * proporcion)
+        return ({c["id_ticket"] for c in mezcla[:corte]},
+                {c["id_ticket"] for c in mezcla[corte:]})
+
+    todos = tickets(40)
+    ajuste_1, reserva_1 = partir(todos)
+    _, reserva_2 = partir(todos + tickets(8, categoria="bug_producto"))
+
+    assert reserva_1 != reserva_2
+    # La mayoría de la reserva nueva son casos con los que se ajustó antes.
+    assert len(reserva_2 & ajuste_1) > len(reserva_2) / 2
+    # Y de la reserva original apenas sobrevive nada.
+    assert len(reserva_1 & reserva_2) < len(reserva_1) / 2
+
+
+def test_los_splits_del_servidor_existen_y_filtran_al_listar(sin_servicio):
+    """La alternativa que el notebook 06 propone frente a la partición por semilla. No se
+    puede ejecutar sin servicio, pero sí comprobar que la API es la que el material dice."""
+    import inspect
+
+    from langsmith import Client
+
+    actualizar = inspect.signature(Client.update_dataset_splits).parameters
+    assert {"split_name", "example_ids", "remove"} <= set(actualizar)
+    assert "dataset_name" in inspect.signature(Client.list_dataset_splits).parameters
+
+    # Y lo que hace que sirvan: poder filtrar por ellos al evaluar.
+    assert "splits" in inspect.signature(Client.list_examples).parameters
+
+    # Más el complemento de las versiones que el notebook añade.
+    diferencia = inspect.signature(Client.diff_dataset_versions).parameters
+    assert {"from_version", "to_version"} <= set(diferencia)
+    assert "input_keys" in inspect.signature(Client.upload_csv).parameters

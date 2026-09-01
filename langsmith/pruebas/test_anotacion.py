@@ -418,3 +418,41 @@ def test_la_particion_se_hace_antes_y_las_mitades_se_parecen():
     proporcion_a = sum(e for _, e in alinear) / len(alinear)
     proporcion_r = sum(e for _, e in reserva) / len(reserva)
     assert abs(proporcion_a - proporcion_r) < 0.15
+
+
+def test_la_rubrica_tiene_una_mitad_declarable(sin_servicio):
+    """El notebook 11 enseña la rúbrica en prosa y, desde ahora, la mitad que se declara:
+    `FeedbackConfig` decide qué widget ve el anotador y en qué dirección va «mejor»."""
+    import inspect
+
+    from langsmith import Client
+    from langsmith.schemas import FeedbackConfig
+
+    assert set(FeedbackConfig.__annotations__) == {"type", "min", "max", "categories"}
+
+    crear = inspect.signature(Client.create_feedback_config).parameters
+    assert {"feedback_key", "feedback_config", "is_lower_score_better"} <= set(crear)
+    # Por defecto «más alto es mejor». Para una latencia o un coste eso es al revés, y
+    # es el motivo por el que el notebook insiste en declararlo a mano.
+    assert crear["is_lower_score_better"].default is False
+
+    # Y lo que impide cambiar una escala a mitad de proyecto: crear una distinta es error.
+    documentacion = inspect.getdoc(Client.create_feedback_config)
+    assert "an error is raised" in documentacion
+    assert hasattr(Client, "update_feedback_config")     # la salida, si de verdad la quieres
+
+
+def test_insights_guarda_tu_clave_de_modelo_como_secreto_del_espacio(sin_servicio):
+    """El aviso que el P4 y el notebook 16 citan literalmente. Es una decisión de
+    gobierno escondida en un parámetro opcional de un método de análisis."""
+    import inspect
+
+    from langsmith import Client
+
+    documentacion = " ".join(inspect.getdoc(Client.generate_insights).split())
+    assert "set as a workspace secret" in documentacion
+    assert "Plus and higher" in documentacion
+    assert "upload your chat histories as traces" in documentacion
+
+    parametros = inspect.signature(Client.generate_insights).parameters
+    assert {"openai_api_key", "anthropic_api_key", "chat_histories"} <= set(parametros)

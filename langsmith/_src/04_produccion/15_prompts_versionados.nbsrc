@@ -169,6 +169,14 @@ def _():
     print("  etiqueta «produccion» movida. Rollback: volver a mover la etiqueta.")
 
 #%%md
+> **Y el Hub ya no es solo de prompts.** El mismo mecanismo de *push/pull* por *handle*
+> vale para **agentes** (`push_agent`, `pull_agent`, `list_agents`) y **habilidades**
+> (`push_skill`, `pull_skill`, `list_skills`). Todo lo de este notebook —etiquetar, no
+> desplegar sin etiqueta, la puerta del apartado 5— aplica igual, y el aviso del apartado
+> 4 sobre deserializar lo ajeno **aplica más**: un agente ajeno trae código de decisión,
+> no una plantilla de texto.
+
+#%%md
 ## 3. La caché de cinco minutos
 
 Aquí hay un detalle de producción que no está destacado en ningún sitio y que explica una

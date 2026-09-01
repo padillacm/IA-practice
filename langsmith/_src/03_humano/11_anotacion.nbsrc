@@ -157,6 +157,72 @@ for (respuesta, _, _), a, b in zip(CASOS, anotaciones_a, anotaciones_b):
     print(f"{respuesta[:50]:<52}{a:>3}{b:>3}{marca}")
 
 #%%md
+### La mitad de la rúbrica que sí es código
+
+Las cuatro reglas de arriba se escriben en prosa, dentro de la cola. Pero hay una parte
+que **se declara**, y que decide qué widget ve el anotador y cómo se lee la puntuación
+después: la configuración de la clave de realimentación.
+
+#%%py
+from langsmith.schemas import FeedbackConfig
+
+separador("las tres formas que puede tener una puntuación")
+print("  campos de FeedbackConfig:", list(FeedbackConfig.__annotations__))
+print()
+RUBRICA = {
+    "resuelve": FeedbackConfig(
+        type="categorical",
+        categories=[{"value": 0, "label": "no resuelve"},
+                    {"value": 0.5, "label": "resuelve a medias"},
+                    {"value": 1, "label": "resuelve"}],
+    ),
+    "vueltas_hasta_resolver": FeedbackConfig(type="continuous", min=1, max=10),
+    "por_que": FeedbackConfig(type="freeform"),
+}
+for clave, configuracion in RUBRICA.items():
+    print(f"  {clave:<26}{configuracion['type']:<14}"
+          f"{[c['label'] for c in configuracion.get('categories') or []] or ''}")
+
+#%%py
+@online("Declarar la rúbrica en el servidor", trazas=0)
+def _():
+    """Sin esto el anotador ve una casilla de texto libre y cada uno escribe lo que quiere.
+
+    Y ojo con `is_lower_score_better`: es lo que le dice a LangSmith en qué dirección
+    va «mejor». Con `vueltas_hasta_resolver`, menos es mejor, y si no lo declaras todos
+    los paneles y comparaciones del módulo 4 leerán la métrica al revés.
+    """
+    c = cliente()
+    for clave, configuracion in RUBRICA.items():
+        c.create_feedback_config(
+            feedback_key=clave,
+            feedback_config=configuracion,
+            is_lower_score_better=(clave == "vueltas_hasta_resolver"),
+        )
+    print("  rúbrica declarada:", [f.feedback_key for f in c.list_feedback_configs()])
+
+#%%md
+Dos cosas de esta API que conviene saber antes de usarla:
+
+1. **Una clave tiene una configuración y solo una.** Si vuelves a crearla igual, no pasa
+   nada; si la creas **distinta**, el SDK levanta un error en vez de cambiarla. Es a
+   propósito: cambiar la escala de una rúbrica a mitad de un proyecto convierte tus
+   anotaciones viejas en incomparables con las nuevas, y este error es lo único que se
+   interpone. Si de verdad quieres cambiarla, `update_feedback_config`, y **asume que
+   estás empezando un conjunto nuevo**.
+2. **`is_lower_score_better` no es cosmético, y su valor por defecto es `False`** — o
+   sea, «más alto es mejor». Para un acierto está bien; para una latencia, un coste o un
+   número de vueltas está **al revés**, y nadie lo cambia porque el parámetro es opcional
+   y el default no se ve. Decide el color en la interfaz, sí, pero también el sentido de
+   «mejoró» al comparar experimentos: una latencia declarada al revés hace que la CI del
+   notebook 09 apruebe justo los cambios que hay que bloquear.
+
+> Y la consecuencia para el módulo entero: **la rúbrica en prosa y la configuración tienen
+> que decir lo mismo.** Si tu texto dice «0, 0,5 o 1» y la clave está declarada como
+> `continuous` de 1 a 10, el anotador hará lo que le deje la pantalla, no lo que dice tu
+> documento.
+
+#%%md
 ## 3. Medir el acuerdo, y por qué el porcentaje miente
 
 La forma obvia de medir el acuerdo es contar cuántas veces coinciden. Y es engañosa.

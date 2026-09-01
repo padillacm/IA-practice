@@ -74,6 +74,37 @@ Ver [`PLAN.md`](PLAN.md) para el detalle y la justificación de cada notebook.
 | 4 · Producción: mirar y actuar | 3 + 1 proyecto | **listo** |
 | 5 · Gobierno | 2 | **listo** |
 
+## El mapa de la superficie
+
+Un curso completo no es el que toca todos los métodos del SDK: es el que te deja saber
+**dónde estás**. Esto es la superficie de LangSmith repartida en tres montones, medida
+sobre los 144 miembros públicos de `Client`.
+
+**Lo que el curso enseña y ejecuta** (módulos 0-5): trazado automático y manual, `RunTree`
+y trazas distribuidas, la API de ingesta a pelo, envío por lotes y sus cuatro formas de
+perder trazas, anonimización, hilos y realimentación, datasets con versiones y *splits*,
+experimentos con sus parámetros y sus dos trampas de puntuación, evaluadores de código y
+de LLM, jueces alineados con kappa, colas de anotación y configuración de rúbricas,
+pruebas con modelo en CI con caché, monitorización, reglas y evaluación en línea, prompts
+versionados, y el gobierno: espacios, claves, compartición, retención y borrado.
+
+**Lo que el curso nombra sin desarrollar**, porque queda fuera del plan Developer o del
+alcance del complemento:
+
+| Superficie | Dónde se nombra | Por qué no más |
+|---|---|---|
+| **Insights** (agrupación automática de conversaciones) | P4, apartado 8 bis | Plan Plus o superior, y cuesta por conversación |
+| **Agentes y habilidades en el Hub** | nb 15 | Mismo mecanismo que los prompts; lo que cambia es el riesgo, y ese sí se cuenta |
+| **Cajas de arena (`sandboxes`)** | — | Superficie muy nueva; se prefiere no enseñar lo que puede cambiar de forma |
+| **Fórmulas de realimentación** | — | Métricas derivadas de otras; el módulo 2 cubre lo mismo con `summary_evaluators` |
+| **Exportar para afinar un modelo** | nb 06 | Una línea: `read_dataset_openai_finetuning` |
+| **LangSmith autoalojado** | — | Otro producto operativamente; el curso asume la nube |
+
+**Lo que no está y es deliberado**: los métodos obsoletos (19 de ellos, retirada anunciada
+para el 31 de enero de 2027), las variantes `*_multipart` que el SDK ya desaconseja, y los
+atributos internos del cliente. El notebook 16 enseña a detectar los avisos de
+obsolescencia, que es lo que hace falta cuando esto cambie.
+
 ## Estado de la verificación
 
 | Filtro | Resultado |
@@ -82,12 +113,12 @@ Ver [`PLAN.md`](PLAN.md) para el detalle y la justificación de cada notebook.
 | Problemas estáticos | 0 |
 | Notebooks que se ejecutan enteros, sin clave y **con la red cortada** | 22 de 22 |
 | Intentos de salida a `smith.langchain.com` durante esa ejecución | **0** |
-| Pruebas | 163 de 163, con la red cortada también |
+| Pruebas | 171 de 171, con la red cortada también |
 | Entornos vírgenes (`uv sync` y `pip install -r requirements.txt`) | los dos pasan |
 
 Celdas marcadas `@online`, escritas contra la firma real del SDK pero **no ejecutadas**:
 están en los notebooks 00, 02, 03, 04, 05, 06, 07, 08, 09, 11, 12, 13, 14, 15, 16, 17 y
-en los cuatro proyectos, señaladas una a una: 42 celdas en total.
+en los cuatro proyectos, señaladas una a una: 47 celdas en total.
 
 El módulo 2 se ejecuta entero en local gracias a dos mecanismos del SDK que amplían lo
 verificable mucho más allá de lo previsto: `tracing_context(enabled="local")` construye

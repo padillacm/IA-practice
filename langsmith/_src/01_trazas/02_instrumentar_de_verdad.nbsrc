@@ -15,6 +15,8 @@ Al terminar sabrás:
    que hacen perder tardes enteras.
 4. Poner nombres, etiquetas y metadatos **donde sirven**.
 5. Mandar trazas a proyectos distintos según el contexto.
+6. Trazar **un servicio que no es Python** con las dos peticiones HTTP que lo hacen
+   todo, y engancharlo a la misma traza.
 
 #%%py
 import sys, pathlib
@@ -465,7 +467,110 @@ def _():
         print(f"  {p.name}")
 
 #%%md
-## 7. Ejercicios
+## 7. El servicio que no es Python
+
+Todo lo anterior da por hecho que tu código es Python. En un sistema de verdad hay un
+servicio en Go, un *frontend* en TypeScript o un trabajo por lotes en Java, y esa parte
+también quieres verla en la misma traza.
+
+Hay dos maneras, y conviene saber que la segunda existe **antes** de decidir que tu
+servicio en Go se queda fuera.
+
+| | Qué es | Cuándo |
+|---|---|---|
+| Un SDK oficial | Hay para JS/TS. Mismo modelo, misma API | Si tu lenguaje está en la lista |
+| **La API de ingesta a pelo** | Dos peticiones HTTP. Nada más | Cualquier otro lenguaje, y el `curl` de urgencia |
+
+Y la segunda no es un truco: es literalmente lo que hace el SDK de Python por dentro.
+Se puede ver.
+
+#%%py
+import datetime, uuid, warnings
+
+from utils.curso import servicio_simulado
+
+def una_traza_a_mano(cliente_langsmith) -> None:
+    """Lo que tendría que hacer tu servicio en Go, escrito en Python para poder mirarlo."""
+    id_ejecucion = uuid.uuid4()
+    inicio = datetime.datetime.now(datetime.timezone.utc)
+
+    # 1) Abrir la ejecución. `dotted_order` es lo del notebook 01: marca de tiempo + id.
+    cliente_langsmith.create_run(
+        name="clasificar-ticket",
+        run_type="chain",
+        inputs={"asunto": "Cobro duplicado"},
+        project_name="servicio-en-go",
+        id=id_ejecucion,
+        trace_id=id_ejecucion,                       # es la raíz: se apunta a sí misma
+        dotted_order=f"{inicio.strftime('%Y%m%dT%H%M%S%fZ')}{id_ejecucion}",
+        start_time=inicio,
+    )
+
+    # 2) Cerrarla con el resultado.
+    cliente_langsmith.update_run(
+        id_ejecucion,
+        outputs={"categoria": "facturacion"},
+        end_time=datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    with servicio_simulado() as servicio:
+        una_traza_a_mano(servicio.cliente)
+        import time; time.sleep(0.4)
+
+        separador("las peticiones que salen de verdad")
+        for metodo, url in servicio.peticiones:
+            print(f"  {metodo:<6}{url}")
+
+        print()
+        cuerpo = servicio.recibidos[0]
+        print("  y el cuerpo del POST, con lo que hace falta y nada más:")
+        for clave in ("name", "run_type", "inputs", "trace_id", "dotted_order"):
+            print(f"     {clave:<14}{str(cuerpo.get(clave))[:58]}")
+
+#%%md
+**Dos peticiones: un `POST /runs` para abrir y un `PATCH /runs/{id}` para cerrar.** Eso es
+toda la instrumentación. Cualquier lenguaje que sepa hacer HTTP puede trazar.
+
+Lo que hay que llevarse, porque es donde falla todo el mundo:
+
+1. **`dotted_order` es obligatorio y lo construyes tú.** Marca de tiempo compacta + id,
+   concatenando el del padre delante para las hijas. Es lo del notebook 01: sin él el
+   servidor no puede reconstruir el árbol y te salen ejecuciones sueltas.
+2. **`trace_id` de la raíz apunta a sí misma.** Las hijas heredan el de la raíz y llevan
+   además `parent_run_id`.
+3. **El `PATCH` es el que cierra.** Si tu servicio muere entre el `POST` y el `PATCH`, la
+   traza se queda abierta para siempre — que es exactamente el segundo fallo del notebook
+   03, ahora visto desde el otro lado.
+4. Para volumen alto está `multipart_ingest`, que es lo que usa el envío por lotes del
+   cliente de Python: mismo contenido, una petición para muchas ejecuciones.
+
+#%%md
+### Y lo que une las dos mitades
+
+Si tu servicio en Go llama a tu servicio en Python, no quieres dos trazas: quieres una.
+Eso ya lo tienes del notebook 01 — las cabeceras `langsmith-trace` y `baggage` de
+`RunTree.to_headers()` / `from_headers()`.
+
+La combinación completa, que es como se instrumenta un sistema de verdad:
+
+```
+[Go]  crea la raíz con POST /runs, y manda sus cabeceras en la llamada HTTP
+        |
+        v
+[Python]  RunTree.from_headers(...) -> @traceable cuelga de ahí, automático
+        |
+        v
+[Go]  cierra la raíz con PATCH /runs/{id}
+```
+
+> **La comprobación que ahorra la tarde:** si ves dos trazas separadas en vez de una,
+> mira las cabeceras antes que nada. Es siempre eso.
+
+#%%md
+## 8. Ejercicios
 
 ### Ejercicio 1 — El agujero de 800 ms
 
@@ -620,7 +725,7 @@ que corren sobre las trazas reales.
 </details>
 
 #%%md
-## 8. Resumen
+## 9. Resumen
 
 - **LangChain y LangGraph se instrumentan solos**, con la jerarquía y los `run_type`
   correctos. Ese es el argumento de peso de la herramienta.

@@ -29,7 +29,7 @@ import sys, pathlib
 sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
                             if (p / "utils" / "curso.py").exists())))
 
-import collections, contextlib, copy, io, math, random, statistics
+import collections, contextlib, copy, inspect, io, math, random, statistics
 from utils.curso import (init, online, cliente, separador, tickets, ejemplos_locales,
                          experimento_local, resumen_del_experimento, traza_local,
                          presupuesto_de_trazas)
@@ -557,6 +557,52 @@ print("  -> el siguiente ciclo del bucle NO empieza en producción.")
 print("     Empieza ampliando el dorado en la categoría que el dorado señaló.")
 
 #%%md
+### La única herramienta que ataca esto de frente
+
+Antes de cerrar, la honestidad obliga a decir que LangSmith **sí tiene algo** para el
+problema del apartado anterior, aunque no esté al alcance del plan con el que se escribió
+este curso: **Insights**.
+
+La idea es la que hace falta: en vez de filtrar por una señal que tú definiste —y por
+tanto solo encontrar lo que ya sospechabas—, le da las conversaciones a un modelo y le
+pide que **las agrupe él**. Un fallo que no deja rastro sí deja *texto*, y ahí es donde
+Insights mira.
+
+#%%py
+from langsmith import Client
+
+separador("la API de Insights, y su letra pequeña")
+for metodo in ("generate_insights", "poll_insights", "get_insights_report"):
+    print(f"  {metodo}({', '.join(p for p in inspect.signature(getattr(Client, metodo)).parameters if p != 'self')})")
+
+print()
+documentacion = inspect.getdoc(Client.generate_insights)
+for linea in documentacion.splitlines():
+    limpia = linea.strip("- ").strip()
+    if limpia.startswith(("Only available", "Insights Agent uses", "This method will upload",
+                          "If you pass in a model")):
+        print("  *", limpia)
+
+#%%md
+Cuatro advertencias, y las cuatro salen de la documentación del propio método:
+
+1. **Plus o superior.** No entra en el plan Developer con el que está escrito el curso, y
+   por eso este apartado no tiene una celda `@online` que puedas ejecutar.
+2. **Usa tu clave de modelo y el coste crece linealmente** con el número y el tamaño de
+   las conversaciones. Es evaluación con LLM, con otro nombre: aplica todo el módulo 2.
+3. **Sube tus conversaciones como trazas.** O sea, consume cuota y —lo del notebook 05—
+   sube el contenido tal cual se lo des.
+4. **Si le pasas la clave del modelo, la guarda como secreto del espacio de trabajo**, y
+   a partir de ahí la usan también el *playground* y los evaluadores. Eso es una decisión
+   de gobierno (nb 16), no un parámetro.
+
+> **Dónde encaja, sin exagerar lo que hace:** Insights no sustituye al conjunto dorado.
+> Agrupa y describe; no puntúa contra una verdad, porque no la tiene. Sirve para
+> **encontrar el tipo de fallo** que no sabías buscar —el paso que el bucle de este
+> capstone no pudo dar— y lo que hagas con ese hallazgo vuelve a ser el módulo 2: un
+> dataset, una etiqueta y un experimento.
+
+#%%md
 ## 9. Ejercicio — La señal que te falta
 
 El bucle de este capstone funcionó porque el sistema tenía una **categoría de reserva**
@@ -661,7 +707,8 @@ sustituir la evaluación por monitorización:
 > invisibles desde producción**.
 >
 > El bucle encuentra lo que deja rastro. Para el resto hacen falta etiquetas, y las
-> etiquetas las produce una persona.
+> etiquetas las produce una persona — o, con Insights, un modelo que agrupa el texto para
+> decirte **qué** etiquetar. Lo que ninguno de los dos te ahorra es la etiqueta.
 
 ---
 

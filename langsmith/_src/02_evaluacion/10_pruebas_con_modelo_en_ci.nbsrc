@@ -348,6 +348,48 @@ for etiqueta, cuerpo in [
     print(f"  {etiqueta:<22} {'cacheable' if not problemas else 'NO: ' + str(problemas)}")
 
 #%%md
+## 5 bis. Leer los resultados desde la CI, con su trampa
+
+Las pruebas dan un veredicto —pasa o falla— y eso es lo que necesita la CI. Pero cuando
+quieres el detalle —qué caso concreto bajó, con qué puntuación— hay un método para
+traerte el experimento entero a un DataFrame.
+
+Y viene con un aviso que hay que leer entero.
+
+#%%py
+import inspect
+
+from langsmith import Client
+
+separador("get_test_results, y lo que advierte")
+print(f"  get_test_results({', '.join(p for p in inspect.signature(Client.get_test_results).parameters if p != 'self')})")
+print()
+documentacion = " ".join(inspect.getdoc(Client.get_test_results).split())
+inicio = documentacion.find("This will fetch")
+import textwrap
+print(textwrap.fill(documentacion[inicio:inicio + 240], width=74,
+                    initial_indent="  ", subsequent_indent="  "))
+
+#%%md
+> **«Los resultados no están disponibles inmediatamente al terminar la ejecución.»**
+>
+> Es una carrera, y en una CI se pierde: las pruebas terminan, el paso siguiente llama a
+> `get_test_results`, y devuelve menos filas de las que hubo — o ninguna. El informe sale
+> vacío y parece que no se ejecutó nada.
+
+Cómo se usa sin tropezar:
+
+| Para qué | Cómo |
+|---|---|
+| Que la CI falle | El código de salida de `pytest`. **Nunca** `get_test_results` |
+| Un informe con detalle | Un paso aparte, o el trabajo nocturno, no el mismo segundo |
+| Mirar un fallo concreto | La interfaz, con el nombre del experimento |
+
+La regla general, que vale para cualquier lectura del servicio justo después de escribir:
+**no leas lo que acabas de escribir para decidir si lo escribiste.** El veredicto sale de
+tu proceso; el informe, después.
+
+#%%md
 ## 6. Ejercicios
 
 ### Ejercicio 1 — La prueba que no se entera

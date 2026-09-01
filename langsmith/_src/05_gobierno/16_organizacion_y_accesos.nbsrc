@@ -209,6 +209,38 @@ Lo que sí es tuyo:
 | Una clave por aplicación y entorno | Rotar una no tumba las demás |
 | Rotación con fecha en el calendario | «Cuando haga falta» es «nunca» |
 
+#%%md
+### La clave que acabas guardando sin querer
+
+Y hay una vía por la que la clave de **tu proveedor de modelos** —no la de LangSmith—
+acaba almacenada en LangSmith, que casi nadie tiene en el inventario:
+
+#%%py
+import textwrap
+
+separador("lo que dice la propia documentación del SDK")
+documentacion = " ".join(inspect.getdoc(Client.generate_insights).split())
+inicio = documentacion.find("If you pass in a model")
+aviso = documentacion[inicio:documentacion.find("Args:", inicio)].strip()
+print(textwrap.fill(aviso, width=74, initial_indent="  ", subsequent_indent="  "))
+
+#%%md
+Pásale tu clave de OpenAI o de Anthropic a `generate_insights` y **queda guardada como
+secreto del espacio de trabajo**, disponible a partir de ahí para el *playground* y para
+los evaluadores en línea del notebook 14.
+
+No es un fallo —es lo que hace falta para que un evaluador del servidor pueda llamar a un
+modelo— pero sí es una decisión que casi siempre se toma sin darse cuenta:
+
+| Lo que crees que haces | Lo que además pasa |
+|---|---|
+| Generar un informe de Insights | Tu clave de modelo queda guardada en el espacio |
+| Probar un prompt en el *playground* | La usa cualquiera con acceso al espacio |
+| Poner un juez en línea (nb 14) | La gasta el servidor, con tu factura |
+
+> **Métela en el inventario del apartado anterior.** Es una clave más, vive en un sitio
+> que no es tu `.env`, y la puede gastar todo el que entre al espacio de trabajo.
+
 #%%py
 # Lo que sí se puede automatizar sin que exista API de claves: el inventario.
 INVENTARIO = [
@@ -220,6 +252,9 @@ INVENTARIO = [
      "creada": "2025-11-08", "ultimo_uso": "2025-11-09"},
     {"nombre": "portatil-de-alba", "espacio": "pruebas",    "tipo": "espacio",
      "creada": "2025-09-30", "ultimo_uso": "2026-03-11"},
+    # La del apartado anterior: no es de LangSmith, pero vive dentro y la gasta el espacio.
+    {"nombre": "openai (secreto del espacio)", "espacio": "produccion", "tipo": "modelo",
+     "creada": "2026-01-20", "ultimo_uso": "2026-08-31"},
 ]
 
 import datetime

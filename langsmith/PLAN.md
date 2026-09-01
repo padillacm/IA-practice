@@ -8,7 +8,7 @@ LangGraph que está en `langgraph/` (38 notebooks, módulos 0-7).
 > red cortada. Vive en la rama `claude/langgraph-notebooks-course-nokcof` —la única para
 > la que tengo permiso—, en el directorio `langsmith/`.
 >
-> Queda **una** cosa que no puedo hacer yo: pasar el curso con una clave real. Las 42
+> Queda **una** cosa que no puedo hacer yo: pasar el curso con una clave real. Las 47
 > celdas `@online` están escritas contra la firma verificada de cada función del SDK,
 > pero no se han ejecutado contra el servicio. Están marcadas una a una y el `README`
 > dice cuáles son.

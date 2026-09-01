@@ -236,3 +236,35 @@ def test_los_tickets_del_otro_curso_se_encuentran():
 def test_un_fichero_que_no_existe_da_un_error_util():
     with pytest.raises(FileNotFoundError, match="langgraph"):
         curso.ruta_datos("no_existe.csv")
+
+
+def test_el_mapa_de_la_superficie_del_readme_sigue_siendo_cierto():
+    """El README reparte la superficie del SDK en tres montones y da dos números. Si el
+    SDK cambia y los números dejan de cuadrar, el mapa deja de servir para orientarse,
+    que es lo único para lo que existe."""
+    import ast
+    import pathlib
+    import re
+
+    import langsmith.client as lc
+
+    fuente = pathlib.Path(lc.__file__).read_text()
+    arbol = ast.parse(fuente)
+    clase = next(n for n in arbol.body
+                 if isinstance(n, ast.ClassDef) and n.name == "Client")
+
+    publicos = [n for n in dir(lc.Client) if not n.startswith("_")]
+    obsoletos, fechas = [], set()
+    for nodo in clase.body:
+        if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            cuerpo = ast.get_source_segment(fuente, nodo) or ""
+            if "deprecated" in cuerpo[:600].lower():
+                obsoletos.append(nodo.name)
+                fechas |= set(re.findall(r"Will be removed after ([A-Z][a-z]+ \d+, \d{4})",
+                                         cuerpo))
+
+    readme = (pathlib.Path(__file__).resolve().parents[1] / "README.md").read_text()
+    assert f"{len(publicos)} miembros públicos" in readme, len(publicos)
+    assert f"{len(obsoletos)} de ellos" in readme, len(obsoletos)
+    assert fechas == {"Jan 31, 2027"}, fechas
+    assert "31 de enero de 2027" in readme

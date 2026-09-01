@@ -17,6 +17,8 @@ Al terminar sabrás:
    módulo, y lo demostramos.
 4. Que un evaluador roto **desaparece en silencio** de tus resultados.
 5. Cómo se comparan dos experimentos y qué mira LangSmith que tú no.
+6. Por qué `error_handling` hace que **tu nota y la de la interfaz no coincidan**, y
+   cómo se corre un objetivo asíncrono con `aevaluate`.
 
 #%%py
 import sys, pathlib
@@ -276,6 +278,8 @@ Los que de verdad usas:
 | `max_concurrency` | Casos en paralelo | Tiempo abajo, riesgo de límite de tasa arriba |
 | `experiment_prefix` | Nombre legible | Gratis, y lo agradeces a los tres meses |
 | `metadata` | Qué versión, qué modelo, qué prompt | Gratis, e imprescindible para comparar |
+| `error_handling` | Qué hacer con un caso que revienta | **Cambia la nota.** Apartado siguiente |
+| `blocking` | Esperar a que termine, o no | `False` te devuelve el control y te quita el resumen |
 | `upload_results` | Subir o no | Lo que usa el modo local de este curso |
 
 ### `summary_evaluators`: donde van las métricas que no son medias
@@ -343,6 +347,121 @@ La diferencia es real y grande. Pero antes de subirla a 16 en producción:
 - **Los tiempos por caso dejan de ser comparables** si tu sistema comparte recursos.
 
 Para el conjunto rápido de 30-50 casos, `max_concurrency=4` es un punto sensato.
+
+#%%md
+### `error_handling`: el mismo experimento con dos notas
+
+Vuelve al apartado 2, al sistema frágil que reventaba en los mensajes largos. Ahí vimos
+que una fila con error trae `outputs = {"output": None}` y arrastra la media hacia abajo.
+
+`evaluate()` tiene un parámetro para eso, y **lo que hace no es lo que su nombre sugiere**.
+
+#%%py
+def medir_con(manejo: str) -> dict:
+    """Corre el mismo experimento frágil con los dos manejos de error."""
+    with contextlib.redirect_stderr(io.StringIO()):
+        filas = list(experimento_local(clasificador_fragil, CONJUNTO,
+                                       evaluadores=[acierto_cuidadoso],
+                                       error_handling=manejo))
+    con_error = [f for f in filas if f["run"].error]
+    ligadas = sum(1 for f in con_error if f["run"].reference_example_id is not None)
+    puntos = sum(x.score for f in filas
+                 for x in f["evaluation_results"]["results"] if x.score is not None)
+    return {"filas": len(filas), "con_error": len(con_error),
+            "errores_ligados_al_ejemplo": ligadas, "puntos": puntos}
+
+
+separador("el mismo experimento, dos veces")
+for manejo in ("log", "ignore"):
+    d = medir_con(manejo)
+    print(f"\n  error_handling={manejo!r}")
+    print(f"     casos                              : {d['filas']}")
+    print(f"     casos que reventaron               : {d['con_error']}")
+    print(f"     de esos, ligados a su ejemplo      : {d['errores_ligados_al_ejemplo']}")
+    print(f"     nota que calculas TÚ  (/{d['filas']})        : {d['puntos'] / d['filas']:.1%}")
+    denominador = d["filas"] - (d["con_error"] - d["errores_ligados_al_ejemplo"])
+    print(f"     nota que verás en LangSmith (/{denominador})  : {d['puntos'] / denominador:.1%}")
+
+#%%md
+Léelo otra vez, porque es de las cosas que cuestan una tarde:
+
+- `error_handling="ignore"` **no se salta el caso**. El caso se ejecuta, revienta, y sigue
+  estando en los resultados que tú recorres. Tu media no cambia ni un punto.
+- Lo que hace es **no ligar la ejecución fallida a su ejemplo del dataset**
+  (`reference_example_id` se queda a `None`). Y una ejecución sin ejemplo no forma parte
+  del experimento **para el servidor**.
+- Resultado: la nota de la interfaz sube, la tuya no, y **la diferencia es exactamente tu
+  tasa de fallo**.
+
+> **La regla:** `error_handling="ignore"` no es «ignora los errores», es **«no cuentes los
+> errores en la nota publicada»**. Úsalo solo cuando el fallo sea de la infraestructura de
+> la prueba —una red que se cayó, un 429— y nunca cuando sea de tu sistema, porque
+> entonces estás borrando de la nota justo lo que la nota tenía que medir.
+
+Y si lo usas, **dilo en la descripción del experimento**. Dos experimentos con manejos de
+error distintos no son comparables, y nada en la interfaz te lo va a avisar.
+
+#%%md
+### `aevaluate`: cuando tu objetivo es asíncrono
+
+Casi cualquier agente de verdad es `async`. `evaluate()` acepta una función `async`, pero
+la que aprovecha la concurrencia de verdad es su hermana.
+
+#%%py
+import asyncio
+
+async def clasificador_async(entradas: dict) -> dict:
+    await asyncio.sleep(0.03)             # como si llamara a un modelo
+    return clasificar(entradas)
+
+
+async def correr(concurrencia: int) -> float:
+    from langsmith import aevaluate
+
+    from utils.curso import _cliente_mudo
+
+    inicio = time.time()
+    with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+        resultados = await aevaluate(clasificador_async, data=CONJUNTO,
+                                     evaluators=[acierto_cuidadoso],
+                                     max_concurrency=concurrencia,
+                                     upload_results=False, client=_cliente_mudo())
+        [f async for f in resultados]
+    return time.time() - inicio
+
+
+separador("aevaluate, con y sin concurrencia")
+for concurrencia in (0, 8):
+    tardanza = asyncio.run(correr(concurrencia))
+    etiqueta = "sin concurrencia" if concurrencia == 0 else f"concurrencia {concurrencia}"
+    print(f"  {etiqueta:<20}{tardanza:5.2f} s para {len(CONJUNTO)} casos")
+
+#%%md
+Tres cosas que hay que saber y no están juntas en ningún sitio:
+
+1. **`max_concurrency=0` significa «ninguna»**, no «sin límite». Sin límite es `None`.
+   Es al revés de lo que casi todo el mundo asume, y la diferencia entre las dos filas de
+   arriba es lo que cuesta el error.
+2. `aevaluate` devuelve un **iterador asíncrono**: se recorre con `async for`, no con
+   `for`. Un `list()` encima devuelve un objeto, no tus resultados.
+3. Acepta exactamente los mismos parámetros que `evaluate`, `upload_results=False`
+   incluido — que es lo que permite que esta celda se ejecute sin servicio.
+
+#%%md
+### `blocking=False`: el que parece gratis y no lo es
+
+El último de la tabla. `evaluate(..., blocking=False)` te devuelve el control antes de que
+el experimento termine, y suena a mejora obvia en un cuaderno.
+
+Lo que se lleva a cambio: **el resumen que imprime al final**, con el enlace al
+experimento y las medias. Y si tu proceso se muere antes de que acabe —o cierras el
+cuaderno—, te quedas con un experimento a medias que sí ocupa cuota.
+
+| Cuándo | Qué usar |
+|---|---|
+| Un cuaderno, mirando los resultados | `blocking=True` (por defecto) |
+| Una tarea larga en la que quieres hacer otra cosa mientras | `blocking=False`, y recorre el iterador tú |
+| La CI | `blocking=True`, **siempre**: la CI necesita el veredicto para fallar |
 
 #%%md
 ## 5. Comparar dos experimentos
