@@ -66,7 +66,10 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: langsmith/uv.lock
-      - run: uv sync --frozen --all-groups
+      # A PROPÓSITO sin --all-groups: aquí se instala lo MISMO que instala quien sigue
+      # el curso con `uv sync`. Con los grupos de desarrollo puestos, un notebook que
+      # dependa de algo opcional pasa aquí y falla en su portátil. Ya ocurrió una vez.
+      - run: uv sync --frozen
 
       - name: Cada notebook, entero, sin clave y con la red cortada
-        run: uv run _tools/ejecutar_notebooks.py
+        run: uv run --frozen _tools/ejecutar_notebooks.py

@@ -81,10 +81,13 @@ Un curso completo no es el que toca todos los métodos del SDK: es el que te dej
 sobre los 144 miembros públicos de `Client`.
 
 **Lo que el curso enseña y ejecuta** (módulos 0-5): trazado automático y manual, `RunTree`
-y trazas distribuidas, la API de ingesta a pelo, envío por lotes y sus cuatro formas de
+y trazas distribuidas, la API de ingesta a pelo, **OpenTelemetry en los dos sentidos**
+(`tracing_mode`, el procesador para una instalación que ya existe, y la salida con la
+convención `gen_ai.*` — ejecutado con un exportador en memoria, sin red), envío por lotes y sus cuatro formas de
 perder trazas, anonimización, hilos y realimentación, datasets con versiones y *splits*,
 experimentos con sus parámetros y sus dos trampas de puntuación, evaluadores de código y
 de LLM, jueces alineados con kappa, colas de anotación y configuración de rúbricas,
+coste y tokens leídos de la ejecución con la trampa de `ls_model_name`,
 pruebas con modelo en CI con caché, monitorización, reglas y evaluación en línea, prompts
 versionados, y el gobierno: espacios, claves, compartición, retención y borrado.
 
@@ -113,8 +116,8 @@ obsolescencia, que es lo que hace falta cuando esto cambie.
 | Problemas estáticos | 0 |
 | Notebooks que se ejecutan enteros, sin clave y **con la red cortada** | 22 de 22 |
 | Intentos de salida a `smith.langchain.com` durante esa ejecución | **0** |
-| Pruebas | 171 de 171, con la red cortada también |
-| Entornos vírgenes (`uv sync` y `pip install -r requirements.txt`) | los dos pasan |
+| Pruebas | 174 de 174, con la red cortada también |
+| Entornos vírgenes (`uv sync` **sin grupos** y `pip install -r requirements.txt`) | los dos pasan |
 
 Celdas marcadas `@online`, escritas contra la firma real del SDK pero **no ejecutadas**:
 están en los notebooks 00, 02, 03, 04, 05, 06, 07, 08, 09, 11, 12, 13, 14, 15, 16, 17 y

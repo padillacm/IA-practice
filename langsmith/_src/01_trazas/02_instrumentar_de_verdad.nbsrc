@@ -17,6 +17,8 @@ Al terminar sabrás:
 5. Mandar trazas a proyectos distintos según el contexto.
 6. Trazar **un servicio que no es Python** con las dos peticiones HTTP que lo hacen
    todo, y engancharlo a la misma traza.
+7. `tracing_mode` y **OpenTelemetry en los dos sentidos**: cómo se entra sin romper la
+   instrumentación que ya tienes, y qué te llevas exactamente si te vas.
 
 #%%py
 import sys, pathlib
@@ -570,7 +572,163 @@ La combinación completa, que es como se instrumenta un sistema de verdad:
 > mira las cabeceras antes que nada. Es siempre eso.
 
 #%%md
-## 8. Ejercicios
+## 8. OpenTelemetry, en los dos sentidos
+
+El notebook 00 usa un argumento para quitarte el miedo a empezar por aquí: *«LangSmith
+habla OTel en los dos sentidos, así que esta decisión no es irreversible»*. Es la
+afirmación con más peso de todo el curso —es la que decide si adoptas la herramienta— y
+toca demostrarla, no repetirla.
+
+El mando es un parámetro del cliente que casi nadie conoce: **`tracing_mode`**.
+
+#%%py
+from langsmith import Client
+
+separador("los tres modos de trazado")
+documentacion = inspect.getdoc(Client.__init__)
+inicio = documentacion.find('"langsmith"')
+for linea in documentacion[inicio - 200:inicio + 320].splitlines():
+    if linea.strip().startswith("- ``"):
+        print("  ", linea.strip().replace("``", "`"))
+print()
+print("  Se elige con el parámetro `tracing_mode` o con LANGSMITH_TRACING_MODE.")
+print("  (`otel_enabled` es el nombre viejo y está marcado como obsoleto.)")
+
+#%%md
+### El montaje, y una regla de OpenTelemetry que ordena todo lo demás
+
+Para ver esto sin red hace falta un exportador **en memoria**. Y montarlo enseña de paso
+la regla que más problemas causa al integrar OTel con nada:
+
+> **El `TracerProvider` global se fija UNA vez por proceso.** El segundo intento no
+> falla: se ignora con un aviso. Así que el orden importa — lo que se construya antes de
+> fijarlo se queda enganchado al proveedor de mentira que trae OTel por defecto.
+
+Por eso esta celda va **antes** de crear ningún cliente con OTel, y no después.
+
+#%%py
+import time
+
+from opentelemetry import trace as otel_trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from langsmith.run_helpers import tracing_context
+
+from utils.curso import _SesionMuda
+
+memoria = InMemorySpanExporter()
+proveedor = TracerProvider()
+proveedor.add_span_processor(SimpleSpanProcessor(memoria))
+otel_trace.set_tracer_provider(proveedor)
+
+separador("el proveedor de OTel, fijado antes que nada")
+print("  proveedor global:", type(otel_trace.get_tracer_provider()).__name__)
+
+#%%py
+# Y ahora sí: lo que cambia de verdad entre los tres modos.
+separador("qué monta cada modo")
+clientes = {}
+for modo in ("langsmith", "otel", "hybrid"):
+    clientes[modo] = Client(api_key="local", session=_SesionMuda(), tracing_mode=modo)
+    exportador = type(clientes[modo].otel_exporter).__name__ \
+        if clientes[modo].otel_exporter else "— ninguno —"
+    print(f"  tracing_mode={modo!r:12} otel_exporter = {exportador}")
+
+#%%md
+### La salida, ejecutada
+
+`tracing_mode="otel"` deja de hablar con LangSmith y emite **spans de OpenTelemetry
+estándar**. Con el exportador en memoria ya montado, se mira lo que sale.
+
+#%%py
+cliente_otel = clientes["otel"]
+
+
+@traceable(run_type="chain", name="clasificar")
+def clasificar(ticket: str) -> dict:
+    return buscar(ticket)
+
+
+@traceable(run_type="tool", name="buscar_en_base")
+def buscar_en_base(ticket: str) -> dict:
+    return {"categoria": "facturacion"}
+
+
+def buscar(ticket: str) -> dict:
+    return buscar_en_base(ticket)
+
+
+with tracing_context(enabled=True, client=cliente_otel):
+    clasificar("cobro duplicado en la factura")
+
+cliente_otel.flush()
+time.sleep(0.5)
+
+spans = memoria.get_finished_spans()
+separador("spans de OpenTelemetry emitidos, sin tocar la red")
+print(f"  spans: {len(spans)}  ->  {[s.name for s in spans]}")
+
+#%%py
+separador("qué lleva un span")
+atributos = dict(spans[0].attributes or {})
+for clave in sorted(atributos):
+    print(f"  {clave:<44}{str(atributos[clave])[:44]}")
+
+#%%md
+Mira las dos familias de atributos, porque explican por qué la salida funciona:
+
+- **`gen_ai.*`** son la *convención semántica* de OpenTelemetry para IA generativa:
+  `gen_ai.prompt`, `gen_ai.completion`, `gen_ai.operation.name`, `gen_ai.system`. Eso es
+  lo que cualquier herramienta que hable OTel —Grafana, Datadog, Honeycomb, un colector
+  tuyo— sabe leer sin saber nada de LangSmith.
+- **`langsmith.*`** es lo propio, que la otra herramienta ignorará: el nombre del
+  proyecto, la clase de span, los metadatos.
+
+> **Y ahí está la respuesta honesta al «¿me quedo atrapado?»:** no, y se ve en los
+> atributos. Lo que te llevas si te vas es la traza con la convención estándar; lo que
+> pierdes es lo de `langsmith.*` y, sobre todo, todo lo que este curso construye **encima**
+> de las trazas: datasets, experimentos, colas de anotación. La portabilidad es del dato
+> crudo, no de la maquinaria.
+
+#%%md
+### La entrada, y el error que la rompe
+
+El camino contrario —meter LangSmith en una instalación de OTel que ya tienes— tiene dos
+funciones y **elegir mal la primera es el fallo típico**.
+
+#%%py
+from langsmith.integrations import otel as integracion_otel
+from langsmith.integrations.otel.processor import OtelSpanProcessor
+
+separador("las dos formas de meter LangSmith en tu OTel")
+print("  1. configure()")
+print("     ", inspect.signature(integracion_otel.configure))
+aviso = " ".join((inspect.getdoc(integracion_otel.configure) or "").split())
+inicio = aviso.find("This function is only for")
+print("      AVISO:", aviso[inicio:inicio + 150])
+print()
+print("  2. OtelSpanProcessor()")
+print("     ", inspect.signature(OtelSpanProcessor.__init__).replace(parameters=[
+    p for n, p in inspect.signature(OtelSpanProcessor.__init__).parameters.items() if n != "self"]))
+print("      ", (inspect.getdoc(OtelSpanProcessor) or "").splitlines()[0])
+
+#%%md
+| Si… | Usa | Por qué |
+|---|---|---|
+| LangSmith es tu **única** fuente de OTel | `configure()` | Te monta el `TracerProvider` global y ya está |
+| **Ya tienes** OTel (Datadog, Grafana, un colector) | `OtelSpanProcessor` | Se **añade** a tu configuración en vez de sustituirla |
+
+> **El fallo típico:** llamar a `configure()` en un servicio que ya estaba instrumentado.
+> Sustituye el `TracerProvider` global, y a partir de ese momento **tus trazas de siempre
+> dejan de llegar a donde llegaban** — sin error, sin aviso, sin nada que mirar. Su propia
+> documentación lo dice en un `warning`, que es lo que acabas de imprimir.
+
+Y con eso el argumento del notebook 00 queda comprobado, que era la deuda: **se entra sin
+tocar tu instrumentación y se sale con la convención estándar.**
+
+#%%md
+## 9. Ejercicios
 
 ### Ejercicio 1 — El agujero de 800 ms
 
@@ -725,7 +883,7 @@ que corren sobre las trazas reales.
 </details>
 
 #%%md
-## 9. Resumen
+## 10. Resumen
 
 - **LangChain y LangGraph se instrumentan solos**, con la jerarquía y los `run_type`
   correctos. Ese es el argumento de peso de la herramienta.

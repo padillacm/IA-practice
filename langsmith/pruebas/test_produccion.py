@@ -605,3 +605,34 @@ def test_el_conjunto_dorado_ve_lo_invisible_pero_con_una_banda_inservible():
 
     assert p < 0.5                                       # la señal existe
     assert 2 * math.sqrt(p * (1 - p) / len(grupo)) > 0.30  # y no se puede medir con eso
+
+
+def test_sin_ls_model_name_el_coste_sale_a_cero_y_nadie_avisa():
+    """La trampa del apartado 2 bis del notebook 13. Un modelo que no declara su nombre
+    se traza igual de bien y cuesta cero en el panel: la gráfica de gasto no falla,
+    miente hacia abajo. Le pasa a cualquiera detrás de una pasarela."""
+    from langchain_openai import ChatOpenAI
+
+    from utils.curso import ModeloGuionizado
+
+    de_la_caja = ChatOpenAI(model="gpt-4o-mini", api_key="sk-no-se-usa")._get_ls_params()
+    propio = ModeloGuionizado(["facturacion"])._get_ls_params()
+
+    assert de_la_caja.get("ls_model_name") == "gpt-4o-mini"
+    assert de_la_caja.get("ls_provider") == "openai"
+    # El del curso traza igual pero no se puede tarifar: es el caso del notebook.
+    assert propio.get("ls_provider")
+    assert "ls_model_name" not in propio
+
+
+def test_el_coste_viene_calculado_en_cada_ejecucion():
+    """El notebook 13 dice que el coste se lee, no se calcula. Si el esquema perdiera
+    esos campos, el panel que enseña el notebook dejaría de poder construirse."""
+    from langsmith.schemas import Run
+
+    campos = set(Run.model_fields)
+    assert {"total_cost", "prompt_cost", "completion_cost"} <= campos
+    assert {"total_tokens", "prompt_tokens", "completion_tokens"} <= campos
+    assert {"prompt_cost_details", "completion_token_details"} <= campos
+    # Y el tiempo hasta el primer token, que es la latencia que siente quien lee.
+    assert "first_token_time" in campos

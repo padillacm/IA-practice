@@ -18,7 +18,14 @@ requires-python = ">=3.11,<3.14"
 
 dependencies = [
     # El objeto del curso.
-    "langsmith>=0.11,<0.12",
+    # El extra `otel` trae el SDK de OpenTelemetry y el exportador OTLP. Va en las
+    # dependencias base y no en un grupo porque el notebook 02 lo EJECUTA: sin él, la
+    # sección de OpenTelemetry se quedaría en prosa, que es justo lo que este curso no
+    # hace. Son paquetes puros de Python y no pesan al lado de langgraph.
+    # `otel` para el notebook 02 y `vcr` para el 10: los dos notebooks EJECUTAN esas
+    # rutas, así que van en las dependencias base. En un grupo opcional, un `uv sync`
+    # limpio daría un entorno donde el notebook 10 falla — y eso ya pasó una vez.
+    "langsmith[otel,vcr]>=0.11,<0.12",
 
     # El curso instrumenta la aplicación del curso de LangGraph, así que necesita
     # las mismas piezas. Las versiones son las que allí quedaron verificadas.
@@ -52,7 +59,7 @@ dev = [
 # El plugin de pytest de LangSmith con la caché de peticiones al modelo (notebook 10).
 # El extra `vcr` es lo que hace que `LANGSMITH_TEST_CACHE` sirva de algo.
 pruebas-con-modelo = [
-    "langsmith[vcr]>=0.11,<0.12",
+    # `vcr` ya está en las dependencias base; aquí queda lo que de verdad es opcional.
     "openai>=1.50",
 ]
 

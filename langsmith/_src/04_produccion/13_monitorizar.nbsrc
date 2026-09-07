@@ -13,6 +13,8 @@ que importa**: un agente puede tener el 100 % de disponibilidad y no resolver ni
 Al terminar sabrás:
 
 1. Las **cuatro familias** de métricas, y cuál falta en casi todos los paneles.
+2. Que el **coste viene calculado** por ejecución, y la trampa que hace que salga a
+   cero sin ningún error.
 2. Consultar agregados sin bajarte las trazas, con `get_run_stats` y el lenguaje de filtro.
 3. Las tres **métricas trampa** que engañan por sistema.
 4. Diseñar alertas que alguien mire, en vez de alertas que se silencien.
@@ -34,7 +36,7 @@ print("listo")
 | Familia | Ejemplos | ¿La tiene todo el mundo? |
 |---|---|---|
 | **Volumen y salud** | Peticiones, tasa de error, latencia p50/p95 | Sí |
-| **Coste** | Tokens, euros, coste por cliente y por plan | A medias |
+| **Coste** | Tokens, euros, coste por cliente y por plan | A medias — y el apartado 2 bis dice por qué |
 | **Calidad** | Feedback humano, juez alineado, señales implícitas | **Casi nadie** |
 | **Comportamiento** | Herramientas usadas, vueltas del bucle, escalados | **Nadie** |
 
@@ -190,6 +192,102 @@ def _():
                                   filter='eq(status, "error")',
                                   trace_filter='eq(status, "success")')
     print("  fallos silenciosos     :", silenciosos)
+
+#%%md
+## 2 bis. El coste, que no se calcula: se lee
+
+Hasta aquí los tokens de este notebook son simulados, y eso esconde lo que de verdad hay
+que saber: **LangSmith ya trae el coste calculado por ejecución**. No hay que sumar nada.
+
+#%%py
+import inspect
+
+from langsmith.schemas import Run
+
+separador("lo que cada ejecución trae puesto")
+familias = {
+    "uso": [c for c in sorted(Run.model_fields) if "token" in c and c != "first_token_time"],
+    "dinero": [c for c in sorted(Run.model_fields) if "cost" in c],
+    "tiempo": ["start_time", "end_time", "first_token_time"],
+}
+for familia, campos in familias.items():
+    print(f"\n  {familia}")
+    for campo in campos:
+        print(f"     {campo}")
+
+#%%md
+Tres cosas que cambian cómo montas el panel:
+
+1. **`total_cost`, `prompt_cost` y `completion_cost` vienen calculados.** Tu panel lee un
+   número, no multiplica tokens por una tarifa que se te queda vieja.
+2. **`first_token_time` es el tiempo hasta el primer token.** Para cualquier cosa que se
+   muestre en streaming —y el notebook 11 del curso de LangGraph va de eso— esa es la
+   latencia que siente el usuario, no la del apartado 3. Un sistema que tarda 400 ms en el
+   primer token y 6 s en terminar se percibe rápido; al revés, lento.
+3. **Los `*_details`** parten el coste por tipo de token: los de caché no cuestan lo mismo
+   que los nuevos, y ahí es donde se ve si tu caché de prompts sirve para algo.
+
+#%%md
+### Y la trampa: de dónde saca LangSmith el precio
+
+Para poner un precio hace falta saber qué modelo se llamó. Eso viaja en unos metadatos que
+LangChain pone solo, y que **tú nunca escribes** — hasta el día en que tu modelo no los
+pone.
+
+#%%py
+from langchain_openai import ChatOpenAI
+
+from utils.curso import ModeloGuionizado
+
+separador("los metadatos que hacen posible el precio")
+modelo_real = ChatOpenAI(model="gpt-4o-mini", api_key="sk-no-se-usa-en-esta-celda")
+modelo_propio = ModeloGuionizado(["facturacion"])
+
+for etiqueta, modelo in (("un modelo de la caja", modelo_real),
+                         ("un modelo tuyo", modelo_propio)):
+    parametros = modelo._get_ls_params()
+    tiene_nombre = "ls_model_name" in parametros
+    print(f"\n  {etiqueta}")
+    for clave in sorted(parametros):
+        print(f"     {clave:<18}{parametros[clave]}")
+    print(f"     -> ¿LangSmith puede ponerle precio? {'sí' if tiene_nombre else 'NO'}")
+
+#%%md
+> **La trampa, en una frase: sin `ls_model_name` no hay coste, y no hay error.** La
+> ejecución se traza perfectamente, aparece en el panel, y su coste es **cero**. Tu
+> gráfica de gasto no falla: miente hacia abajo.
+>
+> A quién le pasa: a cualquiera que llame al modelo por una pasarela (LiteLLM, un proxy
+> propio, un Bedrock intermedio), que use un modelo autoalojado, o que se haya escrito su
+> propia clase de modelo — que es exactamente lo que hace este curso para poder ejecutarse
+> sin red, y por eso la celda de arriba lo enseña con el ejemplo de casa.
+
+#%%py
+# La comprobación que va en el arranque, y que cuesta cuatro líneas.
+def comprobar_precio(modelo) -> None:
+    """Falla al arrancar si el modelo no va a poder contabilizarse."""
+    parametros = modelo._get_ls_params()
+    faltan = [c for c in ("ls_provider", "ls_model_name") if not parametros.get(c)]
+    if faltan:
+        raise RuntimeError(
+            f"este modelo no declara {faltan}: sus trazas costarán 0 en el panel. "
+            "Declara ls_model_name en tu clase, o mete el coste tú en los metadatos.")
+
+
+separador("la comprobación de arranque")
+for etiqueta, modelo in (("modelo de la caja", modelo_real),
+                         ("modelo propio", modelo_propio)):
+    try:
+        comprobar_precio(modelo)
+        print(f"  {etiqueta:<20}pasa")
+    except RuntimeError as error:
+        print(f"  {etiqueta:<20}FALLA: {error}")
+
+#%%md
+Y si tu modelo no puede declararlo —una pasarela que no sabe qué hay detrás—, la salida es
+la del notebook 02: **el coste lo metes tú en los metadatos** de la ejecución, y el panel
+lo lee de ahí en vez de del campo calculado. Peor, pero medible; que es lo único que
+importa.
 
 #%%md
 ## 3. Las tres métricas trampa

@@ -723,3 +723,60 @@ def test_la_api_de_ingesta_a_pelo_son_dos_peticiones(sin_servicio):
             assert cuerpo["name"] == "clasificar-ticket"
             assert cuerpo["trace_id"] == str(id_ejecucion)      # la raíz se apunta a sí misma
             assert cuerpo["dotted_order"].endswith(str(id_ejecucion))
+
+
+def test_langsmith_habla_otel_en_los_dos_sentidos(sin_servicio):
+    """El notebook 00 usa esto como argumento para adoptar la herramienta —«la decisión
+    no es irreversible»— así que es la afirmación que más obliga a comprobar. El
+    notebook 02 la ejecuta; esto la vigila.
+
+    Si el SDK quitara `tracing_mode` o el procesador de OTel, el argumento de venta del
+    curso dejaría de ser cierto y hay que reescribir el notebook 00, no relajar esto."""
+    import inspect
+    import time
+
+    from opentelemetry import trace as otel_trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    from langsmith import Client, traceable
+    from langsmith.integrations import otel as integracion_otel
+    from langsmith.integrations.otel.processor import OtelSpanProcessor
+    from langsmith.run_helpers import tracing_context
+
+    from utils.curso import _SesionMuda
+
+    # La entrada: las dos formas de meter LangSmith en un OTel que ya existe.
+    assert callable(integracion_otel.configure)
+    assert "SpanProcessor" in inspect.signature(OtelSpanProcessor.__init__).parameters
+    # Y el aviso que hace peligroso usar la primera sobre una instalación existente.
+    assert "ONLY OpenTelemetry source" in inspect.getdoc(integracion_otel.configure)
+
+    # La salida: el proveedor global se fija una vez, antes de crear nada.
+    memoria = InMemorySpanExporter()
+    proveedor = TracerProvider()
+    proveedor.add_span_processor(SimpleSpanProcessor(memoria))
+    otel_trace.set_tracer_provider(proveedor)
+
+    sin_otel = Client(api_key="local", session=_SesionMuda(), tracing_mode="langsmith")
+    con_otel = Client(api_key="local", session=_SesionMuda(), tracing_mode="otel")
+    assert sin_otel.otel_exporter is None
+    assert con_otel.otel_exporter is not None
+
+    @traceable(run_type="chain", name="tarea")
+    def tarea(x):
+        return {"ok": x}
+
+    with tracing_context(enabled=True, client=con_otel):
+        tarea("hola")
+    con_otel.flush()
+    time.sleep(0.5)
+
+    spans = memoria.get_finished_spans()
+    assert spans, "tracing_mode='otel' no emitió ningún span"
+    atributos = dict(spans[0].attributes or {})
+    # La convención estándar es lo que te llevas si te vas.
+    assert any(k.startswith("gen_ai.") for k in atributos), sorted(atributos)
+    # Y lo propio de LangSmith es lo que pierdes.
+    assert any(k.startswith("langsmith.") for k in atributos), sorted(atributos)
