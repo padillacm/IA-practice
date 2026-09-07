@@ -224,9 +224,13 @@ En LangSmith la realimentación es un objeto que se cuelga de un run:
 def _():
     c = cliente()
     # En tu código, `run_id` sale de `get_current_run_tree().id` dentro de la petición,
-    # o del identificador que devolviste al cliente.
+    # o del identificador que devolviste al cliente. Aquí se coge uno real del
+    # proyecto: un hueco de texto tipo "<el uuid del run>" no es un ejemplo, es una
+    # llamada que revienta con «value must be a valid UUID».
+    ultima = next(iter(c.list_runs(project_name="soporte-produccion", is_root=True,
+                                   limit=1)))
     c.create_feedback(
-        run_id="<el uuid del run>",
+        run_id=ultima.id,
         key="utilidad",
         score=0.0,
         comment="Contestó la política general en vez del caso del cliente.",
@@ -279,10 +283,12 @@ respuesta, se lo manda al navegador, y el navegador puntúa con él y nada más.
 def _():
     import datetime
     c = cliente()
+    ultima = next(iter(c.list_runs(project_name="soporte-produccion", is_root=True,
+                                   limit=1)))
 
     # --- en tu servidor, al responder ---
     token = c.create_presigned_feedback_token(
-        run_id="<el uuid del run>",
+        run_id=ultima.id,
         feedback_key="pulgar",
         expiration=datetime.timedelta(hours=24),
         feedback_config={"type": "categorical",

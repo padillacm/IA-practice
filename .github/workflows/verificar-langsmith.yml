@@ -73,3 +73,9 @@ jobs:
 
       - name: Cada notebook, entero, sin clave y con la red cortada
         run: uv run --frozen _tools/ejecutar_notebooks.py
+
+      # Y la cuarta pasada, que es la que cubre lo que antes no cubría nadie: las
+      # celdas @online se EJECUTAN contra un LangSmith simulado en vez de saltarse.
+      # No prueba la semántica del servicio real, pero sí que ese código corre.
+      - name: Las celdas @online, contra un LangSmith simulado
+        run: uv run --frozen _tools/ejecutar_notebooks.py --simulado

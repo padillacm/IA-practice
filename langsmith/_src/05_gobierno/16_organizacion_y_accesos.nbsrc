@@ -353,6 +353,46 @@ def _():
     print("  -> revisa esta lista cada trimestre, con las claves.")
 
 #%%md
+### Y una superficie de acceso que casi nadie sabe que existe
+
+Si tu agente ejecuta código —el que escribe el modelo, o el de una herramienta que le
+diste—, LangSmith trae **cajas de arena**: máquinas efímeras que se crean por API. Es de
+lo más nuevo del SDK y por eso el curso no lo desarrolla, pero **sí** hay que saber que
+está, porque es una frontera de seguridad y no un detalle de infraestructura.
+
+#%%py
+separador("qué hay debajo de client.sandboxes")
+for recurso in ("boxes", "registries", "snapshots"):
+    metodos = [n for n in dir(getattr(c, "sandboxes").__class__)
+               if not n.startswith("_") and n == recurso]
+    objeto = getattr(c.sandboxes, recurso)
+    acciones = sorted(n for n in dir(objeto)
+                      if not n.startswith("_") and "raw" not in n and "stream" not in n)
+    print(f"  {recurso:<12}{acciones}")
+
+print()
+print("  y lo que se le pasa al crear una caja, que es donde está el gobierno:")
+for parametro in ("env_vars", "proxy_config", "mount_config", "idle_ttl_seconds",
+                  "delete_after_stop_seconds"):
+    print(f"     {parametro}")
+
+#%%md
+Los cuatro parámetros de arriba son los que importan para lo que trata este notebook:
+
+| Parámetro | Por qué es de gobierno |
+|---|---|
+| `env_vars` | Lo que metas ahí **vive en la caja**: una clave de modelo puesta así es una clave más en el inventario del apartado 3 |
+| `proxy_config` | Decide **con quién puede hablar** el código que se ejecuta. Es la diferencia entre una caja de arena y un servidor cualquiera |
+| `mount_config` | Qué ve del sistema de ficheros |
+| `idle_ttl_seconds` / `delete_after_stop_seconds` | Cuánto sobrevive. Una caja olvidada es coste y superficie a la vez |
+
+> **Lo que hay que llevarse sin usarlas todavía:** una caja de arena es la respuesta
+> correcta a *«¿y si el modelo escribe `rm -rf`?»*, y su configuración de red y de
+> variables de entorno es tan parte de vuestra política de accesos como los roles del
+> espacio de trabajo. Si alguien de tu equipo empieza a usarlas, **entran en la revisión
+> trimestral**.
+
+#%%md
 ## 5. Los proyectos como única frontera que sabes expresar
 
 Con lo anterior sobre la mesa, queda una decisión de diseño que sí está en tus manos y que

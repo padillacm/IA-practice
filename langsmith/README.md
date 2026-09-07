@@ -29,11 +29,20 @@ def _():
     print(ds.id)
 ```
 
-**Lo que esto significa para ti, dicho sin adornos:** las celdas `@online` están escritas
-desde la documentación y desde la firma real de cada función del SDK instalado —el
-validador comprueba que cada símbolo existe—, pero **no las he podido ejecutar**. Las
-locales sí, todas, en cada *commit*. El recuento está más abajo. Si una celda en línea
-falla, `@online` la señala y el notebook sigue; es un error del material.
+**Lo que esto significa para ti, dicho sin adornos:** las celdas `@online` no se han
+ejecutado nunca contra el servicio real, porque el curso se escribió sin clave. Lo que
+sí se hace es ejecutarlas **contra un LangSmith simulado** (`utils/langsmith_de_mentira.py`),
+que implementa las rutas HTTP que el SDK usa y guarda estado entre llamadas.
+
+Eso demuestra que ese código **corre**: que los argumentos son los que el SDK acepta, que
+las respuestas se consumen bien y que el encadenado de llamadas se sostiene. **No**
+demuestra la semántica del servidor real. La diferencia importa y por eso está escrita
+aquí y no en una nota al pie.
+
+Cuando se montó esa pasada aparecieron **cinco errores reales** que ninguna validación
+estática podía ver, porque los símbolos existían y los nombres de los argumentos eran
+correctos —lo que estaba mal era el tipo o la forma del objeto devuelto—. Están
+arreglados y cada uno tiene su prueba en `pruebas/test_simulacion.py`.
 
 ## Preparación
 
@@ -98,10 +107,10 @@ alcance del complemento:
 |---|---|---|
 | **Insights** (agrupación automática de conversaciones) | P4, apartado 8 bis | Plan Plus o superior, y cuesta por conversación |
 | **Agentes y habilidades en el Hub** | nb 15 | Mismo mecanismo que los prompts; lo que cambia es el riesgo, y ese sí se cuenta |
-| **Cajas de arena (`sandboxes`)** | — | Superficie muy nueva; se prefiere no enseñar lo que puede cambiar de forma |
-| **Fórmulas de realimentación** | — | Métricas derivadas de otras; el módulo 2 cubre lo mismo con `summary_evaluators` |
+| **Cajas de arena (`sandboxes`)** | nb 16 | Superficie muy nueva; se enseña **qué es y por qué es de gobierno**, no cómo usarla |
+| **Fórmulas de realimentación** | nb 11 | Ya no existen: el SDK levanta `NotImplementedError` y remite a la interfaz |
 | **Exportar para afinar un modelo** | nb 06 | Una línea: `read_dataset_openai_finetuning` |
-| **LangSmith autoalojado** | — | Otro producto operativamente; el curso asume la nube |
+| **LangSmith autoalojado** | nb 17 | El curso asume la nube, pero sí enseña la trampa: por debajo de 0.16 las cosas degradan con un `warning` |
 
 **Lo que no está y es deliberado**: los métodos obsoletos (19 de ellos, retirada anunciada
 para el 31 de enero de 2027), las variantes `*_multipart` que el SDK ya desaconseja, y los
@@ -116,12 +125,16 @@ obsolescencia, que es lo que hace falta cuando esto cambie.
 | Problemas estáticos | 0 |
 | Notebooks que se ejecutan enteros, sin clave y **con la red cortada** | 22 de 22 |
 | Intentos de salida a `smith.langchain.com` durante esa ejecución | **0** |
-| Pruebas | 174 de 174, con la red cortada también |
+| Bloques `@online` que se ejecutan contra el LangSmith simulado | 37 de 40 |
+| Bloques `@online` que no se pueden simular (llaman a un modelo, no a LangSmith) | 3, marcados `necesita_modelo=True` |
+| Errores reales que destapó esa pasada | **5**, todos arreglados y con prueba |
+| Pruebas | 184 de 184, con la red cortada también |
 | Entornos vírgenes (`uv sync` **sin grupos** y `pip install -r requirements.txt`) | los dos pasan |
 
 Celdas marcadas `@online`, escritas contra la firma real del SDK pero **no ejecutadas**:
 están en los notebooks 00, 02, 03, 04, 05, 06, 07, 08, 09, 11, 12, 13, 14, 15, 16, 17 y
-en los cuatro proyectos, señaladas una a una: 47 celdas en total.
+en los cuatro proyectos, señaladas una a una. Desde la pasada simulada, «no ejecutadas»
+solo se aplica ya a las **tres** que necesitan un proveedor de modelos.
 
 El módulo 2 se ejecuta entero en local gracias a dos mecanismos del SDK que amplían lo
 verificable mucho más allá de lo previsto: `tracing_context(enabled="local")` construye
@@ -134,9 +147,10 @@ desaparecen, el curso deja de ser verificable y se sabrá aquí.
 Los mismos filtros del curso de LangGraph, más uno que allí no hacía falta:
 
 ```bash
-uv run _tools/validar.py              # compila y cada símbolo del SDK existe
-uv run pytest                         # invariantes del material
-uv run _tools/ejecutar_notebooks.py   # cada notebook, entero, sin clave y SIN RED
+uv run _tools/validar.py                        # compila y cada símbolo del SDK existe
+uv run pytest                                   # invariantes del material
+uv run _tools/ejecutar_notebooks.py             # cada notebook, entero, sin clave y SIN RED
+uv run _tools/ejecutar_notebooks.py --simulado  # y las celdas @online, contra un LangSmith de mentira
 ```
 
 El tercero corta la resolución de `smith.langchain.com` antes de ejecutar nada. Es la

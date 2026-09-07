@@ -164,6 +164,9 @@ que **se declara**, y que decide qué widget ve el anotador y cómo se lee la pu
 después: la configuración de la clave de realimentación.
 
 #%%py
+import inspect
+
+from langsmith import Client
 from langsmith.schemas import FeedbackConfig
 
 separador("las tres formas que puede tener una puntuación")
@@ -221,6 +224,36 @@ Dos cosas de esta API que conviene saber antes de usarla:
 > que decir lo mismo.** Si tu texto dice «0, 0,5 o 1» y la clave está declarada como
 > `continuous` de 1 a 10, el anotador hará lo que le deje la pantalla, no lo que dice tu
 > documento.
+
+#%%md
+### Una nota sobre las puntuaciones compuestas
+
+Pregunta que sale sola en cuanto tienes tres claves: *«¿puedo combinar `resuelve`,
+`tono` y `exactitud` en una nota única?»*. El SDK tuvo una API para eso y **ya no**.
+
+#%%py
+separador("las fórmulas de realimentación, hoy")
+documentacion = inspect.getdoc(Client.create_feedback_formula) or ""
+for linea in documentacion.splitlines():
+    limpia = linea.strip()
+    if limpia.startswith(("Composite", "Add composite", "This method now")):
+        print("  ", limpia)
+
+#%%md
+Levanta `NotImplementedError`: las puntuaciones compuestas se definen ahora **en la
+interfaz**. Y para el curso eso no cambia gran cosa, porque la alternativa ya estaba
+enseñada y es mejor:
+
+| Lo que quieres | Dónde hacerlo |
+|---|---|
+| Una nota compuesta para mirar en el panel | La interfaz de LangSmith |
+| Una métrica de conjunto sobre un experimento | `summary_evaluators` (nb 07). Ahí puedes calcular F1, no solo medias ponderadas |
+| Decidir si un cambio entra | La puerta del P2, con tu propia fórmula en Python |
+
+> **Y una razón para no tener prisa por componer:** una nota única esconde justamente lo
+> que enseña el apartado 5 de este notebook — que los desacuerdos se agrupan por tipo de
+> caso. Promediar tres criterios en uno es perder la señal que te dice cuál de los tres
+> tiene la rúbrica mal escrita.
 
 #%%md
 ## 3. Medir el acuerdo, y por qué el porcentaje miente

@@ -423,7 +423,7 @@ Si con rúbrica y ejemplos no llegas a κ ≥ 0,6, entonces sí: prueba un model
 en ese orden, porque un modelo mayor con una rúbrica ambigua sigue sin saber qué quieres.
 
 #%%py
-@online("Alinear el juez con un modelo de verdad", trazas=30)
+@online("Alinear el juez con un modelo de verdad", trazas=30, necesita_modelo=True)
 def _():
     """El bucle completo, contra un modelo real. Una traza por caso y por vuelta."""
     from langsmith.run_helpers import tracing_context

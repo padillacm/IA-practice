@@ -94,15 +94,28 @@ Eso tiene una consecuencia práctica que conviene asumir desde el principio:
 Y lo que **sí** tiene API es lo que más valor tiene, así que no es mal reparto.
 
 #%%py
-@online("Lo que sí se puede automatizar, listado", trazas=0)
+@online("Los evaluadores en línea que ya existen", trazas=0)
 def _():
+    """Los accesores nuevos del cliente son ASÍNCRONOS, y eso sorprende.
+
+    `client.evaluators`, `client.threads`, `client.runs.share`… no devuelven listas:
+    devuelven paginadores que se recorren con `async for`. En un cuaderno hay que
+    envolverlos, y en tu servicio síncrono, también.
+    """
+    import asyncio
+
     c = cliente()
-    print("  evaluadores en línea configurados:")
-    for evaluador in c.evaluators.list().evaluators or []:
-        print(f"    {evaluador}")
-    print("\n  colas de anotación:")
-    for cola in c.list_annotation_queues():
-        print(f"    {cola.name}")
+
+    async def listar():
+        return [e async for e in c.evaluators.list()]
+
+    evaluadores = asyncio.run(listar())
+    print(f"  evaluadores en línea configurados: {len(evaluadores)}")
+    for evaluador in evaluadores:
+        print(f"    {getattr(evaluador, 'name', evaluador)}")
+    print()
+    print("  Ojo con `asyncio.run` dentro de un cuaderno que ya tenga bucle: ahí")
+    print("  es `await` directamente, que Jupyter admite en la celda de arriba.")
 
 #%%md
 > **Requisito que te va a saltar si autoalojas:** `client.evaluators`, `client.issues`,

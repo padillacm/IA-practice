@@ -241,7 +241,7 @@ for etiqueta, extra in [("binario", {}),
 > modelo de verdad, y por eso la celda de abajo va marcada.
 
 #%%py
-@online("El mismo juez, con un modelo de verdad", trazas=3)
+@online("El mismo juez, con un modelo de verdad", trazas=3, necesita_modelo=True)
 def _():
     from langsmith.run_helpers import tracing_context
 

@@ -401,18 +401,22 @@ presupuesto_de_trazas(ejemplos=len(DORADO), repeticiones=1, evaluadores_llm=1,
 #%%py
 @online("Subir el conjunto dorado y etiquetarlo v1", trazas=0)
 def _():
+    from langsmith.schemas import DataType
+
     c = cliente()
     conjunto = c.create_dataset(
         dataset_name="tickets-dorado",
         description=f"{len(DORADO)} tickets estratificados. Proyecto P2 del curso.",
-        data_type="kv",
+        data_type=DataType.kv,          # el enum, no la cadena (nb 06)
     )
     c.create_examples(
         dataset_id=conjunto.id,
         examples=[{"inputs": e.inputs, "outputs": e.outputs, "metadata": e.metadata}
                   for e in DORADO],
     )
-    c.update_dataset_tag(dataset_id=conjunto.id, as_of="latest", tag="v1")
+    # `as_of` pide una versión exacta, no "latest" (nb 06).
+    ultima = next(iter(c.list_dataset_versions(dataset_id=conjunto.id, limit=1)))
+    c.update_dataset_tag(dataset_id=conjunto.id, as_of=ultima.as_of, tag="v1")
     print(f"  dataset {conjunto.id}, {len(DORADO)} ejemplos, etiquetado v1")
 
 

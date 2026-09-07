@@ -104,6 +104,31 @@ def _tupla(v: str) -> tuple[int, ...]:
     return tuple(partes)
 
 
+#: Cuando vale «1», `@online` se ejecuta contra un LangSmith simulado en vez de saltarse.
+#: Lo pone `_tools/ejecutar_notebooks.py --simulado` y la CI. Ver
+#: `utils/langsmith_de_mentira.py` para qué demuestra eso y qué no.
+VARIABLE_DE_SIMULACION = "LANGSMITH_SIMULADO"
+
+#: El servicio simulado del proceso, si lo hay. Uno solo, para que el estado que crea una
+#: celda lo vea la siguiente — que es lo que hace que se pueda comprobar el encadenado.
+_SIMULADO: Any = None
+
+
+def simulando() -> bool:
+    """¿Estamos ejecutando las celdas `@online` contra el LangSmith de mentira?"""
+    return os.environ.get(VARIABLE_DE_SIMULACION, "") == "1"
+
+
+def servicio_de_mentira():
+    """Devuelve (creándolo la primera vez) el LangSmith simulado del proceso."""
+    global _SIMULADO
+    if _SIMULADO is None:
+        from utils.langsmith_de_mentira import LangSmithDeMentira
+
+        _SIMULADO = LangSmithDeMentira()
+    return _SIMULADO
+
+
 def hay_servicio() -> bool:
     """¿Hay clave de LangSmith en el entorno?
 
@@ -111,6 +136,8 @@ def hay_servicio() -> bool:
     sea válida ni que haya red: eso lo descubre la primera llamada, y `online` lo
     reporta sin tumbar el notebook.
     """
+    if simulando():
+        return True
     return bool(os.environ.get("LANGSMITH_API_KEY") or os.environ.get("LANGCHAIN_API_KEY"))
 
 
@@ -193,7 +220,8 @@ def trazas_consumidas() -> int:
     return _TRAZAS_CONSUMIDAS
 
 
-def online(titulo: str, *, trazas: int = 1) -> Callable[[Callable[[], Any]], Any]:
+def online(titulo: str, *, trazas: int = 1,
+           necesita_modelo: bool = False) -> Callable[[Callable[[], Any]], Any]:
     """Marca un bloque que **necesita el servicio de LangSmith**, y lo ejecuta o lo salta.
 
     Se usa como decorador sobre una función sin argumentos, que se ejecuta en el acto:
@@ -212,6 +240,10 @@ def online(titulo: str, *, trazas: int = 1) -> Callable[[Callable[[], Any]], Any
     puede pasar es que lo veas señalado y sigas con el resto del notebook, en vez de
     quedarte con el kernel a medias. Si te ocurre, es un error del material: anótalo.
 
+    `necesita_modelo=True` marca los bloques que además de LangSmith llaman a un
+    proveedor de modelos. Esos no se pueden comprobar contra el LangSmith simulado —que
+    simula LangSmith, no a OpenAI— y el modo simulado los salta diciéndolo.
+
     Devuelve lo que devuelva el bloque (o `None` si se saltó o falló), así que también
     sirve para capturar un valor:
 
@@ -221,6 +253,12 @@ def online(titulo: str, *, trazas: int = 1) -> Callable[[Callable[[], Any]], Any
 
     def decorador(funcion: Callable[[], Any]) -> Any:
         global _TRAZAS_CONSUMIDAS
+        if simulando() and necesita_modelo:
+            # El LangSmith simulado no simula a OpenAI. Un bloque que llama a un modelo
+            # de verdad no se puede comprobar aquí, y decirlo es mejor que fingirlo.
+            print(f"[simulado] NO se comprueba: {titulo}")
+            print("           necesita un proveedor de modelos, no solo LangSmith")
+            return None
         if not hay_servicio():
             print(f"[modo local] se salta: {titulo}")
             print("              necesita LANGSMITH_API_KEY en tu .env")
@@ -228,10 +266,15 @@ def online(titulo: str, *, trazas: int = 1) -> Callable[[Callable[[], Any]], Any
                 print(f"              consumiría ~{trazas} traza(s)")
             return None
         etiqueta = f" (~{trazas} traza(s))" if trazas else ""
-        print(f"[en línea] {titulo}{etiqueta}")
+        print(f"[{'simulado' if simulando() else 'en línea'}] {titulo}{etiqueta}")
         try:
             resultado = funcion()
         except Exception:
+            if simulando():
+                # En simulación el fallo SÍ se propaga: si no, la CI no vería nada y
+                # este modo no serviría para nada. Es toda su razón de ser.
+                print(f"[SIMULADO · FALLO] {titulo}")
+                raise
             print(f"[EN LÍNEA · FALLO] {titulo}")
             print(textwrap.indent(traceback.format_exc(limit=3), "    "))
             print("    El notebook sigue. Esto es un error del material: repórtalo.")
@@ -250,6 +293,16 @@ def cliente(**kwargs: Any):
     """
     from langsmith import Client
 
+    if simulando():
+        from utils.langsmith_de_mentira import SesionDeMentira, atar_cliente_moderno
+
+        servicio = servicio_de_mentira()
+        kwargs.setdefault("api_key", "simulado")
+        kwargs.setdefault("session", SesionDeMentira(servicio))
+        kwargs.setdefault("auto_batch_tracing", False)
+        c = Client(**kwargs)
+        atar_cliente_moderno(c, servicio)
+        return c
     return Client(**kwargs)
 
 

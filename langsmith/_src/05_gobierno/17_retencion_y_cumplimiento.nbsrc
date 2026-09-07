@@ -318,6 +318,83 @@ retención extendida, como vimos en el apartado 1, **se activa sola** en cuanto 
 anota una traza.
 
 #%%md
+## 4 bis. Y si la respuesta es «no puede salir de aquí»
+
+El notebook 00 dice que si tu obstáculo es regulatorio y tu presupuesto no es Enterprise,
+esta no es tu herramienta. Con lo de este notebook encima —no se puede borrar una traza—
+esa conversación se tiene antes o se tiene tarde, así que conviene saber qué cambia
+exactamente al autoalojar.
+
+El curso asume la nube y no cambia eso. Pero hay **una cosa** que tienes que saber si
+alguien de tu equipo lo monta, y es una trampa fina.
+
+#%%py
+import logging
+
+from langsmith._internal import _backend_version
+
+separador("lo que hace el SDK con un servidor viejo")
+print("  ", inspect.getsource(_backend_version._check_backend_version).count("logger.warning"),
+      "avisos, 0 excepciones\n")
+for linea in inspect.getsource(_backend_version._check_backend_version).splitlines():
+    if "logger.warning" in linea or "min_version" in linea or "older than" in linea:
+        print("  ", linea.strip()[:78])
+
+#%%py
+# Y se puede ver saltar, con el capturador del notebook 03.
+from utils.curso import registro_del_sdk
+
+separador("un servidor autoalojado demasiado viejo")
+with registro_del_sdk(nivel=logging.WARNING) as lineas:
+    _backend_version._check_backend_version("0.15.2", min_version="0.16.0")
+    _backend_version._check_backend_version("0.16.14", min_version="0.16.0")
+for linea in lineas:
+    print("  ", linea[:110])
+print()
+print(f"  avisos capturados: {len(lineas)} (el segundo servidor está al día y calla)")
+
+#%%md
+> **La trampa:** un LangSmith autoalojado por debajo de **0.16.0** no rompe nada de
+> forma visible. `client.evaluators`, `client.issues`, `client.threads` y compañía
+> **degradan en silencio**, y lo único que lo cuenta es una línea de `logging.warning`
+> que en producción no lee nadie.
+
+Qué hacer con eso, que es todo lo que este curso puede decir sobre autoalojar con
+honestidad:
+
+| | En la nube | Autoalojado |
+|---|---|---|
+| Versión del servidor | La de LangChain, siempre al día | **La tuya**, y decide qué funciona |
+| Cómo te enteras de que va vieja | No aplica | Un `warning` en el registro |
+| Retención y borrado | Lo de este notebook | **Tu** base de datos: aquí sí puedes borrar de verdad |
+| Insights, cajas de arena | Según plan | Según versión, y llegan más tarde |
+
+#%%py
+# La comprobación de arranque, que en autoalojado sí merece la pena.
+def exigir_servidor_al_dia(client, *, minima: str = "0.16.0") -> None:
+    """Convierte el aviso silencioso en un fallo al arrancar."""
+    from packaging.version import parse
+
+    version = (client.info.version or "").strip()
+    if not version:
+        raise RuntimeError("no se pudo leer /info: ¿el servidor está arriba?")
+    if parse(version) < parse(minima):
+        raise RuntimeError(
+            f"LangSmith {version} < {minima}: los evaluadores en línea (nb 14) y los "
+            "accesores nuevos degradan en silencio. Actualiza el servidor.")
+
+
+separador("la comprobación que convierte el aviso en un fallo")
+for version in ("0.15.2", "0.16.14"):
+    fingido = type("Info", (), {"version": version})()
+    cliente_fingido = type("C", (), {"info": fingido})()
+    try:
+        exigir_servidor_al_dia(cliente_fingido)
+        print(f"  servidor {version:<8} arranca")
+    except RuntimeError as error:
+        print(f"  servidor {version:<8} FALLA: {str(error)[:66]}…")
+
+#%%md
 ## 5. Lo que el notebook 30 del curso de LangGraph no borra
 
 El notebook 30 de la otra mitad del curso trata el borrado desde el lado de la aplicación:

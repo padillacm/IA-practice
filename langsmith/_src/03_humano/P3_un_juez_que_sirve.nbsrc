@@ -433,7 +433,7 @@ todo el curso y la que más disgustos evita: sin ella, el mes 7 tu panel sigue d
 0,9 de calidad con un juez que ha vuelto a puntuar la cortesía.
 
 #%%py
-@online("El proyecto completo contra el servicio", trazas=90)
+@online("El proyecto completo contra el servicio", trazas=90, necesita_modelo=True)
 def _():
     """Los tres jueces sobre las dos mitades, con un modelo de verdad.
 

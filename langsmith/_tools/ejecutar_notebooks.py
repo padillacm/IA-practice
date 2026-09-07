@@ -48,6 +48,13 @@ GUION = textwrap.dedent('''
 
     # Antes de ejecutar una sola celda: sin clave y sin salida al servicio.
     modelo_falso.aislar_langsmith()
+    if {simulado!r}:
+        # Modo simulado: las celdas @online se EJECUTAN contra un LangSmith de mentira
+        # en vez de saltarse, y un fallo tumba el notebook. Ver
+        # utils/langsmith_de_mentira.py.
+        import os
+
+        os.environ["LANGSMITH_SIMULADO"] = "1"
 
 
     def _conducir(_ruta):
@@ -115,8 +122,8 @@ def notebooks(objetivos: list[str]) -> list[pathlib.Path]:
     return encontrados
 
 
-def ejecutar(cuaderno: pathlib.Path) -> tuple[bool, str]:
-    guion = GUION.format(raiz=str(RAIZ), tools=str(RAIZ / "_tools"))
+def ejecutar(cuaderno: pathlib.Path, *, simulado: bool = False) -> tuple[bool, str]:
+    guion = GUION.format(raiz=str(RAIZ), tools=str(RAIZ / "_tools"), simulado=simulado)
     resultado = subprocess.run(
         [sys.executable, "-c", guion, str(cuaderno)],
         cwd=RAIZ, capture_output=True, text=True,
@@ -125,14 +132,16 @@ def ejecutar(cuaderno: pathlib.Path) -> tuple[bool, str]:
 
 
 def main() -> int:
-    objetivo = notebooks(sys.argv[1:])
+    argumentos = [a for a in sys.argv[1:] if a != "--simulado"]
+    simulado = "--simulado" in sys.argv[1:]
+    objetivo = notebooks(argumentos)
     if not objetivo:
         print("no hay notebooks que ejecutar")
         return 1
 
     fallos: list[pathlib.Path] = []
     for cuaderno in objetivo:
-        correcto, error = ejecutar(cuaderno)
+        correcto, error = ejecutar(cuaderno, simulado=simulado)
         etiqueta = cuaderno.relative_to(RAIZ)
         if correcto:
             print(f"[  ok ] {etiqueta}")

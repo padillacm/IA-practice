@@ -119,8 +119,33 @@ def _():
 
 @online("Ver el historial de versiones", trazas=0)
 def _():
-    for commit in cliente().list_prompt_commits("soporte-clasificador", limit=10):
-        print(f"  {commit.commit_hash[:8]}  {commit.tags or []}")
+    """Y aquí la sorpresa que se lleva todo el mundo la primera vez.
+
+    `list_prompt_commits` devuelve `ListedPromptCommit`, y ese objeto **no tiene
+    `tags`**. Las etiquetas viven en el repo (`Prompt.tags`), no en cada commit: por
+    la lista de commits no se puede saber cuál está etiquetado como «produccion».
+    """
+    c = cliente()
+    for commit in c.list_prompt_commits("soporte-clasificador", limit=10):
+        print(f"  {commit.commit_hash[:8]}  {commit.created_at}")
+    print()
+    print("  campos que SÍ trae un commit listado:")
+    from langsmith.schemas import ListedPromptCommit
+
+    print("   ", sorted(ListedPromptCommit.model_fields))
+    print("  -> no hay «tags». Están en el repo, no en el commit.")
+
+
+@online("Y entonces, ¿qué commit está en producción?", trazas=0)
+def _():
+    """La forma que sí funciona: preguntar por la etiqueta y leer qué commit te dan."""
+    c = cliente()
+    en_produccion = c.pull_prompt_commit("soporte-clasificador:produccion")
+    print(f"  «produccion» apunta ahora a {en_produccion.commit_hash[:8]}")
+    print()
+    print("  Es una llamada por etiqueta, no un listado. Si quieres auditar varias")
+    print("  etiquetas, es una llamada por etiqueta — y ese es el motivo de que la")
+    print("  puerta del apartado 5 guarde el commit en TU lado, no lo deduzca.")
 
 #%%md
 ### El cambio y la vuelta atrás
@@ -159,14 +184,16 @@ def _():
 @online("Desplegar: mover la etiqueta", trazas=0)
 def _():
     c = cliente()
-    commits = list(c.list_prompt_commits("soporte-clasificador", limit=5))
-    candidata = next(c for c in commits if "candidata" in (c.tags or []))
+    # Cuál es la candidata NO se busca filtrando la lista de commits por etiqueta: esa
+    # lista no las trae. Se pregunta por la etiqueta, que es una llamada distinta.
+    candidata = c.pull_prompt_commit("soporte-clasificador:candidata")
     # Publicar sobre ese mismo commit con la etiqueta de producción es el «despliegue».
     c.push_prompt("soporte-clasificador",
                   object=c.pull_prompt(f"soporte-clasificador:{candidata.commit_hash}"),
                   parent_commit_hash=candidata.commit_hash,
                   commit_tags=["produccion"])
-    print("  etiqueta «produccion» movida. Rollback: volver a mover la etiqueta.")
+    print(f"  «produccion» movida a {candidata.commit_hash[:8]}.")
+    print("  Rollback: volver a mover la etiqueta.")
 
 #%%md
 > **Y el Hub ya no es solo de prompts.** El mismo mecanismo de *push/pull* por *handle*

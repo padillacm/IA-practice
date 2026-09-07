@@ -8,10 +8,12 @@ LangGraph que está en `langgraph/` (38 notebooks, módulos 0-7).
 > red cortada. Vive en la rama `claude/langgraph-notebooks-course-nokcof` —la única para
 > la que tengo permiso—, en el directorio `langsmith/`.
 >
-> Queda **una** cosa que no puedo hacer yo: pasar el curso con una clave real. Las 47
-> celdas `@online` están escritas contra la firma verificada de cada función del SDK,
-> pero no se han ejecutado contra el servicio. Están marcadas una a una y el `README`
-> dice cuáles son.
+> Las celdas `@online` ya **no** se quedan sin ejecutar: corren contra un LangSmith
+> simulado (`utils/langsmith_de_mentira.py`) en la CI, y esa pasada destapó cinco
+> errores reales del material que la validación estática no podía ver. Lo que sigue sin
+> comprobarse es la **semántica del servicio real** —si un filtro devuelve lo que crees,
+> si una versión se etiqueta como se supone— y las **tres** celdas que llaman a un
+> proveedor de modelos, marcadas `necesita_modelo=True`. Para eso hace falta una clave.
 >
 > Este documento se corrige a medida que el SDK desmiente cosas. Las correcciones se
 > dejan escritas y marcadas en vez de reescribirse en silencio, porque saber qué se

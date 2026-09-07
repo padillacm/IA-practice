@@ -216,11 +216,14 @@ etiqueta que le pongas.
 def _():
     c = cliente()
 
+    from langsmith.schemas import DataType
+
     conjunto = c.create_dataset(
         dataset_name="tickets-clasificacion",
         description="40 tickets estratificados por categoría. Módulo 2 del curso.",
         # kv es el valor por defecto; se pone explícito porque es una decisión.
-        data_type="kv",
+        # Y va el ENUM, no la cadena "kv": el SDK le pide `.value` por dentro.
+        data_type=DataType.kv,
     )
 
     c.create_examples(
@@ -231,7 +234,12 @@ def _():
 
     # La etiqueta es lo que hace que un experimento de dentro de tres meses siga
     # comparándose con este. Sin ella solo tienes fechas.
-    c.update_dataset_tag(dataset_id=conjunto.id, as_of="latest", tag="v1")
+    #
+    # `as_of` NO admite "latest": pide una versión EXACTA, y para eso hay que
+    # preguntar antes cuál es. Es el detalle que hace que este bloque falle si se
+    # copia de la documentación sin ejecutarlo.
+    ultima = next(iter(c.list_dataset_versions(dataset_id=conjunto.id, limit=1)))
+    c.update_dataset_tag(dataset_id=conjunto.id, as_of=ultima.as_of, tag="v1")
     print(f"  dataset {conjunto.id} con {len(ejemplos)} ejemplos, etiquetado v1")
 
 @online("Listar las versiones de un dataset", trazas=0)
