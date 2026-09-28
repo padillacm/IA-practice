@@ -1,0 +1,338 @@
+[
+ {
+  "id": "v4_particles",
+  "title": "Choose the particle",
+  "instructions": "Write the missing particle (one or two words).",
+  "items": [
+   {
+    "q": "We have to set ______ early tomorrow to avoid the traffic.",
+    "a": [
+     "off",
+     "out"
+    ]
+   },
+   {
+    "q": "I can't figure ______ how this machine works.",
+    "a": [
+     "out"
+    ]
+   },
+   {
+    "q": "The meeting has been called ______ because the manager is ill.",
+    "a": [
+     "off"
+    ]
+   },
+   {
+    "q": "We've run ______ of milk - can you buy some?",
+    "a": [
+     "out"
+    ]
+   },
+   {
+    "q": "Please carry ______ with your work while I'm away.",
+    "a": [
+     "on"
+    ]
+   },
+   {
+    "q": "Could you go ______ the report once more before we send it?",
+    "a": [
+     "over",
+     "through"
+    ]
+   },
+   {
+    "q": "The company has cut ______ on travel expenses.",
+    "a": [
+     "back",
+     "down"
+    ]
+   },
+   {
+    "q": "She came ______ with a brilliant solution in five minutes.",
+    "a": [
+     "up"
+    ]
+   },
+   {
+    "q": "I refuse to put up ______ this noise any longer.",
+    "a": [
+     "with"
+    ]
+   },
+   {
+    "q": "He finally gave ______ and admitted he was wrong.",
+    "a": [
+     "in"
+    ]
+   },
+   {
+    "q": "Don't forget to factor ______ the cost of transport.",
+    "a": [
+     "in"
+    ]
+   },
+   {
+    "q": "After years of rivalry, the larger firm took ______ its competitor.",
+    "a": [
+     "over"
+    ]
+   },
+   {
+    "q": "The talks broke ______ after the two sides failed to agree.",
+    "a": [
+     "down"
+    ]
+   },
+   {
+    "q": "Several hundred workers were laid ______ last year.",
+    "a": [
+     "off"
+    ]
+   },
+   {
+    "q": "His story didn't add ______; the police knew he was lying.",
+    "a": [
+     "up"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v4_formal_to_phrasal",
+  "title": "Formal verb -> phrasal verb",
+  "instructions": "Replace the verb in brackets with a phrasal verb in the correct form.",
+  "items": [
+   {
+    "q": "The event was ______ until next month. (postponed)",
+    "a": [
+     "put off",
+     "pushed back"
+    ]
+   },
+   {
+    "q": "We need to ______ our spending. (reduce)",
+    "a": [
+     "cut down on",
+     "cut back on",
+     "cut back",
+     "cut down"
+    ]
+   },
+   {
+    "q": "She ______ his behaviour for years. (tolerated)",
+    "a": [
+     "put up with"
+    ]
+   },
+   {
+    "q": "I'll ______ the matter and call you back. (investigate)",
+    "a": [
+     "look into"
+    ]
+   },
+   {
+    "q": "A problem ______ during testing. (arose)",
+    "a": [
+     "came up",
+     "cropped up"
+    ]
+   },
+   {
+    "q": "He really ______ his father - same smile, same temper. (resembles)",
+    "a": [
+     "takes after"
+    ]
+   },
+   {
+    "q": "The plane ______ on time. (departed)",
+    "a": [
+     "took off"
+    ]
+   },
+   {
+    "q": "We must ______ unnecessary paperwork. (eliminate)",
+    "a": [
+     "get rid of",
+     "do away with",
+     "cut out"
+    ]
+   },
+   {
+    "q": "It took me two weeks to ______ the flu. (recover from)",
+    "a": [
+     "get over"
+    ]
+   },
+   {
+    "q": "They ______ the offer because the salary was too low. (rejected)",
+    "a": [
+     "turned down"
+    ]
+   },
+   {
+    "q": "Please don't ______ your dreams. (abandon)",
+    "a": [
+     "give up",
+     "give up on"
+    ]
+   },
+   {
+    "q": "The smoke ______ the fire alarm. (activated)",
+    "a": [
+     "set off"
+    ]
+   },
+   {
+    "q": "We are ______ our savings much faster than expected. (depleting)",
+    "a": [
+     "using up",
+     "running through",
+     "eating into",
+     "running down"
+    ]
+   },
+   {
+    "q": "I only ______ the truth years later. (discovered)",
+    "a": [
+     "found out"
+    ]
+   },
+   {
+    "q": "Let's ______ where we stopped yesterday. (continue from)",
+    "a": [
+     "carry on from",
+     "pick up from"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v4_idioms",
+  "title": "Complete the idiom",
+  "instructions": "Write ONE word in each gap.",
+  "items": [
+   {
+    "q": "You've hit the nail on the ______ - that's exactly the problem.",
+    "a": [
+     "head"
+    ]
+   },
+   {
+    "q": "Nobody mentioned the budget cuts; they were the elephant in the ______.",
+    "a": [
+     "room"
+    ]
+   },
+   {
+    "q": "Losing that job was a blessing in ______: I found a much better one.",
+    "a": [
+     "disguise"
+    ]
+   },
+   {
+    "q": "Let's call it a ______ - we're all exhausted.",
+    "a": [
+     "day"
+    ]
+   },
+   {
+    "q": "These complaints are just the tip of the ______.",
+    "a": [
+     "iceberg"
+    ]
+   },
+   {
+    "q": "Stop beating around the ______ and tell me what happened.",
+    "a": [
+     "bush"
+    ]
+   },
+   {
+    "q": "The prototype failed, so we're back to square ______.",
+    "a": [
+     "one"
+    ]
+   },
+   {
+    "q": "Don't cut ______ on safety - do it properly.",
+    "a": [
+     "corners"
+    ]
+   },
+   {
+    "q": "I don't think we'll win the contract; it's a long ______.",
+    "a": [
+     "shot"
+    ]
+   },
+   {
+    "q": "Please keep me in the ______ about any changes.",
+    "a": [
+     "loop"
+    ]
+   },
+   {
+    "q": "Take his predictions with a pinch of ______.",
+    "a": [
+     "salt"
+    ]
+   },
+   {
+    "q": "She's always willing to go the extra ______ for her clients.",
+    "a": [
+     "mile"
+    ]
+   },
+   {
+    "q": "I finally bit the ______ and booked the dentist appointment.",
+    "a": [
+     "bullet"
+    ]
+   },
+   {
+    "q": "He passed the exam by the skin of his ______.",
+    "a": [
+     "teeth"
+    ]
+   },
+   {
+    "q": "Our donation is only a drop in the ______ compared to what's needed.",
+    "a": [
+     "ocean"
+    ]
+   },
+   {
+    "q": "The new hire hit the ground ______ and closed three deals in her first week.",
+    "a": [
+     "running"
+    ]
+   },
+   {
+    "q": "We haven't made firm plans; let's play it by ______.",
+    "a": [
+     "ear"
+    ]
+   },
+   {
+    "q": "When they cancelled my holiday, that was the last ______.",
+    "a": [
+     "straw"
+    ]
+   },
+   {
+    "q": "I'm feeling a bit under the ______ today, so I'll work from home.",
+    "a": [
+     "weather"
+    ]
+   },
+   {
+    "q": "You can't sit on the ______ forever - which option do you support?",
+    "a": [
+     "fence"
+    ]
+   }
+  ]
+ }
+]

@@ -1,0 +1,553 @@
+[
+ {
+  "id": "v3_delexical",
+  "title": "Verb + noun collocations",
+  "instructions": "Write the missing verb in the correct form.",
+  "items": [
+   {
+    "q": "We need to ______ a decision by Friday.",
+    "a": [
+     "make",
+     "take",
+     "reach"
+    ]
+   },
+   {
+    "q": "I'd like to ______ a complaint about the service.",
+    "a": [
+     "make"
+    ]
+   },
+   {
+    "q": "The new policy will ______ more harm than good.",
+    "a": [
+     "do"
+    ]
+   },
+   {
+    "q": "Could you ______ me a favour and water my plants?",
+    "a": [
+     "do"
+    ]
+   },
+   {
+    "q": "Please ______ attention to the safety instructions.",
+    "a": [
+     "pay"
+    ]
+   },
+   {
+    "q": "Our team ______ significant progress this quarter.",
+    "a": [
+     "made",
+     "has made"
+    ]
+   },
+   {
+    "q": "The findings ______ serious questions about data privacy.",
+    "a": [
+     "raise",
+     "raised",
+     "pose",
+     "posed"
+    ]
+   },
+   {
+    "q": "After hours of negotiation, they finally ______ an agreement.",
+    "a": [
+     "reached",
+     "came to"
+    ]
+   },
+   {
+    "q": "It's hard to ______ a conclusion from such a small sample.",
+    "a": [
+     "draw",
+     "reach",
+     "come to"
+    ]
+   },
+   {
+    "q": "The product failed to ______ customer expectations.",
+    "a": [
+     "meet"
+    ]
+   },
+   {
+    "q": "Her speech ______ a lasting impression on the audience.",
+    "a": [
+     "made",
+     "left"
+    ]
+   },
+   {
+    "q": "We ______ a big risk by launching the product so early.",
+    "a": [
+     "took",
+     "ran",
+     "are taking",
+     "were taking"
+    ]
+   },
+   {
+    "q": "He ______ his temper and started shouting.",
+    "a": [
+     "lost"
+    ]
+   },
+   {
+    "q": "Don't worry about the booking - I'll ______ care of it.",
+    "a": [
+     "take"
+    ]
+   },
+   {
+    "q": "Could you ______ an eye on my bag for a minute?",
+    "a": [
+     "keep"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v3_adj_adv",
+  "title": "Adjective + noun and adverb + adjective",
+  "instructions": "Choose the most natural collocation. Type the letter or the word.",
+  "items": [
+   {
+    "q": "There was ___ traffic on the motorway this morning.",
+    "options": [
+     "big",
+     "strong",
+     "heavy"
+    ],
+    "a": [
+     "c",
+     "heavy",
+     "c) heavy"
+    ]
+   },
+   {
+    "q": "The ___ majority of respondents agreed with the proposal.",
+    "options": [
+     "wide",
+     "vast",
+     "tall"
+    ],
+    "a": [
+     "b",
+     "vast",
+     "b) vast"
+    ]
+   },
+   {
+    "q": "Losing the final was a ___ disappointment.",
+    "options": [
+     "sharp",
+     "sour",
+     "bitter"
+    ],
+    "a": [
+     "c",
+     "bitter",
+     "c) bitter"
+    ]
+   },
+   {
+    "q": "She has a ___ interest in politics.",
+    "options": [
+     "keen",
+     "sharp",
+     "hard"
+    ],
+    "a": [
+     "a",
+     "keen",
+     "a) keen"
+    ]
+   },
+   {
+    "q": "We have ___ evidence that the new system works.",
+    "options": [
+     "compelling",
+     "pushing",
+     "forcing"
+    ],
+    "a": [
+     "a",
+     "compelling",
+     "a) compelling"
+    ]
+   },
+   {
+    "q": "There's only a ___ chance of rain tomorrow.",
+    "options": [
+     "light",
+     "thin",
+     "slight"
+    ],
+    "a": [
+     "c",
+     "slight",
+     "c) slight"
+    ]
+   },
+   {
+    "q": "He made a ___ effort to be polite.",
+    "options": [
+     "conscious",
+     "aware",
+     "knowing"
+    ],
+    "a": [
+     "a",
+     "conscious",
+     "a) conscious"
+    ]
+   },
+   {
+    "q": "The government is facing ___ criticism over the new law.",
+    "options": [
+     "wild",
+     "fierce",
+     "hard"
+    ],
+    "a": [
+     "b",
+     "fierce",
+     "b) fierce"
+    ]
+   },
+   {
+    "q": "It's ___ knowledge that he's planning to retire.",
+    "options": [
+     "common",
+     "usual",
+     "general"
+    ],
+    "a": [
+     "a",
+     "common",
+     "a) common"
+    ]
+   },
+   {
+    "q": "My grandfather was a ___ smoker for forty years.",
+    "options": [
+     "heavy",
+     "strong",
+     "big"
+    ],
+    "a": [
+     "a",
+     "heavy",
+     "a) heavy"
+    ]
+   },
+   {
+    "q": "The festival was cancelled because of ___ rain.",
+    "options": [
+     "fat",
+     "strong",
+     "torrential"
+    ],
+    "a": [
+     "c",
+     "torrential",
+     "c) torrential"
+    ]
+   },
+   {
+    "q": "The results of the two studies were ___ different.",
+    "options": [
+     "strikingly",
+     "strongly",
+     "heavily"
+    ],
+    "a": [
+     "a",
+     "strikingly",
+     "a) strikingly"
+    ]
+   },
+   {
+    "q": "I'm ___ aware of the risks involved.",
+    "options": [
+     "well",
+     "strongly",
+     "highly"
+    ],
+    "a": [
+     "a",
+     "well",
+     "a) well"
+    ]
+   },
+   {
+    "q": "She was ___ disappointed not to get the promotion.",
+    "options": [
+     "bitterly",
+     "heavily",
+     "strongly"
+    ],
+    "a": [
+     "a",
+     "bitterly",
+     "a) bitterly"
+    ]
+   },
+   {
+    "q": "The whole plan is ___ flawed; we need to start again.",
+    "options": [
+     "heavily",
+     "highly",
+     "fundamentally"
+    ],
+    "a": [
+     "c",
+     "fundamentally",
+     "c) fundamentally"
+    ]
+   },
+   {
+    "q": "It's ___ unlikely that they'll change their minds.",
+    "options": [
+     "heavily",
+     "highly",
+     "strongly"
+    ],
+    "a": [
+     "b",
+     "highly",
+     "b) highly"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v3_ideas",
+  "title": "Collocations for ideas, data and change",
+  "instructions": "Write ONE word in each gap.",
+  "items": [
+   {
+    "q": "The new research sheds ______ on the causes of the disease.",
+    "a": [
+     "light",
+     "new"
+    ]
+   },
+   {
+    "q": "House prices rose ______ in 2022, by almost 20%.",
+    "a": [
+     "sharply",
+     "dramatically",
+     "steeply",
+     "significantly",
+     "considerably"
+    ]
+   },
+   {
+    "q": "There has been a ______ decline in birth rates over the past decade (slow and continuous).",
+    "a": [
+     "steady",
+     "gradual"
+    ]
+   },
+   {
+    "q": "Critics have ______ doubt on the reliability of the data.",
+    "a": [
+     "cast",
+     "thrown"
+    ]
+   },
+   {
+    "q": "We need to ______ a balance between speed and quality.",
+    "a": [
+     "strike",
+     "find"
+    ]
+   },
+   {
+    "q": "This decision could have far-______ consequences.",
+    "a": [
+     "reaching"
+    ]
+   },
+   {
+    "q": "Better public education can help ______ the gap between rich and poor.",
+    "a": [
+     "bridge",
+     "close",
+     "narrow"
+    ]
+   },
+   {
+    "q": "She ______ a very valid point about the budget.",
+    "a": [
+     "raised",
+     "made"
+    ]
+   },
+   {
+    "q": "His argument doesn't ______ water - the numbers don't add up.",
+    "a": [
+     "hold"
+    ]
+   },
+   {
+    "q": "Let's ______ into account the cost of training new staff.",
+    "a": [
+     "take"
+    ]
+   },
+   {
+    "q": "The minister is under ______ pressure to resign.",
+    "a": [
+     "mounting",
+     "intense",
+     "enormous",
+     "considerable",
+     "huge",
+     "great",
+     "increasing",
+     "growing"
+    ]
+   },
+   {
+    "q": "There is ______ consensus among scientists on this issue.",
+    "a": [
+     "broad",
+     "general",
+     "widespread",
+     "overwhelming",
+     "strong"
+    ]
+   },
+   {
+    "q": "The plan met with fierce ______ from local residents.",
+    "a": [
+     "opposition",
+     "resistance",
+     "criticism"
+    ]
+   },
+   {
+    "q": "After rising for months, unemployment has finally levelled ______.",
+    "a": [
+     "off",
+     "out"
+    ]
+   },
+   {
+    "q": "Sales ______ a peak in December and then fell sharply.",
+    "a": [
+     "reached",
+     "hit"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v3_upgrade",
+  "title": "Upgrade the collocation",
+  "type": "open",
+  "instructions": "Replace the words in CAPITALS with a more natural or precise collocation (write only the replacement).",
+  "items": [
+   {
+    "q": "We have a VERY BIG problem with the supplier.",
+    "a": [
+     "major",
+     "serious",
+     "huge",
+     "significant",
+     "pressing"
+    ]
+   },
+   {
+    "q": "It's VERY IMPORTANT that we finish on time.",
+    "a": [
+     "crucial",
+     "vital",
+     "essential",
+     "imperative"
+    ]
+   },
+   {
+    "q": "After the marathon I was VERY TIRED.",
+    "a": [
+     "exhausted",
+     "worn out",
+     "shattered",
+     "drained"
+    ]
+   },
+   {
+    "q": "I'm VERY SURE that she's telling the truth.",
+    "a": [
+     "absolutely certain",
+     "convinced",
+     "firmly convinced",
+     "positive",
+     "absolutely sure"
+    ]
+   },
+   {
+    "q": "A VERY LARGE NUMBER OF people signed the petition.",
+    "a": [
+     "a vast number of",
+     "a huge number of",
+     "a substantial number of",
+     "a significant number of",
+     "an enormous number of"
+    ]
+   },
+   {
+    "q": "The project was VERY DIFFICULT but rewarding.",
+    "a": [
+     "extremely challenging",
+     "demanding",
+     "daunting",
+     "arduous",
+     "gruelling"
+    ]
+   },
+   {
+    "q": "We need to THINK ABOUT the proposal CAREFULLY.",
+    "a": [
+     "consider the proposal carefully",
+     "carefully consider the proposal",
+     "weigh up the proposal",
+     "give careful consideration to the proposal"
+    ]
+   },
+   {
+    "q": "The two situations are VERY DIFFERENT.",
+    "a": [
+     "completely different",
+     "strikingly different",
+     "fundamentally different",
+     "radically different",
+     "worlds apart"
+    ]
+   },
+   {
+    "q": "Many people DISAGREE STRONGLY with the plan.",
+    "a": [
+     "strongly oppose",
+     "are strongly opposed to",
+     "fiercely oppose",
+     "vehemently disagree with"
+    ]
+   },
+   {
+    "q": "She gave a VERY GOOD reason for the delay.",
+    "a": [
+     "compelling",
+     "valid",
+     "convincing",
+     "perfectly good"
+    ]
+   }
+  ]
+ }
+]

@@ -1,0 +1,325 @@
+[
+ {
+  "id": "l6_connected_speech",
+  "title": "Decode connected speech",
+  "instructions": "Write each sentence in full, standard English (as you would write it).",
+  "items": [
+   {
+    "q": "Whaddaya wanna do tonight?",
+    "a": [
+     "What do you want to do tonight?"
+    ]
+   },
+   {
+    "q": "I dunno, lemme think.",
+    "a": [
+     "I don't know, let me think."
+    ]
+   },
+   {
+    "q": "We shoulda left earlier.",
+    "a": [
+     "We should have left earlier."
+    ]
+   },
+   {
+    "q": "Ya gotta be kidding me.",
+    "a": [
+     "You have got to be kidding me.",
+     "You've got to be kidding me.",
+     "You have to be kidding me.",
+     "You've gotta be kidding me."
+    ]
+   },
+   {
+    "q": "I'm gonna grab a coffee. D'ya want one?",
+    "a": [
+     "I am going to grab a coffee. Do you want one?",
+     "I'm going to grab a coffee. Do you want one?"
+    ]
+   },
+   {
+    "q": "It's kinda weird, innit?",
+    "a": [
+     "It's kind of weird, isn't it?",
+     "It is kind of weird, is it not?"
+    ]
+   },
+   {
+    "q": "She musta forgotten.",
+    "a": [
+     "She must have forgotten."
+    ]
+   },
+   {
+    "q": "Didja see that?",
+    "a": [
+     "Did you see that?"
+    ]
+   },
+   {
+    "q": "Gimme a sec.",
+    "a": [
+     "Give me a second.",
+     "Give me a sec."
+    ]
+   },
+   {
+    "q": "I oughta call him.",
+    "a": [
+     "I ought to call him."
+    ]
+   },
+   {
+    "q": "Wouldja mind closing the window?",
+    "a": [
+     "Would you mind closing the window?"
+    ]
+   },
+   {
+    "q": "Where'dja get that jacket?",
+    "a": [
+     "Where did you get that jacket?"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage1",
+  "title": "Passage 1 - A voicemail from your manager",
+  "instructions": "Listen to passage 1 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "Why is Laura calling?",
+    "options": [
+     "to congratulate you on finishing early",
+     "to question the proposed schedule",
+     "to cancel the project"
+    ],
+    "a": [
+     "b",
+     "to question the proposed schedule",
+     "b) to question the proposed schedule"
+    ]
+   },
+   {
+    "q": "What does Laura really think about the timeline?",
+    "options": [
+     "It is exactly what she expected.",
+     "It is too slow.",
+     "It is probably unrealistic."
+    ],
+    "why": "'More optimistic than I'd expected' + 'I'm not saying it can't be done, but...' = polite doubt.",
+    "a": [
+     "c",
+     "It is probably unrealistic.",
+     "c) It is probably unrealistic."
+    ]
+   },
+   {
+    "q": "What does she suggest?",
+    "options": [
+     "giving the project to Daniel",
+     "adding some extra time before committing to the client",
+     "asking the client for more money"
+    ],
+    "a": [
+     "b",
+     "adding some extra time before committing to the client",
+     "b) adding some extra time before committing to the client"
+    ]
+   },
+   {
+    "q": "What does she imply about the client?",
+    "options": [
+     "They are old friends of Daniel's.",
+     "They can be difficult to work with.",
+     "They are thinking of cancelling."
+    ],
+    "why": "'Let's just say they weren't the easiest people to work with' = understatement.",
+    "a": [
+     "b",
+     "They can be difficult to work with.",
+     "b) They can be difficult to work with."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage2",
+  "title": "Passage 2 - Remote work: a mixed picture",
+  "instructions": "Listen to passage 2 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "What is the speaker's main point?",
+    "options": [
+     "Remote work has been a disaster for most companies.",
+     "The value of remote work depends on the type of task.",
+     "Offices will soon disappear completely."
+    ],
+    "a": [
+     "b",
+     "The value of remote work depends on the type of task.",
+     "b) The value of remote work depends on the type of task."
+    ]
+   },
+   {
+    "q": "How does the speaker feel about extreme views on remote work?",
+    "options": [
+     "undecided between them",
+     "critical - the evidence doesn't support them",
+     "enthusiastic about both of them"
+    ],
+    "a": [
+     "b",
+     "critical - the evidence doesn't support them",
+     "b) critical - the evidence doesn't support them"
+    ]
+   },
+   {
+    "q": "Which activity does the speaker say suffers when people work remotely?",
+    "options": [
+     "writing reports",
+     "tasks that need deep concentration",
+     "training junior staff"
+    ],
+    "a": [
+     "c",
+     "training junior staff",
+     "c) training junior staff"
+    ]
+   },
+   {
+    "q": "What does the speaker recommend?",
+    "options": [
+     "letting each employee decide freely",
+     "organising the working week around the needs of different tasks",
+     "returning to the office full time"
+    ],
+    "a": [
+     "b",
+     "organising the working week around the needs of different tasks",
+     "b) organising the working week around the needs of different tasks"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage3",
+  "title": "Passage 3 - Why we forget (lecture)",
+  "instructions": "Listen to passage 3 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "What did Ebbinghaus use in his experiments?",
+    "options": [
+     "lists of nonsense syllables",
+     "photographs of faces",
+     "lists of foreign words"
+    ],
+    "a": [
+     "a",
+     "lists of nonsense syllables",
+     "a) lists of nonsense syllables"
+    ]
+   },
+   {
+    "q": "According to the speaker, when do we forget new information fastest?",
+    "options": [
+     "within the first day or so",
+     "after about a week",
+     "after about a month"
+    ],
+    "a": [
+     "a",
+     "within the first day or so",
+     "a) within the first day or so"
+    ]
+   },
+   {
+    "q": "What does the speaker say about cramming?",
+    "options": [
+     "It creates a false, short-lived feeling of having learned something.",
+     "It is the most efficient way to prepare for exams.",
+     "It only works for languages."
+    ],
+    "a": [
+     "a",
+     "It creates a false, short-lived feeling of having learned something.",
+     "a) It creates a false, short-lived feeling of having learned something."
+    ]
+   },
+   {
+    "q": "Why, according to the speaker, does spaced repetition work?",
+    "options": [
+     "It is easier and more relaxing than cramming.",
+     "The effort of recalling information strengthens the memory.",
+     "It lets you study more material in less time."
+    ],
+    "a": [
+     "b",
+     "The effort of recalling information strengthens the memory.",
+     "b) The effort of recalling information strengthens the memory."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage4",
+  "title": "Passage 4 - News report: the four-day week",
+  "instructions": "Listen to passage 4 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "What was the main finding of the trial?",
+    "options": [
+     "Productivity fell sharply in most companies.",
+     "Most companies kept the four-day week afterwards.",
+     "Most employees wanted to return to five days."
+    ],
+    "a": [
+     "b",
+     "Most companies kept the four-day week afterwards.",
+     "b) Most companies kept the four-day week afterwards."
+    ]
+   },
+   {
+    "q": "Why does the reporter mention the critics?",
+    "options": [
+     "to show that the results were fake",
+     "to point out that the companies may not be typical",
+     "to explain why the trial was cancelled"
+    ],
+    "a": [
+     "b",
+     "to point out that the companies may not be typical",
+     "b) to point out that the companies may not be typical"
+    ]
+   },
+   {
+    "q": "What is the reporter's attitude to the results?",
+    "options": [
+     "cautiously positive",
+     "extremely enthusiastic",
+     "completely dismissive"
+    ],
+    "a": [
+     "a",
+     "cautiously positive",
+     "a) cautiously positive"
+    ]
+   },
+   {
+    "q": "What does 'the jury is still out' mean here?",
+    "options": [
+     "The experts have rejected the idea.",
+     "No final conclusion has been reached yet.",
+     "The case is going to court."
+    ],
+    "a": [
+     "b",
+     "No final conclusion has been reached yet.",
+     "b) No final conclusion has been reached yet."
+    ]
+   }
+  ]
+ }
+]

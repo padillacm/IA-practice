@@ -1,0 +1,485 @@
+[
+ {
+  "id": "v5_word_formation",
+  "title": "Word formation",
+  "instructions": "Use the word in CAPITALS to form a word that fits the gap.",
+  "items": [
+   {
+    "q": "The new policy has been ______ criticised by experts. (WIDE)",
+    "a": [
+     "widely"
+    ]
+   },
+   {
+    "q": "There is growing ______ that the system needs reform. (RECOGNISE)",
+    "a": [
+     "recognition"
+    ]
+   },
+   {
+    "q": "His ______ to compromise caused the talks to collapse. (WILLING)",
+    "a": [
+     "unwillingness"
+    ]
+   },
+   {
+    "q": "The advertisement was deliberately ______. (LEAD)",
+    "a": [
+     "misleading"
+    ]
+   },
+   {
+    "q": "We were impressed by the ______ of her argument. (CLEAR)",
+    "a": [
+     "clarity"
+    ]
+   },
+   {
+    "q": "The results are ______ with previous research. (CONSIST)",
+    "a": [
+     "consistent"
+    ]
+   },
+   {
+    "q": "It was a completely ______ decision; nobody saw it coming. (EXPECT)",
+    "a": [
+     "unexpected"
+    ]
+   },
+   {
+    "q": "The company faces ______ competition from abroad. (INCREASE)",
+    "a": [
+     "increasing"
+    ]
+   },
+   {
+    "q": "He apologised for his ______ behaviour at the meeting. (RESPECT)",
+    "a": [
+     "disrespectful"
+    ]
+   },
+   {
+    "q": "Some of the paintings in the collection are ______. (REPLACE)",
+    "a": [
+     "irreplaceable"
+    ]
+   },
+   {
+    "q": "Poor ______ of resources led to the project's failure. (MANAGE)",
+    "a": [
+     "management",
+     "mismanagement"
+    ]
+   },
+   {
+    "q": "The ______ of the new bridge took three years. (CONSTRUCT)",
+    "a": [
+     "construction"
+    ]
+   },
+   {
+    "q": "She has a remarkable ______ to stay calm under pressure. (ABLE)",
+    "a": [
+     "ability"
+    ]
+   },
+   {
+    "q": "Many young people feel ______ with politics. (ILLUSION)",
+    "a": [
+     "disillusioned"
+    ]
+   },
+   {
+    "q": "The data was ______ interpreted, which led to the wrong conclusions. (CORRECT)",
+    "a": [
+     "incorrectly"
+    ]
+   },
+   {
+    "q": "Economic ______ has improved over the last decade. (STABLE)",
+    "a": [
+     "stability"
+    ]
+   },
+   {
+    "q": "The two proposals are ______ different. (FUNDAMENTAL)",
+    "a": [
+     "fundamentally"
+    ]
+   },
+   {
+    "q": "His ______ comments offended several colleagues. (THINK)",
+    "a": [
+     "thoughtless"
+    ]
+   },
+   {
+    "q": "The government aims to ______ the tax system. (SIMPLE)",
+    "a": [
+     "simplify"
+    ]
+   },
+   {
+    "q": "There was a clear ______ of opinion among the experts. (DIVIDE)",
+    "a": [
+     "division"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v5_transformations",
+  "title": "Key word transformations",
+  "instructions": "Write only the missing words (3-6 words, including the word in CAPITALS).",
+  "items": [
+   {
+    "q": "I'm sure she didn't take the money. CAN'T\nShe ______ the money.",
+    "a": [
+     "can't have taken",
+     "cannot have taken"
+    ]
+   },
+   {
+    "q": "It was wrong of you to shout at him. SHOULD\nYou ______ at him.",
+    "a": [
+     "should not have shouted",
+     "shouldn't have shouted"
+    ]
+   },
+   {
+    "q": "I regret not studying harder at university. WISH\nI ______ harder at university.",
+    "a": [
+     "wish I had studied",
+     "wish I'd studied",
+     "wish that I had studied"
+    ]
+   },
+   {
+    "q": "The concert was cancelled because of the storm. CALLED\nThe concert ______ because of the storm.",
+    "a": [
+     "was called off",
+     "had to be called off"
+    ]
+   },
+   {
+    "q": "She was the only one who noticed the mistake. APART\nNobody ______ the mistake.",
+    "a": [
+     "apart from her noticed"
+    ]
+   },
+   {
+    "q": "I found it difficult to understand his accent. DIFFICULTY\nI ______ his accent.",
+    "a": [
+     "had difficulty understanding",
+     "had difficulty in understanding",
+     "had great difficulty understanding"
+    ]
+   },
+   {
+    "q": "It's possible that they missed the train. MAY\nThey ______ the train.",
+    "a": [
+     "may have missed"
+    ]
+   },
+   {
+    "q": "People say that the castle is haunted. SAID\nThe castle ______ haunted.",
+    "a": [
+     "is said to be"
+    ]
+   },
+   {
+    "q": "He didn't realise how serious the situation was. LITTLE\n______ how serious the situation was.",
+    "a": [
+     "little did he realise",
+     "little did he realize",
+     "little did he know"
+    ]
+   },
+   {
+    "q": "\"Don't forget to lock the door,\" she told me. REMINDED\nShe ______ the door.",
+    "a": [
+     "reminded me to lock"
+    ]
+   },
+   {
+    "q": "The film was so boring that I fell asleep. SUCH\nIt ______ that I fell asleep.",
+    "a": [
+     "was such a boring film"
+    ]
+   },
+   {
+    "q": "I haven't seen Mark for ages. SINCE\nIt's ______ Mark.",
+    "a": [
+     "been ages since I saw",
+     "been ages since I last saw",
+     "been ages since I've seen",
+     "been ages since I have seen"
+    ]
+   },
+   {
+    "q": "We postponed the meeting until next week. PUT\nThe meeting ______ until next week.",
+    "a": [
+     "was put off",
+     "has been put off",
+     "was put back",
+     "has been put back"
+    ]
+   },
+   {
+    "q": "Whatever you say, I won't change my mind. MATTER\nNo ______, I won't change my mind.",
+    "a": [
+     "matter what you say"
+    ]
+   },
+   {
+    "q": "She is likely to win the election. CHANCES\nThe ______ win the election.",
+    "a": [
+     "chances are that she will",
+     "chances are she will",
+     "chances are that she'll",
+     "chances are she'll"
+    ]
+   },
+   {
+    "q": "I only realised my mistake when I got home. UNTIL\nIt ______ I got home that I realised my mistake.",
+    "a": [
+     "was not until",
+     "wasn't until"
+    ]
+   },
+   {
+    "q": "They will make the final decision next week. MADE\nThe final decision ______ next week.",
+    "a": [
+     "will be made",
+     "is going to be made",
+     "is to be made",
+     "is being made"
+    ]
+   },
+   {
+    "q": "Tom is not as experienced as Sarah. LESS\nTom ______ Sarah.",
+    "a": [
+     "is less experienced than",
+     "has less experience than"
+    ]
+   },
+   {
+    "q": "You must not tell anyone about this under any circumstances. ACCOUNT\nOn ______ anyone about this.",
+    "a": [
+     "no account must you tell",
+     "no account should you tell",
+     "no account are you to tell"
+    ]
+   },
+   {
+    "q": "I'd prefer you not to smoke in here. RATHER\nI'd ______ in here.",
+    "a": [
+     "rather you did not smoke",
+     "rather you didn't smoke"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v5_confusables",
+  "title": "Confusable words and false friends",
+  "instructions": "Choose the correct word. Type the letter or the word.",
+  "items": [
+   {
+    "q": "The new law will ___ thousands of workers.",
+    "options": [
+     "affect",
+     "effect",
+     "infect"
+    ],
+    "a": [
+     "a",
+     "affect",
+     "a) affect"
+    ]
+   },
+   {
+    "q": "Buying in bulk is more ___.",
+    "options": [
+     "economics",
+     "economic",
+     "economical"
+    ],
+    "a": [
+     "c",
+     "economical",
+     "c) economical"
+    ]
+   },
+   {
+    "q": "She gave me some very ___ advice about money.",
+    "options": [
+     "sensitive",
+     "sensational",
+     "sensible"
+    ],
+    "a": [
+     "c",
+     "sensible",
+     "c) sensible"
+    ]
+   },
+   {
+    "q": "He's very ___ to criticism; he takes everything personally.",
+    "options": [
+     "sensible",
+     "sensitive",
+     "sensory"
+    ],
+    "a": [
+     "b",
+     "sensitive",
+     "b) sensitive"
+    ]
+   },
+   {
+    "q": "___, we have 50 employees, but we plan to hire more next year.",
+    "options": [
+     "Currently",
+     "Eventually",
+     "Actually"
+    ],
+    "a": [
+     "a",
+     "Currently",
+     "a) Currently"
+    ]
+   },
+   {
+    "q": "After years of trying, she ___ succeeded.",
+    "options": [
+     "eventually",
+     "possibly",
+     "actually"
+    ],
+    "a": [
+     "a",
+     "eventually",
+     "a) eventually"
+    ]
+   },
+   {
+    "q": "More than 300 people ___ the conference.",
+    "options": [
+     "assisted to",
+     "attended",
+     "assisted"
+    ],
+    "a": [
+     "b",
+     "attended",
+     "b) attended"
+    ]
+   },
+   {
+    "q": "I felt so ___ when I forgot her name.",
+    "options": [
+     "embarrassed",
+     "pregnant",
+     "embarrassing"
+    ],
+    "a": [
+     "a",
+     "embarrassed",
+     "a) embarrassed"
+    ]
+   },
+   {
+    "q": "We need to ___ the problem before it gets worse.",
+    "options": [
+     "address",
+     "adress",
+     "direct"
+    ],
+    "a": [
+     "a",
+     "address",
+     "a) address"
+    ]
+   },
+   {
+    "q": "The judge must be completely ___: she can have no personal interest in the case.",
+    "options": [
+     "unconcerned",
+     "disinterested",
+     "uninterested"
+    ],
+    "a": [
+     "b",
+     "disinterested",
+     "b) disinterested"
+    ]
+   },
+   {
+    "q": "There were ___ people at the meeting than we expected.",
+    "options": [
+     "lesser",
+     "less",
+     "fewer"
+    ],
+    "a": [
+     "c",
+     "fewer",
+     "c) fewer"
+    ]
+   },
+   {
+    "q": "It's only a ___ of time before they announce it.",
+    "options": [
+     "matter",
+     "issue",
+     "question"
+    ],
+    "a": [
+     "a",
+     "matter",
+     "a) matter"
+    ]
+   },
+   {
+    "q": "The researchers ___ a series of experiments.",
+    "options": [
+     "made up",
+     "carried out",
+     "realised"
+    ],
+    "a": [
+     "b",
+     "carried out",
+     "b) carried out"
+    ]
+   },
+   {
+    "q": "What do you ___ to do after you graduate?",
+    "options": [
+     "pretend",
+     "attend",
+     "intend"
+    ],
+    "a": [
+     "c",
+     "intend",
+     "c) intend"
+    ]
+   },
+   {
+    "q": "I bought this novel at the ___ on the corner.",
+    "options": [
+     "librery",
+     "library",
+     "bookshop"
+    ],
+    "a": [
+     "c",
+     "bookshop",
+     "c) bookshop"
+    ]
+   }
+  ]
+ }
+]

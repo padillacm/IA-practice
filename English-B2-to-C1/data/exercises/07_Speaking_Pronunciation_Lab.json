@@ -1,0 +1,390 @@
+[
+ {
+  "id": "s7_upgrade",
+  "title": "Make it sound C1",
+  "type": "open",
+  "instructions": "Rewrite each B2-style sentence so that it sounds more nuanced, diplomatic or natural. Compare with the model.",
+  "items": [
+   {
+    "q": "I think that's wrong.",
+    "a": [
+     "I'm not entirely convinced that's the case.",
+     "I'd see it slightly differently.",
+     "I'm not sure I'd agree with that."
+    ]
+   },
+   {
+    "q": "Your idea is bad.",
+    "a": [
+     "I'm not sure that idea would work in practice.",
+     "I can see some problems with that idea.",
+     "I have some reservations about that idea."
+    ]
+   },
+   {
+    "q": "I agree.",
+    "a": [
+     "I couldn't agree more.",
+     "That's a fair point.",
+     "Absolutely, I think you're right."
+    ]
+   },
+   {
+    "q": "Maybe it will rain.",
+    "a": [
+     "There's a good chance it'll rain.",
+     "I wouldn't be surprised if it rained.",
+     "It looks like it might rain."
+    ]
+   },
+   {
+    "q": "I don't know the word... eh... the thing for opening wine.",
+    "a": [
+     "It's the thing you use to open a bottle of wine - a corkscrew.",
+     "What's the word... the thing you use to open wine bottles."
+    ]
+   },
+   {
+    "q": "You are late again. This is a problem.",
+    "a": [
+     "I've noticed you've been running late quite a lot recently - is everything OK?",
+     "It might be worth trying to arrive on time; it's becoming a bit of an issue."
+    ]
+   },
+   {
+    "q": "The report has many mistakes.",
+    "a": [
+     "The report could do with some revision.",
+     "There are a few issues in the report we may need to look at."
+    ]
+   },
+   {
+    "q": "I want a raise.",
+    "a": [
+     "I was wondering whether we could discuss my salary.",
+     "I'd like to talk about the possibility of a raise."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_diplomatic",
+  "title": "Choose the most diplomatic response",
+  "instructions": "Choose the response a C1 speaker would most likely use in a professional situation.",
+  "items": [
+   {
+    "q": "A colleague proposes an unrealistic deadline.",
+    "options": [
+     "No, that's a stupid deadline.",
+     "That's impossible.",
+     "That might be a bit ambitious - could we look at the timeline together?"
+    ],
+    "a": [
+     "c",
+     "That might be a bit ambitious - could we look at the timeline together?",
+     "c) That might be a bit ambitious - could we look at the timeline together?"
+    ]
+   },
+   {
+    "q": "Your manager asks your opinion on a plan you don't like.",
+    "options": [
+     "I don't like it at all.",
+     "I can see the logic, but I have a couple of concerns.",
+     "Your plan is wrong."
+    ],
+    "a": [
+     "b",
+     "I can see the logic, but I have a couple of concerns.",
+     "b) I can see the logic, but I have a couple of concerns."
+    ]
+   },
+   {
+    "q": "You didn't understand what someone said in a meeting.",
+    "options": [
+     "What? Repeat.",
+     "Sorry, could you run that by me again?",
+     "I don't understand you."
+    ],
+    "a": [
+     "b",
+     "Sorry, could you run that by me again?",
+     "b) Sorry, could you run that by me again?"
+    ]
+   },
+   {
+    "q": "You need more time to answer a difficult question.",
+    "options": [
+     "That's a good question - let me think about that for a second.",
+     "I don't know.",
+     "Eh... eh... eh..."
+    ],
+    "a": [
+     "a",
+     "That's a good question - let me think about that for a second.",
+     "a) That's a good question - let me think about that for a second."
+    ]
+   },
+   {
+    "q": "You want to interrupt politely.",
+    "options": [
+     "Stop, I want to talk.",
+     "Wait, wait, listen to me.",
+     "Sorry to jump in, but could I just add something?"
+    ],
+    "a": [
+     "c",
+     "Sorry to jump in, but could I just add something?",
+     "c) Sorry to jump in, but could I just add something?"
+    ]
+   },
+   {
+    "q": "Someone makes a good point that changes your mind.",
+    "options": [
+     "Yes, maybe, I don't know.",
+     "Actually, that's a fair point - I hadn't thought of it that way.",
+     "OK, you win."
+    ],
+    "a": [
+     "b",
+     "Actually, that's a fair point - I hadn't thought of it that way.",
+     "b) Actually, that's a fair point - I hadn't thought of it that way."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_ed_endings",
+  "title": "-ed endings",
+  "instructions": "How is the -ed ending pronounced? Write t, d or id. Say each word aloud before answering.",
+  "items": [
+   {
+    "q": "worked",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "played",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "wanted",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/"
+    ]
+   },
+   {
+    "q": "decided",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/"
+    ]
+   },
+   {
+    "q": "laughed",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "changed",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "stopped",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "needed",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/"
+    ]
+   },
+   {
+    "q": "watched",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "cleaned",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "finished",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "visited",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/"
+    ]
+   },
+   {
+    "q": "raised",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "missed",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "loved",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_word_stress",
+  "title": "Word stress",
+  "instructions": "Which syllable is stressed? Write the number (1 = first syllable). Check tricky ones in the Cambridge Dictionary and listen.",
+  "items": [
+   {
+    "q": "pho-to-graph",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "pho-to-gra-pher",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "pho-to-gra-phic",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "e-co-no-my",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "e-co-no-mic",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "de-ve-lop",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "com-for-ta-ble",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "ve-ge-ta-ble",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "de-ter-mine",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "ho-tel",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "in-te-res-ting",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "ca-te-go-ry",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "a-na-ly-sis",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "tech-no-lo-gy",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "pre-sen-ta-tion",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "com-po-nent",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "e-vent",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "a-dvan-tage",
+    "a": [
+     "2"
+    ]
+   }
+  ]
+ }
+]

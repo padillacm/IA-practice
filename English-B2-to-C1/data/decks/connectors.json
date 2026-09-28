@@ -1,0 +1,142 @@
+[
+ {
+  "front": "to add a stronger point (spoken)",
+  "back": "On top of that / What's more",
+  "example": "It's expensive. On top of that, it's badly located."
+ },
+ {
+  "front": "to add a point (formal)",
+  "back": "Furthermore / Moreover / In addition",
+  "example": "Moreover, the costs are rising."
+ },
+ {
+  "front": "to contrast after admitting something (spoken)",
+  "back": "That said / Having said that",
+  "example": "It's a great city. That said, it's very expensive."
+ },
+ {
+  "front": "to contrast (formal)",
+  "back": "However / Nevertheless / Nonetheless",
+  "example": "The plan is risky. Nevertheless, it's worth trying."
+ },
+ {
+  "front": "to introduce a contrasting fact (two clauses)",
+  "back": "whereas / while",
+  "example": "He likes the city, whereas she prefers the countryside."
+ },
+ {
+  "front": "despite the fact that",
+  "back": "although / even though / despite + -ing",
+  "example": "Despite having little experience, she got the job."
+ },
+ {
+  "front": "to admit a point before disagreeing",
+  "back": "Admittedly / Granted",
+  "example": "Granted, it's not perfect, but it works."
+ },
+ {
+  "front": "to give a result (formal)",
+  "back": "Consequently / As a result / Therefore",
+  "example": "Sales fell; consequently, jobs were cut."
+ },
+ {
+  "front": "to express a result (spoken)",
+  "back": "So / That's why / Which means",
+  "example": "The trains were on strike, which meant we had to drive."
+ },
+ {
+  "front": "to give the reason (formal)",
+  "back": "Owing to / Due to / In view of",
+  "example": "Owing to the weather, the event was cancelled."
+ },
+ {
+  "front": "to give an example",
+  "back": "For instance / Take ... for example / such as",
+  "example": "Take Denmark, for example."
+ },
+ {
+  "front": "to say something more clearly",
+  "back": "In other words / That is to say",
+  "example": "In other words, we're out of money."
+ },
+ {
+  "front": "to say something more precisely/correctly",
+  "back": "Or rather / To be more precise",
+  "example": "I'll finish it tomorrow - or rather, on Monday."
+ },
+ {
+  "front": "to generalise",
+  "back": "On the whole / By and large / Generally speaking",
+  "example": "By and large, the feedback was positive."
+ },
+ {
+  "front": "to say something is true only partly",
+  "back": "To some extent / Up to a point",
+  "example": "I agree with you up to a point."
+ },
+ {
+  "front": "to conclude (spoken)",
+  "back": "All in all / So, to sum up",
+  "example": "All in all, it was a success."
+ },
+ {
+  "front": "to conclude (formal)",
+  "back": "In conclusion / To conclude",
+  "example": "In conclusion, the evidence is clear."
+ },
+ {
+  "front": "to consider both sides before deciding",
+  "back": "On balance",
+  "example": "On balance, I think we should go ahead."
+ },
+ {
+  "front": "to change the topic (spoken)",
+  "back": "By the way / Speaking of which / Anyway",
+  "example": "Speaking of which, did you see the game?"
+ },
+ {
+  "front": "to return to the main topic",
+  "back": "Anyway, getting back to... / Coming back to...",
+  "example": "Coming back to your question..."
+ },
+ {
+  "front": "to say what is true in reality, contrasting with appearance",
+  "back": "In fact / Actually / As a matter of fact",
+  "example": "As a matter of fact, I've never been there."
+ },
+ {
+  "front": "to express that something is surprising",
+  "back": "Surprisingly / Believe it or not",
+  "example": "Believe it or not, he agreed."
+ },
+ {
+  "front": "to express that something is not surprising",
+  "back": "Unsurprisingly / Needless to say / Of course",
+  "example": "Needless to say, we were exhausted."
+ },
+ {
+  "front": "in the meantime",
+  "back": "Meanwhile / In the meantime",
+  "example": "In the meantime, please wait here."
+ },
+ {
+  "front": "in any case; regardless",
+  "back": "At any rate / In any case / Either way",
+  "example": "Either way, we need to decide today."
+ },
+ {
+  "front": "to express a condition that everything depends on",
+  "back": "provided that / as long as / assuming that",
+  "example": "Assuming that the weather holds, we'll go."
+ },
+ {
+  "front": "to express purpose (formal)",
+  "back": "so as to / in order to / with a view to + -ing",
+  "example": "We met with a view to reaching a deal."
+ },
+ {
+  "front": "to express frankly your opinion (spoken)",
+  "back": "To be honest / Frankly / If you ask me",
+  "example": "Frankly, I don't think it'll work."
+ }
+]

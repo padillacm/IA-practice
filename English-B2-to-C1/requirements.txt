@@ -1,0 +1,7 @@
+jupyter
+matplotlib
+gTTS
+# offline text-to-speech alternative:
+# pyttsx3
+# only needed to rebuild the notebooks from tools/content:
+# nbformat

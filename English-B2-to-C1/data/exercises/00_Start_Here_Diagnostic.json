@@ -1,0 +1,354 @@
+[
+ {
+  "id": "diag_grammar",
+  "title": "Advanced grammar",
+  "instructions": "Complete each sentence with the correct form of the word(s) in brackets, or one missing word.",
+  "items": [
+   {
+    "q": "If I ______ (take) that job in Berlin, I would be living there now.",
+    "a": [
+     "had taken"
+    ],
+    "why": "Mixed conditional: past condition (had + past participle) -> present result."
+   },
+   {
+    "q": "Not only ______ (he / forget) my birthday, but he also forgot our anniversary.",
+    "a": [
+     "did he forget"
+    ],
+    "why": "Negative adverbial at the start -> question-style inversion."
+   },
+   {
+    "q": "It's high time you ______ (start) looking for a new flat.",
+    "a": [
+     "started"
+    ],
+    "why": "It's (high) time + subject + past simple (unreal past)."
+   },
+   {
+    "q": "She ______ (be) at home - the lights are off and her car isn't there.",
+    "a": [
+     "can't be",
+     "cannot be",
+     "couldn't be"
+    ],
+    "why": "Logical deduction (negative, present): can't be."
+   },
+   {
+    "q": "What I really need ______ a good night's sleep.",
+    "a": [
+     "is"
+    ],
+    "why": "Wh-cleft: What + clause + is + focus."
+   },
+   {
+    "q": "______ (finish) his speech, he sat down to loud applause.",
+    "a": [
+     "having finished"
+    ],
+    "why": "Perfect participle for an action completed before the main one."
+   },
+   {
+    "q": "The suspect is believed ______ (leave) the country last week.",
+    "a": [
+     "to have left"
+    ],
+    "why": "Passive reporting verb + perfect infinitive for a past action."
+   },
+   {
+    "q": "I'd rather you ______ (not / mention) this to anyone.",
+    "a": [
+     "didn't mention",
+     "did not mention"
+    ],
+    "why": "I'd rather + different subject + past simple."
+   },
+   {
+    "q": "______ you need any help, don't hesitate to call.",
+    "a": [
+     "should"
+    ],
+    "why": "Inverted first conditional: Should you need... = If you need..."
+   },
+   {
+    "q": "We ______ (hurry). The train was late anyway, so we rushed for nothing.",
+    "a": [
+     "needn't have hurried",
+     "need not have hurried"
+    ],
+    "why": "needn't have + past participle: we did it, but it was unnecessary."
+   }
+  ]
+ },
+ {
+  "id": "diag_collocations",
+  "title": "Collocations",
+  "instructions": "Choose the word that forms the most natural collocation. Type the letter or the word.",
+  "items": [
+   {
+    "q": "She ___ a lot of effort into the project.",
+    "options": [
+     "made",
+     "put",
+     "gave"
+    ],
+    "a": [
+     "b",
+     "put",
+     "b) put"
+    ]
+   },
+   {
+    "q": "We need to ___ steps to fix this.",
+    "options": [
+     "do",
+     "make",
+     "take"
+    ],
+    "a": [
+     "c",
+     "take",
+     "c) take"
+    ]
+   },
+   {
+    "q": "Whether it's a good film is a ___ of opinion.",
+    "options": [
+     "matter",
+     "case",
+     "question"
+    ],
+    "a": [
+     "a",
+     "matter",
+     "a) matter"
+    ]
+   },
+   {
+    "q": "I have a ___ memory of that day.",
+    "options": [
+     "lively",
+     "vivid",
+     "bright"
+    ],
+    "a": [
+     "b",
+     "vivid",
+     "b) vivid"
+    ]
+   },
+   {
+    "q": "There's been a ___ increase in prices this month.",
+    "options": [
+     "strong",
+     "hard",
+     "sharp"
+    ],
+    "a": [
+     "c",
+     "sharp",
+     "c) sharp"
+    ]
+   },
+   {
+    "q": "After weeks of talks, they finally ___ a compromise.",
+    "options": [
+     "reached",
+     "arrived",
+     "got"
+    ],
+    "a": [
+     "a",
+     "reached",
+     "a) reached"
+    ]
+   },
+   {
+    "q": "He's a ___ believer in hard work.",
+    "options": [
+     "firm",
+     "hard",
+     "solid"
+    ],
+    "a": [
+     "a",
+     "firm",
+     "a) firm"
+    ]
+   },
+   {
+    "q": "The news came as a ___ shock.",
+    "options": [
+     "complete",
+     "whole",
+     "full"
+    ],
+    "a": [
+     "a",
+     "complete",
+     "a) complete"
+    ]
+   },
+   {
+    "q": "The company ___ record profits last year.",
+    "options": [
+     "did",
+     "posted",
+     "put"
+    ],
+    "a": [
+     "b",
+     "posted",
+     "b) posted"
+    ]
+   },
+   {
+    "q": "I'm ___ aware of the risks involved.",
+    "options": [
+     "highly",
+     "strongly",
+     "well"
+    ],
+    "a": [
+     "c",
+     "well",
+     "c) well"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_phrasal_idioms",
+  "title": "Phrasal verbs and idioms",
+  "instructions": "Write ONE word in each gap.",
+  "items": [
+   {
+    "q": "The wedding was ______ off at the last minute.",
+    "a": [
+     "called"
+    ]
+   },
+   {
+    "q": "I can't put ______ with his arrogance any longer.",
+    "a": [
+     "up"
+    ]
+   },
+   {
+    "q": "We need to come up ______ a better plan.",
+    "a": [
+     "with"
+    ]
+   },
+   {
+    "q": "Let's get the ball ______ and start the meeting.",
+    "a": [
+     "rolling"
+    ]
+   },
+   {
+    "q": "That new laptop cost an arm and a ______.",
+    "a": [
+     "leg"
+    ]
+   },
+   {
+    "q": "She turned ______ the job offer because the salary was too low.",
+    "a": [
+     "down"
+    ]
+   },
+   {
+    "q": "He's always sitting on the ______; he never takes sides.",
+    "a": [
+     "fence"
+    ]
+   },
+   {
+    "q": "I'll look ______ the matter and get back to you.",
+    "a": [
+     "into"
+    ]
+   },
+   {
+    "q": "Don't worry, it's not rocket ______ - anyone can do it.",
+    "a": [
+     "science"
+    ]
+   },
+   {
+    "q": "The two managers aren't on the same ______ about the budget.",
+    "a": [
+     "page"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_word_formation",
+  "title": "Word formation",
+  "instructions": "Use the word in CAPITALS to form a word that fits the gap.",
+  "items": [
+   {
+    "q": "The ______ of the new museum was delayed by six months. (OPEN)",
+    "a": [
+     "opening"
+    ]
+   },
+   {
+    "q": "Her ______ was obvious from the way she smiled. (HAPPY)",
+    "a": [
+     "happiness"
+    ]
+   },
+   {
+    "q": "The results were rather ______, to be honest. (DISAPPOINT)",
+    "a": [
+     "disappointing"
+    ]
+   },
+   {
+    "q": "It's ______ to park on this side of the street. (LEGAL)",
+    "a": [
+     "illegal"
+    ]
+   },
+   {
+    "q": "His sudden ______ surprised everyone in the department. (RESIGN)",
+    "a": [
+     "resignation"
+    ]
+   },
+   {
+    "q": "We need a more environmentally ______ approach. (SUSTAIN)",
+    "a": [
+     "sustainable"
+    ]
+   },
+   {
+    "q": "We seriously ______ the time the project would take. (ESTIMATE)",
+    "a": [
+     "underestimated"
+    ]
+   },
+   {
+    "q": "These two drugs should never be taken ______. (SIMULTANEOUS)",
+    "a": [
+     "simultaneously"
+    ]
+   },
+   {
+    "q": "She has been a lifelong ______ of human rights. (DEFEND)",
+    "a": [
+     "defender"
+    ]
+   },
+   {
+    "q": "The speech was ______ long; most people stopped listening. (NECESSARY)",
+    "a": [
+     "unnecessarily"
+    ]
+   }
+  ]
+ }
+]

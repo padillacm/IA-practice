@@ -1,0 +1,22 @@
+[
+ {
+  "title": "A voicemail from your manager",
+  "type": "voicemail",
+  "text": "Hi, it's Laura. Just a quick one about the Henderson project. I've had a look at the timeline you sent over, and, well, I have to say it's a lot more optimistic than I'd expected, given where we were last week. I'm not saying it can't be done, but I'd feel a lot more comfortable if we built in some extra time, maybe another week or so, before we commit to anything with the client. Oh, and could you loop Daniel in? He dealt with them last year and, let's just say, they weren't the easiest people to work with. Anyway, give me a call when you get a chance. Thanks."
+ },
+ {
+  "title": "Remote work: a mixed picture",
+  "type": "podcast opinion",
+  "text": "There's a tendency to talk about remote work as though it were either a miracle or a disaster, and frankly, the evidence doesn't support either view. What the research does seem to suggest is that it depends enormously on the kind of work involved. For tasks that require deep concentration, people working from home often report being more productive. But when it comes to training junior staff, or the kind of informal problem-solving that happens when you bump into a colleague in the corridor, something does seem to get lost. So rather than asking whether remote work is good or bad, I'd argue we ought to be asking which tasks benefit from it, and designing our working weeks accordingly."
+ },
+ {
+  "title": "Why we forget",
+  "type": "lecture",
+  "text": "Back in the eighteen-eighties, the German psychologist Hermann Ebbinghaus spent years memorising lists of nonsense syllables and testing himself on them. What he found was striking: without any review, we lose a large proportion of new information within the first day or so. The good news, though, is that each time we successfully recall something, the rate of forgetting slows down. That's the principle behind spaced repetition. Rather than cramming, which gives you a short-lived feeling of mastery, you review material at gradually increasing intervals, ideally just before you're about to forget it. It feels harder, and that's precisely the point: the effort of retrieval is what strengthens the memory."
+ },
+ {
+  "title": "News report: the four-day week",
+  "type": "news report (scripted for practice)",
+  "text": "Supporters of the four-day working week are claiming victory today after the results of a six-month trial were published. Of the several dozen companies that took part, the vast majority have decided to keep the shorter week, and most reported that productivity had held steady or even improved. Staff, unsurprisingly, said they felt less stressed and less likely to quit. Critics, however, point out that the firms involved volunteered for the trial, and may therefore have been unusually well suited to the change. Whether the model would work in hospitals, schools or factories is another question altogether. So while the early signs are encouraging, when it comes to the economy as a whole, the jury is still out."
+ }
+]

@@ -1,0 +1,536 @@
+[
+ {
+  "id": "g1_mixed",
+  "title": "Mixed conditionals",
+  "instructions": "Put the verb in brackets into the correct form. Think: which time does each clause refer to?",
+  "items": [
+   {
+    "q": "If I ______ (not / miss) the train this morning, I wouldn't be so stressed now.",
+    "a": [
+     "hadn't missed",
+     "had not missed"
+    ],
+    "why": "Past condition (this morning) -> present result (now)."
+   },
+   {
+    "q": "If she ______ (be) more organised in general, she would have finished the report on time.",
+    "a": [
+     "were",
+     "was"
+    ],
+    "why": "Permanent characteristic (present) -> past result."
+   },
+   {
+    "q": "If we had invested in that company ten years ago, we ______ (be) rich now.",
+    "a": [
+     "would be"
+    ],
+    "why": "Past condition -> present result: would + infinitive."
+   },
+   {
+    "q": "If he ______ (speak) better English, he would have got the job last month.",
+    "a": [
+     "spoke"
+    ],
+    "why": "Present/general ability -> past result."
+   },
+   {
+    "q": "I ______ (not / ask) you for help yesterday if I didn't trust you.",
+    "a": [
+     "wouldn't have asked",
+     "would not have asked"
+    ],
+    "why": "Present situation (I trust you) -> past result (yesterday)."
+   },
+   {
+    "q": "If the government had acted sooner, the crisis ______ (not / be) so severe today.",
+    "a": [
+     "wouldn't be",
+     "would not be"
+    ]
+   },
+   {
+    "q": "You ______ (not / feel) so tired now if you had gone to bed earlier.",
+    "a": [
+     "wouldn't feel",
+     "would not feel"
+    ]
+   },
+   {
+    "q": "If I ______ (know) him better, I would have invited him to the wedding last month.",
+    "a": [
+     "knew"
+    ],
+    "why": "'I don't know him well' is a present state -> past result."
+   }
+  ]
+ },
+ {
+  "id": "g1_cond_inversion",
+  "title": "Inverted conditionals and 'but for'",
+  "instructions": "Complete the second sentence so it means the same as the first. Write only the missing words.",
+  "items": [
+   {
+    "q": "If I had known about the problem, I would have helped.\n______ about the problem, I would have helped.",
+    "a": [
+     "had I known"
+    ]
+   },
+   {
+    "q": "If you need any further information, please contact us.\n______ any further information, please contact us.",
+    "a": [
+     "should you need",
+     "should you require"
+    ]
+   },
+   {
+    "q": "If the president resigned, there would be an election.\n______ resign, there would be an election.",
+    "a": [
+     "were the president to"
+    ]
+   },
+   {
+    "q": "If it hadn't been for your help, I would have failed.\n______ your help, I would have failed.",
+    "a": [
+     "had it not been for",
+     "but for",
+     "without"
+    ],
+    "why": "Negative inversion keeps 'not' after the subject: Had it NOT been for... (never *Hadn't it been*)."
+   },
+   {
+    "q": "If they had not cancelled the flight, we would be in Rome now.\n______ the flight, we would be in Rome now.",
+    "a": [
+     "had they not cancelled"
+    ]
+   },
+   {
+    "q": "If it weren't for the rain, we could eat outside.\n______ the rain, we could eat outside.",
+    "a": [
+     "were it not for",
+     "but for",
+     "without"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "g1_if_alternatives",
+  "title": "Alternatives to 'if'",
+  "instructions": "Choose the best option.",
+  "items": [
+   {
+    "q": "Take an umbrella ___ it rains later.",
+    "options": [
+     "provided",
+     "in case",
+     "unless"
+    ],
+    "why": "Precaution = in case. (Take it now because it might rain.)",
+    "a": [
+     "b",
+     "in case",
+     "b) in case"
+    ]
+   },
+   {
+    "q": "You can borrow my car ___ you bring it back by six.",
+    "options": [
+     "in case",
+     "unless",
+     "provided"
+    ],
+    "a": [
+     "c",
+     "provided",
+     "c) provided"
+    ]
+   },
+   {
+    "q": "I won't go to the party ___ you come with me.",
+    "options": [
+     "unless",
+     "provided",
+     "as long as"
+    ],
+    "a": [
+     "a",
+     "unless",
+     "a) unless"
+    ]
+   },
+   {
+    "q": "___ you won the lottery, what would you do first?",
+    "options": [
+     "Unless",
+     "Provided",
+     "Supposing"
+    ],
+    "a": [
+     "c",
+     "Supposing",
+     "c) Supposing"
+    ]
+   },
+   {
+    "q": "___ the storm, we would have arrived on time.",
+    "options": [
+     "Unless",
+     "But for",
+     "Otherwise"
+    ],
+    "a": [
+     "b",
+     "But for",
+     "b) But for"
+    ]
+   },
+   {
+    "q": "Leave now; ___, you'll miss the bus.",
+    "options": [
+     "unless",
+     "in case",
+     "otherwise"
+    ],
+    "a": [
+     "c",
+     "otherwise",
+     "c) otherwise"
+    ]
+   },
+   {
+    "q": "I'm going to the concert ___ you like it or not.",
+    "options": [
+     "unless",
+     "whether",
+     "even if"
+    ],
+    "a": [
+     "b",
+     "whether",
+     "b) whether"
+    ]
+   },
+   {
+    "q": "___ she apologised, I still wouldn't forgive her.",
+    "options": [
+     "Provided that",
+     "Unless",
+     "Even if"
+    ],
+    "a": [
+     "c",
+     "Even if",
+     "c) Even if"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "g1_wishes",
+  "title": "Wishes and unreal past",
+  "instructions": "Put the verb in brackets into the correct form.",
+  "items": [
+   {
+    "q": "I wish I ______ (have) more free time - I'm exhausted.",
+    "a": [
+     "had"
+    ]
+   },
+   {
+    "q": "She wishes she ______ (not / sell) her old flat; prices have doubled since.",
+    "a": [
+     "hadn't sold",
+     "had not sold"
+    ]
+   },
+   {
+    "q": "I wish my neighbours ______ (stop) playing loud music every night.",
+    "a": [
+     "would stop"
+    ],
+    "why": "wish + would = annoying habit of someone else that you want to change."
+   },
+   {
+    "q": "If only I ______ (listen) to your advice last year!",
+    "a": [
+     "had listened"
+    ]
+   },
+   {
+    "q": "It's high time the government ______ (do) something about housing.",
+    "a": [
+     "did"
+    ]
+   },
+   {
+    "q": "I'd rather you ______ (not / tell) anyone about this yet.",
+    "a": [
+     "didn't tell",
+     "did not tell"
+    ]
+   },
+   {
+    "q": "He talks as if he ______ (be) the boss, but he's just an intern.",
+    "a": [
+     "were",
+     "was"
+    ]
+   },
+   {
+    "q": "I'd rather ______ (stay) at home tonight, if you don't mind.",
+    "a": [
+     "stay"
+    ],
+    "why": "Same subject (I ... I) -> bare infinitive."
+   },
+   {
+    "q": "Come on, it's time ______ (leave); the taxi's waiting.",
+    "a": [
+     "to leave",
+     "we left",
+     "we were leaving"
+    ]
+   },
+   {
+    "q": "I wish I ______ (can) speak Japanese.",
+    "a": [
+     "could"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "g1_inversion",
+  "title": "Negative inversion",
+  "instructions": "Complete the second sentence so it means the same as the first. Write only the missing words.",
+  "items": [
+   {
+    "q": "I have never seen such a beautiful sunset.\nNever ______ such a beautiful sunset.",
+    "a": [
+     "have I seen"
+    ]
+   },
+   {
+    "q": "As soon as I arrived, the phone rang.\nNo sooner ______ than the phone rang.",
+    "a": [
+     "had I arrived"
+    ]
+   },
+   {
+    "q": "He didn't realise the danger he was in.\nLittle ______ the danger he was in.",
+    "a": [
+     "did he realise",
+     "did he realize"
+    ]
+   },
+   {
+    "q": "You must not open this door under any circumstances.\nUnder no circumstances ______ this door.",
+    "a": [
+     "must you open",
+     "should you open"
+    ]
+   },
+   {
+    "q": "She not only wrote the script, but she also directed the film.\nNot only ______ the script, but she also directed the film.",
+    "a": [
+     "did she write"
+    ]
+   },
+   {
+    "q": "I only understood the problem after reading the report.\nOnly after reading the report ______ the problem.",
+    "a": [
+     "did I understand"
+    ],
+    "why": "With 'Only after/when/by', the inversion happens in the MAIN clause."
+   },
+   {
+    "q": "We didn't find out the truth until years later.\nNot until years later ______ the truth.",
+    "a": [
+     "did we find out",
+     "did we discover",
+     "did we learn"
+    ]
+   },
+   {
+    "q": "The noise was so loud that we couldn't sleep.\nSo ______ that we couldn't sleep.",
+    "a": [
+     "loud was the noise"
+    ]
+   },
+   {
+    "q": "The demand was so high that tickets sold out in minutes.\nSuch ______ that tickets sold out in minutes.",
+    "a": [
+     "was the demand"
+    ]
+   },
+   {
+    "q": "We had hardly sat down when the lights went out.\nHardly ______ down when the lights went out.",
+    "a": [
+     "had we sat"
+    ]
+   },
+   {
+    "q": "People rarely get a second chance like this.\nRarely ______ a second chance like this.",
+    "a": [
+     "do people get"
+    ]
+   },
+   {
+    "q": "You can't find better coffee anywhere in the city.\nNowhere in the city ______ better coffee.",
+    "a": [
+     "can you find",
+     "will you find"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "g1_clefts",
+  "title": "Cleft sentences",
+  "instructions": "Complete the second sentence so it means the same as the first. Write only the missing words.",
+  "items": [
+   {
+    "q": "I need a long holiday.\nWhat ______ a long holiday.",
+    "a": [
+     "I need is"
+    ]
+   },
+   {
+    "q": "Her attitude annoys me, not her work.\nIt's ______ annoys me, not her work.",
+    "a": [
+     "her attitude that",
+     "her attitude which"
+    ]
+   },
+   {
+    "q": "I only want some peace and quiet.\nAll ______ some peace and quiet.",
+    "a": [
+     "I want is"
+    ]
+   },
+   {
+    "q": "He moved back home because he lost his job.\nThe reason ______ that he lost his job.",
+    "a": [
+     "he moved back home was",
+     "why he moved back home was"
+    ]
+   },
+   {
+    "q": "We didn't discover the error until Friday.\nIt ______ Friday that we discovered the error.",
+    "a": [
+     "wasn't until",
+     "was not until"
+    ]
+   },
+   {
+    "q": "She called the police.\nWhat she ______ call the police.",
+    "a": [
+     "did was",
+     "did was to"
+    ]
+   },
+   {
+    "q": "The manager made the final decision.\nIt ______ made the final decision.",
+    "a": [
+     "was the manager who",
+     "was the manager that"
+    ]
+   },
+   {
+    "q": "I love the way she explains things.\nWhat ______ the way she explains things.",
+    "a": [
+     "I love is"
+    ]
+   },
+   {
+    "q": "Something strange happened: the lights went off.\nWhat ______ that the lights went off.",
+    "a": [
+     "happened was"
+    ]
+   },
+   {
+    "q": "I met my wife in Lisbon.\nLisbon ______ I met my wife.",
+    "a": [
+     "is where",
+     "was where",
+     "is the place where",
+     "was the place where"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "g1_errors",
+  "title": "Error correction (Grammar I)",
+  "type": "open",
+  "instructions": "Rewrite each sentence correctly.",
+  "items": [
+   {
+    "q": "Never I have seen such chaos.",
+    "a": [
+     "Never have I seen such chaos."
+    ]
+   },
+   {
+    "q": "If I would have known, I would have come.",
+    "a": [
+     "If I had known, I would have come.",
+     "Had I known, I would have come."
+    ]
+   },
+   {
+    "q": "I wish I would be taller.",
+    "a": [
+     "I wish I were taller.",
+     "I wish I was taller."
+    ]
+   },
+   {
+    "q": "Only when he left I realised my mistake.",
+    "a": [
+     "Only when he left did I realise my mistake.",
+     "Only when he left did I realize my mistake."
+    ]
+   },
+   {
+    "q": "What I need it is more time.",
+    "a": [
+     "What I need is more time."
+    ]
+   },
+   {
+    "q": "It's time we go home.",
+    "a": [
+     "It's time we went home.",
+     "It's time to go home."
+    ]
+   },
+   {
+    "q": "Hardly had we arrived than it started to rain.",
+    "a": [
+     "Hardly had we arrived when it started to rain."
+    ]
+   },
+   {
+    "q": "Had I not been so tired, I would go out last night.",
+    "a": [
+     "Had I not been so tired, I would have gone out last night."
+    ]
+   },
+   {
+    "q": "Hadn't it been for you, we would have lost.",
+    "a": [
+     "Had it not been for you, we would have lost."
+    ]
+   },
+   {
+    "q": "Call me in case you need anything, and I'll come.",
+    "a": [
+     "Call me if you need anything, and I'll come.",
+     "Call me if you need anything and I'll come."
+    ]
+   }
+  ]
+ }
+]

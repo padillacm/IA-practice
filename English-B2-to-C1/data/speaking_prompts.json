@@ -1,0 +1,254 @@
+[
+ {
+  "kind": "long turn",
+  "prompt": "Talk about a decision that changed the direction of your life. What would be different now if you had decided otherwise?",
+  "hints": [
+   "mixed conditionals",
+   "Looking back, ...",
+   "If I hadn't..., I wouldn't be..."
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Describe a skill you learnt as an adult. How did you learn it, and what made it difficult?",
+  "hints": [
+   "a steep learning curve",
+   "It wasn't until... that...",
+   "get the hang of"
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Talk about a place that is important to you and explain why.",
+  "hints": [
+   "What I love most about it is...",
+   "vivid memories",
+   "it holds a special place"
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Describe a time when you had to deal with a difficult person. How did you handle it?",
+  "hints": [
+   "What I did was...",
+   "keep my temper",
+   "In hindsight, I should have..."
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Talk about a book, film or series that changed the way you think about something.",
+  "hints": [
+   "It made me realise...",
+   "thought-provoking",
+   "What struck me most was..."
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Should social media platforms be legally responsible for the content their users post?",
+  "hints": [
+   "It could be argued that...",
+   "hold someone accountable",
+   "strike a balance"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Is it better to be a specialist or a generalist in today's job market?",
+  "hints": [
+   "On the one hand... on the other...",
+   "in the long run",
+   "That said, ..."
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Will artificial intelligence make work more meaningful or less meaningful?",
+  "hints": [
+   "I'd argue that...",
+   "far-reaching consequences",
+   "It's not so much... as..."
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Should university education be free for everyone?",
+  "hints": [
+   "There's a strong case for...",
+   "bear the cost",
+   "widen access"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Are cities becoming better or worse places to live?",
+  "hints": [
+   "By far the biggest problem is...",
+   "affordable housing",
+   "quality of life"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Is tourism doing more harm than good in popular destinations?",
+  "hints": [
+   "overtourism",
+   "do more harm than good",
+   "local residents are priced out"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Should people be allowed to work fully remotely if they want to?",
+  "hints": [
+   "It depends largely on...",
+   "work-life balance",
+   "Having said that, ..."
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "Your company can fund only ONE: a gym for employees, a four-day week pilot, or a training budget. Argue for one and against the other two.",
+  "hints": [
+   "The last thing we need is...",
+   "value for money",
+   "I'm not sure I'd go that far"
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "A friend says learning languages is pointless now that translation apps exist. Respond.",
+  "hints": [
+   "I see where you're coming from, but...",
+   "lose something in translation",
+   "There's more to it than..."
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "Your city wants to ban cars from the centre. Present both sides, then give your view.",
+  "hints": [
+   "Supporters argue that... whereas critics...",
+   "On balance, ...",
+   "a knock-on effect"
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "Should children be allowed to have smartphones before the age of 14?",
+  "hints": [
+   "It's high time...",
+   "screen time",
+   "There's no easy answer"
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell the story of a trip where things went wrong - and how it ended.",
+  "hints": [
+   "No sooner had we... than...",
+   "Little did we know...",
+   "as it turned out"
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell the story of the best or worst job you've ever had.",
+  "hints": [
+   "It was the first time I'd ever...",
+   "Looking back, ...",
+   "I must have..."
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell a story about a misunderstanding caused by language or culture.",
+  "hints": [
+   "What happened was...",
+   "I couldn't have been more embarrassed",
+   "to get the wrong end of the stick"
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell the story of how you met one of your closest friends.",
+  "hints": [
+   "We hit it off",
+   "I'd never have guessed that...",
+   "Had I not gone to..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Present your current project to a new colleague in 2 minutes: goal, status, next steps, risks.",
+  "hints": [
+   "We're on track to...",
+   "The main risk is...",
+   "keep you in the loop"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Politely push back on a deadline your manager has set.",
+  "hints": [
+   "I'm a bit concerned that...",
+   "Would it be possible to...?",
+   "realistic timeline"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Give feedback to a colleague whose work has had several mistakes recently.",
+  "hints": [
+   "I've noticed that...",
+   "It might be worth...",
+   "How can I help?"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Explain a complex process from your job to someone who knows nothing about it.",
+  "hints": [
+   "Basically, what happens is...",
+   "In other words, ...",
+   "The key thing to bear in mind is..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "You're in a job interview. Answer: 'What's your biggest weakness?'",
+  "hints": [
+   "I tend to...",
+   "I've been working on...",
+   "What I've learnt is..."
+  ]
+ },
+ {
+  "kind": "describe",
+  "prompt": "Describe a photograph or painting you like in detail, then speculate about the story behind it.",
+  "hints": [
+   "It looks as if...",
+   "They must have...",
+   "I'd imagine that..."
+  ]
+ },
+ {
+  "kind": "describe",
+  "prompt": "Describe how your city has changed over the last ten years.",
+  "hints": [
+   "There has been a sharp increase in...",
+   "is said to be",
+   "barely recognisable"
+  ]
+ },
+ {
+  "kind": "describe",
+  "prompt": "Describe your ideal working day in five years' time.",
+  "hints": [
+   "What I'd really like is...",
+   "Ideally, ...",
+   "strike a balance between"
+  ]
+ }
+]

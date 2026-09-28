@@ -1,0 +1,127 @@
+[
+ {
+  "front": "actually = ?  (NOT Sp. 'actualmente')",
+  "back": "in fact / really. 'Actualmente' = currently / at the moment",
+  "example": "Actually, I've changed my mind. / Currently, I work in Madrid."
+ },
+ {
+  "front": "eventually = ?  (NOT Sp. 'eventualmente')",
+  "back": "in the end, after a long time. 'Eventualmente' = possibly / occasionally",
+  "example": "We eventually found the hotel."
+ },
+ {
+  "front": "assist = ?  (NOT Sp. 'asistir a')",
+  "back": "help. 'Asistir a' = attend",
+  "example": "Over 300 people attended the conference."
+ },
+ {
+  "front": "embarrassed = ?  (NOT Sp. 'embarazada')",
+  "back": "ashamed, uncomfortable. 'Embarazada' = pregnant",
+  "example": "I was so embarrassed when I tripped."
+ },
+ {
+  "front": "sensible = ?  (NOT Sp. 'sensible')",
+  "back": "reasonable, practical. 'Sensible' = sensitive",
+  "example": "That's a sensible decision. / She's very sensitive."
+ },
+ {
+  "front": "realise = ?  (NOT Sp. 'realizar')",
+  "back": "understand, become aware of. 'Realizar' = carry out, do",
+  "example": "The researchers carried out a survey."
+ },
+ {
+  "front": "pretend = ?  (NOT Sp. 'pretender')",
+  "back": "act as if something is true. 'Pretender' = intend, aim",
+  "example": "What do you intend to do?"
+ },
+ {
+  "front": "library = ?  (NOT Sp. 'librería')",
+  "back": "biblioteca. 'Librería' = bookshop (UK) / bookstore (US)",
+  "example": "I bought it at a bookshop."
+ },
+ {
+  "front": "carpet = ?  (NOT Sp. 'carpeta')",
+  "back": "alfombra. 'Carpeta' = folder",
+  "example": "Save it in this folder."
+ },
+ {
+  "front": "constipated = ?  (NOT Sp. 'constipado')",
+  "back": "estreñido. 'Constipado' = have a cold",
+  "example": "I've got a cold."
+ },
+ {
+  "front": "exit = ?  (NOT Sp. 'éxito')",
+  "back": "salida. 'Éxito' = success",
+  "example": "The launch was a huge success."
+ },
+ {
+  "front": "fabric = ?  (NOT Sp. 'fábrica')",
+  "back": "tela. 'Fábrica' = factory",
+  "example": "She works in a car factory."
+ },
+ {
+  "front": "large = ?  (NOT Sp. 'largo')",
+  "back": "big. 'Largo' = long",
+  "example": "It was a very long meeting."
+ },
+ {
+  "front": "career = ?  (NOT exactly Sp. 'carrera' universitaria)",
+  "back": "professional life. 'Carrera' (studies) = degree / course",
+  "example": "I did a degree in economics."
+ },
+ {
+  "front": "attend = ?  (NOT Sp. 'atender')",
+  "back": "go to (an event). 'Atender' = serve / deal with / pay attention",
+  "example": "The waiter served us quickly."
+ },
+ {
+  "front": "discussion = ?  (NOT always Sp. 'discusión')",
+  "back": "a conversation about a topic. 'Discusión' (fight) = argument",
+  "example": "They had a terrible argument."
+ },
+ {
+  "front": "sympathetic = ?  (NOT Sp. 'simpático')",
+  "back": "showing understanding of someone's problems. 'Simpático' = nice / friendly",
+  "example": "Her new boss is really nice."
+ },
+ {
+  "front": "topic = ?  (NOT Sp. 'tópico')",
+  "back": "subject. 'Tópico' = cliché / stereotype",
+  "example": "That's just a cliché about Spaniards."
+ },
+ {
+  "front": "remove = ?  (NOT Sp. 'remover')",
+  "back": "take away. 'Remover' = stir",
+  "example": "Stir the soup."
+ },
+ {
+  "front": "advice = ?  (NOT Sp. 'aviso')",
+  "back": "consejo (uncountable!). 'Aviso' = warning / notice",
+  "example": "Can I give you some advice? / a warning sign"
+ },
+ {
+  "front": "molest = ?  (NOT Sp. 'molestar')",
+  "back": "abuse sexually - AVOID! 'Molestar' = bother / disturb / annoy",
+  "example": "Sorry to bother you."
+ },
+ {
+  "front": "support = ?  (NOT Sp. 'soportar' = aguantar)",
+  "back": "help/encourage. 'Soportar' = stand / put up with",
+  "example": "I can't stand this noise."
+ },
+ {
+  "front": "contest = ?  (NOT Sp. 'contestar')",
+  "back": "competition. 'Contestar' = answer / reply",
+  "example": "Please reply to my email."
+ },
+ {
+  "front": "argument = ?  (careful with Sp. 'argumento')",
+  "back": "a disagreement OR a line of reasoning. 'Argumento' (of a film) = plot",
+  "example": "The plot of the film is confusing."
+ },
+ {
+  "front": "lecture = ?  (NOT Sp. 'lectura')",
+  "back": "a talk at university. 'Lectura' = reading",
+  "example": "Reading is my favourite hobby."
+ }
+]

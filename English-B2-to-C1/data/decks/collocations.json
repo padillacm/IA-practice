@@ -1,0 +1,252 @@
+[
+ {
+  "front": "come to an agreement after discussion (verb + noun)",
+  "back": "reach an agreement",
+  "example": "After two days of talks, the unions reached an agreement with management."
+ },
+ {
+  "front": "finish something by the agreed date (verb + noun)",
+  "back": "meet a deadline",
+  "example": "We worked all weekend to meet the deadline."
+ },
+ {
+  "front": "do what people hoped for (verb + noun)",
+  "back": "meet expectations",
+  "example": "The sequel failed to meet expectations."
+ },
+ {
+  "front": "make people think about an issue (verb + noun)",
+  "back": "raise a question",
+  "example": "The scandal raises serious questions about oversight."
+ },
+ {
+  "front": "make the public know more about something (verb + noun)",
+  "back": "raise awareness",
+  "example": "The campaign aims to raise awareness of mental health."
+ },
+ {
+  "front": "decide something is true after considering evidence (verb + noun)",
+  "back": "draw a conclusion",
+  "example": "It's too early to draw any conclusions."
+ },
+ {
+  "front": "say something relevant in a discussion (verb + adj + noun)",
+  "back": "make a valid point",
+  "example": "You make a valid point about the costs."
+ },
+ {
+  "front": "consider something when deciding (verb + prep + noun)",
+  "back": "take into account",
+  "example": "We need to take inflation into account."
+ },
+ {
+  "front": "do something to solve a problem (verb + noun)",
+  "back": "take action / take steps",
+  "example": "The council must take action on air pollution."
+ },
+ {
+  "front": "happen (a planned event) (verb + noun)",
+  "back": "take place",
+  "example": "The ceremony will take place on Friday."
+ },
+ {
+  "front": "do more damage than benefit",
+  "back": "do more harm than good",
+  "example": "Cutting the budget could do more harm than good."
+ },
+ {
+  "front": "improve slowly but continuously (verb + noun)",
+  "back": "make progress",
+  "example": "She's making steady progress with her pronunciation."
+ },
+ {
+  "front": "try hard (verb + noun)",
+  "back": "make an effort",
+  "example": "He made a real effort to be friendly."
+ },
+ {
+  "front": "help to clarify / explain something (verb + noun)",
+  "back": "shed light on",
+  "example": "The study sheds light on how memory works."
+ },
+ {
+  "front": "make people doubt something (verb + noun)",
+  "back": "cast doubt on",
+  "example": "New evidence casts doubt on his story."
+ },
+ {
+  "front": "find the right compromise between two things (verb + noun)",
+  "back": "strike a balance",
+  "example": "It's hard to strike a balance between work and family."
+ },
+ {
+  "front": "a situation that seems true / logical when examined (idiomatic verb + noun)",
+  "back": "hold water",
+  "example": "His excuse doesn't hold water."
+ },
+ {
+  "front": "reduce the difference between two groups (verb + noun)",
+  "back": "bridge / close / narrow the gap",
+  "example": "The programme aims to bridge the gap between rich and poor schools."
+ },
+ {
+  "front": "very serious, with big effects (adjective)",
+  "back": "far-reaching (consequences)",
+  "example": "The ruling will have far-reaching consequences."
+ },
+ {
+  "front": "general agreement among many people (adj + noun)",
+  "back": "broad / widespread consensus",
+  "example": "There is broad consensus that reform is needed."
+ },
+ {
+  "front": "strong disagreement from a group (adj + noun)",
+  "back": "fierce opposition",
+  "example": "The plan met with fierce opposition."
+ },
+ {
+  "front": "a lot of vehicles on the road (adj + noun)",
+  "back": "heavy traffic",
+  "example": "Heavy traffic delayed us by an hour."
+ },
+ {
+  "front": "a very large amount of rain falling (adj + noun)",
+  "back": "heavy / torrential rain",
+  "example": "Torrential rain caused flooding in the south."
+ },
+ {
+  "front": "almost all (adj + noun)",
+  "back": "the vast majority",
+  "example": "The vast majority of users never read the terms."
+ },
+ {
+  "front": "strong feeling of sadness because of failure (adj + noun)",
+  "back": "bitter disappointment",
+  "example": "Losing the final was a bitter disappointment."
+ },
+ {
+  "front": "very interested (adj + noun)",
+  "back": "a keen interest",
+  "example": "She takes a keen interest in politics."
+ },
+ {
+  "front": "evidence that convinces you (adj + noun)",
+  "back": "compelling evidence",
+  "example": "There is compelling evidence that the drug works."
+ },
+ {
+  "front": "very small possibility (adj + noun)",
+  "back": "a slight chance / a slim chance",
+  "example": "There's a slight chance of showers."
+ },
+ {
+  "front": "something everyone knows (adj + noun)",
+  "back": "common knowledge",
+  "example": "It's common knowledge that they're getting married."
+ },
+ {
+  "front": "very unlikely (adverb + adj)",
+  "back": "highly unlikely",
+  "example": "It's highly unlikely that prices will fall."
+ },
+ {
+  "front": "very worried (adverb + adj)",
+  "back": "deeply concerned",
+  "example": "We are deeply concerned about the situation."
+ },
+ {
+  "front": "fully aware (adverb + adj, 'well')",
+  "back": "well aware",
+  "example": "I'm well aware of the risks."
+ },
+ {
+  "front": "extremely disappointed (adverb + adj)",
+  "back": "bitterly disappointed",
+  "example": "Fans were bitterly disappointed by the result."
+ },
+ {
+  "front": "different in a way that is very noticeable (adverb + adj)",
+  "back": "strikingly different",
+  "example": "The two cities are strikingly different."
+ },
+ {
+  "front": "wrong in a basic, essential way (adverb + adj)",
+  "back": "fundamentally flawed",
+  "example": "The whole argument is fundamentally flawed."
+ },
+ {
+  "front": "increase suddenly and by a lot (verb + adverb)",
+  "back": "rise sharply",
+  "example": "Energy prices rose sharply last winter."
+ },
+ {
+  "front": "be very different from case to case (verb + adverb)",
+  "back": "vary considerably / widely",
+  "example": "Salaries vary considerably across the country."
+ },
+ {
+  "front": "recommend something very much (adverb + verb)",
+  "back": "strongly recommend",
+  "example": "I strongly recommend booking in advance."
+ },
+ {
+  "front": "believe something with total conviction (adverb + verb)",
+  "back": "firmly believe",
+  "example": "I firmly believe that education is the key."
+ },
+ {
+  "front": "an increasing amount of pressure (adj + noun)",
+  "back": "mounting pressure",
+  "example": "The minister is under mounting pressure to resign."
+ },
+ {
+  "front": "a lucky event (noun + of + noun)",
+  "back": "a stroke of luck",
+  "example": "By a stroke of luck, we found a taxi immediately."
+ },
+ {
+  "front": "something that will certainly happen soon (noun phrase)",
+  "back": "a matter of time",
+  "example": "It's only a matter of time before they find out."
+ },
+ {
+  "front": "a large number of complaints arriving at once (noun + of + noun)",
+  "back": "a flood of complaints",
+  "example": "The change triggered a flood of complaints."
+ },
+ {
+  "front": "stop being calm and get angry (verb + noun)",
+  "back": "lose your temper",
+  "example": "He lost his temper with the referee."
+ },
+ {
+  "front": "be in contact regularly (verb + prep + noun)",
+  "back": "keep in touch",
+  "example": "Let's keep in touch after the course."
+ },
+ {
+  "front": "know the latest situation of something (verb + noun + of)",
+  "back": "keep track of",
+  "example": "It's hard to keep track of all my passwords."
+ },
+ {
+  "front": "be responsible for doing something (verb + noun)",
+  "back": "take responsibility for",
+  "example": "The CEO took full responsibility for the failure."
+ },
+ {
+  "front": "use an opportunity to get something (verb + noun)",
+  "back": "take advantage of",
+  "example": "Take advantage of the offer while it lasts."
+ },
+ {
+  "front": "create an impression that lasts (verb + adj + noun)",
+  "back": "make / leave a lasting impression",
+  "example": "Her speech left a lasting impression on everyone."
+ },
+ {
+  "front": "stay at the same level after rising or falling (phrasal)",
+  "back": "level off",
+  "example": "Inflation has finally levelled off."
+ }
+]
