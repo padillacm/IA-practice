@@ -37,7 +37,8 @@
    {
     "q": "The results are ______ with previous research. (CONSIST)",
     "a": [
-     "consistent"
+     "consistent",
+     "inconsistent"
     ]
    },
    {
@@ -49,7 +50,8 @@
    {
     "q": "The company faces ______ competition from abroad. (INCREASE)",
     "a": [
-     "increasing"
+     "increasing",
+     "increased"
     ]
    },
    {
@@ -110,7 +112,8 @@
    {
     "q": "His ______ comments offended several colleagues. (THINK)",
     "a": [
-     "thoughtless"
+     "thoughtless",
+     "unthinking"
     ]
    },
    {
@@ -123,6 +126,65 @@
     "q": "There was a clear ______ of opinion among the experts. (DIVIDE)",
     "a": [
      "division"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v5_word_families",
+  "title": "Word families in context",
+  "instructions": "Write the correct form of the word in CAPITALS for each numbered gap in the text above.",
+  "items": [
+   {
+    "q": "(1) very ______ (RELY)",
+    "a": [
+     "reliable"
+    ]
+   },
+   {
+    "q": "(2) its ______ (RELY) has become a problem",
+    "a": [
+     "reliability",
+     "unreliability"
+    ]
+   },
+   {
+    "q": "(3) so ______ (DEPEND) on one company",
+    "a": [
+     "dependent",
+     "reliant"
+    ]
+   },
+   {
+    "q": "(4) reduce our ______ (DEPEND)",
+    "a": [
+     "dependence",
+     "dependency"
+    ]
+   },
+   {
+    "q": "(5) The ______ (DECIDE) to look for a second supplier",
+    "a": [
+     "decision"
+    ]
+   },
+   {
+    "q": "(6) some managers were ______ (DECIDE) for weeks",
+    "a": [
+     "undecided",
+     "indecisive"
+    ]
+   },
+   {
+    "q": "(7) the director acted ______ (DECIDE)",
+    "a": [
+     "decisively"
+    ]
+   },
+   {
+    "q": "(8) should ______ (STRONG) our position",
+    "a": [
+     "strengthen"
     ]
    }
   ]
@@ -172,7 +234,8 @@
     "a": [
      "had difficulty understanding",
      "had difficulty in understanding",
-     "had great difficulty understanding"
+     "had great difficulty understanding",
+     "had some difficulty understanding"
     ]
    },
    {
@@ -341,8 +404,8 @@
     "q": "___, we have 50 employees, but we plan to hire more next year.",
     "options": [
      "Currently",
-     "Eventually",
-     "Actually"
+     "Occasionally",
+     "Eventually"
     ],
     "a": [
      "a",
@@ -355,7 +418,7 @@
     "options": [
      "eventually",
      "possibly",
-     "actually"
+     "presently"
     ],
     "a": [
      "a",
@@ -432,8 +495,8 @@
     "q": "It's only a ___ of time before they announce it.",
     "options": [
      "matter",
-     "issue",
-     "question"
+     "subject",
+     "case"
     ],
     "a": [
      "a",

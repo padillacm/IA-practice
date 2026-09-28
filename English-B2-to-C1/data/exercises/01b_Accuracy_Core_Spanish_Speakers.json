@@ -1,0 +1,441 @@
+[
+ {
+  "id": "a1_articles",
+  "title": "Articles",
+  "instructions": "Write a, an, the, or - (dash) if no article is needed.",
+  "items": [
+   {
+    "q": "______ money doesn't bring happiness.",
+    "a": [
+     "-"
+    ],
+    "why": "General statement, uncountable noun: no article."
+   },
+   {
+    "q": "Can you give me back ______ money I lent you?",
+    "a": [
+     "the"
+    ],
+    "why": "Specific money (the money I lent you)."
+   },
+   {
+    "q": "My sister is ______ architect.",
+    "a": [
+     "an"
+    ]
+   },
+   {
+    "q": "I'll call you ______ next week.",
+    "a": [
+     "-"
+    ]
+   },
+   {
+    "q": "______ most people I know work from home at least one day a week.",
+    "a": [
+     "-"
+    ]
+   },
+   {
+    "q": "He was taken to ______ hospital after the accident.",
+    "a": [
+     "-",
+     "the"
+    ],
+    "why": "BrE: to hospital (as a patient). AmE: to the hospital. Both accepted."
+   },
+   {
+    "q": "She moved to ______ United States in 2019.",
+    "a": [
+     "the"
+    ]
+   },
+   {
+    "q": "______ young people today are more aware of mental health.",
+    "a": [
+     "-"
+    ]
+   },
+   {
+    "q": "It's ______ best book I've read this year.",
+    "a": [
+     "the"
+    ]
+   },
+   {
+    "q": "We had ______ lunch in a small café near the office.",
+    "a": [
+     "-"
+    ]
+   },
+   {
+    "q": "I'd like to work for ______ international company.",
+    "a": [
+     "an"
+    ]
+   },
+   {
+    "q": "______ inflation is the main concern for voters.",
+    "a": [
+     "-"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "a1_prepositions",
+  "title": "Dependent prepositions",
+  "instructions": "Write ONE word in each gap. Type - if no word is needed.",
+  "items": [
+   {
+    "q": "Whether we travel or not depends ______ the weather.",
+    "a": [
+     "on",
+     "upon"
+    ]
+   },
+   {
+    "q": "She's been married ______ a Canadian for ten years.",
+    "a": [
+     "to"
+    ]
+   },
+   {
+    "q": "We arrived ______ Madrid late at night.",
+    "a": [
+     "in"
+    ]
+   },
+   {
+    "q": "We need to discuss ______ the budget tomorrow.",
+    "a": [
+     "-"
+    ]
+   },
+   {
+    "q": "Could you explain the problem ______ me?",
+    "a": [
+     "to"
+    ]
+   },
+   {
+    "q": "He's very good ______ solving problems under pressure.",
+    "a": [
+     "at"
+    ]
+   },
+   {
+    "q": "I'm thinking ______ changing jobs.",
+    "a": [
+     "about",
+     "of"
+    ]
+   },
+   {
+    "q": "The course consists ______ twelve modules.",
+    "a": [
+     "of"
+    ]
+   },
+   {
+    "q": "There has been a sharp increase ______ house prices.",
+    "a": [
+     "in"
+    ]
+   },
+   {
+    "q": "What was the reason ______ the delay?",
+    "a": [
+     "for",
+     "behind"
+    ]
+   },
+   {
+    "q": "The new policy will have a big impact ______ small businesses.",
+    "a": [
+     "on",
+     "upon"
+    ]
+   },
+   {
+    "q": "Everyone should have access ______ clean water.",
+    "a": [
+     "to"
+    ]
+   },
+   {
+    "q": "Who's responsible ______ this project?",
+    "a": [
+     "for"
+    ]
+   },
+   {
+    "q": "Let's focus ______ the main issue.",
+    "a": [
+     "on",
+     "upon"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "a1_verb_patterns",
+  "title": "Verb patterns",
+  "instructions": "Put the verb in brackets into the correct form (infinitive, bare infinitive or -ing).",
+  "items": [
+   {
+    "q": "I look forward to ______ (hear) from you.",
+    "a": [
+     "hearing"
+    ]
+   },
+   {
+    "q": "My boss made me ______ (redo) the whole report.",
+    "a": [
+     "redo"
+    ]
+   },
+   {
+    "q": "I'm not used to ______ (work) such long hours.",
+    "a": [
+     "working"
+    ]
+   },
+   {
+    "q": "She suggested ______ (take) a short break.",
+    "a": [
+     "taking"
+    ]
+   },
+   {
+    "q": "They let us ______ (leave) early on Friday.",
+    "a": [
+     "leave"
+    ]
+   },
+   {
+    "q": "I stopped ______ (smoke) five years ago.",
+    "a": [
+     "smoking"
+    ],
+    "why": "stop + -ing = quit the activity."
+   },
+   {
+    "q": "On the way home, I stopped ______ (buy) some bread.",
+    "a": [
+     "to buy"
+    ],
+    "why": "stop + to = stop in order to do something."
+   },
+   {
+    "q": "Remember ______ (lock) the door when you leave.",
+    "a": [
+     "to lock"
+    ],
+    "why": "remember + to = don't forget (future)."
+   },
+   {
+    "q": "I remember ______ (lock) the door - I'm sure it's locked.",
+    "a": [
+     "locking"
+    ],
+    "why": "remember + -ing = memory of the past."
+   },
+   {
+    "q": "If the printer doesn't work, try ______ (turn) it off and on again.",
+    "a": [
+     "turning"
+    ],
+    "why": "try + -ing = experiment."
+   },
+   {
+    "q": "I tried ______ (open) the window, but it was stuck.",
+    "a": [
+     "to open"
+    ],
+    "why": "try + to = make an effort."
+   },
+   {
+    "q": "Would you mind ______ (send) me the file again?",
+    "a": [
+     "sending"
+    ]
+   },
+   {
+    "q": "We can't afford ______ (lose) this client.",
+    "a": [
+     "to lose"
+    ]
+   },
+   {
+    "q": "It's worth ______ (check) the contract before signing.",
+    "a": [
+     "checking"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "a1_tenses",
+  "title": "Present perfect or past simple?",
+  "instructions": "Put the verb in brackets into the correct tense, or write for / since.",
+  "items": [
+   {
+    "q": "I ______ (work) here since 2020.",
+    "a": [
+     "have worked",
+     "have been working"
+    ]
+   },
+   {
+    "q": "I ______ (see) him yesterday at the station.",
+    "a": [
+     "saw"
+    ]
+   },
+   {
+    "q": "How long ______ (you / know) your best friend?",
+    "a": [
+     "have you known"
+    ]
+   },
+   {
+    "q": "She ______ (move) to London three years ago.",
+    "a": [
+     "moved"
+    ]
+   },
+   {
+    "q": "______ you ever ______ (be) to Mexico? (write both words: e.g. 'have ... been')",
+    "a": [
+     "have been",
+     "have ... been",
+     "have...been"
+    ]
+   },
+   {
+    "q": "We've been waiting ______ forty minutes.",
+    "a": [
+     "for"
+    ]
+   },
+   {
+    "q": "I haven't eaten anything ______ breakfast.",
+    "a": [
+     "since"
+    ]
+   },
+   {
+    "q": "When ______ (you / start) learning English?",
+    "a": [
+     "did you start"
+    ]
+   },
+   {
+    "q": "They ______ (be) married for twenty years - they're celebrating next week.",
+    "a": [
+     "have been"
+    ]
+   },
+   {
+    "q": "I ______ (finish) the report last night, so you can read it now.",
+    "a": [
+     "finished"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "a1_word_order",
+  "title": "Subjects, word order and 'what/that'",
+  "type": "open",
+  "instructions": "Each sentence has ONE mistake. Rewrite it correctly.",
+  "items": [
+   {
+    "q": "Is important to check the figures before the meeting.",
+    "a": [
+     "It is important to check the figures before the meeting."
+    ]
+   },
+   {
+    "q": "Are many reasons why the project failed.",
+    "a": [
+     "There are many reasons why the project failed."
+    ]
+   },
+   {
+    "q": "I like very much this city.",
+    "a": [
+     "I like this city very much.",
+     "I really like this city."
+    ]
+   },
+   {
+    "q": "Can you tell me where is the meeting room?",
+    "a": [
+     "Can you tell me where the meeting room is?"
+    ]
+   },
+   {
+    "q": "Always I forget my password.",
+    "a": [
+     "I always forget my password."
+    ]
+   },
+   {
+    "q": "All what I need is a bit more time.",
+    "a": [
+     "All I need is a bit more time.",
+     "All that I need is a bit more time."
+    ]
+   },
+   {
+    "q": "I don't know what time does the train leave.",
+    "a": [
+     "I don't know what time the train leaves."
+    ]
+   },
+   {
+    "q": "She is never on time, is a real problem.",
+    "a": [
+     "She is never on time, which is a real problem.",
+     "She is never on time. It's a real problem."
+    ]
+   },
+   {
+    "q": "I am agree with you completely.",
+    "a": [
+     "I agree with you completely.",
+     "I completely agree with you."
+    ]
+   },
+   {
+    "q": "Everything what he said was true.",
+    "a": [
+     "Everything he said was true.",
+     "Everything that he said was true."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "a1_email",
+  "title": "Proofread the email",
+  "type": "open",
+  "instructions": "Write the corrected email as ONE answer (item 1). Then list the 8 corrections in item 2 if you like.",
+  "items": [
+   {
+    "q": "The corrected email",
+    "a": [
+     "Hi Laura, I'm writing to explain the delay in the project. As you know, the success of the project depends on the supplier, and they only sent the materials yesterday. It's very frustrating, because I've been working on this for three weeks. I suggest having a quick call tomorrow to discuss the next steps. Can you tell me what time is good for you? Best, Carlos"
+    ]
+   },
+   {
+    "q": "The 8 corrections",
+    "a": [
+     "I'm writing (not I write you) / explain the delay (no 'about') / the success of the project / depends on / only sent (past simple with yesterday) / It's very frustrating / I've been working ... for three weeks / suggest having / discuss the next steps (no 'about')"
+    ]
+   }
+  ]
+ }
+]

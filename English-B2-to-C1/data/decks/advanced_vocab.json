@@ -17,7 +17,7 @@
  {
   "front": "to weaken something gradually",
   "back": "undermine",
-  "example": "The scandal undermined public trust."
+  "example": "The scandal undermined public trust. (undermine confidence / trust / efforts / authority)"
  },
  {
   "front": "to cause something (often a reaction) to start",
@@ -25,14 +25,14 @@
   "example": "The announcement triggered protests."
  },
  {
-  "front": "to say something is true, often without proof",
+  "front": "to say something is true, often without proof (allege = claim someone did something wrong; legal/news)",
   "back": "claim / allege",
   "example": "Critics allege that the figures were manipulated."
  },
  {
   "front": "to accept that something is true (often reluctantly)",
   "back": "acknowledge / concede",
-  "example": "She conceded that she had made a mistake."
+  "example": "She conceded that she had made a mistake. (concede THAT + clause; concede defeat)"
  },
  {
   "front": "to make a problem seem less important than it is",
@@ -47,7 +47,7 @@
  {
   "front": "to encourage or support an activity",
   "back": "foster",
-  "example": "Schools should foster creativity."
+  "example": "Schools should foster creativity. (foster creativity / a sense of belonging / cooperation)"
  },
  {
   "front": "to be an example of / symbol of",
@@ -55,13 +55,13 @@
   "example": "She epitomises the modern entrepreneur."
  },
  {
-  "front": "to do something before it is expected",
+  "front": "to expect or predict something (and often prepare for it)",
   "back": "anticipate",
   "example": "We didn't anticipate such high demand."
  },
  {
   "front": "to cause something to happen",
-  "back": "bring about / give rise to",
+  "back": "give rise to / trigger",
   "example": "The policy gave rise to widespread protest."
  },
  {
@@ -81,7 +81,7 @@
  },
  {
   "front": "to find a solution after thinking hard",
-  "back": "come up with / devise",
+  "back": "devise / formulate",
   "example": "They devised a new strategy."
  },
  {
@@ -95,14 +95,14 @@
   "example": "How do you account for the drop in sales?"
  },
  {
-  "front": "to be unwilling to do something",
+  "front": "unwilling and hesitant to do something (adjective)",
   "back": "reluctant",
-  "example": "He was reluctant to admit his mistake."
+  "example": "He was reluctant to admit his mistake. (reluctant + to-infinitive)"
  },
  {
   "front": "easily seen or noticed",
   "back": "conspicuous / noticeable",
-  "example": "She was conspicuous by her absence."
+  "example": "He felt conspicuous in his bright red suit."
  },
  {
   "front": "very important; essential",
@@ -135,7 +135,7 @@
   "example": "A comprehensive review of the policy."
  },
  {
-  "front": "likely to happen; possible to be done",
+  "front": "possible and practical to do (feasible); able to work or succeed, especially financially (viable)",
   "back": "feasible / viable",
   "example": "Is the plan financially viable?"
  },
@@ -156,8 +156,8 @@
  },
  {
   "front": "careful not to take risks; cautious",
-  "back": "wary (of)",
-  "example": "Be wary of offers that seem too good to be true."
+  "back": "wary",
+  "example": "Be wary of offers that seem too good to be true. (wary OF something)"
  },
  {
   "front": "based on careful thought; wise (decision)",
@@ -171,11 +171,11 @@
  },
  {
   "front": "very bad, unsatisfactory (formal/informal range)",
-  "back": "dire / appalling / subpar",
-  "example": "The service was appalling."
+  "back": "dire / appalling / dreadful",
+  "example": "The service was appalling. (BrE informal: 'the food was dire')"
  },
  {
-  "front": "the most typical example",
+  "front": "being the most typical example of something (adjective)",
   "back": "quintessential",
   "example": "The quintessential English pub."
  },
@@ -191,13 +191,13 @@
  },
  {
   "front": "an obstacle that prevents progress",
-  "back": "hurdle / setback / stumbling block",
+  "back": "hurdle / obstacle / stumbling block",
   "example": "Funding is the main stumbling block."
  },
  {
   "front": "something done as a first step to test ideas",
-  "back": "pilot (scheme)",
-  "example": "A pilot scheme was launched in three cities."
+  "back": "pilot scheme / pilot program / pilot",
+  "example": "A pilot scheme (AmE: pilot program) was launched in three cities."
  },
  {
   "front": "public argument or strong disagreement",
@@ -205,7 +205,7 @@
   "example": "The decision sparked controversy."
  },
  {
-  "front": "an increase in something (e.g. prices, cases)",
+  "front": "a sudden, large increase in something (e.g. demand, cases)",
   "back": "surge / upsurge",
   "example": "A surge in demand."
  },
@@ -241,12 +241,17 @@
  },
  {
   "front": "to cause controversy / a strong reaction",
-  "back": "spark (debate / outrage)",
-  "example": "The comments sparked outrage online."
+  "back": "spark",
+  "example": "The comments sparked outrage online. (spark debate / controversy / outrage)"
  },
  {
   "front": "in the end, fundamentally (sentence adverb)",
   "back": "ultimately",
   "example": "Ultimately, it's about trust."
+ },
+ {
+  "front": "a problem that delays or reverses progress",
+  "back": "setback",
+  "example": "The supplier issue was a major setback for the launch."
  }
 ]

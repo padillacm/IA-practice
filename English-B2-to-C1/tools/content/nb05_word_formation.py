@@ -48,9 +48,9 @@ pronounce -> **pronunciation**; maintain -> **maintenance**; deep -> **depth**; 
                 {"q": "His ______ to compromise caused the talks to collapse. (WILLING)", "a": ["unwillingness"]},
                 {"q": "The advertisement was deliberately ______. (LEAD)", "a": ["misleading"]},
                 {"q": "We were impressed by the ______ of her argument. (CLEAR)", "a": ["clarity"]},
-                {"q": "The results are ______ with previous research. (CONSIST)", "a": ["consistent"]},
+                {"q": "The results are ______ with previous research. (CONSIST)", "a": ["consistent", "inconsistent"]},
                 {"q": "It was a completely ______ decision; nobody saw it coming. (EXPECT)", "a": ["unexpected"]},
-                {"q": "The company faces ______ competition from abroad. (INCREASE)", "a": ["increasing"]},
+                {"q": "The company faces ______ competition from abroad. (INCREASE)", "a": ["increasing", "increased"]},
                 {"q": "He apologised for his ______ behaviour at the meeting. (RESPECT)", "a": ["disrespectful"]},
                 {"q": "Some of the paintings in the collection are ______. (REPLACE)", "a": ["irreplaceable"]},
                 {"q": "Poor ______ of resources led to the project's failure. (MANAGE)", "a": ["management", "mismanagement"]},
@@ -60,12 +60,36 @@ pronounce -> **pronunciation**; maintain -> **maintenance**; deep -> **depth**; 
                 {"q": "The data was ______ interpreted, which led to the wrong conclusions. (CORRECT)", "a": ["incorrectly"]},
                 {"q": "Economic ______ has improved over the last decade. (STABLE)", "a": ["stability"]},
                 {"q": "The two proposals are ______ different. (FUNDAMENTAL)", "a": ["fundamentally"]},
-                {"q": "His ______ comments offended several colleagues. (THINK)", "a": ["thoughtless"]},
+                {"q": "His ______ comments offended several colleagues. (THINK)", "a": ["thoughtless", "unthinking"]},
                 {"q": "The government aims to ______ the tax system. (SIMPLE)", "a": ["simplify"]},
                 {"q": "There was a clear ______ of opinion among the experts. (DIVIDE)", "a": ["division"]},
             ],
         }),
         # ------------------------------------------------------------------ 2
+        ("md", """
+### Word families in context
+One root, several forms: choose the right one for each gap in this short text.
+
+> *Our supplier used to be very (1) ______ (RELY), but recently its (2) ______ (RELY) has become a problem. We can't
+> afford to be so (3) ______ (DEPEND) on one company, so we need to reduce our (4) ______ (DEPEND). The
+> (5) ______ (DECIDE) to look for a second supplier was not easy, and some managers were (6) ______ (DECIDE) for weeks.
+> In the end, the director acted (7) ______ (DECIDE), and the change should (8) ______ (STRONG) our position.*
+"""),
+        ("ex", {
+            "id": "v5_word_families",
+            "title": "Word families in context",
+            "instructions": "Write the correct form of the word in CAPITALS for each numbered gap in the text above.",
+            "items": [
+                {"q": "(1) very ______ (RELY)", "a": ["reliable"]},
+                {"q": "(2) its ______ (RELY) has become a problem", "a": ["reliability", "unreliability"]},
+                {"q": "(3) so ______ (DEPEND) on one company", "a": ["dependent", "reliant"]},
+                {"q": "(4) reduce our ______ (DEPEND)", "a": ["dependence", "dependency"]},
+                {"q": "(5) The ______ (DECIDE) to look for a second supplier", "a": ["decision"]},
+                {"q": "(6) some managers were ______ (DECIDE) for weeks", "a": ["undecided", "indecisive"]},
+                {"q": "(7) the director acted ______ (DECIDE)", "a": ["decisively"]},
+                {"q": "(8) should ______ (STRONG) our position", "a": ["strengthen"]},
+            ],
+        }),
         ("md", """
 ---
 ## 2. Paraphrasing: key word transformations
@@ -89,7 +113,7 @@ Strategy:
                 {"q": "I regret not studying harder at university. WISH\nI ______ harder at university.", "a": ["wish I had studied", "wish I'd studied", "wish that I had studied"]},
                 {"q": "The concert was cancelled because of the storm. CALLED\nThe concert ______ because of the storm.", "a": ["was called off", "had to be called off"]},
                 {"q": "She was the only one who noticed the mistake. APART\nNobody ______ the mistake.", "a": ["apart from her noticed"]},
-                {"q": "I found it difficult to understand his accent. DIFFICULTY\nI ______ his accent.", "a": ["had difficulty understanding", "had difficulty in understanding", "had great difficulty understanding"]},
+                {"q": "I found it difficult to understand his accent. DIFFICULTY\nI ______ his accent.", "a": ["had difficulty understanding", "had difficulty in understanding", "had great difficulty understanding", "had some difficulty understanding"]},
                 {"q": "It's possible that they missed the train. MAY\nThey ______ the train.", "a": ["may have missed"]},
                 {"q": "People say that the castle is haunted. SAID\nThe castle ______ haunted.", "a": ["is said to be"]},
                 {"q": "He didn't realise how serious the situation was. LITTLE\n______ how serious the situation was.", "a": ["little did he realise", "little did he realize", "little did he know"]},
@@ -116,7 +140,7 @@ Strategy:
 | **actually** | in fact, really | NOT *actualmente* -> **currently / at the moment** |
 | **eventually** | in the end, after a long time | NOT *eventualmente* -> **possibly / occasionally** |
 | **assist** | help | *asistir a* -> **attend** |
-| **embarrassed** | ashamed, uncomfortable | *embarazada* -> **pregnant** |
+| **embarrassed** | awkward, self-conscious (not *ashamed*) | *embarazada* -> **pregnant** |
 | **sensible** | reasonable, practical | *sensible* -> **sensitive** |
 | **realise** | understand, become aware | *realizar* -> **carry out, do, make** |
 | **pretend** | act as if something is true | *pretender* -> **intend, aim, try** |
@@ -135,14 +159,14 @@ Strategy:
                 {"q": "Buying in bulk is more ___.", "options": ["economical", "economic", "economics"]},
                 {"q": "She gave me some very ___ advice about money.", "options": ["sensible", "sensitive", "sensational"]},
                 {"q": "He's very ___ to criticism; he takes everything personally.", "options": ["sensitive", "sensible", "sensory"]},
-                {"q": "___, we have 50 employees, but we plan to hire more next year.", "options": ["Currently", "Actually", "Eventually"]},
-                {"q": "After years of trying, she ___ succeeded.", "options": ["eventually", "possibly", "actually"]},
+                {"q": "___, we have 50 employees, but we plan to hire more next year.", "options": ["Currently", "Eventually", "Occasionally"]},
+                {"q": "After years of trying, she ___ succeeded.", "options": ["eventually", "possibly", "presently"]},
                 {"q": "More than 300 people ___ the conference.", "options": ["attended", "assisted", "assisted to"]},
                 {"q": "I felt so ___ when I forgot her name.", "options": ["embarrassed", "pregnant", "embarrassing"]},
                 {"q": "We need to ___ the problem before it gets worse.", "options": ["address", "direct", "adress"]},
                 {"q": "The judge must be completely ___: she can have no personal interest in the case.", "options": ["disinterested", "uninterested", "unconcerned"]},
                 {"q": "There were ___ people at the meeting than we expected.", "options": ["fewer", "less", "lesser"]},
-                {"q": "It's only a ___ of time before they announce it.", "options": ["matter", "question", "issue"]},
+                {"q": "It's only a ___ of time before they announce it.", "options": ["matter", "case", "subject"]},
                 {"q": "The researchers ___ a series of experiments.", "options": ["carried out", "realised", "made up"]},
                 {"q": "What do you ___ to do after you graduate?", "options": ["intend", "pretend", "attend"]},
                 {"q": "I bought this novel at the ___ on the corner.", "options": ["bookshop", "library", "librery"]},

@@ -39,11 +39,11 @@ Same method as Notebook 01: explanation -> exercise -> `check()` -> *Your turn*.
                 {"q": "The streets are wet. It ______ (rain) last night.", "a": ["must have rained"]},
                 {"q": "She ______ (see) me - she walked straight past without saying hello.", "a": ["can't have seen", "cannot have seen", "couldn't have seen"]},
                 {"q": "I'm not sure where my keys are. I ______ (leave) them at the office.", "a": ["might have left", "may have left", "could have left"]},
-                {"q": "You ______ (tell) me it was a formal dinner! I was the only one in jeans.", "a": ["should have told", "ought to have told"]},
+                {"q": "You ______ (tell) me it was a formal dinner! I was the only one in jeans.", "a": ["should have told", "ought to have told", "could have told", "might have told"]},
                 {"q": "We ______ (buy) so much food - half of it went to waste.", "a": ["needn't have bought", "need not have bought", "shouldn't have bought", "should not have bought"]},
                 {"q": "He looks exhausted. He ______ (work) all night.", "a": ["must have been working", "must have worked"]},
                 {"q": "That ______ (be) Tom you saw at the party - he's in Canada this month.", "a": ["can't have been", "cannot have been", "couldn't have been"]},
-                {"q": "Why did you walk home alone at 3 a.m.? You ______ (get) attacked!", "a": ["could have got", "could have gotten", "might have got", "might have gotten", "could have been"]},
+                {"q": "Why did you walk home alone at 3 a.m.? You ______ (get) attacked!", "a": ["could have got", "could have gotten", "might have got", "might have gotten", "could have been", "might have been"]},
                 {"q": "I ______ (take) a taxi because Anna offered me a lift, so I saved some money.", "a": ["didn't need to take", "did not need to take", "didn't have to take", "did not have to take"]},
                 {"q": "They ______ (forget) about the meeting - they're never late.", "a": ["must have forgotten"]},
             ],
@@ -173,7 +173,7 @@ Advanced speakers **avoid repeating words**, and add emphasis with grammar rathe
                 {"q": "Some candidates may already have experience. If ______, they will start on a higher salary.", "a": ["so"]},
                 {"q": "These shoes are too small. Do you have any bigger ______?", "a": ["ones"]},
                 {"q": "I asked him to apologise, but he refused to do ______.", "a": ["so"]},
-                {"q": "There is no evidence ______ to support this claim.", "a": ["whatsoever"]},
+                {"q": "There is no evidence ______ to support this claim.", "a": ["whatsoever", "whatever"]},
                 {"q": "\"Would you like to join us for dinner?\" \"I'd love ______!\"", "a": ["to"]},
                 {"q": "She is ______ far the best candidate we've interviewed.", "a": ["by"]},
             ],
@@ -188,7 +188,7 @@ for all persons (no *-s*, no past). British English often uses *should* + infini
 
 | Trigger | Example |
 |---|---|
-| *suggest, recommend, insist, demand, propose, request, ask* **that** | The doctor recommended **that he rest**. (NOT *rests*) |
+| *suggest, recommend, insist, demand, propose, request, ask* **that** | The doctor recommended **that he rest**. (formal; BrE also *should rest*, informal *rests*) |
 | *It is essential / vital / crucial / important / imperative that* | It is vital **that every employee be** informed. |
 | Negative: **not** + base form | They insisted **that she not travel** alone. |
 | BrE alternative | They insisted that she **should not travel** alone. |
@@ -202,13 +202,13 @@ for all persons (no *-s*, no past). British English often uses *should* + infini
             "title": "Subjunctive and fixed expressions",
             "instructions": "Put the verb in brackets into the correct form, or complete the fixed expression with ONE word.",
             "items": [
-                {"q": "The doctor recommended that he ______ (rest) for two weeks.", "a": ["rest", "should rest"]},
+                {"q": "The doctor recommended that he ______ (rest) for two weeks.", "a": ["rest", "should rest", "rests"]},
                 {"q": "It is essential that every employee ______ (be) informed before Monday.", "a": ["be", "should be", "is"],
-                 "why": "Formal: 'be'. BrE: 'should be'. ('is' is common in informal BrE but less formal.)"},
+                 "why": "Formal: 'be'. BrE: 'should be'. The indicative ('is', 'takes') is also normal in British English, just less formal."},
                 {"q": "They insisted that she ______ (not / travel) alone.", "a": ["not travel", "should not travel", "shouldn't travel"]},
                 {"q": "The committee proposed that the rule ______ (change).", "a": ["be changed", "should be changed"]},
-                {"q": "It's vital that he ______ (take) his medication every day.", "a": ["take", "should take"]},
-                {"q": "I suggest that she ______ (apply) for the position.", "a": ["apply", "should apply"]},
+                {"q": "It's vital that he ______ (take) his medication every day.", "a": ["take", "should take", "takes"]},
+                {"q": "I suggest that she ______ (apply) for the position.", "a": ["apply", "should apply", "applies"]},
                 {"q": "______ that as it may, we still need a decision by Friday.", "a": ["be"]},
                 {"q": "We'll finish the project on time, come what ______.", "a": ["may"]},
             ],
@@ -230,7 +230,7 @@ Each sentence has **one** mistake. Rewrite it correctly (open answers - compare 
                 {"q": "I cut my hair yesterday at the new salon.", "a": ["I had my hair cut yesterday at the new salon.", "I got my hair cut yesterday at the new salon."]},
                 {"q": "Having finished dinner, the dishes were washed.", "a": ["Having finished dinner, we washed the dishes.", "Having finished dinner, I washed the dishes."]},
                 {"q": "She can't have saw the message.", "a": ["She can't have seen the message."]},
-                {"q": "It is essential that he arrives on time.", "a": ["It is essential that he arrive on time.", "It is essential that he should arrive on time."]},
+                {"q": "It is essential that he arrived on time tomorrow.", "a": ["It is essential that he arrive on time tomorrow.", "It is essential that he should arrive on time tomorrow.", "It is essential that he arrives on time tomorrow."]},
                 {"q": "The car needs to repair.", "a": ["The car needs repairing.", "The car needs to be repaired."]},
             ],
         }),

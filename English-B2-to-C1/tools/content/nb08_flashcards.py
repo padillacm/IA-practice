@@ -3,10 +3,11 @@ NOTEBOOK = {
     "title": "08 - Daily Flashcards (Spaced Repetition)",
     "cells": [
         ("md", """
-**15 minutes every day, no exceptions.** This is the single habit that will grow your active vocabulary the most.
+**10-15 minutes every day, no exceptions.** This is the single habit that will grow your active vocabulary the most.
 
 ### How it works (Leitner system)
-Every card lives in a "box". Get it right and it moves up a box and comes back later; get it wrong and it goes back to box 1.
+Every card lives in a "box". **g**ood moves it up a box (it comes back later), **h**ard keeps it in the same box,
+**a**gain sends it back to box 1 - and you'll see it again before the session ends.
 
 | Box | Next review |
 |---|---|
@@ -17,60 +18,68 @@ Every card lives in a "box". Get it right and it moves up a box and comes back l
 | 5 | in ~2 weeks |
 | 6 | in ~5 weeks |
 
-This follows the *forgetting curve* (you'll hear about it in the Notebook 06 lecture): you review each item just before you'd forget it.
-
 ### Rules
-* The **front** shows a definition or a gap; you produce the **English expression**. Producing (not just recognising) is what builds speaking vocabulary.
+* **8 new cards per day in total** (across all decks) - that's the default. More sounds tempting, but by week 3 you'd face
+  150+ reviews a day and quit. At 8 a day you'll have met all 320+ built-in cards in about six weeks - after that,
+  your own `my_words` cards take over.
 * **Say the answer aloud**, then say the example sentence aloud.
-* Be honest with `y/n`. "Almost" = **n**.
-* 10 new cards a day is plenty (that's ~1,100 new expressions in 16 weeks).
+* Be honest. "Almost" = **a**gain.
+* **Direction matters:**
+  - *Productive* (definition -> expression) for what you want to **use**: collocations, connectors, functional chunks, workplace.
+  - *Receptive* (`reverse=True`: expression -> meaning) for what you mainly need to **understand**: idioms, false friends.
 
-### Decks included
+### Decks
 """),
         ("code", """
 list_decks();
 """),
         ("md", """
-| Deck | Content |
-|---|---|
-| `collocations` | high-frequency C1 collocations (verb+noun, adj+noun, adverb+adj) |
-| `phrasal_verbs` | the phrasal verbs you need to understand natives and sound natural |
-| `idioms` | modern, frequently used idioms |
-| `advanced_vocab` | C1 words for discussing ideas, work and society |
-| `connectors` | discourse markers and linkers for speaking and writing |
-| `false_friends` | traps for Spanish speakers |
-| `my_words` | **your own** cards (created with `add_card`) - the most valuable deck |
+| Deck | Content | Direction |
+|---|---|---|
+| `my_words` | **your own** cards (from conversations, podcasts, mistakes) - the most valuable deck | both |
+| `functional_chunks` | phrases for agreeing, hedging, buying time, interrupting, emails | productive |
+| `collocations` | high-frequency C1 collocations (verb+noun, adj+noun, adverb+adj, work) | productive |
+| `connectors` | discourse markers and linkers, with register notes | productive |
+| `phrasal_verbs` | the phrasal verbs you need to understand natives and sound natural | productive |
+| `advanced_vocab` | C1 words with their patterns (*concede that...*, *foster creativity*) | productive |
+| `workplace` | meeting and office English (*circle back, heads-up, drop the ball*) | productive |
+| `idioms` | modern, frequently used idioms | **receptive** |
+| `false_friends` | traps for Spanish speakers (*actually, eventually, compromise, billion...*) | **receptive** |
 
 ## Today's session
 """),
         ("code", """
-study("collocations", new=10)          # think, press Enter, grade yourself y/n
+study(["my_words", "functional_chunks", "collocations"])      # think, press Enter, grade g / h / a
 """),
         ("code", """
-study("phrasal_verbs", new=5, typed=True)   # typed=True: type the answer, auto-checked
+study(["idioms", "false_friends"], reverse=True)              # see the expression, explain the meaning
+"""),
+        ("code", """
+# study("connectors", typed=True)     # type the answer - auto-checked
 """),
         ("md", """
-## Rotation suggestion
-* **Mon/Thu:** collocations + advanced_vocab
-* **Tue/Fri:** phrasal_verbs + idioms
-* **Wed/Sat:** connectors + false_friends + my_words
-* **Sun:** only due reviews (`new=0`) across all decks
+## Weekly rotation
+The daily limit of 8 new cards is shared, so just rotate which decks you open:
+* **Mon/Thu:** my_words + functional_chunks + collocations
+* **Tue/Fri:** my_words + phrasal_verbs + workplace
+* **Wed/Sat:** my_words + advanced_vocab + connectors; idioms/false_friends with `reverse=True`
+* **Sun:** reviews only: `study([...all decks...], new=0)`
 
 ## Add your own cards
 Whenever you meet a useful expression (in a podcast, a series, a conversation, or a mistake you made), add it.
-The best cards have a **clear prompt**, the **exact chunk**, and **your own example**.
+The best cards have a **clear prompt** (ideally the example sentence with a gap), the **exact chunk**, and **your own example**.
 """),
         ("code", """
 # add_card(deck, front, back, example)
-add_card("my_words",
-         "to deal with a difficult problem in a determined way (verb + noun)",
-         "tackle a problem",
-         "The new mayor has promised to tackle the housing problem head-on.")
+# add_card("my_words",
+#          "The mayor promised to t_____ the housing problem head-on. (deal with, determined)",
+#          "tackle",
+#          "The new mayor has promised to tackle the housing problem head-on.")
 """),
         ("md", """
 ## Export to Anki (optional)
-If you prefer to review on your phone, export any deck to a CSV file and import it into **Anki** (free on Android/desktop,
-AnkiMobile on iOS): *File -> Import*, fields separated by tab.
+If you prefer to review on your phone, export any deck and import it into **Anki** (free on Android/desktop, AnkiMobile on iOS):
+*File -> Import*.
 """),
         ("code", """
 # export_anki("collocations")      # creates progress/anki_collocations.txt

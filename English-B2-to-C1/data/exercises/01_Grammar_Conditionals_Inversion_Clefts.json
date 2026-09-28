@@ -28,9 +28,10 @@
     "why": "Past condition -> present result: would + infinitive."
    },
    {
-    "q": "If he ______ (speak) better English, he would have got the job last month.",
+    "q": "If he ______ (speak) better English in general, he would have got the job last month.",
     "a": [
-     "spoke"
+     "spoke",
+     "could speak"
     ],
     "why": "Present/general ability -> past result."
    },
@@ -53,11 +54,13 @@
     "q": "You ______ (not / feel) so tired now if you had gone to bed earlier.",
     "a": [
      "wouldn't feel",
-     "would not feel"
+     "would not feel",
+     "wouldn't be feeling",
+     "would not be feeling"
     ]
    },
    {
-    "q": "If I ______ (know) him better, I would have invited him to the wedding last month.",
+    "q": "If I ______ (know) him better (I hardly know him now), I would have invited him to the wedding last month.",
     "a": [
      "knew"
     ],
@@ -101,7 +104,8 @@
    {
     "q": "If they had not cancelled the flight, we would be in Rome now.\n______ the flight, we would be in Rome now.",
     "a": [
-     "had they not cancelled"
+     "had they not cancelled",
+     "had they not canceled"
     ]
    },
    {
@@ -289,7 +293,8 @@
     "a": [
      "to leave",
      "we left",
-     "we were leaving"
+     "we were leaving",
+     "for us to leave"
     ]
    },
    {
@@ -321,14 +326,17 @@
     "q": "He didn't realise the danger he was in.\nLittle ______ the danger he was in.",
     "a": [
      "did he realise",
-     "did he realize"
+     "did he realize",
+     "did he know"
     ]
    },
    {
     "q": "You must not open this door under any circumstances.\nUnder no circumstances ______ this door.",
     "a": [
      "must you open",
-     "should you open"
+     "should you open",
+     "are you to open",
+     "can you open"
     ]
    },
    {
@@ -469,7 +477,8 @@
    {
     "q": "Never I have seen such chaos.",
     "a": [
-     "Never have I seen such chaos."
+     "Never have I seen such chaos.",
+     "I have never seen such chaos."
     ]
    },
    {
@@ -509,7 +518,9 @@
    {
     "q": "Hardly had we arrived than it started to rain.",
     "a": [
-     "Hardly had we arrived when it started to rain."
+     "Hardly had we arrived when it started to rain.",
+     "Hardly had we arrived before it started to rain.",
+     "No sooner had we arrived than it started to rain."
     ]
    },
    {

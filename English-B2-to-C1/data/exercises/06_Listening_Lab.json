@@ -85,6 +85,154 @@
   ]
  },
  {
+  "id": "l6_weak_strong",
+  "title": "Strong or weak form?",
+  "instructions": "Is the CAPITALISED word said in its strong form or its weak form (with /ə/)? Write strong or weak. Say each sentence aloud.",
+  "items": [
+   {
+    "q": "I CAN swim, but not very well.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "A: Can you swim?  B: Yes, I CAN.",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "What are you looking AT?",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "Meet me AT six.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "She WAS late again.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "A: Was she late?  B: Yes, she WAS.",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "Where are you FROM?",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "I'm FROM Seville.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "Would you like SOME tea?",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "SOME people just never learn. (= certain people)",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "It's not FOR you, it's from you.",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "She's taller THAN me.",
+    "a": [
+     "weak"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_micro",
+  "title": "Micro-dictations",
+  "instructions": "Type each sentence you heard with micro(1) ... micro(10).",
+  "items": [
+   {
+    "q": "micro(1)",
+    "a": [
+     "I'd have told you if I'd known.",
+     "I would have told you if I had known."
+    ]
+   },
+   {
+    "q": "micro(2)",
+    "a": [
+     "What are you going to do about it?"
+    ]
+   },
+   {
+    "q": "micro(3)",
+    "a": [
+     "There's a lot of work to do before the end of the week."
+    ]
+   },
+   {
+    "q": "micro(4)",
+    "a": [
+     "Could you give him a call and ask him to come in?"
+    ]
+   },
+   {
+    "q": "micro(5)",
+    "a": [
+     "I was hoping we could have a chat about it."
+    ]
+   },
+   {
+    "q": "micro(6)",
+    "a": [
+     "Some of them have already left for the airport."
+    ]
+   },
+   {
+    "q": "micro(7)",
+    "a": [
+     "She must have been waiting for ages."
+    ]
+   },
+   {
+    "q": "micro(8)",
+    "a": [
+     "It's not as bad as it looks."
+    ]
+   },
+   {
+    "q": "micro(9)",
+    "a": [
+     "He can't have seen it, or he'd have said something.",
+     "He cannot have seen it, or he would have said something."
+    ]
+   },
+   {
+    "q": "micro(10)",
+    "a": [
+     "We've been meaning to get in touch with them for a while."
+    ]
+   }
+  ]
+ },
+ {
   "id": "l6_passage1",
   "title": "Passage 1 - A voicemail from your manager",
   "instructions": "Listen to passage 1 twice, then choose the best answer.",
@@ -92,49 +240,49 @@
    {
     "q": "Why is Laura calling?",
     "options": [
-     "to congratulate you on finishing early",
-     "to question the proposed schedule",
-     "to cancel the project"
+     "to tell you the client has rejected your timeline",
+     "to express doubts about the proposed schedule",
+     "to ask you to hand the Henderson project over to Daniel"
     ],
     "a": [
      "b",
-     "to question the proposed schedule",
-     "b) to question the proposed schedule"
+     "to express doubts about the proposed schedule",
+     "b) to express doubts about the proposed schedule"
     ]
    },
    {
     "q": "What does Laura really think about the timeline?",
     "options": [
-     "It is exactly what she expected.",
-     "It is too slow.",
-     "It is probably unrealistic."
+     "It is more cautious than she expected.",
+     "It is achievable only if Daniel joins the team.",
+     "It is too ambitious as it stands."
     ],
     "why": "'More optimistic than I'd expected' + 'I'm not saying it can't be done, but...' = polite doubt.",
     "a": [
      "c",
-     "It is probably unrealistic.",
-     "c) It is probably unrealistic."
+     "It is too ambitious as it stands.",
+     "c) It is too ambitious as it stands."
     ]
    },
    {
     "q": "What does she suggest?",
     "options": [
-     "giving the project to Daniel",
-     "adding some extra time before committing to the client",
-     "asking the client for more money"
+     "letting Daniel negotiate the deadline with the client",
+     "allowing extra time before making a commitment to the client",
+     "committing to the client now and adjusting the plan later"
     ],
     "a": [
      "b",
-     "adding some extra time before committing to the client",
-     "b) adding some extra time before committing to the client"
+     "allowing extra time before making a commitment to the client",
+     "b) allowing extra time before making a commitment to the client"
     ]
    },
    {
     "q": "What does she imply about the client?",
     "options": [
-     "They are old friends of Daniel's.",
+     "They were unhappy with Daniel's work last year.",
      "They can be difficult to work with.",
-     "They are thinking of cancelling."
+     "They are likely to demand a shorter deadline."
     ],
     "why": "'Let's just say they weren't the easiest people to work with' = understatement.",
     "a": [
@@ -166,9 +314,9 @@
    {
     "q": "How does the speaker feel about extreme views on remote work?",
     "options": [
-     "undecided between them",
+     "reluctant to give any opinion of their own",
      "critical - the evidence doesn't support them",
-     "enthusiastic about both of them"
+     "sympathetic to the view that remote work has been a disaster"
     ],
     "a": [
      "b",
@@ -179,7 +327,7 @@
    {
     "q": "Which activity does the speaker say suffers when people work remotely?",
     "options": [
-     "writing reports",
+     "meetings with clients",
      "tasks that need deep concentration",
      "training junior staff"
     ],
@@ -240,7 +388,7 @@
     "options": [
      "It creates a false, short-lived feeling of having learned something.",
      "It is the most efficient way to prepare for exams.",
-     "It only works for languages."
+     "It works well as long as you review again the following week."
     ],
     "a": [
      "a",
@@ -298,8 +446,8 @@
     "q": "What is the reporter's attitude to the results?",
     "options": [
      "cautiously positive",
-     "extremely enthusiastic",
-     "completely dismissive"
+     "convinced the model will work across the whole economy",
+     "broadly sceptical - the results are probably misleading"
     ],
     "a": [
      "a",
@@ -318,6 +466,65 @@
      "b",
      "No final conclusion has been reached yet.",
      "b) No final conclusion has been reached yet."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage5",
+  "title": "Passage 5 - Planning the team away-day (irony and tone)",
+  "instructions": "Listen to passage 5 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "How does B feel about the paintballing plan?",
+    "options": [
+     "genuinely excited",
+     "unenthusiastic, although B doesn't say so directly",
+     "worried about getting hurt"
+    ],
+    "a": [
+     "b",
+     "unenthusiastic, although B doesn't say so directly",
+     "b) unenthusiastic, although B doesn't say so directly"
+    ]
+   },
+   {
+    "q": "What does B imply about the last away-day?",
+    "options": [
+     "It didn't achieve much.",
+     "It was too expensive.",
+     "It was cancelled at the last minute."
+    ],
+    "a": [
+     "a",
+     "It didn't achieve much.",
+     "a) It didn't achieve much."
+    ]
+   },
+   {
+    "q": "Why might B hesitate to make a suggestion to Karen?",
+    "options": [
+     "B could end up with extra work.",
+     "B doesn't know Karen well.",
+     "Karen doesn't like new ideas."
+    ],
+    "a": [
+     "a",
+     "B could end up with extra work.",
+     "a) B could end up with extra work."
+    ]
+   },
+   {
+    "q": "In B's first turn, 'Brilliant' is...",
+    "options": [
+     "ironic",
+     "a question",
+     "sincere"
+    ],
+    "a": [
+     "a",
+     "ironic",
+     "a) ironic"
     ]
    }
   ]

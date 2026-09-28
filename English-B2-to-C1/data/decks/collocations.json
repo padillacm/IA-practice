@@ -15,7 +15,7 @@
   "example": "The sequel failed to meet expectations."
  },
  {
-  "front": "make people think about an issue (verb + noun)",
+  "front": "cause people to ask or consider a question (verb + noun)",
   "back": "raise a question",
   "example": "The scandal raises serious questions about oversight."
  },
@@ -55,7 +55,7 @@
   "example": "Cutting the budget could do more harm than good."
  },
  {
-  "front": "improve slowly but continuously (verb + noun)",
+  "front": "move forward / get closer to a goal (verb + noun)",
   "back": "make progress",
   "example": "She's making steady progress with her pronunciation."
  },
@@ -80,23 +80,23 @@
   "example": "It's hard to strike a balance between work and family."
  },
  {
-  "front": "a situation that seems true / logical when examined (idiomatic verb + noun)",
+  "front": "(of an argument, excuse or theory) be convincing when examined closely",
   "back": "hold water",
   "example": "His excuse doesn't hold water."
  },
  {
   "front": "reduce the difference between two groups (verb + noun)",
-  "back": "bridge / close / narrow the gap",
+  "back": "bridge the gap / close the gap / narrow the gap",
   "example": "The programme aims to bridge the gap between rich and poor schools."
  },
  {
-  "front": "very serious, with big effects (adjective)",
-  "back": "far-reaching (consequences)",
+  "front": "having effects on many people or things (adjective, often + consequences)",
+  "back": "far-reaching",
   "example": "The ruling will have far-reaching consequences."
  },
  {
   "front": "general agreement among many people (adj + noun)",
-  "back": "broad / widespread consensus",
+  "back": "broad consensus / widespread consensus",
   "example": "There is broad consensus that reform is needed."
  },
  {
@@ -111,7 +111,7 @@
  },
  {
   "front": "a very large amount of rain falling (adj + noun)",
-  "back": "heavy / torrential rain",
+  "back": "heavy rain / torrential rain",
   "example": "Torrential rain caused flooding in the south."
  },
  {
@@ -155,7 +155,7 @@
   "example": "We are deeply concerned about the situation."
  },
  {
-  "front": "fully aware (adverb + adj, 'well')",
+  "front": "know something very clearly (adverb + adjective)",
   "back": "well aware",
   "example": "I'm well aware of the risks."
  },
@@ -181,7 +181,7 @@
  },
  {
   "front": "be very different from case to case (verb + adverb)",
-  "back": "vary considerably / widely",
+  "back": "vary considerably / vary widely",
   "example": "Salaries vary considerably across the country."
  },
  {
@@ -225,12 +225,12 @@
   "example": "Let's keep in touch after the course."
  },
  {
-  "front": "know the latest situation of something (verb + noun + of)",
+  "front": "monitor something so you always know where it is or what is happening (verb + noun + of)",
   "back": "keep track of",
   "example": "It's hard to keep track of all my passwords."
  },
  {
-  "front": "be responsible for doing something (verb + noun)",
+  "front": "accept that you are responsible (or to blame) for something (verb + noun)",
   "back": "take responsibility for",
   "example": "The CEO took full responsibility for the failure."
  },
@@ -241,12 +241,42 @@
  },
  {
   "front": "create an impression that lasts (verb + adj + noun)",
-  "back": "make / leave a lasting impression",
+  "back": "make a lasting impression / leave a lasting impression",
   "example": "Her speech left a lasting impression on everyone."
  },
  {
   "front": "stay at the same level after rising or falling (phrasal)",
   "back": "level off",
   "example": "Inflation has finally levelled off."
+ },
+ {
+  "front": "not achieve a target by the required time (verb + noun)",
+  "back": "miss a deadline",
+  "example": "We can't afford to miss another deadline."
+ },
+ {
+  "front": "lead a meeting as the person in charge (verb + noun)",
+  "back": "chair a meeting",
+  "example": "Who's chairing the meeting tomorrow?"
+ },
+ {
+  "front": "point out a possible problem so people notice it (verb + noun)",
+  "back": "flag an issue",
+  "example": "I just wanted to flag an issue with the budget."
+ },
+ {
+  "front": "make sure people don't expect more than you can deliver (verb + noun)",
+  "back": "manage expectations",
+  "example": "We need to manage the client's expectations about the launch date."
+ },
+ {
+  "front": "start to become popular or successful (verb + noun)",
+  "back": "gain traction",
+  "example": "The idea is starting to gain traction with senior management."
+ },
+ {
+  "front": "give good reasons to support something (verb + noun + for)",
+  "back": "make the case for",
+  "example": "She made a strong case for hiring more staff."
  }
 ]

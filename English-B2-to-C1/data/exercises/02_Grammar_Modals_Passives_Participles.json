@@ -30,7 +30,9 @@
     "q": "You ______ (tell) me it was a formal dinner! I was the only one in jeans.",
     "a": [
      "should have told",
-     "ought to have told"
+     "ought to have told",
+     "could have told",
+     "might have told"
     ]
    },
    {
@@ -64,7 +66,8 @@
      "could have gotten",
      "might have got",
      "might have gotten",
-     "could have been"
+     "could have been",
+     "might have been"
     ]
    },
    {
@@ -269,7 +272,8 @@
    {
     "q": "There is no evidence ______ to support this claim.",
     "a": [
-     "whatsoever"
+     "whatsoever",
+     "whatever"
     ]
    },
    {
@@ -295,7 +299,8 @@
     "q": "The doctor recommended that he ______ (rest) for two weeks.",
     "a": [
      "rest",
-     "should rest"
+     "should rest",
+     "rests"
     ]
    },
    {
@@ -305,7 +310,7 @@
      "should be",
      "is"
     ],
-    "why": "Formal: 'be'. BrE: 'should be'. ('is' is common in informal BrE but less formal.)"
+    "why": "Formal: 'be'. BrE: 'should be'. The indicative ('is', 'takes') is also normal in British English, just less formal."
    },
    {
     "q": "They insisted that she ______ (not / travel) alone.",
@@ -326,14 +331,16 @@
     "q": "It's vital that he ______ (take) his medication every day.",
     "a": [
      "take",
-     "should take"
+     "should take",
+     "takes"
     ]
    },
    {
     "q": "I suggest that she ______ (apply) for the position.",
     "a": [
      "apply",
-     "should apply"
+     "should apply",
+     "applies"
     ]
    },
    {
@@ -398,10 +405,11 @@
     ]
    },
    {
-    "q": "It is essential that he arrives on time.",
+    "q": "It is essential that he arrived on time tomorrow.",
     "a": [
-     "It is essential that he arrive on time.",
-     "It is essential that he should arrive on time."
+     "It is essential that he arrive on time tomorrow.",
+     "It is essential that he should arrive on time tomorrow.",
+     "It is essential that he arrives on time tomorrow."
     ]
    },
    {

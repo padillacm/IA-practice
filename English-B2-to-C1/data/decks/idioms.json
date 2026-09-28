@@ -1,6 +1,6 @@
 [
  {
-  "front": "describe exactly what is causing a problem",
+  "front": "say exactly the right thing; identify the real problem precisely",
   "back": "hit the nail on the head",
   "example": "You've hit the nail on the head there."
  },
@@ -26,7 +26,7 @@
  },
  {
   "front": "avoid saying something directly",
-  "back": "beat around the bush",
+  "back": "beat around the bush / beat about the bush",
   "example": "Stop beating around the bush."
  },
  {
@@ -51,8 +51,8 @@
  },
  {
   "front": "not completely believe something",
-  "back": "take it with a pinch (AmE grain) of salt",
-  "example": "Take online reviews with a pinch of salt."
+  "back": "take it with a pinch of salt / take it with a grain of salt",
+  "example": "Take online reviews with a pinch of salt (AmE: a grain of salt)."
  },
  {
   "front": "make more effort than is expected",
@@ -71,8 +71,8 @@
  },
  {
   "front": "a tiny amount compared to what is needed",
-  "back": "a drop in the ocean",
-  "example": "The donation is a drop in the ocean."
+  "back": "a drop in the ocean / a drop in the bucket",
+  "example": "The donation is a drop in the ocean (AmE: a drop in the bucket)."
  },
  {
   "front": "start a new job/project quickly and effectively",
@@ -125,7 +125,7 @@
   "example": "Come on, it's not rocket science."
  },
  {
-  "front": "say something exactly right / a lucky guess",
+  "front": "exactly right; completely accurate (informal adjective, mainly BrE)",
   "back": "spot on",
   "example": "Your analysis was spot on."
  },
@@ -140,17 +140,17 @@
   "example": "I only eat meat once in a blue moon."
  },
  {
-  "front": "when everything has been considered; finally",
+  "front": "ultimately; when everything has been considered",
   "back": "at the end of the day",
-  "example": "At the end of the day, it's your decision."
+  "example": "At the end of the day, it's your decision. (Very common, but a well-known cliché - use sparingly.)"
  },
  {
   "front": "misunderstand something completely",
   "back": "get the wrong end of the stick",
-  "example": "I think you've got the wrong end of the stick."
+  "example": "I think you've got the wrong end of the stick. (mainly BrE)"
  },
  {
-  "front": "become successful after a difficult period",
+  "front": "get past the worst part of a difficult situation and start to improve",
   "back": "turn the corner",
   "example": "The economy seems to have turned the corner."
  },
@@ -181,8 +181,8 @@
  },
  {
   "front": "tell someone something in a very direct way",
-  "back": "not mince your words",
-  "example": "She didn't mince her words."
+  "back": "not mince your words / not mince words",
+  "example": "She didn't mince her words. (AmE: didn't mince words)"
  },
  {
   "front": "the most important or central point",
@@ -190,7 +190,7 @@
   "example": "The bottom line is that we need more money."
  },
  {
-  "front": "to be unwilling to take a risk in case something goes wrong later",
+  "front": "(saying) it's wiser to be careful now than to regret it later",
   "back": "better safe than sorry",
   "example": "Take a coat - better safe than sorry."
  },

@@ -1,174 +1,176 @@
 [
  {
-  "id": "diag_grammar",
-  "title": "Advanced grammar",
+  "id": "diag_A_grammar",
+  "title": "Form A - Advanced grammar",
   "instructions": "Complete each sentence with the correct form of the word(s) in brackets, or one missing word.",
   "items": [
    {
-    "q": "If I ______ (take) that job in Berlin, I would be living there now.",
+    "q": "If she ______ (not / lend) me the money last year, I would still be paying off my debts now.",
     "a": [
-     "had taken"
+     "hadn't lent",
+     "had not lent"
     ],
-    "why": "Mixed conditional: past condition (had + past participle) -> present result."
+    "why": "Mixed conditional: past condition -> present result."
    },
    {
-    "q": "Not only ______ (he / forget) my birthday, but he also forgot our anniversary.",
+    "q": "Not once ______ (she / complain) about the workload during the whole project.",
     "a": [
-     "did he forget"
+     "did she complain"
     ],
-    "why": "Negative adverbial at the start -> question-style inversion."
+    "why": "Negative adverbial at the start -> inversion."
    },
    {
-    "q": "It's high time you ______ (start) looking for a new flat.",
+    "q": "It's about time the council ______ (repair) this road.",
     "a": [
-     "started"
-    ],
-    "why": "It's (high) time + subject + past simple (unreal past)."
+     "repaired"
+    ]
    },
    {
-    "q": "She ______ (be) at home - the lights are off and her car isn't there.",
+    "q": "He ______ (be) at the gym now - he never trains on Sundays.",
     "a": [
      "can't be",
      "cannot be",
      "couldn't be"
-    ],
-    "why": "Logical deduction (negative, present): can't be."
+    ]
    },
    {
-    "q": "What I really need ______ a good night's sleep.",
+    "q": "What surprised me most ______ how calm everyone was.",
     "a": [
-     "is"
-    ],
-    "why": "Wh-cleft: What + clause + is + focus."
+     "was"
+    ]
    },
    {
-    "q": "______ (finish) his speech, he sat down to loud applause.",
+    "q": "______ (not / receive) a reply, I called them again.",
     "a": [
-     "having finished"
-    ],
-    "why": "Perfect participle for an action completed before the main one."
+     "not having received",
+     "having not received"
+    ]
    },
    {
-    "q": "The suspect is believed ______ (leave) the country last week.",
+    "q": "The ship is thought ______ (sink) in the 17th century.",
     "a": [
-     "to have left"
-    ],
-    "why": "Passive reporting verb + perfect infinitive for a past action."
+     "to have sunk"
+    ]
    },
    {
-    "q": "I'd rather you ______ (not / mention) this to anyone.",
+    "q": "I'd rather we ______ (not / discuss) this in front of the clients.",
     "a": [
-     "didn't mention",
-     "did not mention"
-    ],
-    "why": "I'd rather + different subject + past simple."
+     "didn't discuss",
+     "did not discuss"
+    ]
    },
    {
-    "q": "______ you need any help, don't hesitate to call.",
+    "q": "______ you require further assistance, please contact reception.",
     "a": [
      "should"
-    ],
-    "why": "Inverted first conditional: Should you need... = If you need..."
+    ]
    },
    {
-    "q": "We ______ (hurry). The train was late anyway, so we rushed for nothing.",
+    "q": "You ______ (bring) your umbrella - it didn't rain, and you carried it around all day for nothing.",
     "a": [
-     "needn't have hurried",
-     "need not have hurried"
-    ],
-    "why": "needn't have + past participle: we did it, but it was unnecessary."
+     "needn't have brought",
+     "need not have brought"
+    ]
    }
   ]
  },
  {
-  "id": "diag_collocations",
-  "title": "Collocations",
+  "id": "diag_A_accuracy",
+  "title": "Form A - Accuracy core",
+  "instructions": "Write ONE word (or the correct verb form) in each gap. Type - if no word is needed.",
+  "items": [
+   {
+    "q": "Whether we go ahead depends ______ the price.",
+    "a": [
+     "on",
+     "upon"
+    ]
+   },
+   {
+    "q": "She's married ______ a doctor.",
+    "a": [
+     "to"
+    ]
+   },
+   {
+    "q": "I ______ (live) in this city since 2015.",
+    "a": [
+     "have lived",
+     "have been living"
+    ]
+   },
+   {
+    "q": "______ is important to arrive early for the interview.",
+    "a": [
+     "it"
+    ]
+   },
+   {
+    "q": "______ are many problems with this plan.",
+    "a": [
+     "there"
+    ]
+   },
+   {
+    "q": "Can you tell me where the station ______?",
+    "a": [
+     "is"
+    ]
+   },
+   {
+    "q": "I look forward to ______ (hear) from you.",
+    "a": [
+     "hearing"
+    ]
+   },
+   {
+    "q": "______ unemployment has risen sharply this year.",
+    "a": [
+     "-",
+     "no article",
+     "none",
+     "0",
+     "ø"
+    ]
+   },
+   {
+    "q": "He made me ______ (wait) for over an hour.",
+    "a": [
+     "wait"
+    ]
+   },
+   {
+    "q": "I ______ (see) him yesterday at the station.",
+    "a": [
+     "saw"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_A_collocations",
+  "title": "Form A - Collocations",
   "instructions": "Choose the word that forms the most natural collocation. Type the letter or the word.",
   "items": [
    {
-    "q": "She ___ a lot of effort into the project.",
+    "q": "The minister ___ an apology after the scandal.",
     "options": [
-     "made",
-     "put",
-     "gave"
-    ],
-    "a": [
-     "b",
-     "put",
-     "b) put"
-    ]
-   },
-   {
-    "q": "We need to ___ steps to fix this.",
-    "options": [
-     "do",
-     "make",
-     "take"
-    ],
-    "a": [
-     "c",
-     "take",
-     "c) take"
-    ]
-   },
-   {
-    "q": "Whether it's a good film is a ___ of opinion.",
-    "options": [
-     "matter",
-     "case",
-     "question"
+     "issued",
+     "gave out",
+     "made out"
     ],
     "a": [
      "a",
-     "matter",
-     "a) matter"
+     "issued",
+     "a) issued"
     ]
    },
    {
-    "q": "I have a ___ memory of that day.",
-    "options": [
-     "lively",
-     "vivid",
-     "bright"
-    ],
-    "a": [
-     "b",
-     "vivid",
-     "b) vivid"
-    ]
-   },
-   {
-    "q": "There's been a ___ increase in prices this month.",
-    "options": [
-     "strong",
-     "hard",
-     "sharp"
-    ],
-    "a": [
-     "c",
-     "sharp",
-     "c) sharp"
-    ]
-   },
-   {
-    "q": "After weeks of talks, they finally ___ a compromise.",
-    "options": [
-     "reached",
-     "arrived",
-     "got"
-    ],
-    "a": [
-     "a",
-     "reached",
-     "a) reached"
-    ]
-   },
-   {
-    "q": "He's a ___ believer in hard work.",
+    "q": "She has a ___ grasp of the subject.",
     "options": [
      "firm",
-     "hard",
-     "solid"
+     "tall",
+     "heavy"
     ],
     "a": [
      "a",
@@ -177,176 +179,655 @@
     ]
    },
    {
-    "q": "The news came as a ___ shock.",
+    "q": "Don't make a ___ decision - take your time.",
     "options": [
-     "complete",
-     "whole",
-     "full"
-    ],
-    "a": [
-     "a",
-     "complete",
-     "a) complete"
-    ]
-   },
-   {
-    "q": "The company ___ record profits last year.",
-    "options": [
-     "did",
-     "posted",
-     "put"
+     "sharp",
+     "snap",
+     "hot"
     ],
     "a": [
      "b",
-     "posted",
-     "b) posted"
+     "snap",
+     "b) snap"
     ]
    },
    {
-    "q": "I'm ___ aware of the risks involved.",
+    "q": "The film received ___ reviews from the critics.",
     "options": [
-     "highly",
-     "strongly",
-     "well"
+     "crazy",
+     "rave",
+     "raving"
+    ],
+    "a": [
+     "b",
+     "rave",
+     "b) rave"
+    ]
+   },
+   {
+    "q": "There's a ___ possibility that the flight will be cancelled.",
+    "options": [
+     "heavy",
+     "distinct",
+     "sharp"
+    ],
+    "a": [
+     "b",
+     "distinct",
+     "b) distinct"
+    ]
+   },
+   {
+    "q": "He ___ the blame for the error, although it wasn't his fault.",
+    "options": [
+     "made",
+     "did",
+     "took"
     ],
     "a": [
      "c",
-     "well",
-     "c) well"
+     "took",
+     "c) took"
+    ]
+   },
+   {
+    "q": "She ___ a fortune in property.",
+    "options": [
+     "made",
+     "did",
+     "took"
+    ],
+    "a": [
+     "a",
+     "made",
+     "a) made"
+    ]
+   },
+   {
+    "q": "It's an ___ secret that he's leaving the company.",
+    "options": [
+     "known",
+     "public",
+     "open"
+    ],
+    "a": [
+     "c",
+     "open",
+     "c) open"
+    ]
+   },
+   {
+    "q": "The two candidates had a ___ debate on TV.",
+    "options": [
+     "burning",
+     "boiling",
+     "heated"
+    ],
+    "a": [
+     "c",
+     "heated",
+     "c) heated"
+    ]
+   },
+   {
+    "q": "The company ___ a profit for the first time last year.",
+    "options": [
+     "made",
+     "did",
+     "got"
+    ],
+    "a": [
+     "a",
+     "made",
+     "a) made"
     ]
    }
   ]
  },
  {
-  "id": "diag_phrasal_idioms",
-  "title": "Phrasal verbs and idioms",
+  "id": "diag_A_phrasal_idioms",
+  "title": "Form A - Phrasal verbs and idioms",
   "instructions": "Write ONE word in each gap.",
   "items": [
    {
-    "q": "The wedding was ______ off at the last minute.",
-    "a": [
-     "called"
-    ]
-   },
-   {
-    "q": "I can't put ______ with his arrogance any longer.",
+    "q": "I'll pick you ______ from the airport at six.",
     "a": [
      "up"
     ]
    },
    {
-    "q": "We need to come up ______ a better plan.",
+    "q": "Prices are expected to go ______ again next month.",
     "a": [
-     "with"
+     "up"
     ]
    },
    {
-    "q": "Let's get the ball ______ and start the meeting.",
+    "q": "She was brought ______ by her grandparents in a small village.",
     "a": [
-     "rolling"
+     "up"
     ]
    },
    {
-    "q": "That new laptop cost an arm and a ______.",
+    "q": "Could you fill ______ this form, please?",
     "a": [
-     "leg"
+     "in",
+     "out"
     ]
    },
    {
-    "q": "She turned ______ the job offer because the salary was too low.",
+    "q": "Sorry, I've got to hang ______ now - someone's at the door.",
     "a": [
-     "down"
+     "up"
     ]
    },
    {
-    "q": "He's always sitting on the ______; he never takes sides.",
+    "q": "I was so tired that I slept like a ______.",
     "a": [
-     "fence"
+     "log",
+     "baby"
     ]
    },
    {
-    "q": "I'll look ______ the matter and get back to you.",
+    "q": "He's always been the black ______ of the family.",
     "a": [
-     "into"
+     "sheep"
     ]
    },
    {
-    "q": "Don't worry, it's not rocket ______ - anyone can do it.",
+    "q": "Don't worry about the test - it'll be a piece of ______.",
     "a": [
-     "science"
+     "cake"
     ]
    },
    {
-    "q": "The two managers aren't on the same ______ about the budget.",
+    "q": "Keep your ______ crossed for me tomorrow!",
     "a": [
-     "page"
+     "fingers"
+    ]
+   },
+   {
+    "q": "I can't help you this week - I've got too much on my ______.",
+    "a": [
+     "plate"
     ]
    }
   ]
  },
  {
-  "id": "diag_word_formation",
-  "title": "Word formation",
+  "id": "diag_A_word_formation",
+  "title": "Form A - Word formation",
   "instructions": "Use the word in CAPITALS to form a word that fits the gap.",
   "items": [
    {
-    "q": "The ______ of the new museum was delayed by six months. (OPEN)",
+    "q": "The ______ of the two banks was announced today. (MERGE)",
     "a": [
-     "opening"
+     "merger"
     ]
    },
    {
-    "q": "Her ______ was obvious from the way she smiled. (HAPPY)",
+    "q": "Her ______ to detail is impressive. (ATTEND)",
     "a": [
-     "happiness"
+     "attention"
     ]
    },
    {
-    "q": "The results were rather ______, to be honest. (DISAPPOINT)",
+    "q": "The plan looked good on paper but was completely ______. (PRACTICE)",
     "a": [
-     "disappointing"
+     "impractical"
     ]
    },
    {
-    "q": "It's ______ to park on this side of the street. (LEGAL)",
+    "q": "We were impressed by the ______ of the team. (FLEXIBLE)",
     "a": [
-     "illegal"
+     "flexibility"
     ]
    },
    {
-    "q": "His sudden ______ surprised everyone in the department. (RESIGN)",
+    "q": "The situation is getting ______ worse. (PROGRESS)",
     "a": [
-     "resignation"
+     "progressively"
     ]
    },
    {
-    "q": "We need a more environmentally ______ approach. (SUSTAIN)",
+    "q": "There is a serious ______ of skilled workers. (SHORT)",
     "a": [
-     "sustainable"
+     "shortage"
     ]
    },
    {
-    "q": "We seriously ______ the time the project would take. (ESTIMATE)",
+    "q": "His ______ to the company was rewarded with a promotion. (LOYAL)",
     "a": [
-     "underestimated"
+     "loyalty"
     ]
    },
    {
-    "q": "These two drugs should never be taken ______. (SIMULTANEOUS)",
+    "q": "The heat in the office was ______. (BEAR)",
     "a": [
-     "simultaneously"
+     "unbearable"
     ]
    },
    {
-    "q": "She has been a lifelong ______ of human rights. (DEFEND)",
+    "q": "She spoke with great ______ during the presentation. (CONFIDENT)",
     "a": [
-     "defender"
+     "confidence"
     ]
    },
    {
-    "q": "The speech was ______ long; most people stopped listening. (NECESSARY)",
+    "q": "Please ______ the file before you send it. (NAME)",
     "a": [
-     "unnecessarily"
+     "rename"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_B_grammar",
+  "title": "Form B - Advanced grammar",
+  "instructions": "Complete each sentence with the correct form of the word(s) in brackets, or one missing word.",
+  "items": [
+   {
+    "q": "Were it not for the government subsidy, the firm ______ (go) bankrupt years ago.",
+    "a": [
+     "would have gone"
+    ]
+   },
+   {
+    "q": "Only later ______ (I / realise) what had really happened.",
+    "a": [
+     "did I realise",
+     "did I realize"
+    ]
+   },
+   {
+    "q": "I wish you ______ (stop) interrupting me all the time!",
+    "a": [
+     "would stop"
+    ]
+   },
+   {
+    "q": "I can't find my keys. They ______ (fall) out of my pocket in the taxi.",
+    "a": [
+     "might have fallen",
+     "may have fallen",
+     "could have fallen",
+     "must have fallen"
+    ]
+   },
+   {
+    "q": "It was her calm voice ______ reassured everyone.",
+    "a": [
+     "that",
+     "which"
+    ]
+   },
+   {
+    "q": "The report, ______ (write) in a hurry, contained several errors.",
+    "a": [
+     "written"
+    ]
+   },
+   {
+    "q": "She is reported ______ (negotiate) with a rival firm at the moment.",
+    "a": [
+     "to be negotiating"
+    ]
+   },
+   {
+    "q": "The committee recommended that the fee ______ (reduce).",
+    "a": [
+     "be reduced",
+     "should be reduced"
+    ]
+   },
+   {
+    "q": "If I ______ (be) you, I'd accept the offer.",
+    "a": [
+     "were",
+     "was"
+    ]
+   },
+   {
+    "q": "Scarcely ______ (the meeting / begin) when the fire alarm went off.",
+    "a": [
+     "had the meeting begun"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_B_accuracy",
+  "title": "Form B - Accuracy core",
+  "instructions": "Write ONE word (or the correct verb form) in each gap. Type - if no word is needed.",
+  "items": [
+   {
+    "q": "She's responsible ______ training new staff.",
+    "a": [
+     "for"
+    ]
+   },
+   {
+    "q": "I'm really interested ______ learning more about it.",
+    "a": [
+     "in"
+    ]
+   },
+   {
+    "q": "How long ______ her? (you / know)",
+    "a": [
+     "have you known"
+    ]
+   },
+   {
+    "q": "I've worked here ______ three years.",
+    "a": [
+     "for"
+    ]
+   },
+   {
+    "q": "______ is raining again.",
+    "a": [
+     "it"
+    ]
+   },
+   {
+    "q": "I don't know what time the shop ______ (open).",
+    "a": [
+     "opens"
+    ]
+   },
+   {
+    "q": "I'm used to ______ (get) up early.",
+    "a": [
+     "getting"
+    ]
+   },
+   {
+    "q": "He's ______ engineer at a car company.",
+    "a": [
+     "an"
+    ]
+   },
+   {
+    "q": "I stopped ______ (smoke) ten years ago and feel much better.",
+    "a": [
+     "smoking"
+    ]
+   },
+   {
+    "q": "Could you explain the rules ______ me?",
+    "a": [
+     "to"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_B_collocations",
+  "title": "Form B - Collocations",
+  "instructions": "Choose the word that forms the most natural collocation. Type the letter or the word.",
+  "items": [
+   {
+    "q": "The police have ___ an investigation into the fire.",
+    "options": [
+     "launched",
+     "thrown",
+     "done"
+    ],
+    "a": [
+     "a",
+     "launched",
+     "a) launched"
+    ]
+   },
+   {
+    "q": "She ___ a speech at the conference.",
+    "options": [
+     "told",
+     "gave",
+     "said"
+    ],
+    "a": [
+     "b",
+     "gave",
+     "b) gave"
+    ]
+   },
+   {
+    "q": "The storm caused ___ damage to the coast.",
+    "options": [
+     "tall",
+     "wide",
+     "extensive"
+    ],
+    "a": [
+     "c",
+     "extensive",
+     "c) extensive"
+    ]
+   },
+   {
+    "q": "He has a very ___ sense of humour.",
+    "options": [
+     "dry",
+     "arid",
+     "thirsty"
+    ],
+    "a": [
+     "a",
+     "dry",
+     "a) dry"
+    ]
+   },
+   {
+    "q": "We had a ___ escape - the car nearly hit us.",
+    "options": [
+     "slim",
+     "thin",
+     "narrow"
+    ],
+    "a": [
+     "c",
+     "narrow",
+     "c) narrow"
+    ]
+   },
+   {
+    "q": "The proposal ___ support from the board.",
+    "options": [
+     "beat",
+     "won",
+     "made"
+    ],
+    "a": [
+     "b",
+     "won",
+     "b) won"
+    ]
+   },
+   {
+    "q": "Profits ___ by 40% last year.",
+    "options": [
+     "flew",
+     "soared",
+     "hopped"
+    ],
+    "a": [
+     "b",
+     "soared",
+     "b) soared"
+    ]
+   },
+   {
+    "q": "Please ___ your seatbelts.",
+    "options": [
+     "fasten",
+     "close",
+     "lock"
+    ],
+    "a": [
+     "a",
+     "fasten",
+     "a) fasten"
+    ]
+   },
+   {
+    "q": "The speech was followed by ___ applause.",
+    "options": [
+     "thunderous",
+     "heavy",
+     "stormy"
+    ],
+    "a": [
+     "a",
+     "thunderous",
+     "a) thunderous"
+    ]
+   },
+   {
+    "q": "He ___ a good impression at the interview.",
+    "options": [
+     "made",
+     "did",
+     "put"
+    ],
+    "a": [
+     "a",
+     "made",
+     "a) made"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_B_phrasal_idioms",
+  "title": "Form B - Phrasal verbs and idioms",
+  "instructions": "Write ONE word in each gap.",
+  "items": [
+   {
+    "q": "The plane took ______ an hour late.",
+    "a": [
+     "off"
+    ]
+   },
+   {
+    "q": "Could you turn ______ the music? It's too loud.",
+    "a": [
+     "down"
+    ]
+   },
+   {
+    "q": "I ran ______ an old school friend at the supermarket.",
+    "a": [
+     "into"
+    ]
+   },
+   {
+    "q": "We need to deal ______ this problem now.",
+    "a": [
+     "with"
+    ]
+   },
+   {
+    "q": "She's always looked ______ to her older sister.",
+    "a": [
+     "up"
+    ]
+   },
+   {
+    "q": "He's pulling your ______ - it isn't true.",
+    "a": [
+     "leg"
+    ]
+   },
+   {
+    "q": "Horror films aren't really my cup of ______.",
+    "a": [
+     "tea"
+    ]
+   },
+   {
+    "q": "Hang in ______ - things will get better.",
+    "a": [
+     "there"
+    ]
+   },
+   {
+    "q": "She has a heart of ______ - she'd help anyone.",
+    "a": [
+     "gold"
+    ]
+   },
+   {
+    "q": "I'm between jobs at the moment, so money's a bit ______.",
+    "a": [
+     "tight"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "diag_B_word_formation",
+  "title": "Form B - Word formation",
+  "instructions": "Use the word in CAPITALS to form a word that fits the gap.",
+  "items": [
+   {
+    "q": "The ______ of the new law caused protests. (INTRODUCE)",
+    "a": [
+     "introduction"
+    ]
+   },
+   {
+    "q": "His explanation wasn't very ______. (CONVINCE)",
+    "a": [
+     "convincing"
+    ]
+   },
+   {
+    "q": "The team worked ______ to meet the deadline. (TIRE)",
+    "a": [
+     "tirelessly"
+    ]
+   },
+   {
+    "q": "We need to ______ our online presence. (STRONG)",
+    "a": [
+     "strengthen"
+    ]
+   },
+   {
+    "q": "The weather in the mountains is completely ______. (PREDICT)",
+    "a": [
+     "unpredictable"
+    ]
+   },
+   {
+    "q": "She was praised for her ______. (HONEST)",
+    "a": [
+     "honesty"
+    ]
+   },
+   {
+    "q": "The ______ between the two countries is growing. (TENSE)",
+    "a": [
+     "tension"
+    ]
+   },
+   {
+    "q": "His ______ caused the accident. (CARE)",
+    "a": [
+     "carelessness"
+    ]
+   },
+   {
+    "q": "A ______ of the report will be published online. (SUMMARISE)",
+    "a": [
+     "summary"
+    ]
+   },
+   {
+    "q": "The ______ of the town has doubled since 1990. (POPULATE)",
+    "a": [
+     "population"
     ]
    }
   ]

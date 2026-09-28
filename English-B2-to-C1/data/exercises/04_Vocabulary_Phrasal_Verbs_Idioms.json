@@ -82,7 +82,8 @@
    {
     "q": "The talks broke ______ after the two sides failed to agree.",
     "a": [
-     "down"
+     "down",
+     "off"
     ]
    },
    {
@@ -108,7 +109,8 @@
     "q": "The event was ______ until next month. (postponed)",
     "a": [
      "put off",
-     "pushed back"
+     "pushed back",
+     "put back"
     ]
    },
    {
@@ -162,7 +164,8 @@
    {
     "q": "It took me two weeks to ______ the flu. (recover from)",
     "a": [
-     "get over"
+     "get over",
+     "shake off"
     ]
    },
    {
@@ -190,7 +193,9 @@
      "using up",
      "running through",
      "eating into",
-     "running down"
+     "running down",
+     "going through",
+     "burning through"
     ]
    },
    {
@@ -200,10 +205,13 @@
     ]
    },
    {
-    "q": "Let's ______ where we stopped yesterday. (continue from)",
+    "q": "Let's ______ where we left off yesterday. (continue from)",
     "a": [
+     "pick up",
      "carry on from",
-     "pick up from"
+     "continue from",
+     "pick up from",
+     "carry on"
     ]
    }
   ]
@@ -234,7 +242,8 @@
    {
     "q": "Let's call it a ______ - we're all exhausted.",
     "a": [
-     "day"
+     "day",
+     "night"
     ]
    },
    {
@@ -300,7 +309,8 @@
    {
     "q": "Our donation is only a drop in the ______ compared to what's needed.",
     "a": [
-     "ocean"
+     "ocean",
+     "bucket"
     ]
    },
    {
@@ -331,6 +341,77 @@
     "q": "You can't sit on the ______ forever - which option do you support?",
     "a": [
      "fence"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v4_workplace",
+  "title": "Workplace expressions",
+  "instructions": "Write the missing word.",
+  "items": [
+   {
+    "q": "I don't need exact costs - just give me a ______ figure.",
+    "a": [
+     "ballpark",
+     "rough"
+    ]
+   },
+   {
+    "q": "Just a ______-up: the client might join the call.",
+    "a": [
+     "heads"
+    ]
+   },
+   {
+    "q": "This only concerns the two of us - shall we take it ______?",
+    "a": [
+     "offline"
+    ]
+   },
+   {
+    "q": "I've ______ in Ana from Legal so she can see the whole thread.",
+    "a": [
+     "looped",
+     "copied"
+    ]
+   },
+   {
+    "q": "Sorry, I dropped the ______ on that - I'll send it right away.",
+    "a": [
+     "ball"
+    ]
+   },
+   {
+    "q": "We've sent our offer. The ball is in their ______ now.",
+    "a": [
+     "court"
+    ]
+   },
+   {
+    "q": "The rebrand is on the back ______ until next year.",
+    "a": [
+     "burner"
+    ]
+   },
+   {
+    "q": "Legal still needs to sign ______ on the contract.",
+    "a": [
+     "off"
+    ]
+   },
+   {
+    "q": "I don't have the ______ for another project right now.",
+    "a": [
+     "bandwidth",
+     "capacity",
+     "time"
+    ]
+   },
+   {
+    "q": "Same price and faster delivery? It's a no-______.",
+    "a": [
+     "brainer"
     ]
    }
   ]

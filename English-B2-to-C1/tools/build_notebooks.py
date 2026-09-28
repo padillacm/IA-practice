@@ -10,6 +10,7 @@ Run from anywhere:  python tools/build_notebooks.py
 import importlib
 import json
 import random
+import re
 import sys
 import zlib
 from pathlib import Path
@@ -22,9 +23,15 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 SETUP = '''# Run this cell first: it loads the helper toolkit (english_tools.py)
 import sys, pathlib
-for _p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]:
+_here = pathlib.Path.cwd()
+_cands = [_here, *_here.parents, *[p.parent for p in _here.glob("*/english_tools.py")],
+          *[p.parent for p in _here.glob("*/*/english_tools.py")]]
+for _p in _cands:
     if (_p / "english_tools.py").exists():
         sys.path.insert(0, str(_p)); break
+else:
+    raise FileNotFoundError("english_tools.py not found. Open this notebook from the course's notebooks/ folder. "
+                            "In Google Colab, first run:  !git clone <your-repo-url>  and then  %cd <repo>/English-B2-to-C1")
 from english_tools import *'''
 
 
@@ -59,12 +66,17 @@ def _render_ex(ex):
     md = "\n".join(lines)
     code = ["answers = {"]
     for n, item in enumerate(ex["items"], 1):
-        hint = item["q"].split("\n")[-1] if "\n" in item["q"] else item["q"]
-        hint = hint.replace('"', "'")
-        hint = hint if len(hint) <= 60 else hint[:57] + "..."
+        hint = " | ".join(item["q"].splitlines()).replace('"', "'")
+        if len(hint) > 90:
+            tail = re.search(r"\([A-Z' /]+\)$", hint)
+            hint = hint[:85 - (len(tail.group()) if tail else 0)] + "..." + (tail.group() if tail else "")
+        if "options" in item:
+            hint += "   [" + " / ".join(f"{l}) {o}" for l, o in zip("abcd", item["options"])) + "]"
         code.append(f'    {n}: "",   # {hint}')
     code.append("}")
     code.append(f'check("{ex["id"]}", answers)')
+    if ex.get("type") == "open":
+        code.append(f'# After comparing with the models, save the ones you got wrong:  check("{ex["id"]}", answers, wrong=[2, 5])')
     return new_markdown_cell(md), new_code_cell("\n".join(code))
 
 
@@ -100,5 +112,7 @@ def build(module_name):
 
 if __name__ == "__main__":
     modules = sorted(p.stem for p in (ROOT / "tools" / "content").glob("nb*.py"))
+    for old in [*(ROOT / "notebooks").glob("*.ipynb"), *(ROOT / "data" / "exercises").glob("*.json")]:
+        old.unlink()
     for m in modules:
         build(m)

@@ -15,7 +15,10 @@
    {
     "q": "I'd like to ______ a complaint about the service.",
     "a": [
-     "make"
+     "make",
+     "lodge",
+     "file",
+     "submit"
     ]
    },
    {
@@ -56,7 +59,8 @@
     "q": "After hours of negotiation, they finally ______ an agreement.",
     "a": [
      "reached",
-     "came to"
+     "came to",
+     "struck"
     ]
    },
    {
@@ -70,7 +74,10 @@
    {
     "q": "The product failed to ______ customer expectations.",
     "a": [
-     "meet"
+     "meet",
+     "fulfil",
+     "fulfill",
+     "live up to"
     ]
    },
    {
@@ -86,7 +93,10 @@
      "took",
      "ran",
      "are taking",
-     "were taking"
+     "were taking",
+     "are running",
+     "have taken",
+     "were running"
     ]
    },
    {
@@ -275,7 +285,7 @@
     "options": [
      "well",
      "strongly",
-     "highly"
+     "heavily"
     ],
     "a": [
      "a",
@@ -332,8 +342,7 @@
    {
     "q": "The new research sheds ______ on the causes of the disease.",
     "a": [
-     "light",
-     "new"
+     "light"
     ]
    },
    {
@@ -343,14 +352,18 @@
      "dramatically",
      "steeply",
      "significantly",
-     "considerably"
+     "considerably",
+     "rapidly",
+     "substantially",
+     "markedly"
     ]
    },
    {
     "q": "There has been a ______ decline in birth rates over the past decade (slow and continuous).",
     "a": [
      "steady",
-     "gradual"
+     "gradual",
+     "slow"
     ]
    },
    {
@@ -378,7 +391,8 @@
     "a": [
      "bridge",
      "close",
-     "narrow"
+     "narrow",
+     "reduce"
     ]
    },
    {
@@ -410,7 +424,13 @@
      "huge",
      "great",
      "increasing",
-     "growing"
+     "growing",
+     "heavy",
+     "strong",
+     "severe",
+     "immense",
+     "tremendous",
+     "extreme"
     ]
    },
    {
@@ -420,7 +440,10 @@
      "general",
      "widespread",
      "overwhelming",
-     "strong"
+     "strong",
+     "wide",
+     "clear",
+     "near"
     ]
    },
    {
@@ -443,6 +466,88 @@
     "a": [
      "reached",
      "hit"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "v3_text_cloze",
+  "title": "Collocations in context (a short report)",
+  "instructions": "Read the report and write ONE word in each gap. Think about which words go together.",
+  "items": [
+   {
+    "q": "Over the past year, customer complaints have risen (1) ______ (= a lot, suddenly).",
+    "a": [
+     "sharply",
+     "dramatically",
+     "steeply",
+     "significantly",
+     "considerably",
+     "markedly"
+    ]
+   },
+   {
+    "q": "The survey (2) ______ light on the main reasons.",
+    "a": [
+     "sheds",
+     "shed",
+     "throws",
+     "threw"
+    ]
+   },
+   {
+    "q": "The (3) ______ majority of complaints relate to delivery times.",
+    "a": [
+     "vast",
+     "overwhelming"
+    ]
+   },
+   {
+    "q": "We have (4) ______ steps to address the problem, ...",
+    "a": [
+     "taken"
+    ]
+   },
+   {
+    "q": "... but we still need to (5) ______ a balance between speed and cost.",
+    "a": [
+     "strike",
+     "find"
+    ]
+   },
+   {
+    "q": "Management has (6) ______ concerns about the budget, ...",
+    "a": [
+     "raised",
+     "expressed",
+     "voiced"
+    ]
+   },
+   {
+    "q": "... and there is (7) ______ opposition from the sales team to any price increase.",
+    "a": [
+     "strong",
+     "fierce",
+     "stiff",
+     "considerable"
+    ]
+   },
+   {
+    "q": "It is (8) ______ unlikely that the problem will be solved this quarter.",
+    "a": [
+     "highly"
+    ]
+   },
+   {
+    "q": "However, the new system should (9) ______ a big difference by the summer.",
+    "a": [
+     "make"
+    ]
+   },
+   {
+    "q": "We will continue to (10) ______ track of progress every month.",
+    "a": [
+     "keep"
     ]
    }
   ]
@@ -488,7 +593,9 @@
      "convinced",
      "firmly convinced",
      "positive",
-     "absolutely sure"
+     "absolutely sure",
+     "absolutely convinced",
+     "completely certain"
     ]
    },
    {
@@ -508,7 +615,11 @@
      "demanding",
      "daunting",
      "arduous",
-     "gruelling"
+     "gruelling",
+     "challenging",
+     "tough",
+     "extremely demanding",
+     "grueling"
     ]
    },
    {
@@ -517,7 +628,9 @@
      "consider the proposal carefully",
      "carefully consider the proposal",
      "weigh up the proposal",
-     "give careful consideration to the proposal"
+     "give careful consideration to the proposal",
+     "give the proposal careful consideration",
+     "carefully weigh up the proposal"
     ]
    },
    {
@@ -527,11 +640,14 @@
      "strikingly different",
      "fundamentally different",
      "radically different",
-     "worlds apart"
+     "worlds apart",
+     "poles apart",
+     "entirely different",
+     "totally different"
     ]
    },
    {
-    "q": "Many people DISAGREE STRONGLY with the plan.",
+    "q": "Many people DISAGREE STRONGLY WITH the plan.",
     "a": [
      "strongly oppose",
      "are strongly opposed to",
@@ -545,7 +661,10 @@
      "compelling",
      "valid",
      "convincing",
-     "perfectly good"
+     "perfectly good",
+     "sound",
+     "legitimate",
+     "excellent"
     ]
    }
   ]

@@ -7,7 +7,7 @@
  {
   "front": "to add a point (formal)",
   "back": "Furthermore / Moreover / In addition",
-  "example": "Moreover, the costs are rising."
+  "example": "Moreover, the costs are rising. (Writing. In speech 'moreover' sounds stiff: say 'Also / Plus / On top of that'.)"
  },
  {
   "front": "to contrast after admitting something (spoken)",
@@ -42,7 +42,7 @@
  {
   "front": "to express a result (spoken)",
   "back": "So / That's why / Which means",
-  "example": "The trains were on strike, which meant we had to drive."
+  "example": "There was a train strike, which meant we had to drive."
  },
  {
   "front": "to give the reason (formal)",
@@ -82,7 +82,7 @@
  {
   "front": "to conclude (formal)",
   "back": "In conclusion / To conclude",
-  "example": "In conclusion, the evidence is clear."
+  "example": "In conclusion, the evidence is clear. (Essays and formal talks; in meetings: 'So, to wrap up...')"
  },
  {
   "front": "to consider both sides before deciding",
@@ -90,7 +90,7 @@
   "example": "On balance, I think we should go ahead."
  },
  {
-  "front": "to change the topic (spoken)",
+  "front": "to change or link to a new topic (spoken)",
   "back": "By the way / Speaking of which / Anyway",
   "example": "Speaking of which, did you see the game?"
  },
@@ -115,12 +115,12 @@
   "example": "Needless to say, we were exhausted."
  },
  {
-  "front": "in the meantime",
+  "front": "during the time before something else happens",
   "back": "Meanwhile / In the meantime",
   "example": "In the meantime, please wait here."
  },
  {
-  "front": "in any case; regardless",
+  "front": "whatever happens / regardless of that",
   "back": "At any rate / In any case / Either way",
   "example": "Either way, we need to decide today."
  },
@@ -135,8 +135,8 @@
   "example": "We met with a view to reaching a deal."
  },
  {
-  "front": "to express frankly your opinion (spoken)",
+  "front": "to give your honest opinion (spoken)",
   "back": "To be honest / Frankly / If you ask me",
-  "example": "Frankly, I don't think it'll work."
+  "example": "Frankly, I don't think it'll work. (Don't overuse 'to be honest' - it can imply you weren't honest before.)"
  }
 ]

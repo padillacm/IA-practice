@@ -52,7 +52,8 @@ Drop *if* and invert. Very common in formal writing, emails and presentations.
 | *whether or not* | both options, same result | I'm going **whether or not** you like it. |
 
 > Classic Spanish-speaker trap: *"en caso de que"* is usually **if**, not *in case*.
-> *"Call me in case you need help"* sounds odd. Use **if** (or *should you need...*).
+> *"Call me in case you need help"* is heard in informal American English, but it is avoided in British and formal English.
+> Use **if** (or *should you need...*) and keep *in case* for precautions.
 """),
         ("ex", {
             "id": "g1_mixed",
@@ -65,13 +66,13 @@ Drop *if* and invert. Very common in formal writing, emails and presentations.
                  "why": "Permanent characteristic (present) -> past result."},
                 {"q": "If we had invested in that company ten years ago, we ______ (be) rich now.", "a": ["would be"],
                  "why": "Past condition -> present result: would + infinitive."},
-                {"q": "If he ______ (speak) better English, he would have got the job last month.", "a": ["spoke"],
+                {"q": "If he ______ (speak) better English in general, he would have got the job last month.", "a": ["spoke", "could speak"],
                  "why": "Present/general ability -> past result."},
                 {"q": "I ______ (not / ask) you for help yesterday if I didn't trust you.", "a": ["wouldn't have asked", "would not have asked"],
                  "why": "Present situation (I trust you) -> past result (yesterday)."},
                 {"q": "If the government had acted sooner, the crisis ______ (not / be) so severe today.", "a": ["wouldn't be", "would not be"]},
-                {"q": "You ______ (not / feel) so tired now if you had gone to bed earlier.", "a": ["wouldn't feel", "would not feel"]},
-                {"q": "If I ______ (know) him better, I would have invited him to the wedding last month.", "a": ["knew"],
+                {"q": "You ______ (not / feel) so tired now if you had gone to bed earlier.", "a": ["wouldn't feel", "would not feel", "wouldn't be feeling", "would not be feeling"]},
+                {"q": "If I ______ (know) him better (I hardly know him now), I would have invited him to the wedding last month.", "a": ["knew"],
                  "why": "'I don't know him well' is a present state -> past result."},
             ],
         }),
@@ -85,7 +86,7 @@ Drop *if* and invert. Very common in formal writing, emails and presentations.
                 {"q": "If the president resigned, there would be an election.\n______ resign, there would be an election.", "a": ["were the president to"]},
                 {"q": "If it hadn't been for your help, I would have failed.\n______ your help, I would have failed.", "a": ["had it not been for", "but for", "without"],
                  "why": "Negative inversion keeps 'not' after the subject: Had it NOT been for... (never *Hadn't it been*)."},
-                {"q": "If they had not cancelled the flight, we would be in Rome now.\n______ the flight, we would be in Rome now.", "a": ["had they not cancelled"]},
+                {"q": "If they had not cancelled the flight, we would be in Rome now.\n______ the flight, we would be in Rome now.", "a": ["had they not cancelled", "had they not canceled"]},
                 {"q": "If it weren't for the rain, we could eat outside.\n______ the rain, we could eat outside.", "a": ["were it not for", "but for", "without"]},
             ],
         }),
@@ -152,7 +153,7 @@ After certain expressions, a **past form describes something unreal** (not a pas
                 {"q": "He talks as if he ______ (be) the boss, but he's just an intern.", "a": ["were", "was"]},
                 {"q": "I'd rather ______ (stay) at home tonight, if you don't mind.", "a": ["stay"],
                  "why": "Same subject (I ... I) -> bare infinitive."},
-                {"q": "Come on, it's time ______ (leave); the taxi's waiting.", "a": ["to leave", "we left", "we were leaving"]},
+                {"q": "Come on, it's time ______ (leave); the taxi's waiting.", "a": ["to leave", "we left", "we were leaving", "for us to leave"]},
                 {"q": "I wish I ______ (can) speak Japanese.", "a": ["could"]},
             ],
         }),
@@ -187,6 +188,10 @@ It sounds formal and dramatic - perfect for presentations, storytelling and writ
 | Nowhere | **Nowhere will you find** better coffee. |
 | So + adjective / Such + be + noun | **So loud was** the music that... / **Such was** the demand that... |
 
+> **Register:** inversion is formal and dramatic - great in presentations, speeches, formal emails and storytelling
+> for effect. In casual conversation it can sound theatrical; there, prefer a cleft (*It wasn't until I got home that I
+> realised...*) or normal word order (*I'd never seen anything like it*).
+
 **Word-order formula:** Negative adverbial + **auxiliary** (do/does/did, have/had, modal, be) + **subject** + main verb.
 If there's no auxiliary in the normal sentence, add *do/does/did*: *I rarely go* -> *Rarely **do** I **go***.
 """),
@@ -197,8 +202,8 @@ If there's no auxiliary in the normal sentence, add *do/does/did*: *I rarely go*
             "items": [
                 {"q": "I have never seen such a beautiful sunset.\nNever ______ such a beautiful sunset.", "a": ["have I seen"]},
                 {"q": "As soon as I arrived, the phone rang.\nNo sooner ______ than the phone rang.", "a": ["had I arrived"]},
-                {"q": "He didn't realise the danger he was in.\nLittle ______ the danger he was in.", "a": ["did he realise", "did he realize"]},
-                {"q": "You must not open this door under any circumstances.\nUnder no circumstances ______ this door.", "a": ["must you open", "should you open"]},
+                {"q": "He didn't realise the danger he was in.\nLittle ______ the danger he was in.", "a": ["did he realise", "did he realize", "did he know"]},
+                {"q": "You must not open this door under any circumstances.\nUnder no circumstances ______ this door.", "a": ["must you open", "should you open", "are you to open", "can you open"]},
                 {"q": "She not only wrote the script, but she also directed the film.\nNot only ______ the script, but she also directed the film.", "a": ["did she write"]},
                 {"q": "I only understood the problem after reading the report.\nOnly after reading the report ______ the problem.", "a": ["did I understand"],
                  "why": "With 'Only after/when/by', the inversion happens in the MAIN clause."},
@@ -276,13 +281,13 @@ These are open answers - `check()` marks exact matches and shows the model answe
             "type": "open",
             "instructions": "Rewrite each sentence correctly.",
             "items": [
-                {"q": "Never I have seen such chaos.", "a": ["Never have I seen such chaos."]},
+                {"q": "Never I have seen such chaos.", "a": ["Never have I seen such chaos.", "I have never seen such chaos."]},
                 {"q": "If I would have known, I would have come.", "a": ["If I had known, I would have come.", "Had I known, I would have come."]},
                 {"q": "I wish I would be taller.", "a": ["I wish I were taller.", "I wish I was taller."]},
                 {"q": "Only when he left I realised my mistake.", "a": ["Only when he left did I realise my mistake.", "Only when he left did I realize my mistake."]},
                 {"q": "What I need it is more time.", "a": ["What I need is more time."]},
                 {"q": "It's time we go home.", "a": ["It's time we went home.", "It's time to go home."]},
-                {"q": "Hardly had we arrived than it started to rain.", "a": ["Hardly had we arrived when it started to rain."]},
+                {"q": "Hardly had we arrived than it started to rain.", "a": ["Hardly had we arrived when it started to rain.", "Hardly had we arrived before it started to rain.", "No sooner had we arrived than it started to rain."]},
                 {"q": "Had I not been so tired, I would go out last night.", "a": ["Had I not been so tired, I would have gone out last night."]},
                 {"q": "Hadn't it been for you, we would have lost.", "a": ["Had it not been for you, we would have lost."]},
                 {"q": "Call me in case you need anything, and I'll come.", "a": ["Call me if you need anything, and I'll come.", "Call me if you need anything and I'll come."]},

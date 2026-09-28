@@ -31,7 +31,7 @@
   "prompt": "Describe a time when you had to deal with a difficult person. How did you handle it?",
   "hints": [
    "What I did was...",
-   "keep my temper",
+   "keep my cool / not lose my temper",
    "In hindsight, I should have..."
   ]
  },
@@ -121,7 +121,7 @@
   "prompt": "A friend says learning languages is pointless now that translation apps exist. Respond.",
   "hints": [
    "I see where you're coming from, but...",
-   "lose something in translation",
+   "get lost in translation",
    "There's more to it than..."
   ]
  },
@@ -131,14 +131,14 @@
   "hints": [
    "Supporters argue that... whereas critics...",
    "On balance, ...",
-   "a knock-on effect"
+   "a knock-on effect (AmE: a ripple effect)"
   ]
  },
  {
   "kind": "discussion",
   "prompt": "Should children be allowed to have smartphones before the age of 14?",
   "hints": [
-   "It's high time...",
+   "There's growing evidence that...",
    "screen time",
    "There's no easy answer"
   ]
@@ -249,6 +249,204 @@
    "What I'd really like is...",
    "Ideally, ...",
    "strike a balance between"
+  ]
+ },
+ {
+  "kind": "mediation",
+  "prompt": "Listen to passage 3 (listen(3)) once, then explain the idea of spaced repetition to a friend who has an exam next week, in your own words (2 minutes).",
+  "hints": [
+   "The basic idea is that...",
+   "In practical terms, this means...",
+   "counter-intuitive"
+  ]
+ },
+ {
+  "kind": "mediation",
+  "prompt": "Listen to passage 4 (listen(4)) and summarise the four-day-week report for your manager in 60 seconds, then say whether your company should try it.",
+  "hints": [
+   "The headline finding was...",
+   "One caveat is that...",
+   "the jury is still out"
+  ]
+ },
+ {
+  "kind": "mediation",
+  "prompt": "Summarise the last podcast episode you listened to for a colleague who has no time to hear it (90 seconds).",
+  "hints": [
+   "It's essentially about...",
+   "The key takeaway is...",
+   "What I found most interesting was..."
+  ]
+ },
+ {
+  "kind": "abstract",
+  "prompt": "Is it ever right to break a rule? Build an argument using at least one concrete example.",
+  "hints": [
+   "It all hinges on...",
+   "a slippery slope",
+   "Where I'd draw the line is..."
+  ]
+ },
+ {
+  "kind": "abstract",
+  "prompt": "What would the world be like if nobody could lie?",
+  "hints": [
+   "Presumably, ...",
+   "it would do away with...",
+   "Were that the case, ..."
+  ]
+ },
+ {
+  "kind": "compare",
+  "prompt": "Compare how people in your country and in an English-speaking country you know deal with time, punctuality and deadlines.",
+  "hints": [
+   "whereas",
+   "tend to be more laid-back about",
+   "a far cry from"
+  ]
+ },
+ {
+  "kind": "negotiation",
+  "prompt": "You are selling your car; the buyer offers 20% less than you want. Negotiate and reach a deal.",
+  "hints": [
+   "meet you halfway",
+   "That's my final offer",
+   "I could stretch to..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Handle this question after a presentation: 'Aren't your figures a bit optimistic?'",
+  "hints": [
+   "That's a fair challenge",
+   "to put it into context",
+   "If anything, ..."
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Retell the plot of a film you know well, from the point of view of a minor character.",
+  "hints": [
+   "Unbeknownst to...",
+   "It later emerged that...",
+   "had it not been for..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Give a 60-second stand-up update: what you did yesterday, what you're doing today, any blockers.",
+  "hints": [
+   "I'm on track with...",
+   "I'm blocked on...",
+   "I'll need input from..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Explain to a client that their project will be two weeks late, and propose a solution.",
+  "hints": [
+   "I'm afraid we've run into...",
+   "What we can do is...",
+   "to minimise the impact"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "A senior stakeholder proposes something you think is a mistake. Disagree respectfully on a video call.",
+  "hints": [
+   "I can see the logic, but...",
+   "My concern is that...",
+   "Could we look at...?"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Make small talk for two minutes before an international call starts.",
+  "hints": [
+   "How's your week going?",
+   "Where are you based?",
+   "I hear it's been..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Say no to an extra task from your manager without sounding unhelpful.",
+  "hints": [
+   "I don't have the bandwidth...",
+   "What would you like me to deprioritise?",
+   "I could take it on from..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Admit a mistake you made that affected a colleague, and explain how you'll fix it.",
+  "hints": [
+   "I dropped the ball on...",
+   "To put it right, I'll...",
+   "Going forward, ..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Introduce yourself and your role at the start of a kick-off meeting with a new international team.",
+  "hints": [
+   "I'm based in...",
+   "I look after...",
+   "I'll be your main point of contact for..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Negotiate a deadline with a manager who keeps interrupting you. Hold the floor and reach an agreement.",
+  "hints": [
+   "Sorry, if I could just finish...",
+   "As I was saying, ...",
+   "Would it work if...?"
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Your partner strongly disagrees with you about remote work. Concede one point, defend another, and ask two follow-up questions.",
+  "hints": [
+   "That's a fair point, but...",
+   "I take your point, although...",
+   "What makes you say that?"
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Plan a weekend trip together. Your partner keeps changing the topic - bring it back each time.",
+  "hints": [
+   "Anyway, getting back to...",
+   "Coming back to the plan...",
+   "Fair enough, but..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Complain about a faulty product to a customer service agent who isn't very helpful.",
+  "hints": [
+   "I'm afraid that's not good enough",
+   "I'd like to speak to...",
+   "What I'd expect is..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Interview your partner about their job for 5 minutes. Use backchannels and follow-up questions.",
+  "hints": [
+   "Really? How come?",
+   "That must be...",
+   "So what you're saying is..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Discuss and agree on the three most important skills for the next ten years.",
+  "hints": [
+   "I'd put ... at the top",
+   "Would you agree that...?",
+   "Let's go with..."
   ]
  }
 ]

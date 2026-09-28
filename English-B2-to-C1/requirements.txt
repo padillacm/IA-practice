@@ -1,7 +1,7 @@
 jupyter
 matplotlib
-gTTS
-# offline text-to-speech alternative:
-# pyttsx3
-# only needed to rebuild the notebooks from tools/content:
-# nbformat
+edge-tts      # natural neural voices for listening (needs internet)
+gTTS          # fallback text-to-speech (needs internet)
+# pyttsx3            # offline text-to-speech alternative
+# faster-whisper     # optional: transcribe your speaking recordings (analyse_recording)
+# nbformat           # only needed to rebuild the notebooks from tools/content

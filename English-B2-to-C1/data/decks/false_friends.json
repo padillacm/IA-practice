@@ -2,126 +2,235 @@
  {
   "front": "actually = ?  (NOT Sp. 'actualmente')",
   "back": "in fact / really. 'Actualmente' = currently / at the moment",
-  "example": "Actually, I've changed my mind. / Currently, I work in Madrid."
+  "example": "Actually, I've changed my mind. / Currently, I work in Madrid.",
+  "answer": "in fact"
  },
  {
   "front": "eventually = ?  (NOT Sp. 'eventualmente')",
-  "back": "in the end, after a long time. 'Eventualmente' = possibly / occasionally",
-  "example": "We eventually found the hotel."
+  "back": "in the end, after a long time. 'Eventualmente' = possibly / if necessary; 'trabajo eventual' = temporary work",
+  "example": "We eventually found the hotel.",
+  "answer": "in the end"
  },
  {
   "front": "assist = ?  (NOT Sp. 'asistir a')",
   "back": "help. 'Asistir a' = attend",
-  "example": "Over 300 people attended the conference."
+  "example": "Our support team will assist you with the set-up. / Over 300 people attended the conference.",
+  "answer": "help"
  },
  {
   "front": "embarrassed = ?  (NOT Sp. 'embarazada')",
-  "back": "ashamed, uncomfortable. 'Embarazada' = pregnant",
-  "example": "I was so embarrassed when I tripped."
+  "back": "awkward, self-conscious (weaker than 'ashamed'). 'Embarazada' = pregnant",
+  "example": "I was so embarrassed when I called my boss by the wrong name. / She's pregnant with her second child.",
+  "answer": "awkward"
  },
  {
   "front": "sensible = ?  (NOT Sp. 'sensible')",
   "back": "reasonable, practical. 'Sensible' = sensitive",
-  "example": "That's a sensible decision. / She's very sensitive."
+  "example": "That's a sensible decision. / She's very sensitive.",
+  "answer": "reasonable"
  },
  {
   "front": "realise = ?  (NOT Sp. 'realizar')",
   "back": "understand, become aware of. 'Realizar' = carry out, do",
-  "example": "The researchers carried out a survey."
+  "example": "I didn't realise the meeting had been moved. / The researchers carried out a survey.",
+  "answer": "understand"
  },
  {
   "front": "pretend = ?  (NOT Sp. 'pretender')",
   "back": "act as if something is true. 'Pretender' = intend, aim",
-  "example": "What do you intend to do?"
+  "example": "He pretended not to see me. / What do you intend to do next?",
+  "answer": "act as if"
  },
  {
   "front": "library = ?  (NOT Sp. 'librería')",
   "back": "biblioteca. 'Librería' = bookshop (UK) / bookstore (US)",
-  "example": "I bought it at a bookshop."
+  "example": "You can borrow it from the library. / I bought it at a bookshop.",
+  "answer": "biblioteca"
  },
  {
   "front": "carpet = ?  (NOT Sp. 'carpeta')",
   "back": "alfombra. 'Carpeta' = folder",
-  "example": "Save it in this folder."
+  "example": "I spilled coffee on the carpet. / Save it in this folder.",
+  "answer": "alfombra"
  },
  {
   "front": "constipated = ?  (NOT Sp. 'constipado')",
-  "back": "estreñido. 'Constipado' = have a cold",
-  "example": "I've got a cold."
+  "back": "estreñido. 'Estar constipado' = to have a cold",
+  "example": "I've got a cold, so I'll keep my camera off. (Never 'I'm constipated'!)",
+  "answer": "estreñido"
  },
  {
   "front": "exit = ?  (NOT Sp. 'éxito')",
   "back": "salida. 'Éxito' = success",
-  "example": "The launch was a huge success."
+  "example": "The exit is at the back of the room. / The launch was a huge success.",
+  "answer": "salida"
  },
  {
   "front": "fabric = ?  (NOT Sp. 'fábrica')",
   "back": "tela. 'Fábrica' = factory",
-  "example": "She works in a car factory."
+  "example": "This fabric is 100% cotton. / She works in a car factory.",
+  "answer": "tela"
  },
  {
   "front": "large = ?  (NOT Sp. 'largo')",
   "back": "big. 'Largo' = long",
-  "example": "It was a very long meeting."
+  "example": "We have a large number of clients in Mexico. / It was a very long meeting.",
+  "answer": "big"
  },
  {
   "front": "career = ?  (NOT exactly Sp. 'carrera' universitaria)",
-  "back": "professional life. 'Carrera' (studies) = degree / course",
-  "example": "I did a degree in economics."
+  "back": "professional life. 'Carrera' (studies) = degree (AmE also: major). Not 'What career did you study?' -> 'What did you study?'",
+  "example": "She's had a successful career in finance. / I did a degree in economics (AmE: I majored in economics).",
+  "answer": "professional life"
  },
  {
   "front": "attend = ?  (NOT Sp. 'atender')",
   "back": "go to (an event). 'Atender' = serve / deal with / pay attention",
-  "example": "The waiter served us quickly."
+  "example": "Will you be attending the meeting? / Could you deal with this customer?",
+  "answer": "go to"
  },
  {
   "front": "discussion = ?  (NOT always Sp. 'discusión')",
   "back": "a conversation about a topic. 'Discusión' (fight) = argument",
-  "example": "They had a terrible argument."
+  "example": "We had a useful discussion about the budget. / They had a terrible argument.",
+  "answer": "conversation"
  },
  {
   "front": "sympathetic = ?  (NOT Sp. 'simpático')",
   "back": "showing understanding of someone's problems. 'Simpático' = nice / friendly",
-  "example": "Her new boss is really nice."
+  "example": "My manager was very sympathetic when my father was ill. / Her new boss is really nice.",
+  "answer": "understanding"
  },
  {
   "front": "topic = ?  (NOT Sp. 'tópico')",
   "back": "subject. 'Tópico' = cliché / stereotype",
-  "example": "That's just a cliché about Spaniards."
+  "example": "Let's move on to the next topic. / That's just a cliché about Spaniards.",
+  "answer": "subject"
  },
  {
   "front": "remove = ?  (NOT Sp. 'remover')",
-  "back": "take away. 'Remover' = stir",
-  "example": "Stir the soup."
+  "back": "take away, get rid of. 'Remover' (soup) = stir - but 'remover de un cargo' = remove from office",
+  "example": "Please remove my name from the list. / Stir the soup.",
+  "answer": "take away"
  },
  {
   "front": "advice = ?  (NOT Sp. 'aviso')",
   "back": "consejo (uncountable!). 'Aviso' = warning / notice",
-  "example": "Can I give you some advice? / a warning sign"
+  "example": "Can I give you some advice? / We received a notice about the changes.",
+  "answer": "consejo"
  },
  {
   "front": "molest = ?  (NOT Sp. 'molestar')",
   "back": "abuse sexually - AVOID! 'Molestar' = bother / disturb / annoy",
-  "example": "Sorry to bother you."
+  "example": "Sorry to bother you.",
+  "answer": "abuse"
  },
  {
   "front": "support = ?  (NOT Sp. 'soportar' = aguantar)",
   "back": "help/encourage. 'Soportar' = stand / put up with",
-  "example": "I can't stand this noise."
+  "example": "Thanks for all your support. / I can't stand this noise.",
+  "answer": "help"
  },
  {
   "front": "contest = ?  (NOT Sp. 'contestar')",
-  "back": "competition. 'Contestar' = answer / reply",
-  "example": "Please reply to my email."
+  "back": "a competition; (verb) formally challenge a decision. 'Contestar' = answer / reply",
+  "example": "She won a photography contest. / We intend to contest the decision. / Please reply to my email.",
+  "answer": "competition"
  },
  {
   "front": "argument = ?  (careful with Sp. 'argumento')",
   "back": "a disagreement OR a line of reasoning. 'Argumento' (of a film) = plot",
-  "example": "The plot of the film is confusing."
+  "example": "The plot of the film is confusing.",
+  "answer": "disagreement"
  },
  {
   "front": "lecture = ?  (NOT Sp. 'lectura')",
   "back": "a talk at university. 'Lectura' = reading",
-  "example": "Reading is my favourite hobby."
+  "example": "The lecture starts at ten. / Reading is my favourite hobby.",
+  "answer": "talk"
+ },
+ {
+  "front": "compromise = ?  (careful with Spanish look-alike)",
+  "back": "an agreement where both sides give something up. 'Compromiso' = commitment",
+  "answer": "agreement",
+  "example": "We reached a compromise on price. / Thanks for your commitment to the project."
+ },
+ {
+  "front": "assume = ?  (careful with Spanish look-alike)",
+  "back": "suppose something is true. 'Asumir (responsabilidad / un cargo)' = take on / accept",
+  "answer": "suppose",
+  "example": "I assumed you'd already left. / She took on the role of director."
+ },
+ {
+  "front": "billion = ?  (careful with Spanish look-alike)",
+  "back": "1,000,000,000 = 'mil millones'. 'Billón' = trillion",
+  "answer": "mil millones",
+  "example": "The company is worth $3 billion (tres mil millones)."
+ },
+ {
+  "front": "agenda = ?  (careful with Spanish look-alike)",
+  "back": "list of points for a meeting. 'Agenda' (book) = diary (BrE) / planner (AmE)",
+  "answer": "list of points",
+  "example": "What's on the agenda today? / Let me check my diary."
+ },
+ {
+  "front": "consistent = ?  (careful with Spanish look-alike)",
+  "back": "regular, reliable, coherent. 'Consistente' = solid, thick; well-founded",
+  "answer": "reliable",
+  "example": "Her results are very consistent. / The sauce is quite thick."
+ },
+ {
+  "front": "introduce = ?  (careful with Spanish look-alike)",
+  "back": "present someone; bring in something new. 'Introducir' (a card, data) = insert / enter",
+  "answer": "present",
+  "example": "Let me introduce my colleague. / Insert your card. / Enter your password."
+ },
+ {
+  "front": "demand = ?  (careful with Spanish look-alike)",
+  "back": "ask for something forcefully. 'Demandar' = sue",
+  "answer": "ask for",
+  "example": "They're demanding a refund. / They're suing the company."
+ },
+ {
+  "front": "resume = ?  (careful with Spanish look-alike)",
+  "back": "start again after a pause. 'Resumir' = summarise (AmE résumé = CV)",
+  "answer": "start again",
+  "example": "The meeting will resume at 2. / Could you summarise the main points?"
+ },
+ {
+  "front": "formation = ?  (careful with Spanish look-alike)",
+  "back": "the way something is formed. 'Formación' = training / education / background",
+  "answer": "how something is formed",
+  "example": "We offer training for new staff. / She has a background in law."
+ },
+ {
+  "front": "doubt = ?  (careful with Spanish look-alike)",
+  "back": "uncertainty / lack of belief. 'Tengo una duda' = I have a question",
+  "answer": "uncertainty",
+  "example": "I have a quick question about the invoice."
+ },
+ {
+  "front": "prove = ?  (careful with Spanish look-alike)",
+  "back": "show something is true. 'Probar' = try / test / taste",
+  "answer": "show it is true",
+  "example": "Can you prove it? / Try the new version. / Taste this."
+ },
+ {
+  "front": "succeed = ?  (careful with Spanish look-alike)",
+  "back": "achieve what you wanted. 'Suceder' = happen",
+  "answer": "achieve",
+  "example": "She succeeded in closing the deal. / What happened?"
+ },
+ {
+  "front": "casualty = ?  (careful with Spanish look-alike)",
+  "back": "a person hurt or killed. 'Casualidad' = coincidence / chance",
+  "answer": "victim",
+  "example": "What a coincidence! / We met by chance."
+ },
+ {
+  "front": "rare = ?  (careful with Spanish look-alike)",
+  "back": "unusual, not common. 'Raro' = strange / weird / odd",
+  "answer": "unusual",
+  "example": "That's a rare opportunity. / That's a bit strange."
  }
 ]

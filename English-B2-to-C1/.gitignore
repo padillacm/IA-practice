@@ -1,3 +1,5 @@
-progress/_tts.mp3
+# Your personal data (scores, mistakes, flashcard state). Delete these two lines to back it up in git.
+progress/*
+!progress/.gitkeep
 .ipynb_checkpoints/
 __pycache__/

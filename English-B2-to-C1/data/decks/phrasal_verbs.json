@@ -1,7 +1,7 @@
 [
  {
   "front": "postpone",
-  "back": "put off / push back",
+  "back": "put off / push back / put back",
   "example": "They put off the meeting until Thursday."
  },
  {
@@ -65,7 +65,7 @@
   "example": "The match was called off because of the snow."
  },
  {
-  "front": "finish the supply of something",
+  "front": "use up all of something / have none left",
   "back": "run out of",
   "example": "We've run out of coffee."
  },
@@ -85,7 +85,7 @@
   "example": "We set off at dawn."
  },
  {
-  "front": "make an alarm/bomb activate",
+  "front": "make an alarm go off; cause (meaning 2 of this verb)",
   "back": "set off",
   "example": "The smoke set off the fire alarm."
  },
@@ -116,7 +116,7 @@
  },
  {
   "front": "stop trying; abandon",
-  "back": "give up (on)",
+  "back": "give up / give up on",
   "example": "Don't give up on your dreams."
  },
  {
@@ -137,7 +137,7 @@
  {
   "front": "be obviously noticeable / better than others",
   "back": "stand out",
-  "example": "Her CV really stood out."
+  "example": "Her CV (AmE: résumé) really stood out."
  },
  {
   "front": "become exhausted from working too hard",
@@ -185,7 +185,7 @@
   "example": "I struggled to get my point across."
  },
  {
-  "front": "be finished / survive (a difficult period)",
+  "front": "survive or deal with a difficult period; finish a large amount of work",
   "back": "get through",
   "example": "We'll get through this together."
  },
@@ -196,7 +196,7 @@
  },
  {
   "front": "complete what you have started / promised",
-  "back": "follow through (on)",
+  "back": "follow through / follow through on",
   "example": "He never follows through on his promises."
  },
  {
@@ -215,7 +215,7 @@
   "example": "I look back on those years with affection."
  },
  {
-  "front": "say something in a discussion (typically suddenly)",
+  "front": "mention or raise a topic in conversation",
   "back": "bring up",
   "example": "Don't bring up politics at dinner."
  },
@@ -230,7 +230,7 @@
   "example": "Sorry I'm late - I was held up in traffic."
  },
  {
-  "front": "make someone lose interest / discourage",
+  "front": "make someone lose interest / discourage them (meaning 2)",
   "back": "put off",
   "example": "The price put me off."
  },
