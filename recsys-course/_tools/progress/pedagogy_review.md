@@ -1,9 +1,16 @@
 # Progreso: revisión pedagógica (00–19)
 Informe acumulado: recsys-course/_tools/PEDAGOGY_REVIEW.md
-- [ ] Visión global: progresión del temario, carga cognitiva, prerrequisitos, coherencia de CineMatch
-- [ ] 00  - [ ] 01  - [ ] 02  - [ ] 03  - [ ] 04
+- [x] Visión global: progresión del temario, carga cognitiva, prerrequisitos, coherencia de CineMatch (G1–G8 en el informe; refinar al final)
+- [x] 00  - [ ] 01  - [ ] 02  - [ ] 03  - [ ] 04
 - [ ] 05  - [ ] 06  - [ ] 07  - [ ] 08  - [ ] 09
 - [ ] 10  - [ ] 11  - [ ] 12  - [ ] 13  - [ ] 14
 - [ ] 15  - [ ] 16  - [ ] 17  - [ ] 18  - [ ] 19
-- [ ] Artefactos transversales (glosario / mapa de conceptos / guía de estudio) si hacen falta
+- [ ] Artefactos transversales: GUIA_DE_ESTUDIO.md (+ enlace README), niveles README alineados (G7)
 - [ ] check_course.py OK + informe final
+
+## Notas para retomar
+- Patrón por módulo (lecciones 01–19): (a) caja "🔁 Conexión con módulos anteriores" justo tras Objetivos (2–3 preguntas con <details>);
+  (b) "👀 Qué debes observar" tras gráficos clave sin interpretar; (c) +1–2 preguntas (Razonamiento/Transferencia/Diagnóstico)
+  al final de la Autoevaluación; (d) proyecto: bloques "🪜 Pista 1/2" plegados en los TODOs difíciles; (e) analogías ML/MLOps/agentes.
+- Scripts de edición en scratchpad (rep.py: reemplazos exactos únicos). El 00 ya enlaza ../GUIA_DE_ESTUDIO.md (crear el archivo).
+- G8: añadir "ruta núcleo vs opcional" en 06, 12, 15, 19.

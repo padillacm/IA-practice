@@ -30,7 +30,9 @@ M(rf"""
 | **GPU** | No necesaria (CPU). ≈ 0 unidades de Colab |
 | **Prerrequisitos** | Python, pandas, NumPy y ML general. **Cero** conocimientos de recomendación |
 
-> Esta es la puerta de entrada del curso. Si solo te quedas con una lección, que sea esta: aquí está el **mapa mental** que vas a ir rellenando durante los 18 módulos siguientes.
+> Esta es la puerta de entrada del curso. Si solo te quedas con una lección, que sea esta: aquí está el **mapa mental** que vas a ir rellenando durante los 19 módulos siguientes (01–19).
+>
+> 🧭 Antes de empezar, echa un vistazo a la [guía de estudio](../GUIA_DE_ESTUDIO.md): ruta recomendada, tiempos, mapa de dependencias entre conceptos y glosario ES/EN.
 """)
 
 M(r"""
@@ -149,6 +151,9 @@ print(f"Celdas observadas: {R.notna().mean().mean():.0%} (en MovieLens-100K ≈ 
 
 # ---------------------------------------------------------------------------
 M(r"""
+---
+> 👀 **Qué debes observar en la matriz:** (1) hay más «?» que números incluso en un juguete de 5×6; en datos reales la proporción observada es del 6 % o menos, así que **el problema es sobre todo de huecos**; (2) los «?» no son ceros: Ana no ha visto *Titanic*, lo que no significa que la odie; (3) para rellenar un «?» puedes mirar **la fila** (qué más le gustó a Ana → contenido) o **la columna y otras filas** (a quién más le gustó *Titanic* y si se parece a Ana → colaborativo). Son las dos familias de la sección 3.
+
 ---
 ## 2. 📐 Teoría formal: ¿qué predice un recomendador?
 
@@ -306,6 +311,9 @@ plt.show()
 # ---------------------------------------------------------------------------
 M(r"""
 ---
+> 👀 **Qué debes observar:** cada escalón tiene aproximadamente un orden de magnitud menos eventos que el anterior. Si eliges como positivo la valoración explícita, tendrás ~2 ejemplos por cada 1.000 impresiones; si eliges el clic, 120, pero mucho más ruidosos (*clickbait*). **No hay respuesta gratis**: el módulo 07 entrena varias de estas señales a la vez (multi-tarea) precisamente para no tener que elegir solo una.
+
+---
 ## 5. 🏭 La arquitectura multi-etapa: el embudo de la industria
 
 Este es **el diagrama más importante del curso**. Imagina que tienes un modelo de ranking buenísimo (un transformer con cientos de *features*). Cuesta, digamos, 20 µs por par (usuario, ítem). Puntuar un catálogo de 10 millones de ítems para **una sola petición** serían 200 s. Tienes ~100–200 ms. **No cabe.**
@@ -317,6 +325,8 @@ La solución universal (YouTube, Netflix, Meta, TikTok, Pinterest, Amazon…) es
 3. **Re-ranking y políticas**: ajusta la lista final — diversidad, frescura, calibración, reglas de negocio (contenido propio, restricciones legales/parentales), exploración (bandits) — y la compone en la página (filas de la home).
 
 El documento canónico es el paper de YouTube (Covington, Adams & Sargin, RecSys 2016), que describe exactamente dos redes: *candidate generation* y *ranking*.
+
+> 💡 **Ya conoces este patrón si has montado un RAG.** *Retrieval* ≈ el **bi-encoder + base vectorial** que trae los 50 *chunks* más parecidos a la consulta (barato, optimiza recall); *ranking* ≈ el **cross-encoder / reranker** que reordena esos 50 mirando consulta y documento juntos (caro, optimiza precisión); *re-ranking y políticas* ≈ los filtros y la deduplicación que aplicas antes de meter el contexto en el prompt. La diferencia: en recsys la «consulta» es **el usuario y su historia**, no un texto, y el catálogo cambia cada día. Lo verás en detalle en el módulo 08.
 """)
 
 C(r'''
@@ -669,6 +679,12 @@ M(r"""
 
 **7.** ¿Por qué es peligroso entrenar cada día con los logs del recomendador actual sin más?
 <details><summary>Respuesta</summary>Porque solo contienen feedback de lo que el sistema eligió mostrar (sesgo de exposición). El modelo nuevo aprende a imitar al viejo y los sesgos se amplifican (feedback loop, homogeneización). Se mitiga con exploración, corrección por propensión (IPS) y datos aleatorizados.</details>
+
+**8. (Razonamiento)** CineMatch tiene 50.000 títulos y un ranker que tarda 50 µs por par. Quieres responder en 100 ms y dedicar como mucho 40 ms al ranking. ¿Cuántos candidatos debe traer, como máximo, el *retrieval*? ¿Qué le pasa al sistema si el retrieval no incluye la película que el usuario habría visto?
+<details><summary>Respuesta</summary>40 ms / 50 µs = 800 candidatos (en la práctica menos, por el coste de buscar <i>features</i>). Puntuar los 50.000 costaría 2,5 s. Si el retrieval no trae la película correcta, <b>ningún ranker puede recuperarla</b>: el recall del retrieval es el techo de todo el embudo (por eso se mide <i>recall@1000</i> en esa etapa).</details>
+
+**9. (Transferencia)** Tu equipo propone evaluar el primer modelo personalizado con un split aleatorio 80/20 de las valoraciones, «como en cualquier clasificador». Da dos razones de la tabla de la sección 2 por las que eso puede engañar.
+<details><summary>Respuesta</summary>(1) Las interacciones no son i.i.d.: un split aleatorio mete en train valoraciones <b>posteriores</b> a las de test (el modelo «ve el futuro», p. ej. la popularidad final de una película). (2) Lo que importa es el orden de la lista de cada usuario en el futuro, no el error por fila; un split temporal simula mejor lo que pasará al desplegar. Lo medirás con números en los módulos 01 y 02.</details>
 """)
 
 M(r"""
@@ -794,6 +810,9 @@ M(r"""
 5. Nº de películas y nº de ratings por género (un ítem con varios géneros cuenta en cada uno; pista: `str.split("|")` + `explode`).
 6. Dispersión **nota media vs nº de ratings** por película (eje x log). ¿Qué ves en la zona de pocos ratings?
 
+<details><summary>🪜 Pista 1 (Lorenz)</summary>Cuenta ratings por película con <code>value_counts()</code>, ordénalos de menor a mayor y usa <code>np.cumsum(x) / x.sum()</code> para el eje y; el eje x es <code>np.arange(1, n+1) / n</code>. Dibuja también la diagonal (igualdad perfecta) como referencia.</details>
+<details><summary>🪜 Pista 2 (semana)</summary><code>pd.to_datetime(df.timestamp, unit="s").dt.to_period("W")</code> y luego <code>groupby(...).size()</code>.</details>
+
 > 💡 Pista Gini: con las popularidades ordenadas de menor a mayor $x_{(1)} \le \dots \le x_{(n)}$, $G = \frac{\sum_{k=1}^{n} (2k - n - 1)\, x_{(k)}}{n \sum_k x_{(k)}}$.
 """)
 
@@ -846,6 +865,9 @@ Implementa `home(user_id, train, score_fn, generos, k)` que devuelva un `dict` c
 - `"Top 10 en CineMatch"`: los $k$ mejores según `score_fn`, excluyendo lo ya visto.
 - Una fila por cada género de `generos` (los $k$ mejores de ese género según la misma puntuación).
 - **Sin repetir** películas entre filas (la primera fila que la reclama se la queda) y **sin mostrar lo ya visto**.
+
+<details><summary>🪜 Pista 1</summary>Mantén un <code>set</code> <code>usados</code> que empiece con lo que el usuario ya vio en <code>train</code>. Recorre la puntuación ordenada y añade a la fila solo ítems que no estén en <code>usados</code>; al añadir, mételos en el set.</details>
+<details><summary>🪜 Pista 2</summary>Precalcula <code>generos_de = items.set_index("item_id")["genres"].str.split("|")</code>. Para la fila de un género, recorre los candidatos (ya ordenados por <code>score</code>) quedándote con los que tienen ese género en <code>generos_de[i]</code>, y aplica la misma lógica de <code>usados</code>. Una función interna <code>llenar(pool)</code> evita repetir código.</details>
 """)
 
 C(r'''
@@ -866,6 +888,9 @@ M(r"""
 Simulamos el futuro: para cada usuario ocultamos sus **5 últimas** valoraciones en el tiempo y nos quedamos como "relevantes" las que tienen ≥ 4★. Entrenamos con el resto y medimos **HitRate@10**: fracción de usuarios con al menos un relevante en su top-10 (excluyendo lo ya visto en train). En el módulo 02 verás métricas más finas.
 
 ### TODO 5 — Split y HitRate@10
+
+<details><summary>🪜 Pista 1 (split)</summary>Ordena por <code>["user_id", "timestamp"]</code> y usa <code>groupby("user_id").cumcount(ascending=False) &lt; n</code> para marcar las n últimas de cada usuario.</details>
+<details><summary>🪜 Pista 2 (HitRate)</summary>Para cada usuario: toma los relevantes de test (rating ≥ 4), recorre <code>score.index</code> saltando lo visto en train hasta tener k ítems y comprueba si la intersección con los relevantes es no vacía. Promedia sobre los usuarios con al menos un relevante.</details>
 """)
 
 C(r'''
