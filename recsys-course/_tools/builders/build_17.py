@@ -231,6 +231,20 @@ def lesson() -> None:
     6. **Diseñar** alertas sobre métricas de negocio y simular **feedback loops**.
     7. **Ejecutar** despliegues seguros: *shadow*, *canary* con guardrails y *rollback* automático.
     8. **Describir** un sistema CI/CD/CT para recsys y los tests que lo protegen.
+
+    ### 🔁 Conexión con módulos anteriores
+    Ya dominas MLOps genérico; lo que este módulo añade es **lo específico de recsys**. Recupera primero:
+    1. ¿Por qué el *feedback loop* (módulos 01 y 13) es un problema de MLOps y no solo de modelado? ¿Qué hay que loguear para poder corregirlo (módulo 14)?
+    2. En el módulo 16 distinguimos *training-serving skew* de *drift*. ¿Cuál de los dos arregla un reentreno?
+    3. En el módulo 05, ¿qué era el *fold-in* y por qué te permite recomendar a usuarios nuevos sin reentrenar?
+    4. En el módulo 15, ¿qué check harías **antes** de leer el resultado de un canary?
+
+    <details><summary>Respuestas</summary>
+    1. Porque los datos del próximo reentreno los genera el modelo actual: el pipeline de CT, sin cuidado, amplifica sus propios sesgos. Hay que loguear la exposición con su <b>propensión</b> (y la versión del modelo) para poder hacer IPS/OPE.
+    2. Solo el drift (el mundo cambió). El skew es un bug del sistema: reentrenar no lo arregla, lo esconde.
+    3. Calcular el vector de un usuario con una regresión ridge con los factores de ítem fijos. Aquí es la pieza que hace barato el monitoreo de <i>embedding drift</i> y el warm-start.
+    4. El SRM (reparto de tráfico correcto) y que el canary mide los guardrails con IC, no solo la media.
+    </details>
     """)
 
     M(r"""
@@ -309,6 +323,10 @@ def lesson() -> None:
     ax2.set_title("Catálogo: edad de lo consumido e ítems nuevos"); ax2.legend(loc="upper left", fontsize=8)
     plt.tight_layout(); plt.show()
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** los tres paneles son tres tipos de drift **antes de entrenar nada**: volumen (cuánta actividad hay cada año), gustos (la cuota del género principal se mueve) y catálogo (entran ítems nuevos y cambia la edad de lo que se consume). Cualquier modelo entrenado con un año concreto queda «fechado». Este EDA temporal es lo primero que harías al heredar un sistema.
+    """)
 
     M(r"""
     ## 📐 3. Teoría: tipos de drift y cómo medirlos
@@ -627,6 +645,10 @@ def lesson() -> None:
     ''')
 
     M(r"""
+    > 👀 **Qué debes observar:** estas señales se calculan **sin etiquetas** (las tienes el mismo día) y aun así anticipan la caída de NDCG que solo verías con etiquetas semanas después. El panel derecho es el argumento para usar el OOV (fracción de interacciones sobre ítems que el modelo no conoce) como *trigger* de reentreno en recsys: su correlación con el NDCG es fuerte y negativa. En ML tabular clásico no existe un equivalente tan directo.
+    """)
+
+    M(r"""
     ## 8. Monitoreo con Evidently
 
     **Evidently** (open source) genera *Reports* (y *Test Suites*) comparando un dataset de **referencia** con uno
@@ -697,6 +719,10 @@ def lesson() -> None:
     ''')
 
     M(r"""
+    > 👀 **Qué debes observar:** con el paso de los años casi todo se vuelve rojo: con muestras grandes, los tests estadísticos detectan **cualquier** diferencia (pregunta 4 de la autoevaluación). Un mapa todo rojo no es una alarma útil. Por eso los equipos combinan estos informes con tamaños de efecto (PSI, JS) y, sobre todo, con señales ligadas al rendimiento (OOV, NDCG retrasado, métricas de negocio).
+    """)
+
+    M(r"""
     ### 8.1 Embedding drift
 
     Las features tabulares no cuentan toda la historia: los **vectores de usuario** (fold-in) resumen gustos. Medimos su
@@ -742,6 +768,10 @@ def lesson() -> None:
     ''')
 
     M(r"""
+    > 👀 **Qué debes observar:** un AUC del clasificador de dominio cercano a 0,5 significa «no distingo referencia de actual» (sin drift); cuanto más se acerca a 1, más se han movido los vectores de usuario. La PCA es solo una intuición visual: dos nubes que se superponen pueden diferir en dimensiones que la proyección no muestra, así que decide con el AUC o la MMD, no con el dibujo.
+    """)
+
+    M(r"""
     ## 9. Métricas de negocio y alertas
 
     Las métricas de modelo (NDCG offline, drift) son **proxies**. Lo que importa son métricas de producto: *play rate*
@@ -783,6 +813,10 @@ def lesson() -> None:
           "| primera alerta z-score: día", int(first[first >= 80][0]) if (first >= 80).any() else None,
           "| falsos positivos z:", int((first < 80).sum()))
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** el umbral fijo salta con la **estacionalidad** semanal (los fines de semana son distintos) y genera falsos positivos antes del incidente real; el z-score contra el mismo día de la semana absorbe ese patrón y avisa cuando de verdad cambia algo. Lección de guardia: una alerta que suena a menudo sin motivo acaba ignorada; diseña alertas que comparen con el **contexto** correcto.
+    """)
 
     M(r"""
     ## 10. Feedback loops
@@ -992,6 +1026,10 @@ def lesson() -> None:
     ''')
 
     M(r"""
+    > 👀 **Qué debes observar:** en cada escalón de tráfico el intervalo de la diferencia se **estrecha** (más usuarios, menos incertidumbre). El canary bueno avanza porque el intervalo nunca cae claramente bajo 0; el malo se detiene en cuanto el intervalo entero queda por debajo del umbral del guardrail, con poco tráfico expuesto. Es el mismo razonamiento de potencia del módulo 15 aplicado a un despliegue.
+    """)
+
+    M(r"""
     ## 13. CI/CD/CT para recomendadores
 
     | Capa | Qué se prueba | Ejemplos (recsys) |
@@ -1100,6 +1138,12 @@ def lesson() -> None:
 
     7. Propón una política de reentreno para CineMatch y justifícala.
     <details><summary>Respuesta</summary>Ejemplo: warm-start diario con los eventos del día (frescura e ítems nuevos), reentreno completo semanal con ventana deslizante tuneada, trigger extra si OOV > umbral o caída de play rate persistente; cada candidato pasa validación de datos, evaluación vs champion en el mismo split temporal, shadow y canary con guardrails.</details>
+
+    8. **(Diagnóstico)** Tras un reentreno nocturno automático, el NDCG offline del challenger es un 4 % mejor que el del champion y se promueve; al día siguiente el *play rate* cae un 3 %. La validación de datos pasó. Da dos hipótesis específicas de recsys.
+    <details><summary>Respuesta</summary>(1) El challenger se evaluó en un periodo que contiene la exposición del propio champion (sesgo de exposición/feedback loop): imita mejor al sistema anterior en el test, sin ser mejor para el usuario. (2) <i>Skew</i>: el pipeline de entrenamiento cambió una <i>feature</i> que el servicio calcula de otra forma (paridad, módulo 16). También: OOV (estrenos sin embedding) o un cambio en la definición de la etiqueta. Por eso hay shadow y canary con guardrails antes del 100 %.</details>
+
+    9. **(Transferencia)** Traduce el flow de Prefect de la sección 11 a una frase por pieza en el orquestador que uses en tu trabajo (Airflow, Kubeflow, Metaflow). ¿Qué parte es **específica de recsys** y no aparecería en un pipeline de un clasificador de fraude?
+    <details><summary>Respuesta</summary>Ingesta → validación → drift → entrenamiento → evaluación → registro/alias se traducen 1:1 (DAG de tareas, operadores o <i>steps</i>). Lo específico de recsys: el trigger por <b>OOV</b>/catálogo, la evaluación temporal <i>full ranking</i> contra el champion en el mismo periodo, el fold-in de usuarios, y loguear propensiones para corregir el feedback loop.</details>
 
     ## 📚 Referencias
 
@@ -1250,6 +1294,8 @@ def project() -> None:
     Define `SCHEMA` (Pandera) para lotes con columnas `user_id, item_id, rating, ts`. Debe rechazar: ratings fuera de
     {0,5, 1, …, 5}, timestamps futuros o anteriores a 1995, IDs nulos/no positivos y **> 1 % de duplicados**
     `(user_id, item_id, ts)`.
+
+    <details><summary>🪜 Pista</summary><code>pa.DataFrameSchema({"rating": pa.Column(float, pa.Check.isin([0.5, 1.0, …, 5.0])), "ts": pa.Column(int, pa.Check.in_range(T_1995, NOW)), "user_id": pa.Column(int, pa.Check.gt(0), nullable=False), …})</code> más un <i>check</i> a nivel de DataFrame: <code>pa.Check(lambda df: df.duplicated(["user_id", "item_id", "ts"]).mean() &lt;= 0.01)</code>. Valida con <code>lazy=True</code> para ver todos los errores a la vez.</details>
     """)
 
     C(r'''
@@ -1320,6 +1366,8 @@ def project() -> None:
     - Si `should_retrain(report, baseline)` → entrenar challenger con ventana de `WINDOW` años hasta `year-2`, evaluar challenger
       y champion en `year-1` (mismo conjunto), registrar el challenger (reentrenado hasta `year-1`) con alias `challenger`
       y promover a `champion` solo si `ndcg_challenger ≥ ndcg_champion`.
+
+    <details><summary>🪜 Pista</summary>Cada paso como <code>@task</code> (validar, informe de drift, entrenar, evaluar, registrar) y un <code>@flow ct_pipeline(year)</code> que los encadena con <code>if</code> normales. Para la línea base: <code>client.set_model_version_tag(name, version, "baseline_oov", valor)</code> y léela con <code>client.get_model_version(...).tags</code>. Promoción: <code>client.set_registered_model_alias(name, "champion", version)</code>. <code>should_retrain</code> puede ser «OOV o JS superan la línea base en más de X» (elige X con la simulación del Paso 4).</details>
     """)
 
     C(r'''

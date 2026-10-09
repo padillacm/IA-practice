@@ -276,3 +276,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   nº máximo de candidatos).
 - ✅ Proyecto: pistas para el servicio (artefactos al arrancar, flujo de caché, log de features antes del ranker) y
   para `load_test`/`parity_check`.
+
+### 17 · MLOps: monitoreo y reentreno
+- Bien enfocado para un alumno que ya sabe MLOps: el experimento central (cuánto se degrada un modelo estático con 20
+  años de MovieLens) es auténtico y la sección «Qué deberías ver» es un buen ejemplo de lectura guiada.
+- ✅ Caja 🔁 que explicita «lo que este módulo añade sobre tu MLOps» (feedback loop + propensiones del 01/13/14, skew
+  vs drift del 16, fold-in del 05, SRM del 15).
+- ✅ «👀 Qué observar» en seis figuras sin lectura: EDA temporal (tres drifts antes de entrenar), señales sin
+  etiquetas y OOV como trigger específico de recsys, mapa de Evidently «todo rojo» (tests con n grande), embedding
+  drift (AUC de dominio vs PCA), alertas con estacionalidad y canary por escalones.
+- ✅ Autoevaluación: +1 diagnóstico (challenger +4 % offline, −3 % online tras reentreno automático) y +1
+  transferencia (traducir el flow a tu orquestador; qué es específico de recsys).
+- ✅ Proyecto: pistas para el esquema Pandera (check a nivel de DataFrame) y para el flow (tags de línea base en
+  MLflow, aliases).
+- El *feedback loop* aparece en 01, 13, 14 y 17: es **espiral deliberada** (cada vez con una lente distinta: datos,
+  re-ranking, exploración, operación); las cajas 🔁 ahora lo hacen explícito.
