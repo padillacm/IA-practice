@@ -156,6 +156,19 @@ def lesson() -> None:
     6. **Detectar** *training-serving skew* con un chequeo de paridad de features.
     7. **Hacer un test de carga** y leer curvas de throughput / p99 para dimensionar réplicas.
     8. **Comparar** Triton, BentoML, Ray Serve y TorchServe, y explicar por qué TorchRec / NVIDIA Merlin existen (sharding de tablas de embeddings).
+
+    ### 🔁 Conexión con módulos anteriores
+    1. ¿Qué capas (offline / nearline / online) presentó el módulo 00 y qué presupuesto de latencia tiene cada una?
+    2. En el proyecto 06 construiste contadores *point-in-time* con `cumsum` y `shift`. ¿Qué bug evitaban y qué pieza de infraestructura hace lo mismo a escala?
+    3. En el módulo 08 serviste top-K con FAISS pidiendo K' > K. ¿Por qué hacía falta pedir más candidatos?
+    4. ¿Qué es el *one-epoch phenomenon* del 06 y por qué no te importa en serving pero sí en el reentreno (módulo 17)?
+
+    <details><summary>Respuestas</summary>
+    1. Offline (batch, horas: entrenar, precalcular), nearline (segundos–minutos: reaccionar a eventos sin bloquear la petición) y online (milisegundos: retrieval, ranking y re-ranking dentro de la petición, con <i>fallbacks</i>).
+    2. El <i>leakage</i> temporal: usar información posterior al ejemplo. A escala lo garantiza un <b>feature store</b> con <i>point-in-time joins</i> (Feast, §4).
+    3. Porque el índice ANN no sabe qué ha visto cada usuario: se piden más y se filtran después (o se usa una base vectorial con filtros).
+    4. Que los modelos CTR alcanzan su mejor punto en 1–2 épocas y luego sobreajustan. En serving solo importa el modelo final; en un reentreno continuo, el número de épocas y el <i>warm-start</i> deciden si el modelo nuevo es mejor o peor que el actual.
+    </details>
     """)
 
     # ------------------------------------------------------------------ Intuición
@@ -330,6 +343,10 @@ def lesson() -> None:
     plt.tight_layout(); plt.show()
     print(f"Con 64 shards: p99 = {p99[6]:.1f} ms → con hedging {p99_h[6]:.1f} ms (coste: ~5 % más peticiones)")
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** (izquierda) al aumentar el *fan-out*, el p99 de la petición completa se aleja del p99 de un shard: la petición espera al **más lento** de todos. (derecha) es la misma idea en una fórmula: si cada shard cumple con probabilidad F(t), los n a la vez cumplen con F(t)ⁿ; con n = 100 hace falta que cada shard sea casi perfecto. Por eso en recsys se optimiza la **cola** (p99, p99,9), no la media, y se usan *hedged requests*. Si vienes de MLOps: es el mismo motivo por el que un SLO de un endpoint se fija en p99.
+    """)
 
     # ------------------------------------------------------------------ Pipeline base
     M(r"""
@@ -747,6 +764,10 @@ def lesson() -> None:
     ax[1].set_xlabel("TTL (s)"); ax[1].set_ylabel("latencia media (ms)"); ax[1].set_title("Latencia media esperada"); ax[1].legend()
     plt.tight_layout(); plt.show()
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** con tráfico Zipf (unos pocos usuarios recargan mucho) el *hit rate* sube deprisa con el TTL y luego se aplana: TTLs de minutos ya capturan casi toda la ganancia. La invalidación por evento baja el *hit rate* (cada *play* tira la entrada) pero es lo que evita servir una home que ignora lo que acabas de ver. El TTL no es un parámetro de rendimiento sino de **frescura**: elígelo con producto, no solo con la latencia.
+    """)
 
     # ------------------------------------------------------------------ FastAPI
     M(r"""
@@ -1238,6 +1259,10 @@ def lesson() -> None:
     ''')
 
     M(r"""
+    > 👀 **Qué debes observar:** (izquierda) el chequeo de paridad te dice **qué feature** está rota, no solo que algo va mal: es el primer test que automatizarías en CI. (derecha) un histograma centrado en 0 y estrecho es lo sano; colas largas significan que algunas predicciones cambian mucho entre offline y online, y el título muestra cuánto NDCG se pierde. Nada de esto lo detecta un monitor de *drift*: el mundo no cambió, cambió el código.
+    """)
+
+    M(r"""
     ## 14. Cold start en producción
 
     En producción el cold start no es un problema de modelado sino una **cadena de fallbacks** con SLO:
@@ -1277,6 +1302,10 @@ def lesson() -> None:
     ax.set_xlabel("similitud coseno"); ax.set_title("Torre de contenido para ítems nuevos (géneros → embedding)"); ax.legend()
     plt.show()
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** los dos histogramas deben estar **separados**: el embedding predicho desde el contenido se parece más al real que a uno aleatorio. Con solo géneros la separación es parcial (el contenido no lo sabe todo), pero basta para que el estreno entre en el top-100 de usuarios afines **sin reentrenar**: es la misma idea del mapeo contenido → CF del módulo 12 (§5), ahora como pieza de serving.
+    """)
 
     C(r'''
     api_proc.terminate()   # apagamos el servicio
@@ -1348,6 +1377,12 @@ def lesson() -> None:
 
     7. Una tabla de 500M IDs × 64 dims en fp32 con Adam: ¿cuánta memoria? ¿Qué harías?
     <details><summary>Respuesta</summary>Pesos: 500e6·64·4 B = 128 GB; Adam añade 2 momentos ⇒ ~384 GB. Sharding row-wise por hash entre varias GPUs (TorchRec/HugeCTR), optimizador más ligero (row-wise Adagrad), fp16/int8 en inferencia, hashing/poda de IDs raros o caché jerárquica.</details>
+
+    8. **(Diagnóstico)** El ranker tenía AUC 0,81 offline y en producción las predicciones logueadas dan AUC 0,74 con los mismos usuarios y la misma semana. No ha cambiado el catálogo. ¿Skew o drift? ¿Qué compruebas primero?
+    <details><summary>Respuesta</summary>Skew: mismo periodo y misma población, así que el mundo no ha cambiado. Primero, el chequeo de paridad de features (§13) con el log de features servidas: valores por defecto distintos, unidades, frescura del <i>online store</i> (¿se materializó?), o una <i>feature</i> calculada con otra implementación. Después, versión del modelo servida y preprocesado.</details>
+
+    9. **(Cálculo)** Tu presupuesto total es 150 ms p99 y la red/cliente consume 40 ms. El retrieval tarda 15 ms p99 y el re-ranking 10 ms. El ranker tarda 0,05 ms por candidato más 5 ms fijos. ¿Cuántos candidatos puedes rankear como máximo dejando 20 ms de margen?
+    <details><summary>Respuesta</summary>150 − 40 − 15 − 10 − 20 = 65 ms para el ranker; (65 − 5) / 0,05 = 1.200 candidatos (sumar p99 de etapas es conservador: el p99 de la suma suele ser menor). Si el retrieval devuelve más, hay que recortar o abaratar el ranker (cuantización, batching, destilación: módulo 19).</details>
 
     ## 📚 Referencias
 
@@ -1601,6 +1636,8 @@ def project() -> None:
     Completa la plantilla. Requisitos: carga de artefactos al arrancar (no por petición), caché con TTL e invalidación en
     `/event`, fallback de popularidad, `/metrics` en texto Prometheus, y **log de features servidas** (un JSON por línea
     en `logs/served_features.jsonl` con `user_id`, `item_id` y las features de `RANK_FEATS`) cuando `LOG_FEATURES=1`.
+
+    <details><summary>🪜 Pista</summary>Estructura de la lección (§8): carga índice, embeddings, ranker y features en variables globales al importar el módulo (o en un <code>lifespan</code>), no dentro del <i>endpoint</i>. <code>/recommend/{user}</code>: mira la caché <code>recs:{user}</code> → si falla, retrieval → features → ranker → re-ranking → guarda con TTL; si el usuario es desconocido o algo lanza excepción, devuelve la popularidad. <code>/event</code> actualiza el historial y borra <code>recs:{user}</code>. Para el log, escribe con <code>json.dumps</code> una línea por (usuario, ítem) <b>justo antes</b> de llamar al ranker: son las features que el modelo vio de verdad.</details>
     """)
 
     C(r'''
@@ -1642,6 +1679,8 @@ def project() -> None:
     - `load_test(url, users, concurrency, n)` → dict con `qps`, `p50`, `p95`, `p99` medidos **desde el cliente**.
     - `parity_check(log_path)` → fracción de celdas (fila × feature) en las que el log del servicio coincide con
       `build_candidates` recalculado offline para los mismos `(user_id, item_id)` (tolerancia 1e-5).
+
+    <details><summary>🪜 Pista</summary><code>load_test</code>: un <code>ThreadPoolExecutor(concurrency)</code> que lanza <code>n</code> peticiones y mide cada una con <code>time.perf_counter()</code>; QPS = n / tiempo total; percentiles con <code>np.percentile</code>. <code>parity_check</code>: lee el JSONL con <code>pd.read_json(lines=True)</code>, recalcula las features offline para los mismos pares, haz <i>merge</i> por <code>(user_id, item_id)</code> y compara columna a columna con <code>np.isclose(..., atol=1e-5)</code>; reporta también la fracción por feature para saber cuál falla.</details>
     """)
 
     C(r'''

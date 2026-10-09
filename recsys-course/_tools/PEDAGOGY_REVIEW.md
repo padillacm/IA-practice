@@ -264,3 +264,15 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
 - ✅ Autoevaluación: +1 diagnóstico (SRM con cálculo del χ²) y +1 transferencia (plan interleaving → A/B con poco
   tráfico).
 - ✅ Proyecto: pistas para el power analysis (fórmula y `NormalIndPower`) y Team Draft.
+
+### 16 · Producción y serving
+- Excelente puente desde MLOps («offline = Airflow, online = endpoint, nearline = la pieza que casi nadie tiene») y el
+  «bug más caro de la industria en 20 líneas» (leakage del join ingenuo) es un ejemplo resuelto memorable.
+- ✅ Caja 🔁 (capas del 00, contadores PIT del proyecto 06 → feature store, K' > K del 08, one-epoch del 06 → reentreno).
+- ✅ «👀 Qué observar» en *tail at scale* (F(t)ⁿ; SLO en p99), caché TTL/invalidación (frescura como decisión de
+  producto), paridad/skew (qué feature; no lo detecta un monitor de drift) y torre de contenido para estrenos (puente
+  con el 12).
+- ✅ Autoevaluación: +1 diagnóstico (skew vs drift con AUC 0,81 → 0,74) y +1 cálculo (presupuesto de latencia →
+  nº máximo de candidatos).
+- ✅ Proyecto: pistas para el servicio (artefactos al arrancar, flujo de caché, log de features antes del ranker) y
+  para `load_test`/`parity_check`.
