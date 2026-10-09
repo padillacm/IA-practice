@@ -136,6 +136,22 @@ def build_lesson() -> None:
 5. **Explicar y corregir** el problema del *peeking* con tests secuenciales (mSPRT / *always-valid*, group sequential).
 6. **Diagnosticar** efectos novelty/primacy, interferencia en marketplaces de dos lados y efectos a largo plazo con un **surrogate index**.
 7. **Estimar** efectos heterogéneos (HTE) y **aplicar** un diff-in-diff cuando no se puede aleatorizar.
+
+### 🔁 Conexión con módulos anteriores
+1. En el módulo 02 comparaste dos modelos con un **test pareado** sobre los mismos usuarios. ¿Por qué era mucho más potente que comparar dos intervalos de confianza? (Interleaving es la versión online de esa idea.)
+2. También en el 02: la anchura del IC caía como 1/√n. ¿Cuántos usuarios más necesitas para detectar un efecto la **mitad** de grande?
+3. En el módulo 14, la OPE estimaba el valor de una política sin desplegarla. ¿Por qué, aun así, Netflix decide con un A/B?
+4. En el módulo 13 viste que el NDCG offline premia lo popular. ¿Qué tipo de métrica (north-star, proxy, guardrail) protegería la diversidad en un A/B de un ranker nuevo?
+
+<details><summary>Respuestas</summary>
+1. Porque al restar usuario a usuario se elimina la variabilidad entre usuarios (unos ven 1 h, otros 40 h), que domina la varianza. Interleaving hace lo mismo online: cada usuario ve los dos rankers mezclados (§8).
+2. 4×: el tamaño muestral escala con 1/δ² (§4, la fórmula que debes saber de memoria).
+3. Porque la OPE tiene supuestos (propensiones correctas, soporte común) y varianza alta cuando las políticas difieren mucho; el A/B mide el efecto real en las métricas de negocio, incluidas las que ningún log captura.
+4. Un <b>guardrail</b> (p. ej. cobertura o diversidad intra-lista, que no puede empeorar más de X %), además de la north-star de retención o satisfacción.
+</details>
+
+### 🧭 Cómo recorrer esta lección
+Son 13 temas. **Núcleo** (lo que se usa en cada experimento): §1–5 (fundamentos, unidad, SRM, potencia, CUPED), §6–7 (métricas y novelty) y §8–9 (interleaving y peeking). **Ampliación** (cuando el problema lo pida): §10 interferencia, §11 surrogate index, §12 HTE y §13 diff-in-diff. Si vas justo, haz el núcleo, el proyecto, y vuelve a la ampliación antes del módulo 19 (que la da por sabida).
 """)
 
     nb.md("""
@@ -311,6 +327,10 @@ plt.tight_layout(); plt.show(); print({k: round(v, 3) for k, v in fpr.items()})
 ''')
 
     nb.md("""
+> 👀 **Qué debes observar:** en un **A/A test** (sin efecto real) un test correcto rechaza H0 el 5 % de las veces y sus p-valores son **uniformes** (histograma plano). El test ingenuo sobre impresiones rechaza bastante más y acumula p-valores cerca de 0: trata impresiones correlacionadas del mismo usuario como independientes, así que subestima la varianza. El método delta recupera el 5 %. Haz siempre un A/A en tu plataforma antes de fiarte de un análisis.
+""")
+
+    nb.md("""
 ### Sample Ratio Mismatch (SRM): el primer check de cualquier análisis
 
 Si diseñaste 50/50 y obtienes 50.000 vs 49.000 usuarios, **algo está roto** (un bug de asignación, un redirect que pierde usuarios en tratamiento, bots filtrados de forma desigual, el tratamiento hace crashear la app antes de loguear…). Un test χ² con umbral estricto (p. ej. p < 0,001) detecta el SRM; si salta, **no se analiza el experimento**: se busca la causa. Microsoft reporta que el SRM es uno de los problemas de calidad más frecuentes en su plataforma (Fabijan et al., KDD 2019).
@@ -376,6 +396,10 @@ for wk in [7, 14, 21, 28]: axes[1].axvline(wk, color="#cbd5e0", ls=":")
 axes[1].set(title=f"MDE relativo vs duración ({daily:,} usuarios/día/grupo)", xlabel="días", ylabel="MDE (%)")
 plt.tight_layout(); plt.show()
 ''')
+
+    nb.md("""
+> 👀 **Qué debes observar:** el MDE baja como $1/\\sqrt{\\text{días}}$: pasar de 7 a 14 días mejora mucho, de 21 a 28 bastante menos. Las líneas verticales son semanas completas: los experimentos se dimensionan en **semanas enteras** para no mezclar efectos del día de la semana. Si el MDE a 4 semanas sigue por encima del efecto que esperas, no lances el A/B tal cual: reduce varianza (CUPED, §5), cambia de métrica o usa interleaving (§8).
+""")
 
     nb.code(r'''
 # Verificación por simulación: ¿la potencia teórica coincide con la empírica?
@@ -461,6 +485,10 @@ axes[1].plot(rr, rr ** 2 * 100, "k--", label="teoría: ρ²"); axes[1].scatter(r
 axes[1].set(title="CUPED: reducción de varianza vs correlación pre/post", xlabel="ρ(X_pre, Y)", ylabel="reducción de varianza (%)"); axes[1].legend()
 plt.tight_layout(); plt.show()
 ''')
+
+    nb.md("""
+> 👀 **Qué debes observar:** los puntos empíricos caen sobre la curva ρ²: con ρ = 0,7 te ahorras ~50 % de la varianza, que es como **duplicar el tráfico gratis**. Y como la covariable es anterior a la aleatorización, el estimador sigue siendo insesgado (la celda siguiente lo comprueba: mismo τ̂, error estándar menor). Si vienes de ML: CUPED es una regresión con una covariable pre-tratamiento (ANCOVA); CUPAC sustituye esa covariable por la **predicción de un modelo de ML**.
+""")
 
     nb.code(r'''
 # CUPED ≡ regresión con covariable (ANCOVA) — así lo harías con statsmodels
@@ -909,6 +937,10 @@ plt.axvline(launch - 0.5, color="k", ls=":"); plt.title("Diff-in-diff: lanzamien
 plt.legend(fontsize=8); plt.show()
 ''')
 
+    nb.md("""
+> 👀 **Qué debes observar:** antes de la línea vertical, tratadas y control deben ir **en paralelo** (no iguales): esa es la evidencia visual del supuesto clave. La línea discontinua es el contrafactual (las tratadas si no hubieran lanzado) y el efecto es la distancia entre ella y la curva real después del lanzamiento. Si antes del lanzamiento las curvas ya divergían, el DiD atribuiría esa tendencia al tratamiento.
+""")
+
     # --------------------------------------------------------------- 14
     nb.md("""
 ---
@@ -991,6 +1023,12 @@ Para causalidad: **EconML**, **CausalML**, **DoWhy**; para series: **CausalImpac
 
 **8.** ¿Cuándo usarías diff-in-diff y cuál es su supuesto clave?
 <details><summary>Respuesta</summary>Cuando no se puede aleatorizar (p. ej. lanzamiento por país). Supuesto: tendencias paralelas; sin tratamiento, tratados y controles habrían evolucionado igual. Se comprueba con las tendencias pre-tratamiento y con placebos.</details>
+
+**9. (Diagnóstico)** Tu A/B diseñado 50/50 tiene 501.200 usuarios en control y 498.100 en tratamiento, y el tratamiento gana +1,8 % en horas (p = 0,01). ¿Lo celebras?
+<details><summary>Respuesta</summary>Todavía no: primero el SRM. Con ~1 M de usuarios, una diferencia de 3.100 da un χ² ≈ 9,6 (p ≈ 0,002): la asignación o el registro están rotos (p. ej. el tratamiento hace fallar la app a algunos usuarios antes de registrar la exposición, que probablemente son los menos activos). Con SRM, el +1,8 % no es interpretable hasta encontrar la causa.</details>
+
+**10. (Transferencia)** Tienes dos rankers candidatos y 100.000 usuarios al mes disponibles para experimentar. El A/B necesitaría 2 M para tu MDE. Diseña un plan en dos fases.
+<details><summary>Respuesta</summary>Fase 1: interleaving (10–100× más sensible) para decidir qué ranker prefiere el usuario con poco tráfico y descartar el peor. Fase 2: un A/B (con CUPED) del ganador contra producción sobre una métrica proxy/surrogate que se mueva en semanas, con guardrails, y un holdback largo para el efecto en retención. Interleaving no mide retención ni efectos de página, por eso no basta solo.</details>
 """)
 
     nb.md("""
@@ -1232,6 +1270,8 @@ TRUE_LIFT = pop_sim["y_b"].mean() / pop_sim["y_a"].mean() - 1      # ¡solo para
 
 ### TODO 1
 Con los datos del **periodo previo** (`x_pre`, todos con A) estima μ y σ de "plays por usuario en 2 semanas". Calcula el **n por grupo** para detectar un MDE relativo del 2 % (α=0,05, potencia 0,8) con la fórmula y con `NormalIndPower`, y cuántos días harían falta si entran `N_POP/14` usuarios nuevos al día repartidos en dos grupos.
+
+<details><summary>🪜 Pista</summary>Fórmula de la lección: n = 2 (z₀,₉₇₅ + z₀,₈)² σ² / δ² con δ = 0,02·μ (≈ 16 σ²/δ²). Con statsmodels: <code>NormalIndPower().solve_power(effect_size=δ/σ, alpha=0.05, power=0.8)</code>. Días = n / (usuarios nuevos por día y grupo).</details>
 """)
     nb.code(r'''
 def power_analysis(x_pre: np.ndarray, mde_rel: float = 0.02, alpha=0.05, power=0.8) -> dict:
@@ -1293,6 +1333,8 @@ def cuped(y: np.ndarray, x: np.ndarray) -> tuple:
 
 ### TODO 5
 1. Implementa `team_draft(list_a, list_b, k, rng)` → `(lista, equipos)`.
+
+<details><summary>🪜 Pista (Team Draft)</summary>Como elegir equipos en el patio: en cada turno elige el ranker con <b>menos</b> elecciones (empate → moneda); ese ranker aporta su ítem mejor colocado que aún no esté en la lista. Guarda en <code>equipos</code> quién aportó cada posición. Después, un play en una posición cuenta para su equipo y Δᵢ = plays de B − plays de A para el usuario i.</details>
 2. `interleaving_deltas(pop, idx, rng)`: para cada usuario de `idx`, construye la lista mezclada de `lists_a`/`lists_b`, simula sus plays en `sessions` sesiones con `EXAM * p * PLAY_SCALE` (la `p` de cada ítem está en `p_a`/`p_b`) y devuelve $\\Delta_i = \\text{plays}_B - \\text{plays}_A$.
 3. Test t de una muestra sobre Δ con 5.000 usuarios **distintos** de los del A/B (aquí: una muestra aleatoria de la población).
 """)

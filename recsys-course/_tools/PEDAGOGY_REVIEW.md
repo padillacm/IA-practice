@@ -250,3 +250,17 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
 - ✅ Autoevaluación: +1 cálculo (peso IPS 16× de una acción rara) y +1 diagnóstico (IPS +40 % con ESS 3 % vs DR +4 %).
 - ✅ Proyecto: pistas para los cinco estimadores (fórmulas vectorizadas), LinUCB/TS con Sherman–Morrison y
   cross-fitting de q̂.
+
+### 15 · Experimentación online
+- Rigor estadístico alto y muy orientado a recsys (unidad de aleatorización, método delta, interleaving replicando el
+  razonamiento de Netflix, mSPRT, interferencia con simulación de marketplace, surrogate index). Buenas lecturas en
+  §2, §10 y §11 y prints interpretativos en novelty/HTE.
+- ⚠️ **Sobrecarga (G8)**: 13 temas. ✅ Caja «🧭 Cómo recorrer esta lección» (núcleo §1–9 vs ampliación §10–13, con
+  aviso de que el 19 da la ampliación por sabida).
+- ✅ Caja 🔁 (test pareado del 02 → interleaving; ley 1/√n del 02 → 1/δ²; OPE del 14 vs A/B; guardrail para la
+  diversidad del 13).
+- ✅ «👀 Qué observar» en el A/A con método delta (p-valores uniformes), MDE vs días (semanas completas; qué hacer si no
+  llega), CUPED vs ρ² (analogía ANCOVA/CUPAC con ML) y diff-in-diff (tendencias paralelas).
+- ✅ Autoevaluación: +1 diagnóstico (SRM con cálculo del χ²) y +1 transferencia (plan interleaving → A/B con poco
+  tráfico).
+- ✅ Proyecto: pistas para el power analysis (fórmula y `NormalIndPower`) y Team Draft.
