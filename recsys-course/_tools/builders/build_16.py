@@ -27,6 +27,9 @@ seed = 42
 random.seed(seed); np.random.seed(seed)
 plt.rcParams.update({"figure.dpi": 110, "axes.grid": True, "grid.alpha": 0.3})
 
+# LightGBM con 1 hilo: faiss-cpu trae su propia libgomp y dos runtimes OpenMP en el mismo proceso pueden bloquearse
+# o ir muy lentos con muchos hilos. Con nuestros tamaños, 1–2 hilos bastan (sube LGB_THREADS si entrenas a escala).
+LGB_THREADS = int(os.environ.get("LGB_THREADS", "1"))
 DATA_DIR, ART_DIR = "data", "artifacts"
 os.makedirs(DATA_DIR, exist_ok=True); os.makedirs(ART_DIR, exist_ok=True)
 ML100K_URL = "https://files.grouplens.org/datasets/movielens/ml-100k.zip"
@@ -429,7 +432,7 @@ def lesson() -> None:
     from sklearn.metrics import roc_auc_score
 
     FEATS_PIT = ["pop_cum", "rating_mean_cum"]
-    params = dict(objective="binary", learning_rate=0.05, num_leaves=31, n_estimators=200, verbose=-1, random_state=seed)
+    params = dict(objective="binary", learning_rate=0.05, num_leaves=31, n_estimators=200, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
     res = {}
     for name, joiner in [("Join ingenuo (leakage)", naive_join), ("Point-in-time", pit_join)]:
         tr, va_off = joiner(ex_train), joiner(ex_val)          # 'offline': el val se construye igual que el train
@@ -848,7 +851,7 @@ def lesson() -> None:
         X = np.column_stack([sc, np.arange(len(ids)), POP[ids], RMEAN[ids], aff,
                              np.full(len(ids), PROF.loc[user_id, "user_n"]), np.full(len(ids), PROF.loc[user_id, "user_mean"])])
         tm["features_item"] = time.perf_counter()
-        p = RANKER.predict(X); order = ids[np.argsort(-p)]; tm["ranking"] = time.perf_counter()
+        p = RANKER.predict(X, num_threads=1); order = ids[np.argsort(-p)]; tm["ranking"] = time.perf_counter()
         items = diversify(order, k); tm["reranking"] = time.perf_counter()
         resp = {"user_id": user_id, "items": items, "strategy": "two_stage", "model_version": META["model_version"]}
         R.setex(key, TTL, json.dumps(resp))
@@ -1512,7 +1515,7 @@ def project() -> None:
         f = pit_item_features(ex, ITEM_STATS)
         ok_ts = (f.feature_ts.isna() | (f.feature_ts <= f.event_timestamp)).all()
         tr = pit_item_features(make_examples(train_a.sample(frac=0.5, random_state=seed)), ITEM_STATS)
-        m = lgb.LGBMClassifier(n_estimators=150, verbose=-1, random_state=seed).fit(tr[["pop_cum", "rating_mean_cum"]], tr.label)
+        m = lgb.LGBMClassifier(n_estimators=150, verbose=-1, random_state=seed, n_jobs=LGB_THREADS).fit(tr[["pop_cum", "rating_mean_cum"]], tr.label)
         auc = roc_auc_score(f.label, m.predict_proba(f[["pop_cum", "rating_mean_cum"]])[:, 1])
         print(f"E1 · sin features del futuro: {ok_ts} · AUC val (PIT) = {auc:.3f}")
         return ok_ts
@@ -1690,7 +1693,7 @@ def project() -> None:
     def train_ranker(cands):
         c = cands[cands.groupby("user_id").label.transform("max") > 0].sort_values("user_id")
         rk = lgb.LGBMRanker(objective="lambdarank", n_estimators=300, learning_rate=0.05, num_leaves=31,
-                            min_child_samples=20, verbose=-1, random_state=seed)
+                            min_child_samples=20, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
         rk.fit(c[RANK_FEATS], c.label, group=c.groupby("user_id").size().values)
         return rk
 
@@ -1799,7 +1802,7 @@ def project() -> None:
         aff = GENRE[ids] @ UGEN_D[user_id] / GNORM[ids]
         X = np.column_stack([sc.astype(float), np.arange(len(ids), dtype=float), POP[ids], RMEAN[ids], aff,
                              np.full(len(ids), n_u), np.full(len(ids), mean_u)])
-        order = ids[np.argsort(-RANKER.predict(X))]
+        order = ids[np.argsort(-RANKER.predict(X, num_threads=1))]
         items = diversify(order, k)
         if LOG_F:
             for i, row in zip(ids, X):

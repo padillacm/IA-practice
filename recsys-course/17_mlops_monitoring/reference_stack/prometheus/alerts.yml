@@ -1,0 +1,44 @@
+# Alertas de MODELO y NEGOCIO para CineMatch (las de serving están en el módulo 16).
+# Regla general: alerta sobre tamaños de efecto con persistencia (`for:`), nunca sobre p-valores sueltos.
+groups:
+  - name: cinematch-model
+    rules:
+      - alert: CatalogDriftHigh
+        expr: cinematch_oov > 0.15
+        for: 2h
+        labels: {severity: ticket, team: recsys}
+        annotations:
+          summary: "OOV {{ $value | humanizePercentage }}: el modelo no conoce los ítems que se consumen"
+          runbook: "Lanzar ct_flow con force=true; revisar que el job de ingesta de catálogo no esté caído."
+      - alert: EmbeddingDrift
+        expr: cinematch_emb_auc > 0.70
+        for: 6h
+        labels: {severity: ticket, team: recsys}
+        annotations:
+          summary: "Los vectores de usuario actuales se distinguen de la referencia (AUC {{ $value }})"
+      - alert: FeatureDriftShare
+        expr: cinematch_evidently_share >= 0.6
+        for: 6h
+        labels: {severity: info, team: recsys}
+        annotations:
+          summary: "≥ 60 % de las columnas monitorizadas con drift (Evidently)"
+      - alert: CTPipelineStale
+        # El flow empuja la métrica en cada ejecución; si no hay push en 36 h, el reentreno está roto.
+        expr: time() - push_time_seconds{job="cinematch_drift"} > 36 * 3600
+        labels: {severity: page, team: recsys}
+        annotations:
+          summary: "El pipeline de entrenamiento continuo no se ejecuta desde hace > 36 h"
+
+  - name: cinematch-business
+    rules:
+      # play_rate_home se publica desde el pipeline de analítica (Kafka → Flink → Pushgateway) cada 5 min.
+      - record: cinematch:play_rate:ratio_vs_last_week
+        expr: cinematch_play_rate_home / cinematch_play_rate_home offset 1w
+      - alert: PlayRateDrop
+        # Comparar con el mismo momento de la semana anterior elimina la estacionalidad semanal
+        expr: cinematch:play_rate:ratio_vs_last_week < 0.95
+        for: 3h
+        labels: {severity: page, team: recsys}
+        annotations:
+          summary: "Play rate de la home un {{ $value | humanizePercentage }} del de hace una semana"
+          runbook: "1) ¿cambió el champion? → rollback del alias. 2) ¿features frescas? 3) ¿incidente de catálogo?"

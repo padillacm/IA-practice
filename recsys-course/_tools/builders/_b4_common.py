@@ -71,7 +71,7 @@ def build_sequences(ratings, min_len=5):
     cnt = df.groupby("user")["item"].transform("size")
     df = df[cnt >= min_len]
     items = np.sort(df["item"].unique())
-    item2idx = {int(it): i + 1 for i, it in enumerate(items)}
+    item2idx = {it: i + 1 for i, it in enumerate(items)}
     idx2item = np.concatenate([[0], items])
     df = df.assign(iidx=df["item"].map(item2idx))
     seqs = df.groupby("user", sort=True)["iidx"].apply(list).tolist()
@@ -108,7 +108,7 @@ def evaluate_next_item(score_fn, histories, targets, ks=(10,), batch_size=512, m
         s[:, 0] = -float("inf")                                # padding
         if mask_history:                                       # no recomendar lo ya visto
             for i, h in enumerate(H):
-                s[i, h] = -float("inf")
+                s[i, h[0] if isinstance(h, tuple) else h] = -float("inf")   # h puede ser (items, timestamps)
         s.scatter_(1, T[:, None], tgt)                         # el objetivo nunca se enmascara
         ranks.append((s > tgt).sum(1))                         # posición 0-based (empates optimistas)
     ranks = torch.cat(ranks).numpy()
@@ -139,19 +139,18 @@ def to_csr(df, n_users, n_items):
 @torch.no_grad()
 def evaluate_topk(score_fn, train_csr, test_csr, k=20, batch_size=1024):
     '''score_fn(user_ids LongTensor) -> Tensor [B, n_items]. Enmascara train. Devuelve Recall@K y NDCG@K medios.'''
-    users = np.where(np.diff(test_csr.indptr) > 0)[0]
+    users = np.where(np.asarray((test_csr > 0).sum(1)).ravel() > 0)[0]
     rec, ndcg = [], []
     disc = 1.0 / np.log2(np.arange(2, k + 2))
     for b in range(0, len(users), batch_size):
         u = users[b:b + batch_size]
         s = score_fn(torch.as_tensor(u)).float().cpu().numpy()
-        tr = train_csr[u]
-        s[tr.nonzero()] = -np.inf                                # no recomendar lo visto en train
+        s[train_csr[u].nonzero()] = -np.inf                     # no recomendar lo visto en train
         top = np.argpartition(-s, k, axis=1)[:, :k]
         top = np.take_along_axis(top, np.argsort(-np.take_along_axis(s, top, 1), 1), 1)
-        te = test_csr[u]
-        hits = np.asarray(te[np.arange(len(u))[:, None], top].todense()) > 0
-        n_rel = np.asarray(te.sum(1)).ravel()
+        te = test_csr[u].toarray() > 0
+        hits = np.take_along_axis(te, top, 1)
+        n_rel = te.sum(1)
         rec.append(hits.sum(1) / n_rel)
         idcg = np.array([disc[:min(int(r), k)].sum() for r in n_rel])
         ndcg.append((hits * disc).sum(1) / idcg)

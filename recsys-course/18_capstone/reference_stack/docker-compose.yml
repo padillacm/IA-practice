@@ -1,0 +1,19 @@
+# ---------------------------------------------------------------------------
+# CineMatch capstone · stack completo = serving (módulo 16) + MLOps (módulo 17) + API del capstone
+#   docker compose up -d --build        (requiere Docker Compose ≥ 2.20 por `include`)
+# Copia ./artifacts desde el notebook del proyecto (celda export_artifacts) antes de arrancar.
+# ---------------------------------------------------------------------------
+include:
+  - path: ../../16_production_serving/reference_stack/docker-compose.yml   # api (mód. 16), redis, redpanda, nearline, prometheus, grafana
+  - path: ../../17_mlops_monitoring/reference_stack/docker-compose.yml     # mlflow, prefect, evidently, pushgateway, alertmanager
+    project_directory: ../../17_mlops_monitoring/reference_stack
+
+services:
+  capstone-api:
+    build: ./api
+    environment:
+      ART_DIR: /artifacts
+      CACHE_TTL: "60"
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes: ["./artifacts:/artifacts:ro"]
+    ports: ["8018:8018"]

@@ -1,0 +1,66 @@
+# CI/CD/CT de CineMatch (GitHub Actions). Copiar a .github/workflows/ en el repo del servicio.
+#  - push/PR      → CI: lint + unit tests + tests de datos y de modelo sobre una muestra
+#  - main         → CD: imagen Docker + test de paridad ONNX + smoke test de latencia + deploy a shadow
+#  - schedule     → CT: dispara el deployment de Prefect (reentreno diario)
+name: cinematch-ml
+on:
+  push: {branches: [main]}
+  pull_request:
+  schedule: [{cron: "17 3 * * *"}]
+  workflow_dispatch:
+    inputs:
+      force_retrain: {type: boolean, default: false}
+
+jobs:
+  ci:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip}
+      - run: pip install -r requirements.txt ruff pytest
+      - run: ruff check .
+      - name: Tests unitarios (feature builder, métricas, serialización)
+        run: pytest tests/unit -q
+      - name: Tests de datos (Pandera sobre la muestra del día)
+        run: pytest tests/data -q
+      - name: Tests de comportamiento del modelo (NDCG ≥ popularidad, no vistos, determinismo, cold start)
+        run: pytest tests/model -q
+
+  cd:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
+      - name: Build & push
+        run: |
+          docker build -t ghcr.io/${{ github.repository }}/api:${{ github.sha }} ./app
+          docker push ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+      - name: Paridad ONNX + smoke test p99
+        run: |
+          docker run -d -p 8000:8000 --name api ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+          python scripts/onnx_parity.py --atol 1e-5
+          python scripts/smoke_latency.py --url http://localhost:8000 --p99-ms 80 --n 500
+      - name: Deploy a shadow (el tráfico real se duplica, la respuesta no se muestra)
+        run: ./scripts/deploy.sh --env shadow --image ghcr.io/${{ github.repository }}/api:${{ github.sha }}
+
+  ct:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11"}
+      - run: pip install "prefect>=3.0"
+      - name: Disparar el deployment de CT en Prefect
+        env:
+          PREFECT_API_URL: ${{ secrets.PREFECT_API_URL }}
+          PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+        run: |
+          prefect deployment run 'cinematch-continuous-training/cinematch-ct-daily' \
+            --param force=${{ inputs.force_retrain || false }}

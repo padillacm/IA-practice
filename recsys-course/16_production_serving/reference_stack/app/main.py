@@ -80,7 +80,7 @@ def load_artifacts() -> None:
         except Exception as e:
             log.warning("Feast no disponible (%s): uso features de ítem en memoria", e)
     # Warm-up: la primera llamada a FAISS/LightGBM es más lenta (páginas de memoria, JIT de hilos)
-    S["ranker"].predict(np.zeros((100, len(S["meta"]["rank_feats"]))))
+    S["ranker"].predict(np.zeros((100, len(S["meta"]["rank_feats"]))), num_threads=1)
 
 
 @asynccontextmanager
@@ -162,7 +162,7 @@ def recommend(user_id: int, k: int = 10, use_cache: bool = True):
             X = np.column_stack([sc, np.arange(len(ids)), pop, rmean, aff,
                                  np.full(len(ids), n_u), np.full(len(ids), mean_u)])
         with STAGE.labels("ranking").time():
-            p = S["ranker"].predict(X)
+            p = S["ranker"].predict(X, num_threads=1)
             order = ids[np.argsort(-p)]
             SCORE.observe(float(np.clip(p.max(), 0, 1)))   # booster binario → probabilidad
     except Exception as e:  # degradación elegante: mejor una lista sin ranker que un 500

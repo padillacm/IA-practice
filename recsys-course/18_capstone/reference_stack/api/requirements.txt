@@ -1,0 +1,10 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+faiss-cpu>=1.8
+lightgbm>=4.3
+numpy
+pandas
+pyarrow
+fakeredis>=2.20     # sustituir por redis real (REDIS_HOST) en producción
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch               # solo para la torre de usuario TorchScript (CPU)

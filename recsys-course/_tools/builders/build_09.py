@@ -741,8 +741,18 @@ def load_retailrocket(data_dir="data/retailrocket"):
         ev = ev[ev["event"] == "view"].rename(columns={"visitorid": "user", "itemid": "item", "timestamp": "ts"})
         ev["ts"] = ev["ts"] // 1000
         return ev[["user", "item", "ts"]]
-    r, _ = make_synthetic_ml(n_users=4000, n_items=900, seed=7)
-    return r[["user", "item", "ts"]]
+    return make_synthetic_sessions()
+
+def make_synthetic_sessions(n_sessions=20000, n_items=900, seed=7):
+    '''Sesiones anónimas de juguete: clics cada 10–300 s, sesiones separadas por días, transiciones locales.'''
+    rng = np.random.default_rng(seed); rows = []; t = 1_430_000_000
+    pop = np.minimum(rng.zipf(1.4, n_items), 60).astype(float); pop /= pop.sum()
+    for sid in range(n_sessions):
+        t += int(rng.integers(600, 4 * 3600)); it = int(rng.choice(n_items, p=pop))
+        for _ in range(1 + int(rng.geometric(0.3))):
+            rows.append((sid, it, t)); t += int(rng.integers(10, 300))
+            it = (it + int(rng.integers(1, 4))) % n_items if rng.random() < 0.6 else int(rng.choice(n_items, p=pop))
+    return pd.DataFrame(rows, columns=["user", "item", "ts"])
 
 def sessionize(ev, gap_s=1800, min_item_supp=5, min_len=2):
     ev = ev.sort_values(["user", "ts"], kind="mergesort")

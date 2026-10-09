@@ -9,7 +9,7 @@ split temporal global, codificación a matriz dispersa y métricas top-K
 UTILS_MD = """
 ## 🧰 Utilidades del curso
 
-Para que este notebook sea **autocontenido en Colab**, las dos celdas siguientes
+Para que este notebook sea **autocontenido en Colab**, las tres celdas siguientes
 contienen versiones mínimas de las utilidades que construimos en
 [01_data](../01_data) (carga de MovieLens + **split temporal global**) y
 [02_evaluation](../02_evaluation) (**NDCG@K, Recall@K, coverage**). Son las mismas
@@ -28,7 +28,7 @@ Convenciones que usaremos en todo el Bloque II:
 """
 
 UTILS_DATA = r'''
-# 🧰 Utilidades del curso (1/2) — datos. Mismas funciones que en 01_data.
+# 🧰 Utilidades del curso (1/3) — carga de datos. Mismas funciones que en 01_data.
 import io, os, zipfile, urllib.request
 from pathlib import Path
 import numpy as np
@@ -67,7 +67,10 @@ def load_movielens_1m(data_dir: Path = DATA_DIR):
         df.to_parquet(cache[n], index=False)
     return ratings, movies, users
 
+'''
 
+UTILS_SPLIT = r'''
+# 🧰 Utilidades del curso (2/3) — split temporal y codificación. Mismas funciones que en 01_data.
 def temporal_split(df: pd.DataFrame, test_frac: float = 0.2, ts_col: str = "timestamp"):
     """Split temporal GLOBAL: todo lo anterior al corte → train; lo posterior → test.
     El test se filtra a usuarios e ítems vistos en train (warm-start)."""
@@ -99,7 +102,7 @@ class Encoder:
 '''
 
 UTILS_METRICS = r'''
-# 🧰 Utilidades del curso (2/2) — métricas top-K. Mismas definiciones que en 02_evaluation.
+# 🧰 Utilidades del curso (3/3) — métricas top-K. Mismas definiciones que en 02_evaluation.
 from typing import Callable, Dict
 
 
@@ -152,4 +155,5 @@ def add_utils(nb) -> None:
     """Añade las tres celdas de utilidades a un Notebook de nbbuild."""
     nb.md(UTILS_MD)
     nb.code(UTILS_DATA)
+    nb.code(UTILS_SPLIT)
     nb.code(UTILS_METRICS)

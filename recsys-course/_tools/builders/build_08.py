@@ -499,17 +499,19 @@ nlist = 1024 if FAST_DEV_RUN else 4096
 q_ = faiss.IndexFlatIP(d)
 t0 = time.time(); ivf = faiss.IndexIVFFlat(q_, d, nlist, faiss.METRIC_INNER_PRODUCT); faiss.omp_set_num_threads(4)
 ivf.train(corpus); ivf.add(corpus); faiss.omp_set_num_threads(1)
-build_info["IVF-Flat"] = (time.time() - t0, ivf.sa_code_size() if hasattr(ivf, "sa_code_size") else d * 4)
+build_info["IVF-Flat"] = (time.time() - t0, d * 4)
 bench_rows += bench(ivf, "nprobe", [1, 2, 4, 8, 16, 32, 64, 128], "IVF-Flat")
 
 q2 = faiss.IndexFlatIP(d)
 t0 = time.time(); ivfpq = faiss.IndexIVFPQ(q2, d, nlist, 16, 8, faiss.METRIC_INNER_PRODUCT); faiss.omp_set_num_threads(4)
-ivfpq.train(corpus); ivfpq.add(corpus); faiss.omp_set_num_threads(1)
+ivfpq.train(corpus)
+# IndexRefineFlat envuelve el IVF-PQ VACÍO; al añadir, guarda los códigos PQ y también los vectores
+# completos para re-ordenar exactamente los k·k_factor mejores candidatos (recupera el recall que pierde PQ)
+refine = faiss.IndexRefineFlat(ivfpq); refine.k_factor = 8
+refine.add(corpus); faiss.omp_set_num_threads(1)
 build_info["IVF-PQ (m=16)"] = (time.time() - t0, 16)
 bench_rows += bench(ivfpq, "nprobe", [1, 4, 16, 64, 128], "IVF-PQ (m=16)")
-# IVF-PQ + re-ranking exacto de los candidatos (IndexRefineFlat): recupera el recall que pierde PQ
-refine = faiss.IndexRefineFlat(ivfpq); refine.k_factor = 8
-bench_rows += bench(refine, "nprobe", [4, 16, 64], "IVF-PQ + refine ×8")
+bench_rows += bench(refine, "nprobe", [4, 16, 64], "IVF-PQ + refine ×8 (+256 B/vector)")
 
 t0 = time.time(); hnsw = faiss.IndexHNSWFlat(d, 32, faiss.METRIC_INNER_PRODUCT); hnsw.hnsw.efConstruction = 80
 faiss.omp_set_num_threads(4); hnsw.add(corpus); faiss.omp_set_num_threads(1)
