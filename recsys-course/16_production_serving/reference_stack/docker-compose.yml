@@ -1,0 +1,94 @@
+# ---------------------------------------------------------------------------
+# CineMatch · stack de serving de referencia (módulo 16)
+#
+#   docker compose up --build             # API + Redis + Redpanda + consumidor nearline + Prometheus + Grafana
+#   docker compose --profile gpu up       # añade NVIDIA Triton (requiere nvidia-container-toolkit)
+#
+# Antes de arrancar copia los artefactos generados por el notebook (carpeta `artifacts/`)
+# a ./artifacts (items.faiss, item_emb.npy, genre_mat.npy, ranker.txt, *.parquet, meta.json, user_hist.json).
+#
+# Puertos:  API 8000 · Redis 6379 · Redpanda 19092 (Kafka API externa) · Prometheus 9090 · Grafana 3000 · Triton 8001/8002
+# Las versiones de imagen están fijadas para reproducibilidad: súbelas de forma consciente.
+# ---------------------------------------------------------------------------
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]  # caché: expulsa LRU
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  redpanda:
+    # Compatible con la API de Kafka, un solo binario sin JVM/ZooKeeper: ideal para desarrollo local.
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --smp=1
+      - --memory=1G
+      - --mode=dev-container
+    ports: ["19092:19092"]
+
+  api:
+    build: ./app
+    environment:
+      ART_DIR: /artifacts
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: redpanda:9092
+      EVENTS_TOPIC: cinematch.events
+      CACHE_TTL: "60"
+      FEAST_REPO: /feature_repo        # opcional: si existe, lee features de ítem desde Feast (online store Redis)
+      WEB_CONCURRENCY: "4"             # nº de workers de uvicorn (el GIL obliga a escalar en procesos)
+    volumes:
+      - ./artifacts:/artifacts:ro
+      - ./feature_repo:/feature_repo:ro
+    ports: ["8000:8000"]
+    depends_on:
+      redis: {condition: service_healthy}
+      redpanda: {condition: service_started}
+
+  nearline:
+    # Consumidor de eventos: actualiza el historial del usuario en Redis e invalida su caché.
+    build: ./nearline
+    environment:
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: redpanda:9092
+      EVENTS_TOPIC: cinematch.events
+      GROUP_ID: nearline-user-history
+    depends_on: [redis, redpanda]
+    deploy:
+      replicas: 2                      # dos réplicas del mismo consumer group se reparten las particiones
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+
+  triton:
+    # Servidor de modelos para el ranker neuronal exportado a ONNX (lección §10).
+    profiles: ["gpu"]
+    image: nvcr.io/nvidia/tritonserver:24.08-py3
+    command: ["tritonserver", "--model-repository=/models", "--strict-model-config=false"]
+    volumes:
+      - ./triton/model_repository:/models:ro
+    ports: ["8001:8001", "8002:8002"]   # 8001 gRPC · 8002 métricas Prometheus
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]

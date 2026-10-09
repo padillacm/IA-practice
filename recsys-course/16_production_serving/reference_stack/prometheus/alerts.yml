@@ -1,0 +1,36 @@
+# Alertas de SERVING (salud del sistema). Las de calidad del modelo/negocio están en el módulo 17.
+groups:
+  - name: cinematch-serving
+    rules:
+      - alert: CineMatchP99LatencyHigh
+        # p99 de la suma de etapas > 80 ms durante 5 min (SLO del contrato con backend)
+        expr: |
+          histogram_quantile(0.99, sum by (le) (rate(cinematch_stage_latency_seconds_bucket[5m]))) > 0.08
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "p99 de recomendación > 80 ms"
+          runbook: "Comprobar etapa dominante en el dashboard; escalar réplicas o activar retrieval_only."
+      - alert: CineMatchFallbackRateHigh
+        # Si más del 5 % de respuestas son fallback de popularidad, algo falla aguas arriba (Redis vacío, IDs nuevos...)
+        expr: |
+          sum(rate(cinematch_requests_total{strategy="popularity_fallback"}[10m]))
+            / sum(rate(cinematch_requests_total[10m])) > 0.05
+        for: 10m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Tasa de fallback > 5 %"
+      - alert: CineMatchDegradedResponses
+        expr: sum(rate(cinematch_degraded_total[5m])) > 0
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "El ranker está fallando y se sirve retrieval_only"
+      - alert: CineMatchCacheHitRateDrop
+        expr: |
+          sum(rate(cinematch_cache_hits_total[15m]))
+            / (sum(rate(cinematch_cache_hits_total[15m])) + sum(rate(cinematch_requests_total[15m]))) < 0.2
+        for: 30m
+        labels: {severity: ticket}
+        annotations:
+          summary: "Hit rate de caché < 20 % (¿cambió la clave o el TTL?)"

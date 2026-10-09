@@ -1,0 +1,14 @@
+# Prometheus raspa la API (prometheus_client) y Triton (puerto 8002).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+rule_files:
+  - /etc/prometheus/alerts.yml
+scrape_configs:
+  - job_name: cinematch-api
+    metrics_path: /metrics/
+    static_configs:
+      - targets: ["api:8000"]
+  - job_name: triton
+    static_configs:
+      - targets: ["triton:8002"]

@@ -1,0 +1,11 @@
+# Feast · configuración de producción ligera: offline en parquet/S3, online en Redis.
+# En Colab usamos online_store sqlite (ver lección §4.2). Aquí el online store es el mismo Redis del stack.
+project: cinematch
+registry: data/registry.db          # en equipo: registry en S3/GCS o SQL (registry_type: sql)
+provider: local
+online_store:
+  type: redis
+  connection_string: "redis:6379"
+offline_store:
+  type: file                        # alternativas: bigquery, snowflake, spark, duckdb
+entity_key_serialization_version: 3
