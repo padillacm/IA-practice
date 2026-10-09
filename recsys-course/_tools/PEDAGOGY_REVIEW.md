@@ -183,3 +183,14 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   usuario nearline para «Porque acabas de ver»).
 - ✅ Proyecto: pistas para baselines (Markov disperso), SASRec (bloques pre-LN y máscara) y pérdidas (CE con índice
   −1, negativos compartidos y el offset b₀, sin el cual el alumno se atascaría como avisa la lección).
+
+### 10 · Grafos
+- Buen arranque (la matriz ya es un grafo, con $\hat A^3$ calculado sobre el juguete) y analogías útiles (agregados de
+  vecinos en fraude; SGNS = factorización PMI; LightGCN K=0 = MF-BPR como experimento controlado).
+- ✅ Caja 🔁 (RP3β del 04 como grafo, BPR/MF del 05, transductivo vs inductivo con la torre de ítem del 08).
+- ✅ «👀 Qué observar» en los paseos node2vec (una sola dimensión efectiva en bipartito), capas/over-smoothing (por qué
+  K = 2–3), rendimiento por cuartil de actividad (diferencia relativa; resultado nulo legítimo) y vecindario PinSage
+  (puente con item-kNN). Cuatro figuras que antes no tenían lectura.
+- ✅ Autoevaluación: +1 razonamiento (expandir LightGCN K=1 → híbrido MF + user-kNN + item-kNN) y +1 transferencia
+  (nodos actor/director para estrenos: transductivo vs inductivo).
+- ✅ Proyecto: pistas para `edge_index` no dirigido y para el bucle BPR con PyG (`recommendation_loss`, `node_id`).

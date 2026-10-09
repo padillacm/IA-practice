@@ -155,6 +155,17 @@ nb.md(r"""
 5. **Implementar LightGCN desde cero** con multiplicación dispersa y compararlo con la versión de **PyTorch Geometric** y con **MF-BPR**.
 6. **Diagnosticar** el *over-smoothing* y el efecto del grafo en usuarios con poca actividad (*long tail*).
 7. **Describir** cómo Pinterest (PinSage), Alibaba (EGES), Twitter (TwHIN) y LinkedIn (LiGNN) despliegan grafos a escala de miles de millones de nodos.
+
+### 🔁 Conexión con módulos anteriores
+1. En el módulo 04, RP3β era un «paseo aleatorio de 3 pasos». ¿Qué tres nodos recorre y por qué ya era, sin decirlo, un método de grafos?
+2. ¿Con qué pérdida del módulo 05 se entrena LightGCN, y a qué modelo se reduce cuando no hay propagación (K = 0)?
+3. En el módulo 08, ¿por qué un modelo que solo tiene una fila de embedding por ID no puede servir a un ítem publicado hace 5 minutos? ¿Qué parte del two-tower lo resolvía?
+
+<details><summary>Respuestas</summary>
+1. Ítem → usuario → ítem: desde lo que viste, a quién más lo vio, a qué más vieron. Es difusión sobre el grafo bipartito con penalización de popularidad (β); hoy lo verás como $\hat A^k$.
+2. BPR; con K = 0, LightGCN <b>es</b> MF-BPR: es la comparación controlada de la sección 7.
+3. Porque el ID nuevo no tiene embedding entrenado (modelo <b>transductivo</b>). En el two-tower, la torre de ítem usaba <i>features</i> de contenido (géneros, año): eso la hace inductiva. PinSage (sección 8) aplica la misma idea a grafos.
+</details>
 """)
 nb.code(PIP)
 nb.code(IMPORTS)
@@ -368,6 +379,9 @@ ax[1].bar(lbl, uniq, color="#14b8a6"); ax[1].set(title="Nodos distintos visitado
 for a in ax: a.tick_params(axis="x", rotation=20)
 plt.tight_layout(); plt.show()
 """)
+nb.md(r'''
+> 👀 **Qué debes observar:** con $p$ pequeño (0,25) el paseo vuelve atrás muchísimo y visita **pocos nodos distintos** (se queda en el vecindario inmediato); con $p$ grande explora más. Cambiar $q$ mueve las barras en sentido contrario: en un grafo bipartito solo importa el cociente entre «volver» y «avanzar», como anticipaba el 🧠 de arriba. Antes de tunear $p$ y $q$ por separado en un grafo usuario–ítem, recuerda que estás buscando en un espacio de **una** dimensión efectiva.
+''')
 nb.code(r"""
 # DeepWalk -> word2vec sobre los paseos; nos quedamos con los nodos ítem para recomendar
 dw = Word2Vec([list(map(str, w)) for w in walks], vector_size=64, window=5, sg=1, negative=5, min_count=1,
@@ -514,6 +528,9 @@ ax[1].plot(cos_mean, lw=2, label="media de capas (LightGCN)")
 ax[1].set(title="Over-smoothing: coseno medio entre ítems", xlabel="capas de propagación", ylabel="coseno medio"); ax[1].legend()
 plt.tight_layout(); plt.show()
 """)
+nb.md(r'''
+> 👀 **Qué debes observar:** (izquierda) el salto grande está entre K = 0 (MF) y K = 1–2; a partir de 3 capas la mejora se aplana o se invierte. (derecha) si solo usas la última capa, el coseno medio entre ítems sube hacia 1 a medida que propagas: **todos los ítems acaban pareciéndose** (*over-smoothing*, el filtro paso-bajo llevado al extremo). La media de capas de LightGCN crece mucho más despacio porque conserva $E^{(0)}$. Por eso en la práctica K = 2–3 y nunca 10.
+''')
 nb.md(r"""
 ### 7.2 ¿A quién ayuda el grafo? Rendimiento por actividad del usuario
 La hipótesis: los usuarios con **pocas interacciones** se benefician más de la propagación (toman prestada señal de vecinos a 2–3 saltos).
@@ -533,6 +550,9 @@ fig, ax = plt.subplots(figsize=(9, 3.8))
 sns.barplot(data=bq, x="cuartil", y="Recall@20", hue="modelo", ax=ax, palette=["#94a3b8", "#6366f1"])
 ax.set(title="Recall@20 por cuartil de actividad del usuario (train)", xlabel=""); plt.show()
 """)
+nb.md(r'''
+> 👀 **Qué debes observar:** compara la **diferencia relativa** entre barras de cada cuartil, no la altura absoluta (los usuarios activos tienen más relevantes en test y su recall se comporta distinto). Si la hipótesis es cierta, la ventaja de LightGCN sobre MF es mayor en Q1 (poca actividad): los usuarios con pocas interacciones toman prestada señal de vecinos a 2–3 saltos. Si en tu ejecución no se cumple, es un resultado legítimo: con MF bien regularizado la ventaja del grafo puede ser pequeña (lo dice la rúbrica del proyecto).
+''')
 nb.code(r"""
 # 📊 Gráfico — Comparación final + curvas de entrenamiento + t-SNE de los embeddings LightGCN
 from sklearn.manifold import TSNE
@@ -581,6 +601,9 @@ ax.barh([title[i][:35] for i, _ in neigh][::-1], [w for _, w in neigh][::-1], co
 ax.set(title=f"PinSage: vecindario por importancia de «{title[it0][:40]}»", xlabel="peso de importance pooling")
 plt.tight_layout(); plt.show()
 """)
+nb.md(r'''
+> 👀 **Qué debes observar:** los 10 vecinos por importancia son películas **co-consumidas** con la consulta (no necesariamente del mismo género) y sus pesos decaen rápido: unos pocos vecinos concentran la mayoría de visitas. Eso es lo que permite a PinSage agregar solo $T$ vecinos en vez de los miles de adyacentes de un pin popular, y es pariente directo del item-kNN del módulo 04 (co-ocurrencias a 2 saltos).
+''')
 nb.code(r"""
 # 📊 Diagrama — PinSage: muestreo de vecindario + agregación por importancia (2 capas)
 fig, ax = plt.subplots(figsize=(12, 4.6)); ax.set_xlim(0, 12); ax.set_ylim(0, 5); ax.axis("off")
@@ -679,6 +702,12 @@ nb.md(r"""
 
 7. ¿Qué relación hay entre item2vec y la factorización matricial?
 <details><summary>Respuesta</summary>SGNS factoriza implícitamente la matriz PMI desplazada (PMI − log k) de co-ocurrencias ítem-ítem (Levy & Goldberg 2014): es una factorización de una matriz de co-ocurrencia transformada.</details>
+
+8. **(Razonamiento)** Escribe la puntuación de LightGCN con K = 1 y $\alpha_0=\alpha_1=\tfrac12$ como función de $E^{(0)}$. ¿Qué término nuevo aparece frente a MF y qué significa?
+<details><summary>Respuesta</summary>E = ½(I + Â)E⁽⁰⁾, así que ŷ<sub>ui</sub> = ¼ (e<sub>u</sub> + Σ<sub>j∈N(u)</sub> c<sub>uj</sub> e<sub>j</sub>)ᵀ(e<sub>i</sub> + Σ<sub>v∈N(i)</sub> c<sub>iv</sub> e<sub>v</sub>), con c los coeficientes normalizados 1/√(|N<sub>u</sub>||N<sub>j</sub>|). Además del término MF e<sub>u</sub>ᵀe<sub>i</sub>, aparecen productos «usuario con los usuarios que vieron i» y «los ítems que vio u con i»: es un híbrido de MF, user-kNN e item-kNN aprendido de una vez.</details>
+
+9. **(Transferencia)** CineMatch quiere añadir nodos de **actor** y **director** al grafo para ayudar a los estrenos. ¿LightGCN tal cual lo resuelve? ¿Qué cambiarías?
+<details><summary>Respuesta</summary>Solo en parte: un estreno conectado a actores conocidos recibe señal por propagación, pero LightGCN sigue siendo transductivo (el estreno necesita su fila de embedding y reentrenar). Opciones: grafo heterogéneo con pesos por relación (R-GCN/HGT, <code>HeteroData</code>), o un enfoque inductivo tipo PinSage cuyo embedding se calcule a partir de <i>features</i> y vecinos sin reentrenar.</details>
 """)
 nb.md(r"""
 ## 📚 14. Referencias
@@ -756,6 +785,8 @@ print(f"fit={R_fit.nnz:,}  val={R_val.nnz:,}  test={R_test.nnz:,}")
 pj.md(r"""
 ## Paso 1 · Grafo para PyG
 Construye `edge_index` **no dirigido** (usuarios `0..n_users-1`, ítems desplazados `+ n_users`) a partir de una matriz CSR de entrenamiento.
+
+<details><summary>🪜 Pista</summary><code>u, i = R.nonzero()</code>; las aristas usuario→ítem son <code>(u, i + n_users)</code>; para hacerlo no dirigido concatena también <code>(i + n_users, u)</code>. Devuelve además los pares positivos usuario→ítem por separado: los necesitarás para muestrear lotes de BPR.</details>
 """)
 pj.code(r"""
 def build_edge_index(R):
@@ -765,6 +796,8 @@ def build_edge_index(R):
 pj.md(r"""
 ## Paso 2 · Entrenamiento común (MF y LightGCN)
 Truco: **MF = LightGCN de PyG con `num_layers=0`**. Escribe una única función `fit(K, R_train, R_eval, epochs)` que entrene con `recommendation_loss` y devuelva el modelo y su historial de Recall@20 en `R_eval`.
+
+<details><summary>🪜 Pista</summary>Por lote: toma pares positivos <code>pos</code> (2 × B), crea <code>neg</code> con el mismo usuario y un ítem aleatorio en <code>[n_users, n_users + n_items)</code>, puntúa ambos con <code>model(edge_index, torch.cat([pos, neg], 1)).chunk(2)</code> y llama a <code>model.recommendation_loss(pos_rank, neg_rank, node_id=...)</code> pasando los nodos del lote (<code>unique()</code>) para la regularización. Para evaluar, <code>model.get_embedding(edge_index)</code> y separa usuarios e ítems por el desplazamiento.</details>
 """)
 pj.code(r"""
 def fit(K, R_train, R_eval, epochs=60, d=64, lr=2e-3, batch_size=8192, eval_every=10):
