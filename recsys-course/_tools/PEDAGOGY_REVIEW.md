@@ -226,3 +226,15 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   («pon un LLM en la home»: dos usos rentables y uno a rechazar).
 - ✅ Proyecto: pistas para el parser/Borda, el cableado del grafo (aristas condicionales y ciclo relax) y los
   guardrails por construcción.
+
+### 13 · Más allá de la precisión
+- Teoría excelente y muy completa (MMR, DPP con intuición geométrica, Steck, feedback loop con simulación, fairness de
+  Singh & Joachims, Pareto, página de Netflix, reglas), con analogías potentes (cartera de inversión).
+- ⚠️→✅ **18 gráficos con solo 2 lecturas**: casi todas las secciones encadenaban código → gráfico → siguiente sección.
+  Se añaden siete cajas «👀 Qué observar» (DPP: área/ángulo, coste y fronteras; calibración por usuario y su
+  distribución; novedad y el sesgo del NDCG offline hacia lo popular; fairness exposición vs mérito y por actividad;
+  Pareto y ε-restricción como lenguaje de negocio; página deduplicada; heatmap de lanzamiento).
+- ✅ Caja 🔁 con 4 preguntas (ILD/cobertura del 02 lista vs catálogo, feedback loop del 01, Pareto del 04/07, etapa de
+  re-ranking del 00). Es el módulo que más reutiliza conceptos previos: el repaso aquí es especialmente rentable.
+- ✅ Proyecto: pistas para la KL vectorizada del re-ranker greedy y para el orden filtros → deduplicación → cuotas.
+- (La autoevaluación ya tenía preguntas de razonamiento de calidad; no se amplía.)

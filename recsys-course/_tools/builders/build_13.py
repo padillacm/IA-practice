@@ -1418,6 +1418,8 @@ pj.md("""
 `rerank_home(u, ids, rel, w)` con `w = {"div": ..., "cal": ..., "nov": ...}`. Greedy: en cada paso elige el candidato que maximiza
 $$\\operatorname{rel}(i) + w_{div}(1-\\max_{j\\in S}\\operatorname{sim}(i,j)) + w_{nov}\\operatorname{nov}(i) - w_{cal}\\,\\mathrm{KL}(p\\Vert \\tilde q(S\\cup\\{i\\})).$$
 💡 Vectoriza la KL para todos los candidatos a la vez (una matriz `Q` de tamaño $N \\times |\\mathcal{G}|$).
+
+<details><summary>🪜 Pista</summary>Mantén la suma de distribuciones de género de lo ya elegido, <code>acc</code> (vector de |G|). Para todos los candidatos a la vez: <code>Q = (acc + G_cand) / (len(S) + 1)</code> (cada fila es la distribución de la lista si añades ese candidato), <code>Q̃ = (1 − α)Q + α p</code> y <code>KL = (p * log(p / Q̃)).sum(1)</code> solo sobre géneros con p &gt; 0. La diversidad marginal es <code>1 − max_{j∈S} sim(i, j)</code>, que también puedes mantener incrementalmente con un <code>np.maximum</code> por paso (como en MMR).</details>
 """)
 pj.code(r'''
 def rerank_home(u, ids, rel, w, k=K):
@@ -1452,6 +1454,8 @@ pj.md("""
 - Filas candidatas: "Top para ti" (tu `rerank_home`), 3 × "Porque te gusta <género>", "Tendencias", "Joyas ocultas".
 - **Greedy de página** con el modelo de atención `ATT` y deduplicación.
 - **Reglas**: en perfil infantil se eliminan `MATURE`; ninguna fila con más de 4 títulos del mismo género principal.
+
+<details><summary>🪜 Pista</summary>Orden de la lección (§11): primero los <b>filtros duros</b> sobre los candidatos de cada fila (infantil, ya vistos), después el greedy de página con deduplicación y, al rellenar cada fila, la <b>cuota</b> por género (salta el candidato si su género ya tiene 4). Así una cuota nunca reintroduce algo filtrado. Para comprobar R5 escribe dos <code>assert</code>: ningún id repetido en la página y ningún género de <code>MATURE</code> si <code>kids=True</code>.</details>
 """)
 pj.code(r'''
 N_ROWS, N_COLS, VISIBLE = 6, 10, 5
