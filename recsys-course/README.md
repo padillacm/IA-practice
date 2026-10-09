@@ -4,6 +4,8 @@ Curso práctico en español sobre sistemas de recomendación (*recommender syste
 
 Está pensado para quien **ya domina machine learning, MLOps y agentes LLM, pero nunca ha trabajado con sistemas de recomendación**. Todo corre en **Google Colab** (con GPU T4 / L4 / A100 donde hace falta). Cada sesión tiene una **lección** con teoría, código y gráficos, y un **proyecto** con plantilla de TODOs y solución de referencia.
 
+> 🧭 **Empieza por la [guía de estudio](GUIA_DE_ESTUDIO.md)**: ruta recomendada y tiempos (≈ 190–220 h), qué repasar antes de cada bloque, mapa de dependencias entre conceptos y glosario ES/EN.
+
 > **Proyecto hilo conductor: CineMatch.** Durante todo el curso construyes, pieza a pieza, la plataforma de recomendación de un servicio de streaming ficticio. En el capstone (módulo 18) la integras entera: datos → retrieval → ranking → re-ranking → serving → monitoreo → reentreno → agente conversacional.
 
 ---
@@ -61,9 +63,9 @@ Nivel: 🟢 Básico · 🟡 Intermedio · 🟠 Avanzado · 🔴 Experto
 | 00 | [Introducción y panorama](00_intro/) | 🟢 | Qué es un recsys, tipos, arquitectura multi-etapa, ciclo de vida, stack, historia (Tapestry → Netflix Prize → transformers → generativos) | EDA de MovieLens y primer recomendador por popularidad |
 | 01 | [Datos de interacción y baselines](01_data/) | 🟢 | Feedback explícito e implícito, matrices dispersas, long tail, sesgos, splits temporales, *leakage*, catálogo de datasets | Pipeline de datos reproducible de CineMatch |
 | 02 | [Evaluación offline rigurosa](02_evaluation/) | 🟢🟡 | Precision/Recall, NDCG, MAP, MRR, coverage, novedad, *sampled metrics*, significancia, crisis de reproducibilidad | Tu propia librería de evaluación, validada contra `ranx` |
-| 03 | [Basado en contenido y embeddings](03_content_based/) | 🟢 | TF-IDF, BM25, sentence-transformers (BGE/E5), CLIP, cold start | "Más como esta" con sinopsis y pósters |
+| 03 | [Basado en contenido y embeddings](03_content_based/) | 🟢🟡 | TF-IDF, BM25, sentence-transformers (BGE/E5), CLIP, cold start | "Más como esta" con sinopsis y pósters |
 | 04 | [Vecindad y modelos lineales](04_neighborhood_linear/) | 🟡 | user/item-kNN, similitudes, shrinkage, SLIM, **EASE**, RP3beta | item-kNN vs EASE en MovieLens-1M |
-| 05 | [Factorización matricial](05_matrix_factorization/) | 🟡 | Netflix Prize, FunkSVD, SVD++, **ALS implícito**, **BPR**, WARP, iALS revisitado | ALS + BPR en GPU con Optuna |
+| 05 | [Factorización matricial](05_matrix_factorization/) | 🟡🟠 | Netflix Prize, FunkSVD, SVD++, **ALS implícito**, **BPR**, WARP, iALS revisitado | ALS + BPR en GPU con Optuna |
 | 06 | [Predicción de CTR y ranking](06_ctr_ranking/) | 🟡🟠 | LR + hashing, FM, FFM, GBDT, Wide&Deep, DeepFM, **DCN-v2**, **DIN**, calibración | Ranker DCN-v2 vs LightGBM |
 | 07 | [Learning to Rank y multi-tarea](07_learning_to_rank_multitask/) | 🟠 | RankNet → **LambdaMART**, ListNet, sesgo de posición, **MMoE**, **PLE**, ESMM | Ranker multi-objetivo para la home |
 | 08 | [Deep retrieval y ANN](08_deep_retrieval_ann/) | 🟠 | YouTube DNN, **two-tower**, *in-batch negatives*, logQ, *hard negatives*, **FAISS**, HNSW, vector DBs | Two-tower + FAISS sirviendo top-K en ms |
@@ -71,8 +73,8 @@ Nivel: 🟢 Básico · 🟡 Intermedio · 🟠 Avanzado · 🔴 Experto
 | 10 | [Recomendadores en grafos](10_graph/) | 🟠 | item2vec, node2vec, **PinSage**, **LightGCN**, PyTorch Geometric | LightGCN vs MF |
 | 11 | [Recomendadores generativos](11_generative_recsys/) | 🔴 | **HSTU** (Meta), **semantic IDs**, **TIGER**, RQ-VAE, OneRec, foundation models (Netflix), scaling laws | Semantic IDs + retrieval generativo |
 | 12 | [LLMs y agentes en recomendación](12_llm_agents_recsys/) | 🔴 | LLM como encoder y como ranker, LoRA (TALLRec), LLM-as-judge, **agente conversacional con LangGraph**, simulación de usuarios | Agente CineMatch con LangGraph + FAISS + reranker LLM |
-| 13 | [Más allá de la precisión](13_beyond_accuracy/) | 🟠 | **MMR**, **DPP**, calibración (Steck), popularity bias, feedback loops, fairness, Pareto, optimización a nivel de página | Re-ranker de la home: relevancia + diversidad + calibración |
-| 14 | [Bandits, RL y off-policy evaluation](14_bandits_rl_ope/) | 🔴 | UCB, Thompson, **LinUCB**, artwork de Netflix, **IPS/SNIPS/DR**, Open Bandit Pipeline, REINFORCE top-K, SlateQ | Bandit contextual de artwork evaluado *off-policy* |
+| 13 | [Más allá de la precisión](13_beyond_accuracy/) | 🟠🔴 | **MMR**, **DPP**, calibración (Steck), popularity bias, feedback loops, fairness, Pareto, optimización a nivel de página | Re-ranker de la home: relevancia + diversidad + calibración |
+| 14 | [Bandits, RL y off-policy evaluation](14_bandits_rl_ope/) | 🟠🔴 | UCB, Thompson, **LinUCB**, artwork de Netflix, **IPS/SNIPS/DR**, Open Bandit Pipeline, REINFORCE top-K, SlateQ | Bandit contextual de artwork evaluado *off-policy* |
 | 15 | [Experimentación online](15_online_experimentation/) | 🟠🔴 | A/B testing, potencia, **CUPED**, **interleaving**, novelty effects, interferencia, surrogate metrics | Simulador de A/B + interleaving |
 | 16 | [Arquitectura de producción y serving](16_production_serving/) | 🔴 | Offline/nearline/online, latencia, **Feast**, **Kafka**, Redis, FastAPI, **Triton**, BentoML, Ray Serve, **TorchRec**, **Merlin** | CineMatch como microservicio |
 | 17 | [MLOps: monitoreo y reentreno](17_mlops_monitoring/) | 🔴 | **MLflow**, Prefect/Airflow/Metaflow, Pandera, **Evidently**, drift, feedback loops, reentreno continuo, shadow/canary | Pipeline de entrenamiento continuo con detección de drift |
@@ -119,8 +121,8 @@ Cada notebook descarga sus datos solo y trae un *fallback* (subconjunto o datos 
 
 ## 🎓 Cómo estudiar el curso
 
-1. **Sigue el orden.** Los módulos 00–02 son la base de todo: el evaluador del 02 lo usarás hasta el final.
-2. **Primero la lección, luego el proyecto.** Intenta el proyecto sin mirar la solución. La rúbrica te dice qué métrica tienes que alcanzar.
+1. **Sigue el orden** (o una de las rutas alternativas de la [guía de estudio](GUIA_DE_ESTUDIO.md)). Los módulos 00–02 son la base de todo: el evaluador del 02 lo usarás hasta el final.
+2. **Primero la lección, luego el proyecto.** En la lección, responde de memoria la caja **🔁 Conexión con módulos anteriores** y lee las cajas **👀 Qué debes observar** de los gráficos. En el proyecto, intenta cada TODO sin ayuda, abre las **🪜 pistas** por orden si te atascas y deja el SPOILER para el final. La rúbrica te dice qué métrica tienes que alcanzar.
 3. **Itera en pequeño y luego escala.** Cada notebook tiene un flag `FAST_DEV_RUN` / `SCALE` para probar rápido en CPU y luego entrenar a escala completa en GPU.
 4. **Lee los papers de cada módulo.** La sección 📚 Referencias está ordenada por prioridad.
 5. **Las secciones 🧠 Secretos de la élite** son lo que separa a un buen ingeniero de uno de nivel Netflix. Vuelve a ellas.
@@ -135,7 +137,7 @@ Orientativo. Cada notebook indica al inicio su GPU recomendada y una estimación
 | III (06–08) | T4 / L4 | 25–40 |
 | IV (09–12) | L4 / A100 | 60–90 |
 | V (13–15) | CPU / T4 | 5–10 |
-| VI (16–18) | T4 / L4 | 20–35 |
+| VI (16–19) | T4 / L4 | 20–35 |
 
 Te sobra margen para correr los experimentos a escala completa (MovieLens-25M/32M, LLMs de 7–8B con LoRA) y para los retos extra.
 

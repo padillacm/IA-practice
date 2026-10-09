@@ -320,3 +320,43 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   (puente con el 15). Las figuras de §7 ya se interpretaban en el texto previo.
 - ✅ Proyecto (ya muy bien andamiado con una pista por bug): nota «si una herramienta no te sale, vuelve a la lección
   §…» y pista de `soft_labels` (estimar p y μ solo con clics maduros).
+
+---
+
+## Artefactos transversales
+- ✅ `recsys-course/GUIA_DE_ESTUDIO.md`: cómo usar cada módulo (🔁, 👀, preguntas marcadas, 🪜 pistas), ruta y tiempos
+  por bloque (≈ 190–220 h), órdenes alternativos sin romper prerrequisitos (V antes que IV; ruta exprés de ≈ 90 h
+  para entrevistas), qué repasar antes de cada bloque, **mapa de dependencias en mermaid**, hilos transversales
+  (feedback loop, leakage/PIT, negativos, recall como techo, offline ≠ online), **glosario ES/EN de ~70 términos** con
+  módulo, y checklist de fin de curso.
+- ✅ README: enlace a la guía (arriba y en «Cómo estudiar»), niveles alineados con las cabeceras (03, 05, 13, 14),
+  presupuesto de Colab VI = 16–19, y explicación de las cajas 🔁/👀/🪜.
+- ✅ Lección 00 enlaza la guía.
+
+## Resumen cuantitativo de cambios
+| Intervención | Cantidad |
+|---|---|
+| Cajas «🔁 Conexión con módulos anteriores» (01–17, 19; en el 18 el compendio se convierte en repaso) | 18 + 1 |
+| Cajas/prints «👀 Qué debes observar» tras gráficos | ~68 |
+| Pistas graduadas «🪜» en proyectos | ~60 |
+| Preguntas nuevas de Cálculo / Razonamiento / Diagnóstico / Transferencia / Integración | ~35 |
+| Ejemplos resueltos a mano añadidos (métricas 02, LambdaRank 07, logQ 08, RQ 11) | 4 |
+| Rutas «🧭 núcleo vs ampliación» en módulos sobrecargados (06, 12, 15, 19) + plan de sprint del capstone | 5 |
+| Puentes/analogías nuevas (RAG ↔ embudo, BEIR ↔ NDCG, walk-forward ↔ split temporal, EASE ↔ ridge, DIN ↔ cross-attention, MMoE ↔ MoE de LLMs, CUPED ↔ ANCOVA…) | ~12 |
+
+## 📌 Recomendaciones pendientes (cambios grandes, no aplicados)
+1. **Partir 12 y 19** en dos notebooks cada uno (12a/12b; 19a §0–4 / 19b §5–8) con autoevaluación propia. Las cajas 🧭
+   mitigan, pero 80–86 celdas por sesión superan una carga cognitiva razonable.
+2. **Aligerar 06**: mover FFM y GBDT+LR a «📚 Para profundizar» (o a un notebook opcional) para suavizar el salto 05 → 06.
+3. **Autoevaluaciones con feedback ejecutable**: convertir 2–3 preguntas de cálculo por módulo en celdas `assert`
+   (p. ej. «calcula NDCG@5 de esta lista» con comprobación), como ya hacen los tests de los proyectos 02 y 04.
+4. **Repaso acumulativo por bloque**: un mini-notebook de 30 min al final de cada bloque (I–VI) con 8–10 preguntas
+   mezcladas de todos sus módulos (interleaved practice), en vez de solo repasos por módulo.
+5. **Rúbrica del capstone**: añadir 3–5 respuestas cortas del marco de *system design* (§4 del 18) aplicadas al propio
+   CineMatch del alumno, para evaluar también el objetivo 4 del módulo.
+6. **Protocolos de evaluación**: el curso usa tres protocolos (prepare_cinematch 01–02, 80/20 del bloque II, LOO en
+   09–11). Están avisados, pero una tabla única en la guía o en el 02 («qué protocolo usa cada módulo y por qué»)
+   evitaría comparaciones indebidas entre módulos.
+7. **Terminología**: el curso es consistente en lo esencial (*retrieval*, *re-ranking*, reentreno, cold start); quedan
+   variantes menores («re-entrenar»/«reentrenar», «split»/«partición»). El glosario fija la forma preferida; un pase
+   de búsqueda/reemplazo en los builders las unificaría.

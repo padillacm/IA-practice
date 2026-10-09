@@ -5,8 +5,8 @@ Informe acumulado: recsys-course/_tools/PEDAGOGY_REVIEW.md
 - [x] 05  - [x] 06  - [x] 07  - [x] 08  - [x] 09
 - [x] 10  - [x] 11  - [x] 12  - [x] 13  - [x] 14
 - [x] 15  - [x] 16  - [x] 17  - [x] 18  - [x] 19
-- [ ] Artefactos transversales: GUIA_DE_ESTUDIO.md (+ enlace README), niveles README alineados (G7)
-- [ ] check_course.py OK + informe final
+- [x] Artefactos transversales: GUIA_DE_ESTUDIO.md (+ enlace README), niveles README alineados (G7)
+- [x] check_course.py OK (Todo OK) + informe final (resumen y recomendaciones al final de PEDAGOGY_REVIEW.md)
 
 ## Notas para retomar
 - Patrón por módulo (lecciones 01–19): (a) caja "🔁 Conexión con módulos anteriores" justo tras Objetivos (2–3 preguntas con <details>);
