@@ -168,3 +168,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   sus diferencias).
 - ✅ Proyecto: el Paso 3 (bucle + MNS + evaluación por grupos) era un `# TODO` de una línea → dos pistas graduadas;
   pista para FAISS (recall vs exacto con consultas reales, p50/p99 con un hilo).
+
+### 09 · Recomendación secuencial
+- Módulo ejemplar en analogías (SASRec = GPT, BERT4Rec = MLM) y en teoría (derivación de la sobreconfianza de la
+  BCE y de gBCE paso a paso), con un «truco que no viene en los papers» bien justificado.
+- ⚠️→✅ **Inconsistencia de protocolo**: el 01 enseña que LOO tiene *leakage* y aquí se usa LOO sin aviso hasta el
+  secreto 4 (al final). Se hace explícito en la caja 🔁 (pregunta 1) para que el alumno lo razone **antes** de los
+  experimentos.
+- ✅ Caja 🔁 con 4 preguntas (LOO del 01, logQ del 08, DIN del 06, métricas muestreadas del 02).
+- ✅ «👀 Qué observar» en la figura de sobreconfianza (saturación en la cabeza = problema de ranking), en la
+  comparación final (la pérdida pesa más que la arquitectura; no comparar pérdidas), en el barrido de negativos
+  (contrastar con la predicción hecha *antes*) y en el t-SNE (puente con item2vec del 10).
+- ✅ Autoevaluación: +1 diagnóstico (colapso a puntuación constante → offset b₀) y +1 transferencia (estado del
+  usuario nearline para «Porque acabas de ver»).
+- ✅ Proyecto: pistas para baselines (Markov disperso), SASRec (bloques pre-LN y máscara) y pérdidas (CE con índice
+  −1, negativos compartidos y el offset b₀, sin el cual el alumno se atascaría como avisa la lección).

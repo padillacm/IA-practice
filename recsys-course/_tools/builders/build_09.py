@@ -252,6 +252,19 @@ Al terminar serás capaz de:
 5. **Visualizar e interpretar** mapas de atención causal y el espacio de *embeddings* de ítems.
 6. **Evaluar** con protocolo *leave-one-out* y *full ranking* (HR@10, NDCG@10) evitando las trampas habituales.
 7. **Usar** una librería de industria (RecTools) y conectar todo con sistemas reales (Pinterest, Alibaba, Kuaishou, Meta, Netflix).
+
+### 🔁 Conexión con módulos anteriores
+1. En el módulo 01 viste que el *leave-one-out* tiene *leakage* entre usuarios. Este módulo lo usa en los experimentos. ¿Por qué, y qué harías antes de llevar un modelo secuencial a producción?
+2. ¿Qué es la *sampled softmax* con corrección logQ del módulo 08 y por qué la tabla de pérdidas de la sección 2.3 la incluye?
+3. En el módulo 06, DIN ponderaba la historia del usuario según el candidato. ¿Qué limitación de la «media de la historia» resolvía, y qué añade SASRec además?
+4. En el módulo 02, ¿por qué un HR@10 calculado con 100 negativos muestreados no es comparable con uno de *full ranking*?
+
+<details><summary>Respuestas</summary>
+1. Porque es el protocolo de los papers secuenciales y queremos comparar con sus cifras. Antes de producción: evaluar también con un split temporal global, que puede cambiar el orden de los modelos (secreto 4, Gusak et al. 2025).
+2. Softmax sobre el positivo y unos pocos negativos muestreados, restando log Q(j) para que el estimador no quede sesgado hacia la distribución de muestreo. Es la alternativa a la CE completa cuando el catálogo es grande.
+3. La media diluye el interés relevante para cada candidato; DIN lo recuperaba con atención. SASRec además modela el <b>orden</b> (posiciones, máscara causal) y lo hace con varias capas de auto-atención.
+4. Porque con pocos negativos casi cualquier modelo coloca el positivo en el top-10 de la muestra; las métricas muestreadas pueden incluso invertir el orden de dos modelos (Krichene & Rendle, 2020).
+</details>
 """)
 
 nb.code(r"""
@@ -438,6 +451,10 @@ for k in [1, 16, 64, 256]:
 ax[1].set(yscale="log", xlabel="t (calibración)", ylabel="β", title="β de gBCE en función de t")
 ax[1].legend(fontsize=8); plt.tight_layout(); plt.show()
 """)
+
+nb.md(r'''
+> 👀 **Qué debes observar:** (izquierda) la diagonal discontinua es «calibrado». La curva roja (BCE con 1 negativo) está **muy por encima**: un ítem con p = 1 % recibe q* ≈ 0,97. Con 256 negativos (naranja) mejora, pero sigue lejos. gBCE con t = 1 (verde) cae sobre la diagonal y t = 0,75 (azul) queda cerca. Lo importante para ranking no es el valor absoluto, sino que **en la cabeza todas las curvas de BCE saturan cerca de 1**: el modelo no distingue entre ítems con p = 5 % y p = 20 %, que son justo los que compiten por el top-10. (derecha) cuanto más pequeño es α (menos negativos), más pequeño debe ser β para corregir.
+''')
 
 # ---------------- GRU4Rec
 nb.md(r"""
@@ -648,6 +665,10 @@ res["train_time_s"].dropna().plot.barh(ax=ax[1], color="#f59e0b"); ax[1].set(tit
 plt.tight_layout(); plt.show()
 """)
 
+nb.md(r'''
+> 👀 **Qué debes observar:** (1) en el gráfico de curvas, la **pérdida normalizada no se compara entre objetivos** (CE, BCE y gBCE miden cosas distintas); compara solo el NDCG de validación. (2) En la tabla final, ordena mentalmente por **pérdida** antes que por arquitectura: el salto de SASRec-BCE (1 negativo) a SASRec con gBCE o CE completa suele ser mayor que el de GRU4Rec a SASRec. Es el hallazgo de Klenitskiy & Vasilev (2023) que anuncian los objetivos. (3) Mira el tiempo: si dos variantes empatan dentro del ruido, la más barata gana en producción. (4) Con `FAST_DEV_RUN=True` (pocas épocas) BERT4Rec sale perjudicado, como avisa la sección 3.4.
+''')
+
 nb.md(r"""
 ### 🧪 4.1 Barrido de negativos: BCE vs gBCE
 La predicción de la teoría: con **pocos negativos** α es diminuto, la BCE está muy sobreconfiada y gBCE aplica la corrección más fuerte (β ≪ 1), así que la ventaja de gBCE debería ser **máxima con k pequeño**.
@@ -677,6 +698,10 @@ if RUN_NEG_SWEEP:
     ax.set(xscale="log", xlabel="nº de negativos k", ylabel="NDCG@10 (validación)", title="BCE vs gBCE según nº de negativos")
     ax.legend(); plt.show()
 """)
+
+nb.md(r'''
+> 👀 **Qué debes observar:** compara el experimento con la **predicción** que escribimos antes de ejecutarlo: ¿la distancia entre gBCE y BCE es mayor a la izquierda (k pequeño) y se estrecha a la derecha? ¿Alguna llega a la línea de CE completa? Si tu resultado no coincide con la teoría (pasa con pocas épocas o con datos sintéticos), no lo escondas: anótalo y piensa qué supuesto falla (p. ej. que el modelo haya convergido). Hacer la predicción **antes** de mirar es el hábito que separa un experimento de una búsqueda de confirmación.
+''')
 
 nb.code(r"""
 # 📊 Gráfico 9 — Mapas de atención de SASRec+ sobre un usuario real (últimos 25 ítems)
@@ -722,6 +747,10 @@ ax.scatter(Z[~g.isin(main).values, 0], Z[~g.isin(main).values, 1], s=5, c="light
 ax.set(title="t-SNE de embeddings de ítems (SASRec+, 1.500 más populares)", xticks=[], yticks=[]); ax.legend(fontsize=8, markerscale=2)
 plt.show()
 """)
+
+nb.md(r'''
+> 👀 **Qué debes observar:** SASRec nunca ha visto un género, pero los embeddings de *Animation*, *Horror* o *Children's* se agrupan: los ítems que **aparecen en contextos parecidos de las secuencias** acaban cerca, igual que las palabras en word2vec. Es la misma intuición que formalizará item2vec en el módulo 10. Los géneros «generalistas» (*Drama*, *Comedy*) se dispersan porque no predicen bien qué viene después.
+''')
 
 # ---------------- Sesiones
 nb.md(r"""
@@ -916,6 +945,12 @@ nb.md(r"""
 
 7. ¿Por qué PinnerFormer entrena para predecir acciones de los próximos días en lugar del siguiente ítem?
 <details><summary>Respuesta</summary>Porque el embedding se calcula en batch una vez al día: debe ser útil durante todo el día siguiente, no sólo para la próxima acción. Optimizar el horizonte largo reduce la diferencia con un modelo real-time.</details>
+
+8. **(Diagnóstico)** Entrenas SASRec con gBCE y 256 negativos y el NDCG@10 de validación se queda clavado en el de la popularidad desde la primera época. La pérdida baja. ¿Qué sospechas primero?
+<details><summary>Respuesta</summary>El colapso a «puntuación constante» descrito en la sección 3.3: con k negativos por positivo, la señal dominante es «baja todo» y, con <i>weight tying</i>, la red añade una componente común a todos los embeddings. El remedio es el <i>offset</i> fijo b₀ = log(β/k) en los logits. Después: comprueba la máscara causal y que el padding no reciba atención.</details>
+
+9. **(Transferencia)** CineMatch quiere la fila «Porque acabas de ver…» que reaccione en segundos. ¿Calculas el estado $\mathbf h_t$ de SASRec en cada petición, cada noche o *nearline*? Razona con lo que sabes de las capas del módulo 00.
+<details><summary>Respuesta</summary><i>Nearline</i> (o en la petición, si la latencia lo permite): al llegar el evento de visionado, un consumidor de eventos recalcula h<sub>t</sub> con la historia actualizada y lo guarda en caché; la petición solo hace ANN con ese vector. Un batch nocturno haría que la fila no reflejara lo que acabas de ver (el problema que PinnerFormer mitiga entrenando para un horizonte largo).</details>
 """)
 
 nb.md(r"""
@@ -1005,6 +1040,8 @@ pj.code(LOAD_DATA)
 pj.md(r"""
 ## Paso 1 · Baselines (popularidad y Markov)
 Implementa dos `score_fn` compatibles con `evaluate_next_item`: reciben una lista de historiales y devuelven un tensor `[B, n_items+1]`.
+
+<details><summary>🪜 Pista</summary>Popularidad: cuenta los ítems de <code>train_seqs</code> en un vector de tamaño <code>n_items + 1</code> y devuelve ese vector repetido <code>B</code> veces. Markov: una matriz dispersa de transiciones <code>M[i, j] = #(i → j)</code> con los pares consecutivos de cada secuencia; para cada historial, la fila del <b>último</b> ítem (suma un poco de popularidad para desempatar los ceros).</details>
 """)
 pj.code(r"""
 def popularity_score_fn(train_seqs, n_items):
@@ -1023,6 +1060,8 @@ pj.md(r"""
 ## Paso 2 · Modelos
 Implementa `GRU4Rec` y `SASRec` con la interfaz `encode(seq) -> [B, L, d]` y atributos `n_items`, `item_emb` (tamaño `n_items + 2`, 0 = padding).
 Pistas: máscara causal con `torch.triu(..., 1)`, no atender a padding, permitir la diagonal; LayerNorm final.
+
+<details><summary>🪜 Pista 2 (SASRec)</summary><code>x = item_emb(seq) + pos_emb(arange(L))</code>, dropout, y n bloques <i>pre-LN</i>: <code>x = x + attn(LN(x), máscara)</code>, <code>x = x + FFN(LN(x))</code>. La máscara booleana de forma <code>[B, L, L]</code> es «causal OR la clave es padding», con la diagonal siempre permitida para que ninguna fila sea toda −∞. Puedes usar <code>nn.MultiheadAttention(batch_first=True)</code> con <code>attn_mask</code> repetida por cabeza. La sección 3.2 de la lección tiene la implementación de referencia.</details>
 """)
 pj.code(r"""
 class GRU4Rec(nn.Module):
@@ -1048,6 +1087,9 @@ class SASRec(nn.Module):
 pj.md(r"""
 ## Paso 3 · Pérdidas y entrenamiento
 Implementa `seq_loss` con `"ce"`, `"bce"` y `"gbce"` (β = α(t(1−1/α)+1/α), α = k/(N−1)) y un bucle de entrenamiento que evalúe en validación cada pocas épocas.
+
+<details><summary>🪜 Pista 1 (CE)</summary>Con <code>valid = tgt &gt; 0</code>: <code>logits = h[valid] @ W[1:n+1].T</code> y <code>F.cross_entropy(logits, tgt[valid] − 1)</code> (el −1 porque el 0 es padding).</details>
+<details><summary>🪜 Pista 2 (BCE/gBCE)</summary>Muestrea <code>k</code> negativos <b>por secuencia</b> (tensor <code>[B, k]</code>) y compártelos entre posiciones: <code>neg_l = einsum("bld,bkd-&gt;blk", h, W[neg])</code>. Suma a positivos y negativos el <i>offset</i> <code>b0 = log(β/k)</code> (sección 3.3: sin él, el NDCG no despega). Pérdida: <code>−β·logsigmoid(pos) − logsigmoid(−neg).sum(-1)</code>, promediada.</details>
 """)
 pj.code(r"""
 def seq_loss(model, h, tgt, loss="ce", n_neg=1, gbce_t=0.75):
