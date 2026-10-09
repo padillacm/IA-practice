@@ -411,6 +411,20 @@ nb.md("""
 5. **Optimizar multi-objetivo**: barrer pesos, calcular el **frente de Pareto** y elegir un punto operativo con restricciones ε.
 6. **Construir una página completa** estilo Netflix (filas × columnas) con optimización a nivel de página (deduplicación, modelo de atención) frente a filas independientes.
 7. **Diseñar un motor de reglas de negocio** auditable que se aplica sin romper el aprendizaje del sistema.
+
+### 🔁 Conexión con módulos anteriores
+Este módulo reutiliza muchas piezas; comprueba que las tienes frescas:
+1. Define ILD, cobertura y novedad (módulo 02). ¿Cuál de ellas es una propiedad de **una lista** y cuál del **catálogo** entero?
+2. En la simulación 3 del módulo 01, ¿por qué los ítems que «ganaban» el *feedback loop* no eran los mejores?
+3. En los módulos 04 (RP3β) y 07 (fusión de objetivos) ya trazaste un frente de Pareto. ¿Qué significa que un punto «domine» a otro?
+4. ¿En qué etapa del embudo del módulo 00 vive todo lo de este módulo, y por qué no se resuelve dentro del ranker?
+
+<details><summary>Respuestas</summary>
+1. ILD y novedad se calculan por lista (y se promedian); la cobertura es del catálogo: cuántos ítems distintos aparecen en <b>alguna</b> lista. Por eso MMR (que sube la ILD) no arregla la cobertura del feedback loop (§7).
+2. Porque tuvieron suerte al principio: recibieron exposición, clics y más exposición (<i>rich get richer</i>), aunque su atractivo real fuera casi igual al del resto.
+3. Que es al menos igual de bueno en todos los objetivos y estrictamente mejor en alguno. Aquí lo formalizarás con varios objetivos a la vez (§9).
+4. En el <b>re-ranking</b>: el ranker puntúa cada ítem por separado; la redundancia, la calibración o la equidad son propiedades del <b>conjunto</b> (lista, página, tiempo), que solo se ven cuando ya tienes los candidatos puntuados.
+</details>
 """)
 
 nb.code(PIP)
@@ -639,6 +653,10 @@ ax.scatter(res_base["ILD@10"], res_base["NDCG@10"], c="k", s=80, marker="*", zor
 ax.set_xlabel("ILD@10"); ax.set_ylabel("NDCG@10"); ax.legend(); ax.set_title("MMR vs DPP: fronteras precisión–diversidad"); plt.show()
 ''')
 
+nb.md("""
+> 👀 **Qué debes observar:** (figura de los paralelogramos) el área crece con la **longitud** de los vectores (relevancia) y con el **ángulo** entre ellos (diversidad); dos ítems casi paralelos dan un área ≈ 0 aunque ambos sean relevantes. (coste) la versión con Cholesky escala casi linealmente en N mientras la ingenua se dispara: es lo que hace al DPP desplegable. (fronteras) cada curva es un re-ranker barriendo su parámetro; **la que queda arriba y a la derecha domina**. Si MMR y DPP se solapan en tu ejecución, MMR es más simple de operar; la ventaja del DPP suele aparecer con *embeddings* ricos y listas largas.
+""")
+
 # --------------------------------------------------------------- 5. Calibración
 nb.md("""
 ## 5 · Calibración (Steck, RecSys 2018)
@@ -683,6 +701,10 @@ plt.hist(kl_b, bins=30, alpha=.6, label="CF top-10"); plt.hist(kl_c, bins=30, al
 plt.xlabel("KL(p‖q̃) por usuario"); plt.ylabel("usuarios"); plt.title("Distribución de la miscalibración"); plt.legend(); plt.show()
 ''')
 
+nb.md("""
+> 👀 **Qué debes observar:** en las barras del usuario de ejemplo, la lista «precisa» infla el género dominante del historial y hace **desaparecer** los minoritarios; la calibrada recupera las proporciones. En el histograma, el re-ranking calibrado desplaza toda la distribución de KL hacia la izquierda, no solo la media: mejora sobre todo a los usuarios con gustos **mixtos**, que son los peor servidos por un top-K puro. Mira cuánto NDCG cuesta en la curva de la izquierda: la calibración suele ser barata en precisión.
+""")
+
 # --------------------------------------------------------------- 6. Novedad
 nb.md("""
 ## 6 · Novedad, serendipia y la cola larga
@@ -713,6 +735,10 @@ for _, r in nov_df.iterrows():
 ax[1].set_xlabel("novedad media (bits)"); ax[1].set_ylabel("NDCG@10"); ax[1].set_title("Penalizar popularidad: novedad vs precisión")
 plt.tight_layout(); plt.show(); nov_df.round(4)
 ''')
+
+nb.md("""
+> 👀 **Qué debes observar:** al subir β, la anotación «cabeza» baja (menos recomendaciones del 20 % más popular) y la novedad sube; el NDCG aguanta al principio y luego cae. Ojo con leer esto como «la novedad no compensa»: el NDCG offline **premia la popularidad** porque el test lo generó un sistema sesgado hacia ella (módulo 02, sección 8). El valor de la cola larga solo se mide bien online (módulo 15) o con OPE (módulo 14).
+""")
 
 # --------------------------------------------------------------- 7. Feedback loops
 nb.md("""
@@ -887,6 +913,10 @@ ax = uf.plot.bar(rot=0, figsize=(7, 3.2)); ax.set_ylabel("NDCG@10"); ax.set_titl
 plt.tight_layout(); plt.show(); uf.round(4)
 ''')
 
+nb.md("""
+> 👀 **Qué debes observar:** (proveedores) en el baseline la barra de **exposición** de la cola queda por debajo de su barra de **mérito**: la cola recibe menos atención de la que «merece» por relevancia. La cuota por prefijo cierra el hueco a la fuerza; el amortizado lo cierra **acumulado en el tiempo** con menos coste de NDCG. (usuarios) si la calidad cae mucho en Q1 (usuarios poco activos), tienes un problema de equidad entre usuarios que ninguna métrica media te habría mostrado: por eso se evalúa por segmentos (secreto 5 del módulo 02).
+""")
+
 # --------------------------------------------------------------- 9. Pareto
 nb.md("""
 ## 9 · Multi-objetivo y frente de Pareto
@@ -933,6 +963,10 @@ ok = par[(par["ILD@10"] >= 1.15 * base_p["ILD@10"]) & (par["KL calibración"] <=
 best = ok.sort_values("NDCG@10", ascending=False).head(1)
 print("ε-restricción → max NDCG s.a. ILD ≥ +15 % y KL ≤ −30 % respecto al baseline:"); best.round(4)
 ''')
+
+nb.md("""
+> 👀 **Qué debes observar:** los puntos grises (dominados) son configuraciones que **nunca** elegirías: siempre hay otra mejor en todo. El frente es la «carta» de opciones razonables, y elegir un punto ya no es una pregunta técnica sino de producto. La celda ε-restricción traduce esa decisión al lenguaje de negocio («máximo NDCG sin perder diversidad ni calibración»): es la forma en que se suelen escribir los requisitos de un lanzamiento.
+""")
 
 nb.code(r'''
 def hypervolume_2d(points, ref):
@@ -1057,6 +1091,10 @@ draw_page(page_greedy(rows, r), "Greedy de página (deduplicada, filas diversas)
 plt.suptitle(f"Home de CineMatch para el usuario {u_pg} (color = género principal)"); plt.tight_layout(); plt.show()
 ''')
 
+nb.md("""
+> 👀 **Qué debes observar:** en la página de filas independientes aparecen **✕** (el mismo título repetido en varias filas) y, en las etiquetas de la izquierda, filas seguidas del mismo tipo; la greedy de página elimina duplicados y alterna tipos (el color es el género principal de cada título). En las barras, la utilidad de página deduplicada sube aunque la relevancia media por casilla pueda bajar un poco: es el argumento de Netflix para optimizar la página entera. Cada casilla repetida es una oportunidad de enseñar algo nuevo perdida.
+""")
+
 # --------------------------------------------------------------- 11. Reglas
 nb.md("""
 ## 11 · Reglas de negocio: el último kilómetro
@@ -1153,6 +1191,10 @@ plt.colorbar(im, label="verde = mejora, rojo = empeora")
 ax.set_title("Cambio relativo de cada métrica frente al baseline (texto = cambio real; KL y Gini: bajar es mejorar)")
 plt.tight_layout(); plt.show(); sm.round(4)
 ''')
+
+nb.md("""
+> 👀 **Qué debes observar:** el heatmap es la tabla que llevarías a una revisión de lanzamiento: cada fila es una métrica, cada columna un re-ranker, y el color dice si mejora (verde) o empeora (rojo) frente al baseline. No hay columna toda verde: **todo re-ranking compra unas métricas con otras**. Fíjate también en las reglas de negocio: suelen empeorar alguna métrica offline y aun así son innegociables (filtros duros, disponibilidad).
+""")
 
 nb.md("""
 ## 🧰 Librerías de industria (y por qué aquí lo hacemos a mano)
