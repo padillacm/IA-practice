@@ -965,7 +965,7 @@ KuaiRand-Pure (Gao et al., CIKM 2022; Zenodo `records/10439422`). Logs estándar
 | 2 | Tabla AUC por tarea: Single-task, Shared-Bottom, MMoE, PLE | MMoE o PLE ≥ Shared-Bottom en ≥ 2 de 3 tareas |
 | 3 | Frente de Pareto clic–like (≥ 3 pesos) | Gráfico + comentario sobre el *seesaw* |
 | 4 | LambdaMART (LightGBM) con etiqueta graduada de negocio | NDCG@10 de negocio reportado |
-| 5 | Fusión de scores tuneada en **validación** y evaluada en **test** | NDCG@10 de negocio ≥ mejor tarea individual |
+| 5 | Fusión de scores tuneada en **validación** y evaluada en **test** | Comparada con ordenar por cada tarea y con LambdaMART; objetivo orientativo: ≥ mejor tarea individual (si no se cumple, explica por qué) |
 | 6 | Nota de decisión (≤ 10 líneas) para Producto | Pesos elegidos, trade-offs, plan de A/B |
 """)
     nb.code(r'''

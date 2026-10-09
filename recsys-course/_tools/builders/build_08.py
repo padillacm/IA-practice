@@ -476,8 +476,9 @@ faiss.omp_set_num_threads(1)                    # latencia "por consulta" compar
 N_CORPUS = 200_000 if FAST_DEV_RUN else 2_000_000
 rng_ = np.random.default_rng(seed)
 # Corpus grande realista: los vectores de las películas + "variantes" (episodios, ediciones, clips) alrededor
-base = V[rng_.integers(0, len(V), N_CORPUS)]
-corpus = base + rng_.normal(0, 0.6 / np.sqrt(V.shape[1]), base.shape)
+i1, i2 = rng_.integers(0, len(V), N_CORPUS), rng_.integers(0, len(V), N_CORPUS)
+w_ = rng_.uniform(0.5, 1.0, (N_CORPUS, 1))                              # mezcla de dos títulos + ruido
+corpus = w_ * V[i1] + (1 - w_) * V[i2] + rng_.normal(0, 0.5 / np.sqrt(V.shape[1]), (N_CORPUS, V.shape[1]))
 corpus = (corpus / np.linalg.norm(corpus, axis=1, keepdims=True)).astype(np.float32)
 with torch.no_grad():
     m_best = tt_models[best_name]
@@ -541,7 +542,7 @@ plt.tight_layout(); plt.show()
 print({k: f"build {v[0]:.1f}s" for k, v in build_info.items()})
 ''')
     nb.md(r"""
-**Cómo leerlo**: cada curva es un índice; moverse a la derecha (más `nprobe`/`efSearch`) compra recall con latencia. HNSW suele dominar en CPU a recall alto; IVF-PQ gana por **memoria** (16 B vs 256 B por vector: 16× más catálogo en la misma RAM) y con *refine* recupera casi todo el recall. En GPU (`faiss-gpu`), Flat e IVF sobre 10⁶–10⁷ vectores procesan miles de consultas por lote en milisegundos: ideal para *batch retrieval* offline.
+**Cómo leerlo**: cada curva es un índice; moverse a la derecha (más `nprobe`/`efSearch`) compra recall con latencia. HNSW suele dominar en CPU a recall alto; IVF-PQ gana por **memoria** (16 B vs 256 B por vector: 16× más catálogo en la misma RAM) y con *refine* recupera casi todo el recall. Ojo: las **consultas** son vectores de *usuario* y el índice contiene vectores de *ítem*; si ambas distribuciones difieren mucho (lo normal en two-tower), los índices de grafo pierden recall y necesitan `efSearch` mayor (problema *out-of-distribution* de ANN, estudiado p. ej. por RoarGraph, VLDB 2024). Mide siempre el recall **con consultas reales**, no con vectores del propio corpus. En GPU (`faiss-gpu`), Flat e IVF sobre 10⁶–10⁷ vectores procesan miles de consultas por lote en milisegundos: ideal para *batch retrieval* offline.
 
 ### GPU y otras librerías
 """)
@@ -693,10 +694,10 @@ MovieLens-1M (o **ML-25M** con `SCALE="25m"` en A100) con split temporal global 
 |---|---|---|
 | 1 | `TwoTower` (torre usuario con historia + demografía; torre ítem con id + géneros + año) | Tests de forma/normalización pasan |
 | 2 | Pérdida in-batch con **logQ** y máscara de *accidental hits* | Test incluido pasa |
-| 3 | Recall@100 en test | ≥ 1,3 × el baseline de popularidad |
+| 3 | Recall@100 en test | > baseline de popularidad (en split temporal la popularidad es un rival fuerte; con ML-1M real y `FAST_DEV_RUN=False` apunta a ≥ 1,2×) |
 | 4 | Ablación: sin logQ / con logQ / + MNS | Tabla + análisis cabeza/cola |
-| 5 | Índice FAISS (HNSW o IVF) | Recall@100 ≥ 0,95 respecto a búsqueda exacta |
-| 6 | Servicio `recommend(user)` con filtrado de vistos | p99 < 10 ms en CPU (1 hilo) para 300 candidatos |
+| 5 | Índice FAISS (HNSW o IVF) | Recall@100 ≥ 0,95 respecto a búsqueda exacta (catálogo real, consultas = usuarios reales) |
+| 6 | Servicio `recommend(user)` con filtrado de vistos | p99 < 10 ms en CPU (1 hilo, máquina sin otras cargas) para 300 candidatos |
 """)
     nb.code(r'''
 !pip install -q faiss-cpu
@@ -867,7 +868,8 @@ _, GT = exact.search(Q, 100); _, I = index.search(Q, 100)
 print("Catálogo real · recall@100 HNSW vs exacto:", np.mean([len(set(a) & set(b)) / 100 for a, b in zip(I, GT)]).round(4))
 # 2) Estrés: corpus aumentado
 rng_ = np.random.default_rng(seed); NC = 200_000 if FAST_DEV_RUN else 2_000_000
-C = V[rng_.integers(0, len(V), NC)] + rng_.normal(0, 0.6 / np.sqrt(d), (NC, d)); C = (C / np.linalg.norm(C, axis=1, keepdims=True)).astype(np.float32)
+i1, i2, w_ = rng_.integers(0, len(V), NC), rng_.integers(0, len(V), NC), rng_.uniform(0.5, 1.0, (NC, 1))
+C = w_ * V[i1] + (1 - w_) * V[i2] + rng_.normal(0, 0.5 / np.sqrt(d), (NC, d)); C = (C / np.linalg.norm(C, axis=1, keepdims=True)).astype(np.float32)
 big = faiss.IndexHNSWFlat(d, 32, faiss.METRIC_INNER_PRODUCT); big.hnsw.efConstruction = 80
 faiss.omp_set_num_threads(4); big.add(C); faiss.omp_set_num_threads(1)
 ex_big = faiss.IndexFlatIP(d); ex_big.add(C); _, GTb = ex_big.search(Q[:300], 100)
