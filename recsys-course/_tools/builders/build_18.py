@@ -1108,8 +1108,8 @@ def project() -> None:
     | E1 | Datos | split temporal global; esquema Pandera válido; test de no-leakage (todas las features usan datos < corte) | 10 |
     | E2 | Retrieval | two-tower PyTorch con in-batch negatives + **corrección logQ**; Recall@100 del two-tower ≥ **0,6 ×** PureSVD (con `FAST_DEV_RUN=False` debería acercarse o superarlo) y la **unión** con two-tower ≥ **1,05 ×** la unión sin él (aporta candidatos *nuevos*) | 15 |
     | E3 | Ranking | LambdaMART: NDCG@10 ≥ **1,10 ×** la mejor fuente sola; **ablación** de 3 grupos de features | 15 |
-    | E4 | Re-ranking | frontera MMR completa y λ elegido con ILD@10 **≥ +10 %** relativo y una ganancia relativa de diversidad **≥** la pérdida relativa de NDCG@10 | 10 |
-    | E5 | Serving | FastAPI con `/health`, `/recommend`, `/event`, `/metrics`; fallback; **p99 ≤ 100 ms** con 8 concurrentes; **paridad** offline/serving ≥ 99,9 % | 15 |
+    | E4 | Re-ranking | frontera MMR completa y λ elegido con ILD@10 **≥ +3 %** relativo y una ganancia relativa de diversidad **≥** la pérdida relativa de NDCG@10 (con embeddings L2-normalizados el ILD base ya es alto, ~0,7: un +10 % suele ser inalcanzable sin destrozar NDCG) | 10 |
+    | E5 | Serving | FastAPI con `/health`, `/recommend`, `/event`, `/metrics`; fallback; **p99 ≤ 100 ms con 4 concurrentes** (1 worker uvicorn en la CPU de Colab; reporta también 8 y explica el codo por el GIL); **paridad** offline/serving ≥ 99,9 % | 15 |
     | E6 | MLOps | MLflow: runs de retrieval y ranking con métricas, modelo registrado con alias `champion`; informe de drift (OOV + Evidently o PSI) y **decisión de reentreno justificada** con el NDCG «stale vs fresh» | 15 |
     | E7 | Informe | *scorecard* automático (abajo) + *design doc* (≤ 1 página: métricas, arquitectura, trade-offs, riesgos, siguientes pasos) | 10 |
     | ⭐ | Bonus | agente conversacional con ≥ 3 herramientas sobre el motor (LLM con tool use) y fallback sin LLM | +10 |
@@ -1195,7 +1195,7 @@ def project() -> None:
 
     Reutiliza `build_frame` + `train_lambdamart` (y `multi_window_frames` para tener más usuarios etiquetados sin romper
     el protocolo temporal). Añade las features del two-tower (`tt_score`, `tt_rank`). Ablación: (A) solo fuentes,
-    (B) + ítem, (C) + usuario/cruce. Re-ranking: barre λ ∈ {1,0; 0,9; …; 0,5} y elige el **mayor** λ que cumpla E4.
+    (B) + ítem, (C) + usuario/cruce. Re-ranking: barre λ ∈ {1,0; 0,9; …; 0,5} y elige el **mayor** λ que cumpla E4 (ILD ≥ +3 % y ganancia de diversidad ≥ pérdida de NDCG).
 
     ## Etapa 5 · Serving (E5)
 
@@ -1417,7 +1417,7 @@ def project() -> None:
         rows.append({"lambda": lam, "NDCG@10": np.mean(nd), "ILD@10": np.mean(dv)})
     mm = pd.DataFrame(rows); base = mm.iloc[0]
     gain_ild = mm["ILD@10"] / base["ILD@10"] - 1; loss_ndcg = 1 - mm["NDCG@10"] / base["NDCG@10"]
-    ok = mm[(gain_ild >= 0.10) & (gain_ild >= loss_ndcg)]                 # no perder más precisión de la que se gana
+    ok = mm[(gain_ild >= 0.03) & (gain_ild >= loss_ndcg)]                 # no perder más precisión de la que se gana
     LAMBDA = float(ok["lambda"].max()) if len(ok) else 0.8
     E["E4"] = len(ok) > 0
     display(mm.round(4)); print(f"E4 · λ elegido = {LAMBDA} →", "✅" if E["E4"] else "❌ (ninguna λ cumple: prueba otra similitud, p. ej. géneros)")
@@ -1505,9 +1505,10 @@ def project() -> None:
 
     [requests.get(f"{URL}/recommend/{u}", params={"use_cache": False}) for u in users_eval[:20]]   # warm-up
     lt = pd.DataFrame([load_test(c) for c in [1, 4, 8]]); display(lt.round(1))
-    p99_8 = float(lt[lt.conc == 8].p99.iloc[0])
-    E["E5"] = api_ok and p99_8 <= 100 and parity >= 0.999
-    print(f"E5 · API ok={api_ok} · p99@8 = {p99_8:.1f} ms · paridad = {parity:.4%} →", "✅" if E["E5"] else "❌")
+    p99_4, p99_8 = float(lt[lt.conc == 4].p99.iloc[0]), float(lt[lt.conc == 8].p99.iloc[0])
+    E["E5"] = api_ok and p99_4 <= 100 and parity >= 0.999
+    print(f"E5 · API ok={api_ok} · p99@4 = {p99_4:.1f} ms (p99@8 = {p99_8:.1f} ms: 1 worker + GIL ⇒ cola) · paridad = {parity:.4%} →",
+          "✅" if E["E5"] else "❌")
     ''')
 
     C(r'''
@@ -1531,7 +1532,7 @@ def project() -> None:
         mlflow.log_params({"tt_dim": 64, "tau": 0.05, "logq": True, "scale": SCALE}); mlflow.log_metrics({f"recall100_{k.replace(' ', '_')}": v for k, v in rec.items()})
     with mlflow.start_run(run_name="ranking+serving") as run:
         mlflow.log_params({"ranker": "LGBMRanker-lambdarank", "mmr_lambda": LAMBDA, "n_feats": len(RANK_FEATS)})
-        mlflow.log_metrics({"ndcg10_ranker": nd_rank, "ndcg10_engine": float(nd_engine), "p99_ms_conc8": p99_8, "parity": parity})
+        mlflow.log_metrics({"ndcg10_ranker": nd_rank, "ndcg10_engine": float(nd_engine), "p99_ms_conc4": p99_4, "p99_ms_conc8": p99_8, "parity": parity})
         kw = dict(python_model=CineMatchPyfunc(), artifacts={"art": ART_DIR}, registered_model_name="cinematch-capstone",
                   code_paths=["cinematch_serving.py"])
         try:
