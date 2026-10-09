@@ -245,6 +245,17 @@ def build_lesson():
 4. **Simular y corregir** el sesgo de posición con IPS y con PAL (*position-bias aware learning*).
 5. **Implementar** Shared-Bottom, MMoE, PLE y ESMM, y **reproducir** el *seesaw phenomenon* y el efecto de la correlación entre tareas.
 6. **Trazar** el frente de Pareto entre objetivos y **diseñar** una función de fusión de scores para la home de CineMatch.
+
+### 🔁 Conexión con módulos anteriores
+1. Calcula de memoria la ganancia de la posición 1, 2 y 3 en el DCG del módulo 02. ¿Por qué eso hace que intercambiar las posiciones 1 y 2 importe más que intercambiar la 9 y la 10?
+2. En la simulación 2 del módulo 01, ¿qué pasaba con el CTR observado por posición cuando la relevancia era constante?
+3. En el módulo 06, ¿por qué el ranker tenía que dar probabilidades **calibradas** y no solo un buen orden?
+
+<details><summary>Respuestas</summary>
+1. 1, 1/log₂3 ≈ 0,63 y 0,5. La diferencia de descuento entre 1 y 2 (0,37) es mucho mayor que entre 9 y 10 (≈ 0,01): LambdaRank usa justo ese |ΔNDCG| para ponderar cada par (sección 2.3).
+2. Caía como 1/k aunque todas las posiciones fueran igual de relevantes: era sesgo de posición puro. Aquí lo corriges con IPS y PAL (sección 6).
+3. Porque el score se combina con otros: en este módulo, la fusión de objetivos $\sum_t w_t \hat p_t$ (sección 9) solo tiene sentido si cada $\hat p_t$ significa lo que dice.
+</details>
 """)
     nb.md(r"""
 ## 💡 1. Intuición
@@ -311,6 +322,17 @@ Problema: RankNet trata igual un error en las posiciones 1–2 que en 50–51. *
 $$\lambda_{ij} = -\sigma\big(-(s_i-s_j)\big)\cdot\big|\Delta\text{NDCG}_{ij}\big|,\qquad |\Delta\text{NDCG}_{ij}| = \frac{|2^{y_i}-2^{y_j}|\cdot\big|\frac1{\log_2(1+r_i)}-\frac1{\log_2(1+r_j)}\big|}{\text{IDCG}}$$
 donde $r_i$ es la posición actual de $d_i$ según los scores. Empíricamente esto optimiza NDCG casi directamente (y LambdaLoss, Wang et al. 2018, dio después la justificación probabilística).
 
+#### ✍️ Ejemplo resuelto: ¿qué par «empuja» más?
+Una consulta con tres candidatos en el orden actual $d_1$ ($y=0$), $d_2$ ($y=3$), $d_3$ ($y=1$). Ganancias $2^y-1$: 0, 7, 1. Descuentos $1/\log_2(1+r)$: 1; 0,63; 0,5. DCG = 7·0,63 + 1·0,5 = 4,92; IDCG = 7 + 0,63 = 7,63; NDCG = 0,64.
+
+| Par mal ordenado ($y_i > y_j$) | $\lvert 2^{y_i}-2^{y_j}\rvert$ | $\lvert$ diferencia de descuentos $\rvert$ | $\lvert\Delta\text{NDCG}\rvert$ |
+|---|---|---|---|
+| $(d_2, d_1)$: posiciones 2 y 1 | 7 | 0,37 | **0,34** |
+| $(d_2, d_3)$: posiciones 2 y 3 | 6 | 0,13 | 0,10 |
+| $(d_3, d_1)$: posiciones 3 y 1 | 1 | 0,50 | 0,07 |
+
+RankNet empujaría los tres pares con fuerzas parecidas (solo dependen de $s_i - s_j$); LambdaRank multiplica la del par $(d_2, d_1)$ por 0,34, casi 5× más que la de $(d_3, d_1)$: **concentra el aprendizaje en subir lo muy relevante a lo más alto**. Comprobación: intercambiar $d_1$ y $d_2$ deja la lista $[d_2, d_1, d_3]$ con NDCG = 7,5/7,63 = 0,98 = 0,64 + 0,34.
+
 **LambdaMART** = gradient boosting (MART) donde los *pseudo-residuos* de cada árbol son las $\lambda_i$. Es lo que implementan `LightGBM objective="lambdarank"` y `XGBoost rank:ndcg`. Ganó el Yahoo! LTR Challenge (2010) y sigue siendo el estándar en búsqueda.
 
 ### 2.4 Listwise: ListNet y ListMLE
@@ -328,6 +350,7 @@ Con logs de clics, $P(\text{clic}) = P(\text{examinado}\mid k)\cdot P(\text{rele
 Con tareas $t=1..T$ y pérdidas $\mathcal L_t$: $\mathcal L = \sum_t w_t\mathcal L_t$.
 - **Shared-Bottom**: $\hat y_t = h_t(f(\mathbf x))$. Si las tareas están poco correlacionadas, compiten por $f$ → *negative transfer*.
 - **MMoE** (Ma et al., 2018): $n$ expertos $f_e$ y una puerta por tarea $g_t(\mathbf x)=\text{softmax}(W_t\mathbf x)$: $\hat y_t = h_t\big(\sum_e g_{t,e}(\mathbf x) f_e(\mathbf x)\big)$. Cada tarea elige su mezcla.
+  > 💡 **Si conoces los LLM con *Mixture of Experts*** (Mixtral, Switch Transformer): MMoE es la misma idea con dos cambios. La puerta es **por tarea** (no por token) y la mezcla es **densa** (softmax sobre todos los expertos, sin *top-k routing*). El objetivo tampoco es ahorrar cómputo, sino dejar que cada tarea elija qué representación compartir.
 - **PLE / CGC** (Tang et al., Tencent 2020): además de expertos compartidos, **expertos exclusivos por tarea**, y varias capas (extracción progresiva). Nació para resolver el **seesaw phenomenon**: mejorar una tarea empeorando otra.
 - **ESMM** (Ma et al., Alibaba 2018): para CVR (conversión tras clic), en vez de entrenar solo con clics (*sample selection bias*), modela en **todo el espacio**: $p(\text{clic}\wedge\text{conv}) = p(\text{clic})\cdot p(\text{conv}\mid\text{clic})$, supervisando pCTR y pCTCVR.
 - **Ponderación de pérdidas**: fija (tuneada), *uncertainty weighting* (Kendall et al., 2018: $\sum_t e^{-s_t}\mathcal L_t + s_t$), GradNorm (Chen et al., 2018), PCGrad (Yu et al., 2020)…
@@ -714,6 +737,9 @@ for t in range(2):
     axes[t].set_title(f"Tarea {t+1}: MSE test vs correlación"); axes[t].set_xlabel("correlación p entre tareas"); axes[t].invert_xaxis(); axes[t].legend()
 plt.tight_layout(); plt.show()
 ''')
+    nb.md(r"""
+> 👀 **Qué debes observar:** el eje x va de tareas idénticas ($p=1$, izquierda) a independientes ($p=0$, derecha). Con $p=1$ las tres arquitecturas empatan (compartir todo es gratis). Al bajar $p$, el MSE de **Shared-Bottom crece más deprisa**: las dos tareas se pelean por la misma representación (*negative transfer*). MMoE y PLE se degradan menos porque cada puerta aprende a usar expertos distintos. Es la figura 4 del paper de MMoE reproducida en miniatura: si en tu problema las tareas están muy correlacionadas, Shared-Bottom es suficiente y más barato.
+""")
 
     nb.md(r"""
 ## 🧪 8. Multi-task con datos reales: KuaiRand-Pure
@@ -791,6 +817,9 @@ for kind, g in pf.groupby("modelo"):
 plt.xlabel("AUC clic"); plt.ylabel("AUC like"); plt.title("Frente de Pareto clic vs like (test)"); plt.legend(); plt.show()
 ''')
     nb.md(r"""
+> 👀 **Qué debes observar:** al subir $w_\text{like}$ cada curva se mueve hacia **arriba** (más AUC de like) y casi siempre **a la izquierda** (menos AUC de clic): eso es el *seesaw*. Compara curvas, no puntos: una arquitectura es mejor si su curva queda por encima y a la derecha de la otra **en todo el rango**. Las diferencias de AUC aquí son de milésimas: con `FAST_DEV_RUN` y una sola semilla, no saques conclusiones sobre MMoE vs PLE sin repetir.
+""")
+    nb.md(r"""
 ### 8.2 ESMM: CVR en todo el espacio
 "Conversión" = `long_view` tras clic. Un modelo **CVR naive** se entrena solo con impresiones clicadas → en serving puntúa **todas** las impresiones (sesgo de selección). ESMM entrena en todo el espacio: $p(\text{clic}\wedge\text{lv}) = p(\text{clic})\cdot p(\text{lv}\mid\text{clic})$.
 """)
@@ -865,6 +894,9 @@ for a in range(len(grid)):
     for b in range(len(grid)): plt.text(b, a, f"{Hm[a,b]:.3f}", ha="center", va="center", color="w", fontsize=8)
 plt.title("Fusión s = p_clic · p_lv^w_lv · p_like^w_like"); plt.show()
 print("Solo clic:", round(Hm[0, 0], 4), "| mejor combinación:", round(Hm.max(), 4))
+print("👀 Observa: la esquina (0, 0) es «ordenar solo por clic». Si el máximo está lejos de ella, la métrica de negocio premia long view/like "
+      "y ordenar por clic deja valor sobre la mesa. Cuidado: esta métrica proxy la definimos nosotros (1·clic + 2·lv + 4·like); "
+      "con otros pesos de negocio el óptimo cambia, y por eso los pesos de fusión se deciden online (módulo 15).")
 ''')
     nb.md(r"""
 ## 🏭 10. En producción
@@ -914,6 +946,12 @@ print("Solo clic:", round(Hm[0, 0], 4), "| mejor combinación:", round(Hm.max(),
 
 7. Te piden "optimizar a la vez clic y like" con un solo número. ¿Qué respondes?
 <details><summary>Respuesta</summary>Que es un problema multi-objetivo: hay que mostrar el frente de Pareto, elegir un punto según el trade-off de negocio y validarlo online; el peso de fusión es una decisión de producto.</details>
+
+8. **(Cálculo)** Lista actual $[d_1 (y=1), d_2 (y=0), d_3 (y=2)]$. ¿Qué par tiene mayor $|\Delta\text{NDCG}|$ en LambdaRank: $(d_1, d_2)$ o $(d_3, d_2)$?
+<details><summary>Respuesta</summary>Ganancias 1, 0, 3; descuentos 1; 0,63; 0,5. (d₁, d₂): |1 − 0| · |1 − 0,63| = 0,37. (d₃, d₂): |3 − 0| · |0,5 − 0,63| = 0,39. Casi empatan: subir mucha relevancia una posición pesa lo mismo que corregir poca relevancia en la cabeza. Dividido por el mismo IDCG, el orden se mantiene. (Y el par (d₃, d₁) pesa aún más: |3 − 1| · |0,5 − 1| = 1,0: el mayor error de la lista es tener lo más relevante abajo.)</details>
+
+9. **(Diagnóstico)** Entrenas un ranker de clics con los logs de la home y en el A/B recomienda casi lo mismo que el sistema anterior. Ninguna *feature* es la posición. ¿Qué puede estar pasando?
+<details><summary>Respuesta</summary>Sesgo de posición colado por <i>features</i> correlacionadas con la política anterior (p. ej. el CTR histórico del ítem en la home, o su popularidad, que dependen de dónde se mostró): el modelo aprende θ<sub>k</sub>·γ(x) y reproduce el orden viejo. Remedios: <i>shallow tower</i>/PAL con la posición en entrenamiento, IPS con propensiones estimadas mediante una pequeña aleatorización, y revisar qué <i>features</i> heredan la exposición (secreto 5).</details>
 
 ## 📚 14. Referencias
 - Burges, C. et al. (2005). *Learning to Rank using Gradient Descent* (RankNet). ICML.
@@ -989,6 +1027,9 @@ print(KX.shape, dict(zip(TASKS, KY.mean(0).round(4))))
     nb.md(r"""
 ## Paso 1 — Implementa MMoE y PLE
 Te damos `mlp`, `CatEncoder`, `SharedBottom` y `MTLNet`. Completa `MMoE.forward` y `CGCLayer.forward`. Ambos deben devolver `(logits [B, T], gates)`.
+
+<details><summary>🪜 Pista 1 (MMoE)</summary><code>E = torch.stack([e(h) for e in self.experts], 1)</code> tiene forma <code>[B, n_exp, d]</code>. Para cada tarea: <code>g = softmax(gate(h), -1)</code> (forma <code>[B, n_exp]</code>), mezcla <code>(g.unsqueeze(-1) * E).sum(1)</code> y pásala por su torre. Concatena los logits en <code>[B, T]</code> y apila las puertas.</details>
+<details><summary>🪜 Pista 2 (CGC)</summary>Cada tarea t mezcla <b>sus</b> expertos específicos (aplicados a <code>xs[t]</code>) con los compartidos (aplicados a <code>x_sh</code>) usando su puerta. Si no es la última capa, la puerta compartida mezcla <b>todos</b> los expertos (específicos de todas las tareas + compartidos) para producir la nueva entrada compartida; si es la última, devuelve <code>None</code>.</details>
 """)
     nb.code(r'''
 def mlp(dims, dropout=0.0, last_act=True):
@@ -1092,6 +1133,8 @@ Barre `task_w=[1, 1, w]` con ≥ 3 valores de `w` para al menos dos arquitectura
     nb.md(r"""
 ## Paso 4 — Baseline LambdaMART
 Cada **usuario en un día** es una consulta; la etiqueta graduada es la ganancia de negocio entera `clic + 2·lv + 4·like` (0–7). Features para LightGBM: las categóricas de `KUAI_CATS` (como `category`) + **features de conteo point-in-time** que tú construyas (p. ej. CTR previo del vídeo y del autor con suavizado; ver proyecto 06).
+
+<details><summary>🪜 Pista</summary>Ordena el DataFrame por <code>qid</code> antes de entrenar (LightGBM exige filas contiguas por consulta) y calcula <code>group = df.groupby("qid", sort=False).size().values</code>. Con etiquetas 0–7 pasa <code>label_gain=[2**i - 1 for i in range(8)]</code>. Para <code>business_ndcg</code>: por cada <code>qid</code>, toma los k mejores por el score, DCG con ganancia <code>2**gain − 1</code> y descuento 1/log₂(r+1), divide por el DCG ideal (ordenando por <code>gain</code>) y promedia sobre las consultas con al menos 3 candidatos y alguna ganancia &gt; 0.</details>
 """)
     nb.code(r'''
 import lightgbm as lgb

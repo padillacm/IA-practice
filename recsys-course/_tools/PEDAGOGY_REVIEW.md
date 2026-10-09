@@ -140,3 +140,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   la fusión de objetivos del 07).
 - ✅ Proyecto: pistas graduadas para los contadores PIT, DCN-v2 (estructura parallel, logits) y calibración isotónica
   (ajustar en val).
+
+### 07 · Learning to Rank y multi-tarea
+- Teoría clara y bien ordenada (pointwise → RankNet → LambdaRank → listwise → sesgo de posición → MTL) con dos
+  experimentos controlados excelentes (seesaw sintético y Pareto real).
+- ⚠️→✅ **Faltaba el ejemplo resuelto de LambdaRank**: la fórmula de |ΔNDCG| aparecía sin un caso numérico. Se añade
+  una consulta de 3 documentos con la tabla de |ΔNDCG| por par y la comprobación (0,64 + 0,34 = 0,98).
+- ✅ Analogía **MMoE ↔ MoE de los LLM** (Mixtral/Switch): puerta por tarea, mezcla densa, objetivo distinto.
+- ✅ Caja 🔁 (descuentos del DCG del 02 → |ΔNDCG|; simulación de posición del 01 → IPS/PAL; calibración del 06 →
+  fusión).
+- ✅ «👀 Qué observar» en el seesaw sintético (lectura del eje invertido, *negative transfer*), el frente de Pareto
+  (comparar curvas, no puntos; ruido de una semilla) y el heatmap de fusión (la esquina «solo clic»; proxy definida
+  por nosotros).
+- ✅ Autoevaluación: +1 cálculo (|ΔNDCG| a mano) y +1 diagnóstico (sesgo de posición colado por *features*).
+- ✅ Proyecto: pistas graduadas para `MMoE.forward`/`CGCLayer.forward` (formas de tensores), y para LambdaMART
+  (`group` contiguo, `label_gain`, `business_ndcg`).
