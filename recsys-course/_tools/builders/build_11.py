@@ -565,6 +565,19 @@ nb.md(r"""
 5. **Medir** curvas de escalado (pérdida vs cómputo/parámetros) y discutir qué dicen realmente las *scaling laws* en recomendación.
 6. **Analizar** los sistemas de producción 2024–2026: Meta GR/HSTU, Kuaishou OneRec (V1/V2), Netflix, YouTube (Semantic IDs, PLUM), Pinterest PinRec.
 7. **Decidir** cuándo compensa un recomendador generativo frente a un two-tower + ANN y qué riesgos introduce.
+
+### 🔁 Conexión con módulos anteriores
+1. En el módulo 09, ¿por qué la *full softmax* no escala a 100 M de ítems? ¿Qué dos salidas proponía la autoevaluación (una de ellas, este módulo)?
+2. En el módulo 06 viste el *hashing trick* y sus colisiones. ¿Qué tiene en común una colisión de hashing con una colisión de semantic IDs, y qué las diferencia?
+3. En el módulo 03 calculaste embeddings de contenido de sinopsis. ¿Qué problema de los modelos con un embedding por ID resolvía, y por qué eso importa aquí?
+4. ¿Qué es un *beam search* (si vienes de LLMs: el de la generación de texto) y qué riesgo tiene cuando el «vocabulario» son IDs de ítems?
+
+<details><summary>Respuestas</summary>
+1. El coste por posición es O(N·d) en cómputo y memoria de logits. Salidas: <i>sampled softmax</i>/gBCE con negativos y <b>semantic IDs</b> (vocabulario de L·K tokens en vez de N ítems).
+2. En ambas, dos ítems comparten representación. En hashing la colisión es <b>aleatoria</b> (ítems sin relación comparten peso: ruido); en semantic IDs es <b>semántica</b> (ítems de contenido casi igual comparten prefijo), y se desambigua con un token extra.
+3. El <i>cold start</i> de ítems: un ítem nuevo tiene contenido aunque no tenga interacciones. Los semantic IDs se construyen desde el contenido, así que un estreno recibe un ID con significado el primer día.
+4. Mantener las B secuencias parciales más probables en cada paso. Riesgo: generar tuplas que <b>no existen</b> en el catálogo; por eso se restringe con un trie (sección 2.2).
+</details>
 """)
 nb.code(PIP)
 nb.code(IMPORTS)
@@ -648,6 +661,17 @@ $$\mathcal{L} = \underbrace{\|\mathbf{x} - D(\hat{\mathbf{z}})\|^2}_{\text{recon
 - $\beta = 0{,}25$. TIGER usa $L=3$, $K=256$, latente de 32 dimensiones e inicializa los *codebooks* con **k-means** para evitar *codebook collapse*.
 - **Colisiones**: dos ítems con la misma tupla. TIGER añade un 4.º token que los desambigua (0, 1, 2…).
 
+#### ✍️ Ejemplo resuelto: cuantización residual en 2D
+Dos niveles con dos códigos cada uno. Nivel 1: $\mathbf e^{(1)}_1 = (1, 0)$, $\mathbf e^{(1)}_2 = (0, 1)$. Nivel 2: $\mathbf e^{(2)}_1 = (0;\ 0{,}3)$, $\mathbf e^{(2)}_2 = (0;\ -0{,}3)$.
+
+| Ítem | $\mathbf z$ | Nivel 1 (más cercano) | Residuo $\mathbf r_2$ | Nivel 2 (más cercano) | SID | $\hat{\mathbf z}$ |
+|---|---|---|---|---|---|---|
+| A | (0,9; 0,3) | $\mathbf e^{(1)}_1$ (dist² 0,10 vs 1,30) | (−0,1; 0,3) | $\mathbf e^{(2)}_1$ | **(1, 1)** | (1; 0,3) |
+| B | (0,95; −0,25) | $\mathbf e^{(1)}_1$ | (−0,05; −0,25) | $\mathbf e^{(2)}_2$ | **(1, 2)** | (1; −0,3) |
+| C | (0,1; 0,8) | $\mathbf e^{(1)}_2$ | (0,1; −0,2) | $\mathbf e^{(2)}_2$ | **(2, 2)** | (0; 0,7) |
+
+A y B están cerca en el espacio de contenido y **comparten el primer código** (la «región»); el segundo nivel solo los separa en el detalle. C, lejos, empieza por otro código. El RQ-VAE hace lo mismo con $L = 3$ niveles de $K = 256$ códigos, pero además **aprende** los *codebooks* y el *encoder* para que la reconstrucción sea buena.
+
 ### 2.2 Generative retrieval
 Con $\mathrm{SID}(i) = (c_1,\dots,c_L)$, el modelo factoriza autoregresivamente:
 $$p(i_{t+1}\mid \text{hist}) = \prod_{l=1}^{L} p\big(c_l \mid c_{<l},\; \mathrm{SID}(i_1),\dots,\mathrm{SID}(i_t)\big)$$
@@ -718,6 +742,10 @@ ax[2].set(title="% de ítems en colisión (3 niveles)", xlabel="época", ylabel=
 plt.tight_layout(); plt.show()
 """)
 
+nb.md(r'''
+> 👀 **Qué debes observar:** (izquierda) la reconstrucción baja de forma sostenida; la pérdida de *codebook* puede tener saltos cada vez que se **reinician códigos muertos**. (centro) es el diagnóstico más importante: si la fracción de códigos usados del nivel 1 cae muy por debajo de 1, tienes *codebook collapse* (muchos ítems comparten pocos códigos y el ID pierde información). (derecha) las colisiones deberían bajar a medida que los niveles se especializan; las que quedan las resuelve el token de desambiguación.
+''')
+
 nb.md(r"""
 ### 4.1 La alternativa industrial: RQ-KMeans
 Kuaishou (OneRec) tokeniza con **RQ-KMeans**: k-means residual directamente sobre los embeddings, **sin red**. Es más simple, estable y garantiza el uso de todos los códigos.
@@ -751,6 +779,10 @@ for name, c in [("RQ-VAE", codes3[:, 0]), ("RQ-KMeans", codes_km[:, 0]), ("Aleat
 ax.set(title="📊 Gráfico 4 — Pureza de categoría de cada código de nivel 1", xlabel="fracción de la categoría mayoritaria", ylabel="nº de códigos")
 ax.legend(); plt.show()
 """)
+
+nb.md(r'''
+> 👀 **Qué debes observar:** la barra «Aleatorio» marca la pureza que obtendrías por azar (la proporción de la categoría más frecuente). Un buen tokenizador desplaza el histograma **a la derecha**: los ítems que comparten primer código comparten categoría. RQ-KMeans suele usar todos los códigos sin trucos (no tiene red que colapse) y por eso la industria lo prefiere como punto de partida; el RQ-VAE puede ganar en pureza o reconstrucción si se entrena con cuidado. Elige con estas tres cifras (colisiones, uso, pureza), no con la pérdida.
+''')
 nb.code(r"""
 # Semantic IDs finales: 3 códigos + token de desambiguación (TIGER)
 sid_codes = add_dedup_token(codes3)
@@ -1078,6 +1110,12 @@ nb.md(r"""
 
 7. Nombra dos razones por las que una empresa podría preferir seguir con two-tower + ANN.
 <details><summary>Respuesta</summary>Latencia/coste de decodificación autoregresiva frente a un único producto escalar + ANN; catálogos muy dinámicos (re-tokenizar e invalidar tries); madurez del stack; en ítems populares un modelo con IDs y CE completa puede ser igual o mejor; menos riesgo operativo.</details>
+
+8. **(Cálculo)** CineMatch tiene 50.000 títulos y usas semantic IDs con $L=3$ niveles de $K=256$ códigos más un token de desambiguación. ¿Cuántas tuplas distintas caben y cuántos tokens tiene el vocabulario de salida? Compáralo con la softmax del módulo 09.
+<details><summary>Respuesta</summary>256³ ≈ 16,8 M tuplas para 50.000 ítems (sobra espacio; las colisiones vienen de que los ítems no se reparten uniformemente). Vocabulario de salida: 3·256 = 768 tokens (+ los del token de desambiguación), frente a 50.000 logits por posición en la softmax completa. La generación cuesta L pasos de decodificación en vez de uno.</details>
+
+9. **(Diagnóstico)** Tu TIGER-mini tiene 0 % de IDs inválidos pero un Recall@10 muy por debajo de SASRec, incluso en ítems populares. El tokenizador tiene 40 % de uso del nivel 1. ¿Por dónde empiezas?
+<details><summary>Respuesta</summary>Por el tokenizador: con 40 % de uso hay <i>codebook collapse</i>; muchos ítems distintos comparten prefijos y el modelo no puede distinguirlos. Revisa la inicialización con k-means, el reinicio de códigos muertos y β, o prueba RQ-KMeans. Después compara con lo esperado: frente a un SASRec con CE completa, quedar algo por debajo en ítems populares es normal (sección 5.1); la ventaja debe aparecer en cola larga y cold start.</details>
 """)
 nb.md(r"""
 ## 📚 12. Referencias
@@ -1162,6 +1200,8 @@ pj.code(EMBED)
 pj.md(r"""
 ## Paso 1 · Cuantización residual
 Completa `quantize`: para cada *codebook*, código más cercano al residuo, pérdida de codebook + β·commitment, acumula $\hat z$ y actualiza el residuo.
+
+<details><summary>🪜 Pista</summary>Es el ejemplo resuelto en 2D de la sección 2.1 de la lección, por lotes: <code>d = torch.cdist(r, codebook)</code>, <code>c = d.argmin(1)</code>, <code>e = codebook[c]</code>. Pérdida del nivel: <code>((r.detach() − e)**2).mean() + β·((r − e.detach())**2).mean()</code> (el <code>detach</code> es el stop-gradient sg[·]). Luego <code>z_hat += e</code> y <code>r = r − e</code>. El <i>straight-through</i> se aplica fuera: <code>z + (z_hat − z).detach()</code>.</details>
 El resto del RQ-VAE (encoder/decoder, STE, k-means) está dado.
 """)
 pj.code(r"""
@@ -1218,6 +1258,8 @@ def train_rqvae(X, K=256, levels=3, latent=32, epochs=300, lr=1e-3, batch=1024, 
 pj.md(r"""
 ## Paso 3 · IDs únicos y trie
 1. Añade el token de desambiguación. 2. Implementa `allowed_mask(prefixes, level, size)` del trie (puedes empezar con la versión de diccionario y luego vectorizarla).
+
+<details><summary>🪜 Pista</summary>Desambiguación: agrupa por la tupla de 3 códigos y numera los ítems dentro de cada grupo con <code>cumcount()</code> → 4.º token. Trie como diccionario: <code>hijos[prefijo_tupla] = set(códigos siguientes)</code> para todos los prefijos de longitud 0..L−1. <code>allowed_mask</code> devuelve un booleano <code>[n_prefijos, size]</code> con <code>True</code> en los hijos válidos de cada prefijo.</details>
 """)
 pj.code(r"""
 def add_dedup_token(codes):
@@ -1236,6 +1278,9 @@ class SemanticIDTrie:
 pj.md(r"""
 ## Paso 4 · Modelo generativo y beam search restringido
 Se da la clase `TigerMini` (lección). Implementa `beam_search` con el trie y el bucle de entrenamiento; evalúa Recall@10/NDCG@10 con beam = 20.
+
+<details><summary>🪜 Pista 1</summary>Codifica el historial una vez (<code>model.encode</code>). En cada nivel l: decodifica todos los <i>beams</i> a la vez (repite la memoria con <code>repeat_interleave</code>), toma el último paso, quédate con los logits del rango de tokens del nivel l y aplica <code>log_softmax</code>.</details>
+<details><summary>🪜 Pista 2</summary>Pon <code>−inf</code> en los tokens que el trie no permite para cada prefijo, suma el log-prob acumulado del <i>beam</i>, aplana a <code>[B, n_beams·size]</code> y <code>topk(beam)</code>: <code>idx // size</code> te dice de qué <i>beam</i> viene y <code>idx % size</code> qué token añade. La lección (sección 5) tiene la implementación completa si te atascas.</details>
 """)
 pj.code(TIGER)
 pj.code(r"""

@@ -3,7 +3,7 @@ Informe acumulado: recsys-course/_tools/PEDAGOGY_REVIEW.md
 - [x] Visión global: progresión del temario, carga cognitiva, prerrequisitos, coherencia de CineMatch (G1–G8 en el informe; refinar al final)
 - [x] 00  - [x] 01  - [x] 02  - [x] 03  - [x] 04
 - [x] 05  - [x] 06  - [x] 07  - [x] 08  - [x] 09
-- [x] 10  - [ ] 11  - [ ] 12  - [ ] 13  - [ ] 14
+- [x] 10  - [x] 11  - [ ] 12  - [ ] 13  - [ ] 14
 - [ ] 15  - [ ] 16  - [ ] 17  - [ ] 18  - [ ] 19
 - [ ] Artefactos transversales: GUIA_DE_ESTUDIO.md (+ enlace README), niveles README alineados (G7)
 - [ ] check_course.py OK + informe final

@@ -194,3 +194,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
 - ✅ Autoevaluación: +1 razonamiento (expandir LightGCN K=1 → híbrido MF + user-kNN + item-kNN) y +1 transferencia
   (nodos actor/director para estrenos: transductivo vs inductivo).
 - ✅ Proyecto: pistas para `edge_index` no dirigido y para el bucle BPR con PyG (`recommendation_loss`, `node_id`).
+
+### 11 · Recomendadores generativos
+- Contenido de élite **bien dosificado**: analogía del código postal, teoría completa de RQ-VAE/TIGER/HSTU, y sobre todo
+  comparaciones honestas (TIGER vs SASRec con CE completa; scaling laws con su «letra pequeña»). Es el mejor ejemplo
+  del curso de «por qué importa» frente a «lista de nombres».
+- ⚠️→✅ La cuantización residual se presentaba solo en fórmulas. Se añade un **ejemplo resuelto en 2D** (3 ítems, 2
+  niveles × 2 códigos) que muestra por qué ítems parecidos comparten prefijo.
+- ✅ Caja 🔁 con 4 preguntas (full softmax del 09, colisiones de hashing del 06 vs colisiones semánticas, cold start
+  del 03, beam search de LLMs).
+- ✅ «👀 Qué observar» en el entrenamiento del RQ-VAE (uso de códigos = diagnóstico de *collapse*) y en la pureza
+  (comparar con aleatorio; elegir tokenizador por colisiones/uso/pureza, no por pérdida).
+- ✅ Autoevaluación: +1 cálculo (tamaño del espacio de SIDs y del vocabulario vs softmax) y +1 diagnóstico (TIGER débil
+  con 40 % de uso del nivel 1).
+- ✅ Proyecto: pistas para `quantize` (enlazada al ejemplo 2D), trie/desambiguación y beam search restringido (dos
+  niveles).
