@@ -286,6 +286,26 @@ Al terminar este módulo serás capaz de:
 5. **Diagnosticar y corregir** la calibración (reliability diagrams, corrección por *negative downsampling*, isotónica).
 6. **Medir** el efecto de las colisiones de *hashing* y del tamaño de las tablas de embeddings.
 7. **Reconocer** las librerías de industria (TorchRec, NVIDIA Merlin, FuxiCTR, DeepCTR-Torch) y cuándo usar cada una.
+
+### 🧭 Cómo recorrer esta lección (es la más densa del bloque III)
+Ocho arquitecturas en una sesión es mucha carga. Si vas justo de tiempo, haz primero el **núcleo** y deja la ampliación para una segunda pasada:
+
+| Núcleo (imprescindible) | Ampliación (segunda pasada) |
+|---|---|
+| §1 intuición y ejemplo en papel · §2.1 métricas (logloss, NE, GAUC) · §2.2 LR + hashing · §2.3 FM y su truco $O(kn)$ · §2.6 DCN-v2 · §3–4 datos y entrenamiento · §5 LightGBM · §8 calibración | §2.4 FFM · §2.5 Wide & Deep / DeepFM · GBDT+LR · §6 visualizar interacciones · §7 hashing (lo retoma a fondo el módulo 19) · §9 DIN (lo retoman 09 y 11) · §10 librerías |
+
+Hilo conductor para no perderte: **cada modelo es una forma distinta de aprender cruces de features** (a mano → factorizados → por árboles → MLP → capas de cruce → atención sobre la historia).
+
+### 🔁 Conexión con módulos anteriores
+1. ¿Qué etapa del embudo del módulo 00 recibe ~10³ candidatos y por qué puede permitirse modelos caros con cientos de *features*?
+2. Si las únicas *features* de un FM son `user_id` e `item_id`, ¿a qué modelo del módulo 05 se reduce?
+3. ¿Qué es una *feature* con *leakage* temporal (módulo 01) y por qué un «CTR histórico del ítem» es candidata a tenerlo?
+
+<details><summary>Respuestas</summary>
+1. El ranking: solo puntúa los candidatos del retrieval, así que puede gastar decenas de µs por par y buscar <i>features</i> en un <i>feature store</i>.
+2. A la factorización matricial con sesgos, $w_0 + w_u + w_i + \langle \mathbf v_u, \mathbf v_i\rangle$ (sección 2.3).
+3. Una <i>feature</i> calculada con información posterior al momento de la predicción. Si el CTR del ítem se calcula sobre toda la tabla, incluye los clics del futuro (y la propia etiqueta). Lo practicarás en el proyecto con contadores <i>point-in-time</i> y lo industrializarás en el módulo 16.
+</details>
 """)
 
     nb.md(r"""
@@ -426,6 +446,8 @@ $$\mathbf x_{l+1} = \mathbf x_0 \odot (W_l\,\mathbf x_l + \mathbf b_l) + \mathbf
 Representar al usuario como la **media** de los ítems que vio pierde información: tu interés relevante *depende del candidato*. DIN pondera la historia $\{\mathbf e_1..\mathbf e_H\}$ con una atención condicionada al candidato $\mathbf e_a$:
 
 $$\mathbf v_U(a) = \sum_{h=1}^H g(\mathbf e_h, \mathbf e_a)\,\mathbf e_h,\qquad g = \text{MLP}([\mathbf e_h, \mathbf e_a, \mathbf e_h-\mathbf e_a, \mathbf e_h\odot\mathbf e_a])$$
+
+> 💡 **Si conoces transformers**: DIN es una *cross-attention* con **una sola query** (el candidato $\mathbf e_a$) y la historia como *keys/values*. Dos diferencias: el score $g$ lo calcula un MLP en vez de un producto escalar, y no hay softmax.
 
 Sin softmax a propósito: la suma de pesos codifica la **intensidad** del interés. DIEN (2019) añade una GRU con atención (AUGRU) para modelar la evolución del interés; SIM (2020) y TWIN (Kuaishou, 2023) escalan a historias de 10⁴–10⁵ eventos con búsqueda en dos etapas.
 """)
@@ -664,6 +686,9 @@ plt.figure(figsize=(6, 3.2))
 plt.plot(evals["val"]["binary_logloss"]); plt.axvline(gbm.best_iteration, ls="--", c="k", lw=0.8)
 plt.title("LightGBM: logloss de validación por árbol (early stopping)"); plt.xlabel("árboles"); plt.ylabel("logloss")
 plt.show()
+print("👀 Observa: (1) en las curvas de entrenamiento, la logloss de validación de los modelos profundos suele tocar fondo en la 1.ª–2.ª época"
+      " y luego sube (one-epoch phenomenon); (2) las ROC casi se superponen: en CTR las diferencias que importan están en la 3.ª-4.ª cifra"
+      " decimal de la logloss, por eso el panel de barras recorta el eje; (3) LightGBM es el listón: si un deep no lo bate claramente, no compensa su coste.")
 best = r.index[0]; worst = r.index[-1]
 print(f"Mejor: {best}. Mejora relativa de logloss vs LR: {(1 - r.loc[best,'logloss']/r.loc['LR','logloss']):.2%}")
 ''')
@@ -704,6 +729,9 @@ plt.tight_layout(); plt.show()
 top = np.dstack(np.unravel_index(np.argsort(-np.triu(S_fm, 1), axis=None)[:6], S_fm.shape))[0]
 print("Pares más fuertes según FM:", [(names[i], names[j]) for i, j in top])
 ''')
+    nb.md(r"""
+> 👀 **Qué debes observar:** con datos sintéticos, los cuadros brillantes deberían coincidir con los pares plantados (C1–C2, C3–C6, C8–C10, C4–C13, C17–C22): es la prueba de que FM y DCN-v2 **descubren** cruces sin que se los des a mano, que es la promesa del módulo. Con Criteo real no hay verdad conocida, pero sí debes ver una matriz **dispersa**: pocos pares de campos concentran casi toda la interacción. Eso justifica las versiones de bajo rango de DCN-v2 y la poda de campos en producción.
+""")
 
     nb.md(r"""
 ## #️⃣ 7. Hashing trick y colisiones de embeddings
@@ -1021,6 +1049,12 @@ DCNv2_criteo:
 7. ¿Qué compromiso controla el número de cubos $B$ del hashing trick?
 <details><summary>Respuesta</summary>Memoria y latencia frente a colisiones: con $m$ valores, la fracción colisionada ≈ $1-e^{-m/B}$. Demasiado grande además sobreajusta en IDs raros si no hay umbral de frecuencia.</details>
 
+8. **(Razonamiento)** Tu DCN-v2 mejora la logloss de LightGBM en 0,0008 con una sola semilla y es 6× más caro de servir. ¿Qué necesitas saber antes de recomendar el cambio?
+<details><summary>Respuesta</summary>(1) Si la mejora es real: varias semillas y la varianza entre ellas (0,0008 puede ser ruido de inicialización), test grande y temporal. (2) Si está calibrado (NE, ratio de calibración, ECE), porque el score se mezcla con otras cabezas. (3) El coste: latencia p99 en el presupuesto del ranking y coste por mil peticiones. (4) Al final, un A/B: 0,001 de logloss es «prácticamente significativo» en Criteo, pero no garantiza ganancia online.</details>
+
+9. **(Transferencia)** Un compañero propone usar como score de ranking la salida de un modelo entrenado con el 1 % de negativos, «porque el AUC es igual». ¿Qué se rompe y en qué módulo te dolerá?
+<details><summary>Respuesta</summary>El orden se conserva (AUC igual), pero las probabilidades están infladas ~100× en <i>odds</i>. Se rompe cualquier combinación de scores: la fusión de objetivos de la home del módulo 07 (w₁·p(clic) + w₂·E[tiempo]…), las subastas de anuncios y los umbrales. Hay que aplicar la corrección q = p / (p + (1 − p)/w) o recalibrar.</details>
+
 ## 📚 15. Referencias
 **Papers**
 - He, X. et al. (2014). *Practical Lessons from Predicting Clicks on Ads at Facebook*. ADKDD. https://dl.acm.org/doi/10.1145/2648584.2648589
@@ -1119,6 +1153,8 @@ Implementa `point_in_time_item_stats(df)` que, para cada fila, calcule con **sol
 La versión con fuga (`item_pos_rate_leaky`) usa todo el dataset (ya la damos hecha).
 
 💡 Pista: ordena por `timestamp`, usa `groupby(...).cumsum()` y resta la propia fila (`shift`).
+
+<details><summary>🪜 Pista 2</summary>Tras ordenar (estable) por <code>timestamp</code>: <code>cnt = groupby(key).cumcount()</code> ya es «nº de eventos <b>anteriores</b>»; <code>pos = groupby(key).y.cumsum() − y</code> son los positivos anteriores sin contar la fila. Devuelve el resultado reindexado al orden original (<code>.loc[df.index]</code>) o el join desalineará filas. Es el mismo problema que resolverá un <i>feature store</i> con <i>point-in-time joins</i> en el módulo 16.</details>
 """)
     nb.code(r'''
 ALPHA = 20.0
@@ -1181,6 +1217,9 @@ def train_lgb(Xtr, ytr, Xva, yva):
     nb.md(r"""
 ## Paso 4 — DCN-v2 (reutiliza tu implementación de la lección)
 Implementa `DCNv2` con capas de cruce `x_{l+1} = x0 * (W x_l + b) + x_l` y la parte deep *stacked* o *parallel*. Entrena con `train_ctr` (incluida arriba).
+
+<details><summary>🪜 Pista 1</summary>Una sola <code>nn.Embedding(sum(field_dims), k)</code> con índices globales; <code>x0 = emb(x).flatten(1)</code> tiene dimensión <code>d = F·k</code>. Cada capa de cruce es un <code>nn.Linear(d, d)</code> y su <code>forward(x0, xl)</code> devuelve <code>x0 * W(xl) + xl</code>.</details>
+<details><summary>🪜 Pista 2</summary>Versión <i>parallel</i>: una rama de cruces y un MLP sobre <code>x0</code>; concatena sus salidas y una <code>nn.Linear(d + hidden[-1], 1)</code> da el logit. Devuelve logits (no probabilidades): <code>train_ctr</code> usa <code>BCEWithLogitsLoss</code>. Si la logloss de val sube tras la 1.ª época, no es un bug: es el <i>one-epoch phenomenon</i> de la lección.</details>
 """)
     nb.code(r'''
 class DCNv2(nn.Module):
@@ -1196,6 +1235,8 @@ class DCNv2(nn.Module):
 1. Entrena LightGBM **con** `item_pos_rate_leaky` y compara offline (val/test) con la versión point-in-time. ¿Por qué parece mejor? ¿Qué pasaría en producción?
 2. Reliability diagrams + ECE + NE para LightGBM y DCN-v2 (y una calibración isotónica en val si hace falta).
 3. Escribe tu recomendación al *tech lead*.
+
+<details><summary>🪜 Pista (calibración)</summary>Ajusta la isotónica con las predicciones de <b>validación</b> (<code>IsotonicRegression(out_of_bounds="clip").fit(p_val, y_val)</code>) y aplícala a test; nunca la ajustes sobre test. Para el ECE agrupa por cuantiles de p̂ y promedia |tasa observada − p̂ media| ponderando por el tamaño del bin.</details>
 """)
     nb.code(r'''
 # TODO: tu análisis final aquí

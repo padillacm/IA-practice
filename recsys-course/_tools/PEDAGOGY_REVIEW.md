@@ -124,3 +124,19 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   (BPR que recomienda lo mismo a todos).
 - ✅ Proyecto: los cuatro pasos eran `# TODO` sin andamiaje. Pistas graduadas para BPR (modelo y bucle), Optuna
   (validación sin tocar test) y fold-in (ecuación de ALS con Q fijo y la convención de confianza de `implicit`).
+
+### 06 · CTR y ranking
+- Teoría excelente (derivación del truco O(kn), corrección del *negative downsampling* por Bayes, DCN-v2 con
+  interpretación de bloques) y ejemplo de 5 impresiones que motiva los cruces.
+- ⚠️ **Sobrecarga (G8)**: ocho arquitecturas + hashing + calibración + DIN en 5–6 h; es el mayor salto de carga del
+  curso (05 → 06). ✅ Caja **«🧭 Cómo recorrer esta lección»** con núcleo (LR → FM → DCN-v2 → LightGBM → calibración)
+  vs ampliación (FFM, W&D/DeepFM, GBDT+LR, interacciones, hashing, DIN), y un hilo conductor explícito («cada modelo es
+  una forma de aprender cruces»). 📌 Si se quiere aligerar más: mover FFM y GBDT+LR a «📚 Para profundizar».
+- ✅ Caja 🔁 (etapa de ranking del 00, FM ⊃ MF del 05, leakage del 01 → PIT del proyecto y del 16).
+- ✅ Analogía DIN = *cross-attention* de una sola query.
+- ✅ «👀 Qué observar» en curvas/ROC/barras (one-epoch, diferencias en la 3.ª-4.ª cifra, LightGBM como listón) y en
+  los mapas de interacción FM/DCN-v2 (pares plantados; dispersión → bajo rango).
+- ✅ Autoevaluación: +1 razonamiento (¿desplegar DCN-v2 por 0,0008?) y +1 transferencia (downsampling sin corregir rompe
+  la fusión de objetivos del 07).
+- ✅ Proyecto: pistas graduadas para los contadores PIT, DCN-v2 (estructura parallel, logits) y calibración isotónica
+  (ajustar en val).
