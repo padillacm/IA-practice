@@ -1141,3 +1141,124 @@ def lesson() -> None:
     varios rankers en producción ponen el mismo documento en posiciones distintas (*intervention harvesting*, Agarwal et
     al., WSDM 2019).
     """)
+
+    # ------------------------------------------------------------------ 5. long term
+    M(r"""
+    ## 5. Medir la verdad a largo plazo
+
+    ### 💡 El problema
+    Todo lo que optimizas es un **proxy**: clic, *watch time*, conversión a 7 días. La métrica de verdad (retención,
+    satisfacción, valor de vida del cliente) llega tarde y es ruidosa. Ley de Goodhart: *cuando una medida se convierte en
+    objetivo, deja de ser una buena medida*. En recomendación el caso típico es el **clickbait**: sube el CTR, baja la
+    satisfacción y, semanas después, la retención. Un A/B de dos semanas puede declarar ganador al sistema que está
+    destruyendo valor. Hohnhold, O'Brien & Tang (Google, KDD 2015) midieron cómo los usuarios **aprenden** a ignorar
+    anuncios de baja calidad (*ads blindness*) con experimentos de larga duración, y usaron el resultado para reducir la
+    carga de anuncios en móvil.
+
+    ### Las herramientas de los equipos top
+    - **Holdouts globales / long-term holdbacks**: un % pequeño de usuarios no recibe los lanzamientos de un periodo
+      (trimestre, semestre). Mide el efecto **acumulado** de todos los lanzamientos y detecta los que solo funcionaban por
+      novedad. Coste: esos usuarios reciben un producto peor.
+    - **Encuestas como etiquetas**: YouTube mide *valued watchtime* con encuestas de 1 a 5 estrellas tras ver un vídeo,
+      cuenta solo las de 4–5 y entrena un modelo que **predice la respuesta** para todo el mundo (blog oficial de YouTube,
+      2021). Netflix habla de una recompensa *proxy* de satisfacción a largo plazo (Netflix TechBlog, 2024).
+    - ***Value models***: el score final es una fusión de predicciones (clic, *watch*, like, compartir, encuesta, «no me
+      interesa») con **pesos de negocio** que se fijan con experimentos, no con *grid search* offline.
+    - ***Surrogate index*** (módulo 15): predecir el efecto a largo plazo desde métricas tempranas.
+
+    🧪 **Simulación.** 4 000 usuarios durante 90 días. Cada ítem tiene un nivel de *clickbait* $c$ y de calidad $q$. El
+    clic sube con ambos; la satisfacción tras el clic sube con $q$ y **baja** con $c$. La probabilidad de volver al día
+    siguiente depende de la satisfacción acumulada. Comparamos políticas que ordenan por
+    $\;V_w = p_{clic} \cdot p_{sat}^{\,w}$, de $w=0$ (solo clic) a $w=2$, más un holdout no personalizado.
+    """)
+    C(r'''
+    def long_term_sim(w, days=90, n_users=4000 * S, n_items=500, k=10, seed_=seed, holdout=False):
+        r = np.random.default_rng(seed_)
+        c = r.normal(0, 1, n_items); q = r.normal(0, 1, n_items)
+        aff = r.normal(0, 0.7, (n_users, n_items))
+        p_click = sigmoid(-2.2 + 0.9 * c + 0.5 * q + aff)
+        p_sat = sigmoid(0.2 + 1.2 * q - 0.9 * c)
+        score = r.normal(size=(n_users, n_items)) if holdout else p_click * p_sat ** w
+        top = np.argsort(-score, 1)[:, :k]
+        pc_top, ps_top = np.take_along_axis(p_click, top, 1), np.take_along_axis(p_sat, top, 1)
+        h = np.zeros(n_users); active = np.ones(n_users, bool); out = []
+        for d in range(days):
+            clicks = (r.random(pc_top.shape) < pc_top) & active[:, None]
+            sat = clicks & (r.random(pc_top.shape) < ps_top)
+            unsat = clicks & ~sat
+            h = 0.85 * h + 0.15 * (sat.sum(1) - 1.5 * unsat.sum(1))
+            out.append({"día": d, "DAU": active.mean(), "CTR": clicks.sum() / max(active.sum() * k, 1),
+                        "clics por usuario": clicks.sum() / n_users, "satisfechos por usuario": sat.sum() / n_users})
+            active = r.random(n_users) < sigmoid(1.2 + 1.2 * h)
+        return pd.DataFrame(out)
+
+
+    ws = [0.0, 0.5, 1.0, 1.5, 2.0]
+    sims = {w: long_term_sim(w) for w in ws}
+    hold = long_term_sim(0, holdout=True)
+    fig, ax = plt.subplots(1, 3, figsize=(15, 4))
+    for w in [0.0, 1.0, 2.0]:
+        ax[0].plot(sims[w]["CTR"].rolling(3, min_periods=1).mean(), label=f"w={w}")
+        ax[1].plot(sims[w]["DAU"], label=f"w={w}")
+    ax[1].plot(hold["DAU"], "k:", label="holdout (sin personalizar)")
+    ax[0].axvspan(0, 14, color="orange", alpha=0.12); ax[0].text(1, ax[0].get_ylim()[1] * 0.98, "A/B de 2 semanas", fontsize=8, va="top")
+    ax[0].set(xlabel="día", ylabel="CTR", title="Proxy: CTR"); ax[1].set(xlabel="día", ylabel="usuarios activos", title="Verdad: retención")
+    ax[0].legend(fontsize=8); ax[1].legend(fontsize=8)
+    short = [sims[w]["clics por usuario"][:14].sum() for w in ws]; long_ = [sims[w]["clics por usuario"].sum() for w in ws]
+    sat_ = [sims[w]["satisfechos por usuario"].sum() for w in ws]
+    ax[2].plot(ws, np.array(short) / short[0], "o-", label="clics totales, 14 días")
+    ax[2].plot(ws, np.array(long_) / long_[0], "s-", label="clics totales, 90 días")
+    ax[2].plot(ws, np.array(sat_) / sat_[0], "^-", label="visionados satisfechos, 90 días")
+    ax[2].set(xlabel="peso w de la satisfacción en el value model", ylabel="relativo a w=0", title="Goodhart: el óptimo depende del horizonte")
+    ax[2].legend(fontsize=8); plt.tight_layout(); plt.show()
+    display(pd.DataFrame({"CTR 14 días": [sims[w]["CTR"][:14].mean() for w in ws], "DAU día 90": [sims[w]["DAU"].iloc[-1] for w in ws],
+                          "clics 90 días / usuario": long_}, index=[f"w={w}" for w in ws]).round(4))
+    ''')
+    M(r"""
+    El A/B de dos semanas elige **w = 0** (más CTR). A 90 días gana un *value model* con peso en la satisfacción: menos clics
+    por sesión, pero muchos más usuarios que vuelven, y más clics **totales**. El holdout sin personalizar te da la
+    referencia del **valor acumulado** del sistema. 🧠 Nota cómo el ranking de políticas **se invierte con el horizonte**:
+    por eso los equipos top deciden con *guardrails* de satisfacción y holdouts largos, y no solo con el proxy del A/B.
+
+    ### 5.1 Encuestas como etiquetas: corrige el sesgo de respuesta
+
+    Solo responde quien quiere. Si los usuarios muy activos (y más satisfechos) responden más, la media de las respuestas
+    sobreestima la satisfacción y un modelo entrenado con ellas hereda el sesgo. Corrección: modelar la **probabilidad de
+    responder** con features que tienes de todos y ponderar las respuestas por su inversa (IPW), o predecir la respuesta
+    para todos (lo que describe YouTube).
+    """)
+    C(r'''
+    rng = np.random.default_rng(seed)
+    n = 100_000
+    engagement = rng.normal(0, 1, n)
+    sat_true = (rng.random(n) < sigmoid(0.3 + 0.9 * engagement)).astype(int)     # 1 = satisfecho (4–5 estrellas)
+    p_resp = sigmoid(-3 + 1.2 * engagement)                                        # los activos responden más
+    resp = rng.random(n) < p_resp
+    resp_model = LogisticRegression().fit(engagement[:, None], resp)
+    p_hat = resp_model.predict_proba(engagement[:, None])[:, 1]
+    pred_model = LogisticRegression().fit(engagement[resp][:, None], sat_true[resp])
+    est = {"verdad (toda la población)": sat_true.mean(), "media de respuestas": sat_true[resp].mean(),
+           "IPW por propensión de respuesta": np.sum(sat_true[resp] / p_hat[resp]) / np.sum(1 / p_hat[resp]),
+           "predecir la respuesta para todos": pred_model.predict_proba(engagement[:, None])[:, 1].mean()}
+    print(f"tasa de respuesta: {resp.mean():.1%}")
+    pd.Series(est).plot.barh(figsize=(8, 2.8), color=["#16a34a", "#dc2626", "#2563eb", "#7c3aed"], title="% satisfechos estimado")
+    plt.xlim(0.4, 0.8); plt.show()
+    ''')
+    M(r"""
+    ### 5.2 ¿Cuánto holdout? Coste vs sensibilidad
+
+    Un holdout de fracción $h$ sobre $N$ usuarios detecta efectos con $\text{MDE} \approx (z_{1-\alpha/2} + z_{1-\beta})\,\sigma
+    \sqrt{\tfrac{1}{hN} + \tfrac{1}{(1-h)N}}$ y cuesta $h \cdot \Delta$ del valor que aportan los lanzamientos. Como el MDE
+    mejora solo con $\sqrt{h}$, los holdouts de 1–5 % son la norma en plataformas grandes: con decenas de millones de
+    usuarios, incluso el 1 % detecta efectos acumulados pequeños.
+    """)
+    C(r'''
+    hs = np.linspace(0.002, 0.2, 100)
+    fig, ax = plt.subplots(figsize=(8, 3.8)); ax2 = ax.twinx()
+    for N, c_ in [(1e6, "C0"), (1e7, "C1"), (1e8, "C2")]:
+        mde = 2.8 * 1.0 * np.sqrt(1 / (hs * N) + 1 / ((1 - hs) * N))      # σ = 1 (métrica estandarizada)
+        ax.plot(hs * 100, mde * 100, color=c_, label=f"N = {N:.0e} usuarios")
+    ax2.plot(hs * 100, hs * 100, "k--", label="coste: % de usuarios sin lanzamientos")
+    ax.set(xlabel="tamaño del holdout (%)", ylabel="MDE (% de σ)", yscale="log", title="Holdout global: sensibilidad vs coste")
+    ax2.set_ylabel("coste (% usuarios)"); ax.legend(fontsize=8, loc="upper center"); ax2.legend(fontsize=8, loc="upper right"); plt.show()
+    ''')
