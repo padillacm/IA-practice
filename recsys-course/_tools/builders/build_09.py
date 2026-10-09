@@ -10,22 +10,7 @@ sys.path.insert(0, "recsys-course/_tools/builders")
 from nbbuild import Notebook  # noqa: E402
 from _b4_common import UTILS_MD, UTILS_LOAD, UTILS_SEQ, UTILS_EVAL  # noqa: E402
 
-# Fallback adicional (solo módulo 09): espejo público de ML-1M en GitHub antes de caer a datos sintéticos.
-_OLD_FALLBACK = '''        print(f"⚠️ No se pudo descargar MovieLens-1M ({type(e).__name__}). Uso datos SINTÉTICOS.")
-        return make_synthetic_ml()'''
-_NEW_FALLBACK = '''        try:   # espejo público de ML-1M (mismo contenido, CSV con tabuladores)
-            print(f"GroupLens no disponible ({type(e).__name__}); usando espejo de ML-1M en GitHub…")
-            base = "https://raw.githubusercontent.com/khanhnamle1994/movielens/master"
-            ratings = pd.read_csv(f"{base}/ratings.csv", sep="\\t", index_col=0, encoding="latin-1")
-            movies = pd.read_csv(f"{base}/movies.csv", sep="\\t", index_col=0, encoding="latin-1")
-            ratings = ratings.rename(columns={"user_id": "user", "movie_id": "item", "timestamp": "ts"})[["user", "item", "rating", "ts"]]
-            movies = movies.rename(columns={"movie_id": "item"})[["item", "title", "genres"]]
-            return ratings, movies
-        except Exception as e2:
-            print(f"⚠️ No se pudo descargar MovieLens-1M ({type(e2).__name__}). Uso datos SINTÉTICOS.")
-            return make_synthetic_ml()'''
-assert _OLD_FALLBACK in UTILS_LOAD
-UTILS_LOAD = UTILS_LOAD.replace(_OLD_FALLBACK, _NEW_FALLBACK)
+# El espejo de ML-1M en GitHub ya vive en _b4_common (compartido con 10 y 11).
 
 MOD = "recsys-course/09_sequential"
 LESSON = f"{MOD}/09_sequential.ipynb"

@@ -59,8 +59,18 @@ def load_movielens_1m(data_dir="data"):
     except Exception as e:
         if os.path.exists(zpath):
             os.remove(zpath)
-        print(f"⚠️ No se pudo descargar MovieLens-1M ({type(e).__name__}). Uso datos SINTÉTICOS.")
-        return make_synthetic_ml()
+        try:  # GroupLens caído → espejo público de ML-1M en GitHub (mismo contenido, TSV)
+            print(f"GroupLens no disponible ({type(e).__name__}); usando espejo de ML-1M en GitHub…")
+            mirror = "https://raw.githubusercontent.com/khanhnamle1994/movielens/master"
+            rd = lambda f: pd.read_csv(f"{mirror}/{f}", sep="\t", index_col=0, encoding="latin-1")
+            ratings = rd("ratings.csv").rename(columns={"user_id": "user", "movie_id": "item",
+                                                        "timestamp": "ts"})[["user", "item", "rating", "ts"]]
+            movies = rd("movies.csv").rename(columns={"movie_id": "item"})[["item", "title", "genres"]]
+            print(f"MovieLens-1M real (espejo): {len(ratings):,} ratings")
+            return ratings, movies
+        except Exception as e2:
+            print(f"⚠️ No se pudo descargar MovieLens-1M ({type(e2).__name__}). Uso datos SINTÉTICOS.")
+            return make_synthetic_ml()
 """
 
 UTILS_SEQ = r"""
@@ -110,7 +120,9 @@ def evaluate_next_item(score_fn, histories, targets, ks=(10,), batch_size=512, m
             for i, h in enumerate(H):
                 s[i, h[0] if isinstance(h, tuple) else h] = -float("inf")   # h puede ser (items, timestamps)
         s.scatter_(1, T[:, None], tgt)                         # el objetivo nunca se enmascara
-        ranks.append((s > tgt).sum(1))                         # posición 0-based (empates optimistas)
+        # posición 0-based; los empates cuentan a medias (ni optimista ni pesimista):
+        # con empates optimistas, un modelo que puntúa todo igual sacaría HR@K = 1.
+        ranks.append((s > tgt).sum(1) + ((s == tgt).sum(1) - 1) // 2)
     ranks = torch.cat(ranks).numpy()
     out = {}
     for k in ks:
