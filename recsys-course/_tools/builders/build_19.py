@@ -95,6 +95,30 @@ def lesson() -> None:
     7. **Hacer ingeniería de rendimiento**: presupuestos de latencia, *dynamic batching*, *hedged requests*, cachés, cuantización, retrieval en GPU y *capacity planning*.
     8. **Pensar como un equipo top**: cultura de experimentación, *design docs*, revisión de experimentos y señales de seniority.
 
+    ### 🔁 Conexión con módulos anteriores
+    Este módulo da por sabidas muchas piezas. Si alguna de estas preguntas te cuesta, repasa el módulo indicado **antes** de la sección correspondiente:
+
+    | Antes de… | Pregunta de repaso | Módulo |
+    |---|---|---|
+    | §1 tablas de embeddings | ¿Qué fracción de valores colisiona con m valores y B cubos? ¿Qué pasaba con la logloss al crecer B? | 06 §7 |
+    | §2 tiempo real | ¿Qué es el *one-epoch phenomenon* y el *warm-start* de un reentreno? | 06, 17 |
+    | §3 fugas y skew | ¿Qué es un *point-in-time join* y cómo se detecta el *training-serving skew*? | 16 |
+    | §4 exposure bias | ¿Qué es la propensión de una impresión y para qué la necesita la OPE? | 14 |
+    | §5 largo plazo | ¿Qué es un surrogate index y qué supuesto necesita? ¿Qué es el SRM? | 15 |
+    | §7 rendimiento | ¿Por qué el p99 de un *fan-out* a 50 shards es peor que el de un shard? | 16 |
+
+    <details><summary>Respuestas</summary>
+    1. ≈ 1 − e^(−m/B) (problema del cumpleaños); la logloss bajaba con B y luego se saturaba. Aquí aprenderás a medirlo <b>ponderado por tráfico</b>.
+    2. Los modelos CTR alcanzan su mejor punto en 1–2 épocas y luego memorizan la cola; el warm-start parte del modelo anterior en vez de reentrenar desde cero.
+    3. Calcular cada <i>feature</i> solo con datos anteriores al instante del ejemplo (Feast); el skew se detecta comparando las features logueadas en serving con las recalculadas offline (paridad).
+    4. La probabilidad con que la política de logging eligió esa acción; sin ella no hay IPS/DR.
+    5. Una combinación de métricas a corto plazo que predice el resultado a largo plazo; supone que todo el efecto pasa por ellas (<i>surrogacy</i>). SRM = reparto de tráfico distinto del diseñado.
+    6. Porque la petición espera al más lento: 0,99⁵⁰ ≈ 0,6 de que todos cumplan.
+    </details>
+
+    ### 🧭 Cómo recorrer esta lección (7–9 h: hazla en dos sesiones)
+    **Sesión A · datos y modelos a escala** (§0–§4): tablas de embeddings, tiempo real, *label delay*, fugas, skew y sesgos del funnel. **Sesión B · medir, depurar y operar** (§5–§8): largo plazo, *casebook* offline ↑ / online ↓, rendimiento, *capacity planning* y cultura. El proyecto (6 bugs plantados) necesita las dos; si vas justo, el *casebook* (§6) es lo más rentable para entrevistas.
+
     ## Índice
     0. Dónde muere un recomendador (mapa de fallos)
     1. Tablas de embeddings a escala
@@ -182,6 +206,10 @@ def lesson() -> None:
     axes[1].set(ylabel="GB en entrenamiento (fp32)", title="1 000 M de IDs × d=128: pesos + estado del optimizador")
     plt.tight_layout(); plt.show()
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** (izquierda) la memoria crece **linealmente** con el nº de IDs y con d: a 10⁹ IDs y d = 256 ya no cabe en una GPU ni en una máquina. (derecha) el optimizador cuenta tanto como los pesos: Adam triplica la memoria, mientras que Adagrad **por filas** (un escalar por fila) casi no añade nada. Por eso las tablas grandes se entrenan con optimizadores «baratos» aunque las capas densas usen Adam: es una decisión de memoria, no de calidad.
+    """)
 
     M(r"""
     ### 1.1 Hashing trick y colisiones: mídelas **ponderadas por tráfico**
@@ -455,6 +483,10 @@ def lesson() -> None:
     for e_ in range(1, 4): plt.axvline(e_, color="gray", ls=":")
     plt.xlabel("época"); plt.ylabel("log-loss"); plt.title("One-epoch phenomenon: la segunda pasada memoriza la cola"); plt.legend(); plt.show()
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** la log-loss de test toca fondo cerca del final de la **primera** época (línea punteada 1) y sube en cuanto el modelo empieza la segunda, aunque la de train siga bajando: las filas de embedding de IDs raros, vistas por segunda vez, se memorizan. Es el mismo fenómeno que viste en el módulo 06; aquí entiendes **por qué** ocurre (tablas enormes y dispersas) y por qué el entrenamiento en streaming de una sola pasada no es una limitación, sino lo correcto.
+    """)
 
     M(r"""
     ### 1.3 Cuantización de embeddings: por fila, no por tabla
@@ -1270,6 +1302,9 @@ def lesson() -> None:
     plt.xlim(0.4, 0.8); plt.show()
     ''')
     M(r"""
+    > 👀 **Qué debes observar:** la media de las respuestas está sesgada (contestan sobre todo los más implicados, que además están más satisfechos). Ponderar por la inversa de la propensión de respuesta, o predecir la satisfacción para todos con un modelo entrenado en los que respondieron, se acerca mucho más a la verdad. Es **IPS otra vez** (módulo 14), ahora para corregir quién contesta una encuesta en lugar de qué se mostró.
+    """)
+    M(r"""
     ### 5.2 ¿Cuánto holdout? Coste vs sensibilidad
 
     Un holdout de fracción $h$ sobre $N$ usuarios detecta efectos con $\text{MDE} \approx (z_{1-\alpha/2} + z_{1-\beta})\,\sigma
@@ -1371,6 +1406,9 @@ def lesson() -> None:
     plt.tight_layout(); plt.show()
     ''')
     M(r"""
+    > 👀 **Qué debes observar:** el recall de las *golden queries* (consultas con respuesta conocida) se desploma cuando las torres están desalineadas, y la distribución de scores del top-20 se **desplaza**: ambas señales son baratas, no necesitan etiquetas y se pueden ejecutar en cada despliegue. Un test de integración con una docena de *golden queries* habría parado este incidente antes de llegar a usuarios.
+    """)
+    M(r"""
     ### 6.2 Caso 8 en código: separar el efecto novedad del efecto real
 
     En un A/B el efecto medio por **día de calendario** mezcla usuarios que acaban de descubrir el cambio con usuarios que
@@ -1396,6 +1434,10 @@ def lesson() -> None:
     ax[1].set(xlabel="días desde la primera exposición", ylabel="lift %", title="Vista correcta: lift por antigüedad"); ax[1].legend()
     plt.tight_layout(); plt.show()
     ''')
+
+    M(r"""
+    > 👀 **Qué debes observar:** por día de calendario (izquierda) el lift parece alto y estable porque cada día entran usuarios nuevos al experimento, que están en su fase de novedad. Por antigüedad de exposición (derecha) se ve la verdad: el lift empieza alto y **converge** al efecto real (línea discontinua). Si decides con la vista de la izquierda, lanzas un efecto inflado. Es el análisis de novelty del módulo 15 aplicado a un incidente real.
+    """)
 
     # ------------------------------------------------------------------ 7. performance
     M(r"""
@@ -2312,6 +2354,8 @@ def project() -> None:
     ## 5. Bug por bug (en el orden del árbol de triaje)
 
     Para **cuantificar**, usa este *helper*: arregla **un solo** parámetro sobre la config de producción y mide Δ online.
+
+    > 🪜 **Si una herramienta no te sale, vuelve a la lección:** caché y versión → §7.4 y §6 (caso de embeddings desalineados); skew → §3.3 (*log-and-wait*, `skew_report`); *time-travel* de contadores → §3.2; colisiones de hashing → §1.1 (contaminación ponderada por tráfico); madurez de etiquetas y `soft_labels` → §3.1 (Chapelle); *adversarial validation* y candidatos no vistos → §4.2–4.3. Para `soft_labels`: estima p (tasa de conversión) y μ (retraso medio) **solo con clics maduros** (t ≤ T − 7) y aplica la posterior p·S(e) / (1 − p + p·S(e)) únicamente a los clics aún sin conversión.
     """)
     C(r'''
     def quantify(change: dict, base=PROD_CONFIG, label=None):

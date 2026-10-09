@@ -305,3 +305,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   independiente.
 - 📌 Considerar que la rúbrica del capstone pida también 3–5 respuestas cortas del marco de entrevista sobre el propio
   sistema (convertir el §4 en evaluación).
+
+### 19 · Masterclass élite
+- El módulo que mejor convierte «secretos de élite» en **práctica**: cada idea del compendio del 18 se implementa con
+  una simulación de verdad conocida, con lecturas («Cómo leerlo», «Lecturas») y un *casebook* con árbol de triaje.
+  La autoevaluación ya es de nivel alto (cálculos de capacidad, verosimilitud de Chapelle, Berkson).
+- ⚠️ **Sobrecarga (G8)**: 80 celdas, 7–9 h. ✅ Caja «🧭 Cómo recorrer esta lección» (sesión A §0–4 datos/modelos a
+  escala; sesión B §5–8 medir/depurar/operar; el casebook como prioridad para entrevistas). 📌 Recomendación: partir en
+  dos notebooks si se rehace.
+- ✅ Caja 🔁 en forma de **tabla «antes de… → pregunta → módulo»** (06, 14, 15, 16, 17), coherente con que el 19 da
+  muchas piezas por sabidas.
+- ✅ «👀 Qué observar» en memoria de tablas + estado del optimizador (Adagrad por filas), *one-epoch* explicado por
+  tablas dispersas (puente con el 06), encuestas con IPS (puente con el 14), *golden queries* y novelty por antigüedad
+  (puente con el 15). Las figuras de §7 ya se interpretaban en el texto previo.
+- ✅ Proyecto (ya muy bien andamiado con una pista por bug): nota «si una herramienta no te sale, vuelve a la lección
+  §…» y pista de `soft_labels` (estimar p y μ solo con clics maduros).
