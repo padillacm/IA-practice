@@ -87,3 +87,16 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   3× más estrecho).
 - ✅ Proyecto: pistas graduadas en TODO 3 (ranx), TODO 5–6 (AUC por rangos, test pareado bootstrap) y miscalibración KL
   (que el proyecto pide y la lección solo menciona: se aclara que la intuición llega en el 13).
+
+### 03 · Basado en contenido
+- Excelente honestidad pedagógica: «el contenido pierde contra popularidad en warm y gana en cold start» se demuestra
+  con datos y se explica. El ejemplo en papel (6 sinopsis) precede bien a TF-IDF/BM25.
+- ✅ Caja 🔁 (perfil centrado del 00, ILD/cobertura del 02, validación dentro de train).
+- ✅ «👀 Qué observar» en el histograma de anisotropía (separación vs valor absoluto del coseno) y en el UMAP (qué
+  géneros se agrupan y por qué; no interpretar distancias globales). Antes ambos gráficos quedaban sin lectura.
+- ✅ Autoevaluación: +1 diagnóstico (cambio de encoder que degrada en silencio) y +1 transferencia (dónde va el
+  contenido en el embudo con 200 estrenos/semana).
+- ✅ Proyecto: el Paso 5 (cold start) era un `# TODO` vacío que obligaba a reconstruir el protocolo de memoria → dos
+  pistas graduadas con la estructura y la puntuación; pista para la penalización por año del Paso 4.
+- 📌 La lección usa su propio protocolo del Bloque II (80/20, train con todos los ratings) distinto de
+  `prepare_cinematch`; está bien avisado en el proyecto, pero convendría repetir el aviso en la lección (sección 3).

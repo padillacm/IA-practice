@@ -234,6 +234,17 @@ Al terminar este módulo serás capaz de:
 5. **Usar** CLIP (open_clip) para representar **pósters** y hacer búsqueda multimodal texto→imagen.
 6. **Diseñar** un híbrido simple (fusión de modalidades + prior de popularidad) y **medir** su efecto.
 7. **Cuantificar** la ventaja del contenido en **cold start de ítems** frente a no tener nada.
+
+### 🔁 Conexión con módulos anteriores
+1. En el «experimento en papel» del módulo 00, ¿cómo se construía el perfil de contenido de Ana y por qué se centraban los ratings?
+2. ¿Qué métrica del módulo 02 usarías para saber si un recomendador «encierra» al usuario en lo que ya conoce?
+3. ¿Por qué el ajuste de pesos (p. ej. β del híbrido) no se puede hacer sobre el test? ¿Qué hacemos en su lugar?
+
+<details><summary>Respuestas</summary>
+1. Como suma de los vectores de género de lo que vio, ponderada por <i>r<sub>ui</sub> − r̄<sub>u</sub></i>: lo que le gustó suma y lo que odió resta. Hoy generalizas ese mismo perfil (Rocchio) a TF-IDF, BM25, embeddings y pósters.
+2. Diversidad intra-lista (ILD), cobertura de catálogo y novedad. Aquí verás que el perfil centrado sube mucho la cobertura.
+3. Porque el test dejaría de estimar el rendimiento futuro (sobreajuste al test). Se ajusta en validación: un segundo corte temporal <b>dentro</b> de train.
+</details>
 """)
 
 nb.md("""
@@ -637,6 +648,9 @@ ax.set_title("Distribución de similitudes: los embeddings densos son anisótrop
 results[f"{TEXT_MODEL_KEYS[0]} centrado-media"] = evaluate_topk(content_score_fn(user_weights(R, "centered"), E_c[idx]), X, rel)
 ''')
 nb.md("""
+> 👀 **Qué debes observar:** el histograma de TF-IDF está pegado a 0 (la mayoría de sinopsis no comparten palabras), el del embedding **crudo** está desplazado a la derecha y es estrecho (todo se parece a todo: anisotropía) y el **centrado** vuelve a estar alrededor de 0 con más dispersión. Lo que importa para recomendar es la **separación** entre vecinos buenos y malos, no el valor absoluto del coseno: por eso centrar mejora el NDCG sin cambiar de modelo.
+""")
+nb.md("""
 ### 5.2 Visualizar el espacio semántico
 
 Proyectamos los embeddings a 2D con UMAP (fallback: t-SNE) y coloreamos por el género **más
@@ -665,6 +679,9 @@ for mid in [1, 260, 2571, 593, 1721, 2355]:
 ax.legend(markerscale=4, fontsize=8, ncol=2); ax.set_title(f"Espacio de sinopsis ({TEXT_MODEL_KEYS[0]}, {method})")
 ax.set_xticks([]); ax.set_yticks([]); plt.show()
 ''')
+nb.md("""
+> 👀 **Qué debes observar:** géneros con vocabulario muy propio (*Animation*, *Horror*, *Western*) forman grupos compactos; *Drama* y *Comedy* se reparten por todo el mapa porque la sinopsis habla de la trama, no del género. Las películas anotadas de una misma franquicia caen juntas. Recuerda que UMAP/t-SNE preservan **vecindarios locales**, no distancias globales: no interpretes la distancia entre dos grupos lejanos.
+""")
 
 # ---------------- CLIP ----------------
 nb.md("""
@@ -931,6 +948,12 @@ nb.md("""
 
 7. ¿Resuelve el contenido el cold start de usuarios?
 <details><summary>Respuesta</summary>No directamente: sin historial no hay perfil. Se usan preguntas de onboarding, datos demográficos/contextuales o popularidad hasta tener unas pocas interacciones.</details>
+
+8. **(Diagnóstico)** Cambias el encoder de `bge-small` a `e5-base` (mejor en MTEB) y el NDCG@10 del perfil de contenido **cae** a la mitad, sin ningún error. ¿Qué dos cosas compruebas primero?
+<details><summary>Respuesta</summary>(1) Los prefijos: E5 espera <code>query: </code>/<code>passage: </code> y sin ellos degrada en silencio. (2) La normalización y el centrado: si los embeddings no están en norma 1, el producto escalar ya no es coseno; y sin centrar, la anisotropía aplana las diferencias. Después, recuerda el secreto 2: el MTEB no es tu métrica.</details>
+
+9. **(Transferencia)** CineMatch estrena ~200 títulos por semana. ¿En qué etapa del embudo del módulo 00 pondrías el recomendador de contenido y cuándo dejarías de necesitarlo para un título concreto?
+<details><summary>Respuesta</summary>Como <b>fuente de candidatos</b> adicional en retrieval (los estrenos no existen para el colaborativo) y como <i>feature</i> del ranker. Para un título concreto, su peso puede bajar cuando acumule suficientes interacciones para que la señal colaborativa sea fiable (cientos de vistas); en la práctica se mantiene como <i>feature</i> y el ranker aprende cuánto confiar en cada señal.</details>
 """)
 nb.md("""
 ## 📚 12. Referencias
@@ -1083,6 +1106,8 @@ pj.md("""
 Implementa `item_vectors(w_genre, w_text, w_img)` (early fusion con $\\sqrt{w}$) y un
 `more_like_this(item_id, k, gamma)` que reste `gamma · |año_i − año_j| / 10` a la similitud.
 Haz un grid sobre `w_genre ∈ {0.2,…,0.8}`, `gamma ∈ {0, 0.05, 0.1, 0.2}` en **ajuste**.
+
+<details><summary>🪜 Pista</summary>El año sale del título de MovieLens («Toy Story (1995)»): la columna <code>movies.year</code> ya lo trae; rellena los nulos con la mediana. La penalización es una matriz <code>gamma * |y_q[:, None] − y[None, :]| / 10</code> que restas a <code>S = Fq @ F.T</code> antes del <code>argsort</code>; reutiliza el resto de <code>cowatch_hr</code>.</details>
 """)
 pj.code(r'''
 def item_vectors(w_genre: float, w_text: float, w_img: float = 0.0) -> np.ndarray:
@@ -1099,6 +1124,9 @@ pj.md("""
 
 Reutiliza el protocolo de la lección (15 % de películas con ≥ 20 ratings como «estrenos», borradas
 de train; perfil centrado; ranking entre ítems fríos). Compara: aleatorio, géneros, texto, tu fusión.
+
+<details><summary>🪜 Pista 1 (estructura)</summary>Cuatro piezas: (a) elige <code>cold</code> con <code>np.random.default_rng(seed).choice</code> entre las películas con ≥ 20 ratings; (b) <code>tr_w = train[~train.item_id.isin(cold)]</code> y un <code>Encoder(tr_w)</code> nuevo; (c) la matriz de ratings centrados por usuario de <code>tr_w</code> (como en la lección); (d) relevantes = interacciones de test con rating ≥ 4 <b>sobre películas frías</b>, indexadas por su posición en <code>cold</code>.</details>
+<details><summary>🪜 Pista 2 (puntuación)</summary>El perfil de cada usuario es <code>R_centrado @ F[filas_warm]</code> y la puntuación de los fríos es <code>perfil @ F[filas_frías].T</code>. Pásalo a <code>evaluate_topk</code> como función de un lote de usuarios, con una matriz «vistos» vacía (nadie ha visto un estreno): <code>sp.csr_matrix((n_users, len(cold)))</code>.</details>
 """)
 pj.code(r'''
 # TODO: protocolo de cold start y tabla de resultados
