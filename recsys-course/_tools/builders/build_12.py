@@ -787,6 +787,28 @@ Al terminar este módulo serás capaz de:
 6. **Generar explicaciones fundamentadas** y detectar automáticamente las alucinadas.
 7. **Diseñar un agente conversacional con LangGraph** (estado tipado, herramientas de recsys, memoria de preferencias a corto y largo plazo, *guardrails* de catálogo).
 8. **Evaluar agentes recomendadores** con simuladores de usuario (Agent4Rec / iEvaLM) y estimar coste, latencia y tasa de alucinación en producción.
+
+### 🔁 Conexión con módulos anteriores
+1. ¿Por qué en el módulo 03 el contenido puro perdía contra la popularidad en ítems *warm* y ganaba en *cold start*? ¿Esperas que un LLM como encoder cambie esa conclusión?
+2. El ranker LLM de este módulo reordena el top-20 del retriever. ¿Qué métrica del retriever pone el techo de lo que el LLM puede conseguir (módulos 00 y 08)?
+3. En el módulo 07 corregiste el sesgo de posición de los **usuarios** con IPS/PAL. ¿Qué otro sesgo de posición aparece aquí y quién lo sufre?
+4. En el módulo 02 viste por qué las *sampled metrics* engañan. ¿Qué protocolo de evaluación de LLM-rankers es la versión LLM de ese error?
+
+<details><summary>Respuestas</summary>
+1. Porque el contenido no sabe qué es bueno ni qué se está viendo ahora; solo qué se parece. Un LLM da mejor texto (y conocimiento del mundo), pero en <i>warm</i> el CF suele seguir ganando: su ventaja está donde faltan interacciones (§2 y §5 lo miden).
+2. Recall@20 del retriever: si el ítem futuro no está entre los 20 candidatos, ningún re-ranker lo recupera.
+3. El del propio <b>LLM</b>: favorece candidatos por su posición en el prompt. Se mitiga barajando y agregando con Borda (§3).
+4. «1 positivo + N negativos aleatorios»: candidatos fáciles que inflan los resultados. Aquí se reordena la salida real del retriever (secreto 2).
+</details>
+
+### 🧭 Cómo recorrer esta lección (7–9 h: hazla en dos sesiones)
+Es el módulo más largo del curso. Como ya dominas LLMs y LangGraph, lo nuevo no es la herramienta sino **dónde rinde un LLM dentro de un recomendador**. Propuesta:
+
+| Sesión A · el LLM dentro del embudo (≈ 4 h) | Sesión B · conversación y evaluación (≈ 4 h) |
+|---|---|
+| §1 intuición y regla de oro de costes · §2 encoder · §3 ranker listwise y sus sesgos · §5 enriquecimiento y cold start · §11 costes | §8 agente LangGraph · §6 LLM-as-judge · §7 explicaciones · §9 simulación · §10 evaluación de agentes |
+
+**Opcional / con GPU**: §4 (LoRA tipo TALLRec): imprescindible si vas a ajustar LLMs, prescindible si solo vas a usarlos como servicio. Si vas justo, lee la teoría de §4 y ejecuta solo el LoRA desde cero en NumPy.
 """)
 
 nb.md("""
@@ -1122,6 +1144,10 @@ ax.set_xlabel("permutaciones B (Borda)"); ax.set_title("Bootstrapping: robustez 
 curve
 ''')
 
+nb.md("""
+> 👀 **Qué debes observar:** (sesgo de posición) un ranker sin sesgo daría una línea **plana** en el puesto que corresponda a su calidad; si la curva sube con la posición de entrada, el LLM «arrastra» el orden del prompt (y si baja al final, tiene sesgo de recencia). Con el backend `mock` verás el patrón que simula el *mock*, no el de un LLM real. (bootstrapping) el coste crece **linealmente** con B y la calidad suele saturar pronto: B = 3 suele bastar. Es el mismo *trade-off* calidad/coste que pagarás en §11.
+""")
+
 # ---------------------------------------------------------------- 4. LoRA / TALLRec
 nb.md("""
 ## 4 · Fine-tuning con LoRA al estilo TALLRec
@@ -1448,6 +1474,10 @@ plt.tight_layout(); plt.show(); s.round(3)
 ''')
 
 nb.md("""
+> 👀 **Qué debes observar:** ordena las barras entre el **Azar** (suelo) y el **Oráculo** (techo: el CF con los datos que en la vida real aún no tienes). El hueco que cierra cada método es lo que vale el LLM en *cold start*. Si «Texto → CF (ridge)» supera a «Texto directo», es porque **hablar el idioma del CF** importa más que la calidad del texto: es la idea de DropoutNet y del secreto 1 del módulo 03. El enriquecimiento con LLM solo ayuda si el LLM conoce los títulos (y no alucina): compáralo con la tasa de «no lo sé».
+""")
+
+nb.md("""
 ### Cold start de usuarios: de lenguaje natural a consulta (HyDE)
 Un usuario nuevo escribe *"algo de ciencia ficción de los 80 con humor"*. Dos opciones:
 - **Embedding directo** de la consulta.
@@ -1579,6 +1609,10 @@ ax = rates.plot.barh(figsize=(7, 2.4), color=["#bab0ac", "#f58518", "#e45756"]);
 ax.set_title("Auditoría automática de explicaciones"); plt.tight_layout(); plt.show()
 ex[["item", "explicación", "no_soportadas"]].head(5)
 ''')
+
+nb.md("""
+> 👀 **Qué debes observar:** las tres barras son tres fallos distintos. «Sin citas» no es grave (explicación genérica); «cita no soportada» es una **explicación infiel** (cita una película real que el usuario no vio): es la que más daña la confianza; «inventada» es una alucinación pura. En producción fijarías un umbral (p. ej. < 1 % de infieles) como *guardrail* de lanzamiento, y lo monitorizarías como cualquier métrica (módulo 17).
+""")
 
 # ---------------------------------------------------------------- 8. Agente LangGraph
 nb.md("""
@@ -1774,6 +1808,10 @@ ax = fd.rename({True: "ítems que el usuario vio", False: "ítems aleatorios"}).
 ax.set_ylabel("P(el simulador lo 've')"); ax.set_title("Fidelidad del simulador"); plt.tight_layout(); plt.show(); fd
 ''')
 
+nb.md("""
+> 👀 **Qué debes observar:** antes de creerte la gráfica de «evaluación en bucle» de arriba, mira esta. Si el simulador elige los ítems que el usuario real vio **casi tanto** como los aleatorios, no distingue gustos y sus conclusiones sobre políticas no valen nada. Una diferencia clara entre las dos barras es la condición mínima para usarlo (como validar un modelo antes de usar sus predicciones). Con el backend `mock` la fidelidad es la que hemos programado, no una medida real.
+""")
+
 # ---------------------------------------------------------------- 10. Evaluación de agentes
 nb.md("""
 ## 10 · Evaluación de agentes recomendadores
@@ -1951,6 +1989,12 @@ nb.md("""
 
 7. Tienes 50 M de DAU. ¿Pondrías un LLM de re-ranking en cada carga de la home? Razona con números.
 <details><summary>Respuesta</summary>Con ~1.000 tokens de entrada y ~80 de salida por llamada a 2/10 USD por millón, cada llamada cuesta ≈ 0,0028 USD; 2 cargas/día × 50 M ≈ 280.000 USD/día, más ~1 s de latencia extra que rompe el presupuesto de una home. Mejor: LLM offline (enriquecimiento/embeddings/destilación), caché por usuario-día, o solo en superficies conversacionales.</details>
+
+8. **(Diagnóstico)** Tu agente LangGraph recomienda a veces películas de terror a un usuario que dijo «nada de terror» hace tres turnos. Las trazas muestran que el filtro sí recibió la exclusión en el turno 1. ¿Dónde miras?
+<details><summary>Respuesta</summary>En la memoria y en el ciclo de relajación: (1) si el <i>reducer</i> del estado sobrescribe las preferencias en lugar de fusionarlas (<code>merge_prefs</code>), la exclusión se pierde al llegar nuevas preferencias; (2) si el nodo <code>relax</code> relaja también exclusiones cuando hay &lt; 5 candidatos (nunca debe hacerlo); (3) si la exclusión debía ir al <code>Store</code> de largo plazo y no solo al estado del <i>thread</i>. Un test de trayectoria con este diálogo lo convierte en regresión automática.</details>
+
+9. **(Transferencia)** Tu jefa quiere «poner un LLM en la home» de CineMatch. Propón **dos** usos con buen retorno y **uno** que rechazarías, usando la tabla de la regla de oro (§1).
+<details><summary>Respuesta</summary>Buen retorno: enriquecimiento offline de metadatos para estrenos (1 llamada por ítem, ayuda al cold start) y embeddings de texto como <i>feature</i>/fuente de candidatos; también destilar un LLM-ranker a un ranker pequeño. Rechazaría un re-ranking LLM online en cada carga de la home: coste O(QPS) y ~1 s de latencia (pregunta 7). La conversación sí tiene sentido, pero en una superficie aparte y solo para quien conversa.</details>
 
 ## 📚 Referencias
 
@@ -2150,6 +2194,8 @@ pj.md("""
 1. `build_listwise_prompt(hist_ids, cand_ids)`: historial cronológico + candidatos numerados `[1]..[m]` + instrucción de formato estricta.
 2. `parse_ranking(text, n)`: extrae índices **1..n**, ignora años (4 dígitos), duplicados e índices inventados; añade al final los omitidos en su orden original. Devuelve `(orden_0based, {"invalid": .., "missing": ..})`.
 3. `llm_rerank(llm, hist_ids, cand_ids, n_perm)`: con `n_perm > 1` baraja los candidatos y agrega con **Borda**. Pasa `task="rank"` y `meta={"cand_ids":..., "hist_ids":...}` a `llm.generate` (lo necesita el backend mock).
+
+<details><summary>🪜 Pista (parser y Borda)</summary>Para no confundir años con índices, extrae números de 1–3 cifras que no estén pegados a otros dígitos: <code>re.findall(r"(?&lt;!\\d)(\\d{1,3})(?!\\d)", text)</code> (un año de 4 cifras no encaja), descarta los que no estén en 1..n y los repetidos, y añade al final los omitidos en su orden original. Borda: por cada permutación <code>b</code>, el candidato en el puesto r suma <code>m − r</code>; ordena por la suma total. Recuerda deshacer la permutación (trabaja con IDs, no con posiciones).</details>
 """)
 pj.code(r'''
 SYSTEM_RANKER = "Eres un sistema de recomendación de películas. Respondes únicamente con el formato pedido."
@@ -2187,6 +2233,9 @@ Implementa las herramientas como **funciones puras** y el grafo:
 - **Guardrail**: la respuesta final se construye con títulos del catálogo (el LLM no escribe títulos).
 
 💡 Pista: estado `TypedDict` con `Annotated[list, operator.add]` para `messages`, `shown` y `trace`.
+
+<details><summary>🪜 Pista 2 (cableado del grafo)</summary>Siete nodos y dos decisiones: <code>START → understand</code>; <code>add_conditional_edges("understand", ruta, {"explain": "explain", "retrieve": "retrieve"})</code>; <code>retrieve → filter</code>; <code>add_conditional_edges("filter", ruta2, {"relax": "relax", "rank": "rank"})</code> según queden &lt; 5 candidatos; <code>relax → filter</code> (el ciclo); <code>rank → respond → END</code> y <code>explain → END</code>. Compila con <code>checkpointer=MemorySaver()</code> y <code>store=InMemoryStore()</code>; dentro de <code>understand</code> lee/escribe las exclusiones duraderas con <code>store.get/put((user_id, "prefs"), ...)</code>.</details>
+<details><summary>🪜 Pista 3 (guardrails)</summary>Los dos guardrails de E3 se cumplen por construcción si (1) <code>relax</code> solo toca restricciones blandas (años, géneros pedidos) y nunca <code>exclude_genres</code>, y (2) <code>respond</code> construye el texto con <code>titles[id]</code> de los IDs que devuelve <code>rank</code>; el LLM solo redacta alrededor. Escribe un test con «nada de terror» en el turno 1 y una petición ambigua en el turno 3.</details>
 """)
 pj.code(r'''
 def tool_search(query, user_id=None, k=300, exclude=()):

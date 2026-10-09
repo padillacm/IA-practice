@@ -209,3 +209,20 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   con 40 % de uso del nivel 1).
 - ✅ Proyecto: pistas para `quantize` (enlazada al ejemplo 2D), trie/desambiguación y beam search restringido (dos
   niveles).
+
+### 12 · LLMs y agentes
+- Muy bien adaptado al alumno («ya conoces LangGraph: aquí lo que cambia al recomendar»), con la regla de oro de costes,
+  el patrón «LLM como controlador, recsys como herramientas» y defensas contra alucinación muy concretas.
+- ⚠️ **Sobrecarga (G8)**: 86 celdas, 11 secciones, 7–9 h. ✅ Caja **«🧭 Cómo recorrer esta lección»** con dos sesiones
+  (A: el LLM dentro del embudo; B: conversación y evaluación) y §4 LoRA marcada como opcional/GPU.
+  📌 Recomendación: partir el módulo en **12a** (§1–5, 11) y **12b** (§6–10) con su propia autoevaluación; el proyecto
+  ya se apoya sobre todo en 12b.
+- ✅ Caja 🔁 (contenido warm vs cold del 03, techo Recall@K del 00/08, sesgo de posición del 07 vs del LLM, protocolo
+  1+N del 02).
+- ✅ «👀 Qué observar» en sesgo de posición + bootstrapping (aviso del backend mock), cold start (suelo/techo; hablar el
+  idioma del CF), auditoría de explicaciones (tres fallos distintos → guardrail) y fidelidad del simulador (condición
+  previa para creer la evaluación en bucle).
+- ✅ Autoevaluación: +1 diagnóstico (exclusión perdida en el agente: reducer, relax, Store) y +1 transferencia
+  («pon un LLM en la home»: dos usos rentables y uno a rechazar).
+- ✅ Proyecto: pistas para el parser/Borda, el cableado del grafo (aristas condicionales y ciclo relax) y los
+  guardrails por construcción.
