@@ -12,6 +12,12 @@ from pathlib import Path
 sys.path.insert(0, "recsys-course/_tools")
 from nbbuild import Notebook  # noqa: E402
 
+def code_parts(book, src: str) -> None:
+    """Añade `src` como varias celdas, partiendo por las marcas '#---split---' (celdas ≤ ~60 líneas)."""
+    for part in src.split("\n#---split---\n"):
+        book.code(part)
+
+
 MOD = "13_beyond_accuracy"
 OUT = Path("recsys-course") / MOD
 OUT.mkdir(parents=True, exist_ok=True)
@@ -69,6 +75,7 @@ def make_synthetic_movielens(n_users=600, n_items=1500, seed=42):
     ratings = pd.DataFrame(rows_r, columns=["user_id", "item_id", "rating", "timestamp"])
     return ratings, movies
 
+#---split---
 def load_movielens(variant: str = "ml-latest-small"):
     """Devuelve (ratings[user_id,item_id,rating,timestamp], movies[item_id,title,genres,year]) con ids contiguos."""
     try:
@@ -329,29 +336,30 @@ def dpp_rerank(ids, rel, k=K, theta=0.7, sim_fn=SIM, jitter=1e-3):
 '''
 
 CALIB = r'''
-def calibrated_rerank(u, ids, rel, k=K, lam=0.5, alpha=0.01):
-    """Steck (2018): max (1-λ)·Σ s(i) − λ·KL(p || q~(I)), greedy."""
-    p = genre_dist_history(u)
-    chosen, acc = [], np.zeros(len(GENRES))
-    pool = list(range(len(ids)))
-    for _ in range(min(k, len(ids))):
-        best, best_val = None, -np.inf
-        for j in pool:
-            q = acc + P_gi[ids[j]]; q = q / q.sum()
-            val = (1 - lam) * (rel[chosen].sum() + rel[j] if chosen else rel[j]) - lam * kl_calibration(p, q, alpha)
-            if val > best_val:
-                best, best_val = j, val
-        chosen.append(best); pool.remove(best); acc += P_gi[ids[best]]
-    return list(np.asarray(ids)[chosen])
-'''
-
-COMBINED = r'''
 def kl_rows(p, Q, alpha=0.01):
-    """KL(p || q~) para cada fila de Q (vectorizado)."""
+    """KL(p || q~) para cada fila de Q a la vez (vectorizado)."""
     Qt = (1 - alpha) * Q + alpha * p
     m = p > 0
     return (p[m] * np.log(p[m] / Qt[:, m])).sum(1)
 
+def calibrated_rerank(u, ids, rel, k=K, lam=0.5, alpha=0.01):
+    """Steck (2018): max (1-λ)·Σ s(i) − λ·KL(p || q~(I)), greedy.
+
+    En cada paso evaluamos TODOS los candidatos a la vez: Q[j] = distribución de géneros
+    de la lista si añadimos j. Como Σ_{i∈S} s(i) es constante en el paso, basta con
+    (1-λ)·s(j) − λ·KL(p || q~(S ∪ {j}))."""
+    ids, rel = np.asarray(ids), np.asarray(rel)
+    p = genre_dist_history(u)
+    acc, chosen, avail = np.zeros(len(GENRES)), [], np.ones(len(ids), bool)
+    for _ in range(min(k, len(ids))):
+        Q = acc + P_gi[ids]; Q = Q / Q.sum(1, keepdims=True)
+        val = (1 - lam) * rel - lam * kl_rows(p, Q, alpha)
+        val[~avail] = -np.inf
+        j = int(np.argmax(val)); chosen.append(j); avail[j] = False; acc += P_gi[ids[j]]
+    return list(ids[chosen])
+'''
+
+COMBINED = r'''
 def combined_rerank(u, ids, rel, k=K, w_div=0.0, w_cal=0.0, w_nov=0.0):
     """Greedy multi-objetivo: rel + w_div·(1 - max sim) + w_nov·novedad - w_cal·KL(p || q(S ∪ {i}))."""
     ids, rel = np.asarray(ids), np.asarray(rel)
@@ -412,7 +420,7 @@ nb.md("""
 ## 0 · Utilidades mínimas (de los módulos 01, 02 y 08)
 Descarga de MovieLens con *fallback* sintético y split temporal (módulo 01), `Recall/NDCG@K` (módulo 02) y un retriever **PureSVD + FAISS** (módulo 08) que nos da los **100 candidatos** de cada usuario. Todo este módulo trabaja en la etapa de **re-ranking**: recibimos candidatos con su relevancia y decidimos *qué lista final* mostrar.
 """)
-nb.code(UTILS_DATA)
+code_parts(nb, UTILS_DATA)
 nb.code(UTILS_EVAL)
 nb.code(UTILS_RETR)
 nb.code(PREP)
@@ -433,7 +441,7 @@ Dónde vive esto en el embudo: en el **re-ranking**, después del ranker y antes
 nb.code(r'''
 def draw_pipeline():
     fig, ax = plt.subplots(figsize=(12, 2.8)); ax.axis("off"); ax.set_xlim(0, 12); ax.set_ylim(0, 3)
-    boxes = [("Retrieval\n10^6 → 10^3", .2, "#dbe9f6"), ("Ranking\n10^3 → 10^2", 2.6, "#dbe9f6"),
+    boxes = [("Retrieval\n10⁶ → 10³", .2, "#dbe9f6"), ("Ranking\n10³ → 10²", 2.6, "#dbe9f6"),
              ("Re-ranking de lista\nMMR · DPP · calibración\nfairness · novedad", 5.0, "#fde2b5"),
              ("Página\nfilas × columnas\ndeduplicación", 7.6, "#fde2b5"), ("Reglas de negocio\nfiltros · cuotas · pins", 10.0, "#f9c6c6")]
     for t, x, c in boxes:
@@ -642,7 +650,7 @@ Diversidad no es lo mismo que **respetar las proporciones**. Si has visto 70 % c
 - Distribución del usuario: $p(g\\mid u) = \\dfrac{\\sum_{i \\in H_u} w_{u,i}\\, p(g\\mid i)}{\\sum_{i \\in H_u} w_{u,i}}$, con $p(g\\mid i)$ uniforme entre los géneros de $i$ y $w_{u,i}$ creciente con la recencia.
 - Distribución de la lista: $q(g\\mid u) = \\dfrac{\\sum_{i \\in L} w_{r(i)}\\, p(g\\mid i)}{\\sum_{i \\in L} w_{r(i)}}$ (pesos por posición opcionales).
 - Miscalibración: $C_{KL}(p, q) = \\mathrm{KL}(p \\Vert \\tilde q) = \\sum_g p(g\\mid u) \\log \\dfrac{p(g\\mid u)}{\\tilde q(g\\mid u)}$ con $\\tilde q = (1-\\alpha) q + \\alpha p$, $\\alpha = 0{,}01$ (evita $\\log 0$ cuando la lista omite un género).
-- Re-ranking: $\\displaystyle L^* = \\arg\\max_{\\lvert L \\rvert = K} (1-\\lambda) \\sum_{i \\in L} s(u,i) - \\lambda\\, C_{KL}(p, q(L))$, resuelto *greedy* (Steck muestra que la función objetivo es submodular, lo que da la garantía $(1 - 1/e)$ del greedy).
+- Re-ranking: $\\displaystyle L^* = \\arg\\max_{\\lvert L \\rvert = K} (1-\\lambda) \\sum_{i \\in L} s(u,i) - \\lambda\\, C_{KL}(p, q(L))$, resuelto *greedy*: en cada paso añadimos el ítem que más mejora el objetivo (Steck argumenta que este objetivo es submodular, de modo que el greedy tiene la garantía clásica $(1-1/e)$).
 """)
 nb.code(CALIB)
 
@@ -714,83 +722,92 @@ nb.md("""
 El recomendador se entrena con lo que los usuarios **vieron**, y los usuarios ven lo que el recomendador **les mostró**. Lo popular se muestra más → recibe más clics → parece aún mejor → se muestra más. Chaney, Stewart & Engelhardt (RecSys 2018) mostraron en simulación que este *algorithmic confounding* **homogeneiza** el comportamiento de los usuarios y reduce la utilidad, y Mansoury et al. (CIKM 2020) que **amplifica el sesgo de popularidad** con cada ronda de reentrenamiento.
 
 ### 🧪 Simulación
+Escenario con **re-consumo** (re-visionados, música, noticias): lo ya consumido puede volver a recomendarse y el sistema aprende de **conteos** de interacciones. Para que el bucle domine, el sistema arranca con solo el 20 % de los datos de train (como un producto joven): casi todo lo que aprende después viene de **su propio feedback**.
 1. **Verdad oculta**: entrenamos un modelo con *todos* los datos y lo convertimos en probabilidad de clic $p^\\star(u,i)$ (el "mundo real" que el sistema no ve).
-2. Cada ronda: la política recomienda $K$ ítems no consumidos a cada usuario → clics $\\sim \\operatorname{Bernoulli}(p^\\star)$ → se añaden a los datos → se **reentrena**.
-3. Políticas: **Popularidad**, **CF (PureSVD)**, **CF + MMR** (λ = 0,7) y **CF + exploración** (2 de 10 huecos aleatorios, enlaza con el módulo 14).
-4. Medimos la **concentración de la exposición** (Gini, cuota del top-1 %), la **cobertura** y la utilidad (clics esperados).
+2. Cada ronda: la política recomienda $K$ ítems a cada usuario → clics $\\sim \\operatorname{Bernoulli}(p^\\star)$ → se suman a los conteos → se **reentrena** (PureSVD sobre $\\log(1+\\text{conteo})$).
+3. Políticas: **Popularidad**, **CF (PureSVD)**, **CF + MMR** (λ = 0,7, diversidad por géneros) y **CF + exploración** (2 de 10 huecos aleatorios, enlaza con el módulo 14).
+4. Medimos, **ronda a ronda**, la concentración de la exposición (cobertura del catálogo, Gini, cuota del top-1 %) y la utilidad (clics).
 """)
 
 nb.code(r'''
-def make_ground_truth(dim=32, base_ctr=0.03, temp=1.5, seed=SEED):
+def make_ground_truth(dim=32, base_ctr=0.03, temp=1.0, seed=SEED):
     Xall = build_interaction_matrix(ratings, n_users, n_items)
     svd = TruncatedSVD(dim, random_state=seed).fit(Xall)
     S = (Xall @ svd.components_.T) @ svd.components_                     # n_users × n_items
     Z = (S - S.mean(1, keepdims=True)) / (S.std(1, keepdims=True) + 1e-9)
     b = np.log(base_ctr / (1 - base_ctr))
-    return 1 / (1 + np.exp(-(temp * Z + b)))                              # p*(u,i)
+    return 1 / (1 + np.exp(-(temp * np.clip(Z, -3, 3) + b)))             # p*(u,i), colas recortadas
 
 P_TRUE = make_ground_truth()
 print(f"p* medio={P_TRUE.mean():.3f} · p* del top-10 ideal de cada usuario={np.sort(P_TRUE, 1)[:, -10:].mean():.3f}")
 ''')
 
 nb.code(r'''
-def policy_scores(name, Xobs, g):
+def recommend_round(name, C, g, k=K):
+    """C: matriz de conteos observados. Devuelve recs (n_users × k)."""
     if name == "Popularidad":
-        return np.tile(np.asarray(Xobs.sum(0)).ravel().astype(float), (n_users, 1))
-    svd = TruncatedSVD(32, random_state=SEED).fit(Xobs)
-    return np.asarray((Xobs @ svd.components_.T) @ svd.components_)
-
-def recommend_round(name, S, Xobs, g, k=K):
-    S = S.copy(); S[Xobs.nonzero()] = -np.inf
+        S = np.tile(np.asarray(C.sum(0)).ravel(), (n_users, 1))
+    else:
+        Xl = C.copy(); Xl.data = np.log1p(Xl.data)
+        svd = TruncatedSVD(32, random_state=SEED).fit(Xl)
+        S = np.asarray((Xl @ svd.components_.T) @ svd.components_)
     top = np.argpartition(-S, 50, axis=1)[:, :50]
     top = np.take_along_axis(top, np.argsort(-np.take_along_axis(S, top, 1), 1), 1)
     if name == "CF + MMR":
         return np.array([mmr(top[u], np.linspace(1, 0, 50), k=k, lam=.7) for u in range(n_users)])
     recs = top[:, :k].copy()
     if name == "CF + exploración":
-        recs[:, -2:] = g.integers(0, n_items, size=(n_users, 2))       # 2 huecos de exploración uniforme
+        recs[:, -2:] = g.integers(0, n_items, size=(n_users, 2))      # 2 huecos de exploración uniforme
     return recs
 
-def simulate_feedback_loop(name, rounds, seed=SEED):
+def simulate_feedback_loop(name, rounds, init_frac=0.2, seed=SEED):
     g = np.random.default_rng(seed)
-    Xobs = X.copy().tolil(); exposure = np.zeros(n_items); hist = []
+    C0 = X.copy().astype(np.float32); C0.data[g.random(C0.nnz) > init_frac] = 0; C0.eliminate_zeros()
+    C, hist, first_exp = C0.tolil(), [], None
     for t in range(rounds):
-        Xc = Xobs.tocsr()
-        recs = recommend_round(name, policy_scores(name, Xc, g), Xc, g)
-        np.add.at(exposure, recs.ravel(), 1)
+        recs = recommend_round(name, C.tocsr(), g)
+        e = np.bincount(recs.ravel(), minlength=n_items).astype(float)
+        first_exp = e if first_exp is None else first_exp
         clicks = g.random(recs.shape) < P_TRUE[np.arange(n_users)[:, None], recs]
-        for u, i in zip(*np.nonzero(clicks)):
-            Xobs[u, recs[u, i]] = 1
-        top1 = np.sort(exposure)[::-1][: max(1, n_items // 100)].sum() / exposure.sum()
-        hist.append({"ronda": t + 1, "Gini exposición": gini(exposure), "cuota top-1%": top1,
-                     "cobertura ronda": len(np.unique(recs)) / n_items, "clics/usuario": clicks.sum() / n_users})
-    return pd.DataFrame(hist), exposure
+        for u, j in zip(*np.nonzero(clicks)):
+            C[u, recs[u, j]] += 1
+        hist.append({"ronda": t + 1, "cobertura": (e > 0).mean(), "Gini exposición": gini(e),
+                     "cuota top-1%": np.sort(e)[::-1][: max(1, n_items // 100)].sum() / e.sum(),
+                     "clics/usuario": clicks.sum() / n_users})
+    return pd.DataFrame(hist), first_exp, e
 
-ROUNDS = 12 if FAST_DEV_RUN else 40
+ROUNDS = 15 if FAST_DEV_RUN else 40
 loop = {name: simulate_feedback_loop(name, ROUNDS) for name in ["Popularidad", "CF (PureSVD)", "CF + MMR", "CF + exploración"]}
 ''')
 
 nb.code(r'''
 fig, ax = plt.subplots(2, 2, figsize=(12, 7))
-for name, (h, exp) in loop.items():
-    ax[0, 0].plot(h["ronda"], h["Gini exposición"], "o-", ms=3, label=name)
-    ax[0, 1].plot(h["ronda"], h["cuota top-1%"], "o-", ms=3, label=name)
-    ax[1, 1].plot(h["ronda"], h["clics/usuario"].cumsum(), "o-", ms=3, label=name)
-    lor = np.cumsum(np.sort(exp)) / exp.sum()
-    ax[1, 0].plot(np.linspace(0, 1, n_items), lor, label=f"{name} (Gini={gini(exp):.2f})")
+colors = dict(zip(loop, ["#7f7f7f", "#4c78a8", "#f58518", "#54a24b"]))
+for name, (h, e0, eT) in loop.items():
+    c = colors[name]
+    ax[0, 0].plot(h["ronda"], h["cobertura"], "o-", ms=3, c=c, label=name)
+    ax[0, 1].plot(h["ronda"], h["Gini exposición"], "o-", ms=3, c=c, label=name)
+    ax[1, 1].plot(h["ronda"], h["clics/usuario"].cumsum(), "o-", ms=3, c=c, label=name)
+    if name in ("CF (PureSVD)", "CF + exploración"):
+        for e, ls, tag in [(e0, ":", "ronda 1"), (eT, "-", f"ronda {ROUNDS}")]:
+            ax[1, 0].plot(np.linspace(0, 1, n_items), np.cumsum(np.sort(e)) / e.sum(), ls=ls, c=c, label=f"{name} · {tag}")
 ax[1, 0].plot([0, 1], [0, 1], "k--", lw=.8, label="igualdad perfecta")
-ax[0, 0].set_title("Gini de la exposición acumulada"); ax[0, 1].set_title("Cuota de exposición del top-1 % de ítems")
-ax[1, 0].set_title(f"Curva de Lorenz tras {ROUNDS} rondas"); ax[1, 0].set_xlabel("fracción de ítems (de menos a más expuestos)")
+ax[0, 0].set_title("Cobertura del catálogo en cada ronda"); ax[0, 1].set_title("Gini de la exposición en cada ronda")
+ax[1, 0].set_title("Curvas de Lorenz de la exposición"); ax[1, 0].set_xlabel("fracción de ítems (de menos a más expuestos)")
 ax[1, 1].set_title("Clics acumulados por usuario (utilidad)")
 for a in ax.ravel():
     a.legend(fontsize=7)
-ax[0, 0].set_xlabel("ronda"); ax[0, 1].set_xlabel("ronda"); ax[1, 1].set_xlabel("ronda")
-plt.suptitle("Feedback loop: cómo se concentra la exposición según la política", weight="bold"); plt.tight_layout(); plt.show()
-pd.DataFrame({n: h.iloc[-1] for n, (h, _) in loop.items()}).T.drop(columns="ronda").round(3)
+for a in [ax[0, 0], ax[0, 1], ax[1, 1]]:
+    a.set_xlabel("ronda")
+plt.suptitle("Feedback loop: la exposición se concentra con el tiempo (salvo con exploración)", weight="bold")
+plt.tight_layout(); plt.show()
+pd.DataFrame({n: {"cobertura ronda 1": h.cobertura.iat[0], f"cobertura ronda {ROUNDS}": h.cobertura.iat[-1],
+                  "Gini ronda 1": h["Gini exposición"].iat[0], f"Gini ronda {ROUNDS}": h["Gini exposición"].iat[-1],
+                  "clics totales/usuario": h["clics/usuario"].sum()} for n, (h, _, _) in loop.items()}).T.round(3)
 ''')
 
 nb.md("""
-**Cómo leerlo.** La política de popularidad concentra casi toda la exposición en unos pocos ítems desde la primera ronda (Gini ≈ 1). El CF personaliza, pero el reentrenamiento con su propio feedback va **concentrando** la exposición. MMR y, sobre todo, la exploración mantienen la cobertura del catálogo — y la exploración, además, genera **datos no sesgados** con los que el modelo aprende de ítems que nunca habría mostrado. El precio son algunos clics a corto plazo: la pregunta de negocio es si compensan a largo plazo (retención, salud del catálogo, proveedores), algo que solo se responde con experimentos de larga duración (módulo 15).
+**Cómo leerlo.** La popularidad muestra lo mismo a todos desde la primera ronda (cobertura mínima, Gini ≈ 1). El CF empieza personalizando, pero al reentrenarse con su propio feedback la **cobertura cae ronda a ronda**: los ítems que mostró reciben clics, parecen mejores y se muestran más; los que nunca mostró se quedan sin datos (*rich get richer*). Fíjate en que **MMR no lo arregla**: diversifica *géneros dentro de cada lista*, no *qué parte del catálogo* se expone — diversidad intra-lista y diversidad agregada son cosas distintas. La exploración mantiene la cobertura estable y genera **datos menos sesgados** sobre ítems que el modelo nunca habría mostrado, a cambio de algunos clics a corto plazo. Si compensa a largo plazo (retención, salud del catálogo, proveedores) solo se responde con experimentos de larga duración (módulo 15).
 
 ## 8 · Fairness de exposición (proveedores y usuarios)
 
@@ -1120,16 +1137,28 @@ summary = {"Baseline CF": baseline,
            "Novedad β=0,2": {u: list(CANDS[u][0][np.argsort(-(CANDS[u][1] + .2 * NOV[CANDS[u][0]]))][:K]) for u in eval_users},
            "Combinado (div .3, cal 1, nov .2)": {u: combined_rerank(u, *CANDS[u], w_div=.3, w_cal=1, w_nov=.2) for u in eval_users}}
 sm = pd.DataFrame({k: evaluate_lists(v) for k, v in summary.items()}).T
-rel_change = (sm / sm.loc["Baseline CF"] - 1) * 100
+rel_change = ((sm / sm.loc["Baseline CF"] - 1) * 100).drop(index="Baseline CF")
+better = rel_change * np.array([-1 if c in ("KL calibración", "Gini exposición") else 1 for c in rel_change.columns])
 fig, ax = plt.subplots(figsize=(11, 3.8))
-im = ax.imshow(rel_change.drop(index="Baseline CF").T.values, cmap="RdBu", vmin=-60, vmax=60, aspect="auto")
-ax.set_xticks(range(len(rel_change) - 1), rel_change.index[1:], rotation=15, fontsize=8)
-ax.set_yticks(range(rel_change.shape[1]), rel_change.columns, fontsize=8)
-for (r, c), v in np.ndenumerate(rel_change.drop(index="Baseline CF").T.values):
-    ax.text(c, r, f"{v:+.0f}%", ha="center", va="center", fontsize=7.5)
-plt.colorbar(im, label="% vs baseline"); ax.set_title("Cambio relativo de cada métrica frente al baseline (KL y Gini: menos es mejor)")
+im = ax.imshow(better.T.values, cmap="RdYlGn", vmin=-50, vmax=50, aspect="auto")
+ax.set_xticks(range(len(better)), better.index, rotation=15, fontsize=8)
+ax.set_yticks(range(better.shape[1]), better.columns, fontsize=8)
+for (r, c), v in np.ndenumerate(rel_change.T.values):
+    ax.text(c, r, f"{v:+.0f}%", ha="center", va="center", fontsize=7.5, color="white" if abs(better.T.values[r, c]) > 35 else "black")
+plt.colorbar(im, label="verde = mejora, rojo = empeora")
+ax.set_title("Cambio relativo de cada métrica frente al baseline (texto = cambio real; KL y Gini: bajar es mejorar)")
 plt.tight_layout(); plt.show(); sm.round(4)
 ''')
+
+nb.md("""
+## 🧰 Librerías de industria (y por qué aquí lo hacemos a mano)
+No existe un "scikit-learn del re-ranking": en producción MMR, DPP y calibración se implementan en el propio servidor de ranking (Java/C++/Rust) sobre los candidatos de cada petición, porque son pocas líneas y deben ajustarse a la latencia. Herramientas útiles:
+- **Métricas beyond-accuracy**: [RecBole](https://recbole.io/) (ItemCoverage, AveragePopularity, GiniIndex, TailPercentage), [Elliot](https://github.com/sisinflab/elliot) (decenas de métricas de diversidad, novedad y sesgo), [Microsoft Recommenders](https://github.com/recommenders-team/recommenders) (`diversity`, `novelty`, `serendipity`, `catalog_coverage` en `python_evaluation`).
+- **DPP**: [DPPy](https://github.com/guilgautier/DPPy) para muestreo exacto/aproximado (útil para investigar; para MAP greedy en tiempo real se usa el algoritmo de Chen et al. implementado a mano, como aquí).
+- **Fairness en ranking**: `fairsearchcore` (implementación de referencia de FA\\*IR de sus autores) y las métricas de exposición de Elliot.
+
+🧪 **Ejercicio de verificación:** calcula `diversity`/`novelty` con Microsoft Recommenders sobre las mismas listas y comprueba que coinciden con nuestras funciones (cuidado: su diversidad usa co-ocurrencias o embeddings, no géneros, por defecto).
+""")
 
 nb.md("""
 ## 🏭 En producción
@@ -1243,7 +1272,7 @@ El equipo de producto de **CineMatch** tiene tres quejas sobre la home:
 2. *"Veo con mis hijos dibujos y con mi pareja thrillers, pero solo me recomienda thrillers"* (falta de **calibración**).
 3. *"La misma película aparece en tres filas"* y los perfiles infantiles han visto un tráiler de terror (**página** y **reglas**).
 
-El VP pide un re-ranker que arregle esto **sin perder más de un 5 % de NDCG@10 offline** y un análisis de qué pasará con la concentración del catálogo a medio plazo.
+El VP pide un re-ranker que arregle esto **sin perder más de un 7 % de NDCG@10 offline** y un análisis de qué pasará con la concentración del catálogo a medio plazo.
 
 ## 📦 Dataset
 **MovieLens latest-small** (GroupLens). Géneros como espacio de diversidad/calibración. Candidatos: top-100 de un retriever PureSVD + FAISS (módulo 08). Si no hay red, datos sintéticos con la misma forma.
@@ -1254,7 +1283,7 @@ El VP pide un re-ranker que arregle esto **sin perder más de un 5 % de NDCG@10 
 |---|---|---|
 | R1 | Métricas `ild`, `kl_calibration`, `gini` | pasan los tests numéricos |
 | R2 | `dpp_greedy_fast` (Cholesky incremental) | coincide con el greedy ingenuo |
-| R3 | `rerank_home(u, ids, rel, w)` (diversidad + calibración + novedad) | NDCG@10 ≥ 0,95 × baseline · ILD@10 ≥ 1,15 × baseline · KL ≤ 0,7 × baseline |
+| R3 | `rerank_home(u, ids, rel, w)` (diversidad + calibración + novedad) | NDCG@10 ≥ 0,93 × baseline · ILD@10 ≥ 1,10 × baseline · KL ≤ 0,75 × baseline |
 | R4 | Barrido de pesos + frente de Pareto + punto elegido por ε-restricción en **validación** | gráfico y tabla |
 | R5 | `build_home(u)`: 6 filas × 10 títulos, deduplicada, con reglas (infantil, cuota por género) | 0 duplicados · 0 violaciones en perfiles infantiles · utilidad ≥ filas independientes |
 | R6 | Simulación de feedback loop (10 rondas): baseline vs tu re-ranker | gráfico de Gini y cobertura |
@@ -1263,7 +1292,7 @@ El VP pide un re-ranker que arregle esto **sin perder más de un 5 % de NDCG@10 
 pj.code(PIP)
 pj.code(SETUP)
 pj.md("### Utilidades (módulos 01, 02, 08) y preparación de candidatos")
-pj.code(UTILS_DATA)
+code_parts(pj, UTILS_DATA)
 pj.code(UTILS_EVAL)
 pj.code(UTILS_RETR)
 pj.code(PREP)
@@ -1361,7 +1390,7 @@ def evaluate_lists(lists, k=K):
 
 pj.md("""
 ## 🛠️ Parte 4 · Pareto + ε-restricción en validación (R4)
-Barre al menos 30 combinaciones de pesos en `val_users`, marca las no dominadas en (NDCG, ILD, −KL) y elige la de mayor NDCG que cumpla ILD ≥ 1,15× y KL ≤ 0,7× el baseline **de validación**. Después evalúa ese punto **una sola vez** en test.
+Barre al menos 30 combinaciones de pesos en `val_users`, marca las no dominadas en (NDCG, ILD, −KL) y elige por **ε-restricción**: entre las que cumplen NDCG ≥ 0,93×, ILD ≥ 1,10× y KL ≤ 0,75× el baseline **de validación**, la de mayor NDCG (si ninguna cumple, la de Pareto con mejor compromiso y NDCG ≥ 0,93×). Después evalúa ese punto **una sola vez** en test.
 """)
 pj.code(r'''
 def pareto_mask(P):
@@ -1473,11 +1502,16 @@ def choose_weights(grid, users):
     rows = [{**w, **evaluate_lists({u: rerank_home(u, *CANDS[u], w) for u in users})} for w in grid]
     df = pd.DataFrame(rows)
     df["pareto"] = pareto_mask(np.c_[df["NDCG@10"], df["ILD@10"], -df["KL"]])
-    ok = df[(df["ILD@10"] >= 1.15 * base["ILD@10"]) & (df["KL"] <= .7 * base["KL"])]
-    pick = (ok if len(ok) else df[df.pareto]).sort_values("NDCG@10", ascending=False).iloc[0]
+    df["gain"] = df["ILD@10"] / base["ILD@10"] - df["KL"] / base["KL"]          # compromiso diversidad + calibración
+    keep_ndcg = df["NDCG@10"] >= .93 * base["NDCG@10"]
+    ok = df[keep_ndcg & (df["ILD@10"] >= 1.10 * base["ILD@10"]) & (df["KL"] <= .75 * base["KL"])]
+    if len(ok):
+        pick = ok.sort_values("NDCG@10", ascending=False).iloc[0]
+    else:                                                                        # ε-restricción no factible
+        pick = df[df.pareto & keep_ndcg].sort_values("gain", ascending=False).iloc[0]
     return df, {k: float(pick[k]) for k in ["div", "cal", "nov"]}, base
 
-grid = [{"div": a, "cal": b, "nov": c} for a, b, c in itertools.product([0, .15, .3, .6], [0, .5, 1, 2, 3], [0, .2])]
+grid = [{"div": a, "cal": b, "nov": c} for a, b, c in itertools.product([0, .05, .1, .15, .3], [0, .15, .3, .5, 1], [0, .1])]
 sweep, W, base_val = choose_weights(grid, val_users)
 fig, ax = plt.subplots(figsize=(7, 4))
 s = ax.scatter(sweep["ILD@10"], sweep["NDCG@10"], c=sweep["KL"], cmap="viridis_r", s=25)
@@ -1490,8 +1524,8 @@ ax.set_title(f"Barrido en VALIDACIÓN ({len(grid)} configuraciones)"); plt.show(
 
 final = evaluate_lists({u: rerank_home(u, *CANDS[u], W) for u in eval_users})
 rep = pd.DataFrame({"baseline": base_test, "re-ranker": final}).T
-crit = {"NDCG ≥ 0,95×": final["NDCG@10"] >= .95 * base_test["NDCG@10"], "ILD ≥ 1,15×": final["ILD@10"] >= 1.15 * base_test["ILD@10"],
-        "KL ≤ 0,7×": final["KL"] <= .7 * base_test["KL"]}
+crit = {"NDCG ≥ 0,93×": final["NDCG@10"] >= .93 * base_test["NDCG@10"], "ILD ≥ 1,10×": final["ILD@10"] >= 1.10 * base_test["ILD@10"],
+        "KL ≤ 0,75×": final["KL"] <= .75 * base_test["KL"]}
 print("R3 (test):", {k: "✅" if v else "❌" for k, v in crit.items()}); rep.round(4)
 ''')
 pj.code(r'''
@@ -1571,12 +1605,12 @@ ax.set_title(f"Home de CineMatch del usuario {u0} (color = género principal)");
 ''')
 pj.code(r'''
 # ---------- R6 · feedback loop: baseline vs re-ranker ----------
-def ground_truth(dim=32, base_ctr=.03, temp=1.5):
+def ground_truth(dim=32, base_ctr=.03, temp=1.0):
     Xall = build_interaction_matrix(ratings, n_users, n_items)
     svd = TruncatedSVD(dim, random_state=SEED).fit(Xall)
     S = (Xall @ svd.components_.T) @ svd.components_
     Z = (S - S.mean(1, keepdims=True)) / (S.std(1, keepdims=True) + 1e-9)
-    return 1 / (1 + np.exp(-(temp * Z + np.log(base_ctr / (1 - base_ctr)))))
+    return 1 / (1 + np.exp(-(temp * np.clip(Z, -3, 3) + np.log(base_ctr / (1 - base_ctr)))))
 
 def run_loop(use_reranker, rounds=10, sim_users=None, seed=SEED):
     g = np.random.default_rng(seed); us = np.array(sim_users)

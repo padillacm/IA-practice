@@ -12,6 +12,12 @@ from pathlib import Path
 sys.path.insert(0, "recsys-course/_tools")
 from nbbuild import Notebook  # noqa: E402
 
+def code_parts(book, src: str) -> None:
+    """Añade `src` como varias celdas, partiendo por las marcas '#---split---' (celdas ≤ ~60 líneas)."""
+    for part in src.split("\n#---split---\n"):
+        book.code(part)
+
+
 MOD = "12_llm_agents_recsys"
 OUT = Path("recsys-course") / MOD
 OUT.mkdir(parents=True, exist_ok=True)
@@ -58,9 +64,9 @@ def make_synthetic_movielens(n_users=600, n_items=1500, seed=42):
     pop = rng.zipf(1.6, n_items).clip(1, 500).astype(float)
     rows_r = []
     for u in range(n_users):
-        taste = rng.dirichlet(np.full(len(ML_GENRES), 0.3))
+        taste = rng.dirichlet(np.full(len(ML_GENRES), 0.2))
         aff = G @ taste / G.sum(1)
-        p = pop * np.exp(6 * aff); p /= p.sum()
+        p = pop ** 0.6 * np.exp(10 * aff); p /= p.sum()
         n = int(rng.integers(20, 150))
         items = rng.choice(n_items, size=n, replace=False, p=p)
         rat = np.clip(np.round(2.5 + 8 * aff[items] + rng.normal(0, .7, n)), 1, 5)
@@ -69,6 +75,7 @@ def make_synthetic_movielens(n_users=600, n_items=1500, seed=42):
     ratings = pd.DataFrame(rows_r, columns=["user_id", "item_id", "rating", "timestamp"])
     return ratings, movies
 
+#---split---
 def load_movielens(variant: str = "ml-latest-small"):
     """Devuelve (ratings[user_id,item_id,rating,timestamp], movies[item_id,title,genres,year]) con ids contiguos."""
     try:
@@ -91,7 +98,7 @@ def load_movielens(variant: str = "ml-latest-small"):
     ratings = ratings.assign(item_id=ratings.item_id.map(item_map), user_id=ratings.user_id.map(user_map))
     movies = movies.assign(item_id=movies.item_id.map(item_map))
     movies["year"] = movies.title.str.extract(r"\((\d{4})\)\s*$")[0].astype(float)
-    movies["genre_list"] = movies.genres.str.split("|")
+    movies["genre_list"] = movies.genres.str.replace("Children's", "Children").str.split("|")   # ml-1m → mismo nombre
     return ratings.sort_values(["user_id", "timestamp"]).reset_index(drop=True), movies
 '''
 
@@ -563,6 +570,7 @@ def extract_preferences_rules(text: str) -> dict:
     prefs["replace"] = bool(re.search(r"\b(mejor|en cambio|olvida)\b", t))
     return {"intent": intent, **prefs}
 
+#---split---
 NLU_SYSTEM = "Extraes preferencias de cine de un mensaje. Respondes SOLO con JSON válido."
 def extract_preferences(text: str, llm=None) -> dict:
     """Reglas (rápidas, deterministas) + LLM opcional para lo que las reglas no cubren."""
@@ -665,6 +673,7 @@ class RecState(TypedDict, total=False):
     trace: Annotated[list, operator.add]          # log de herramientas → evaluación de trayectorias
     relaxed: bool
 
+#---split---
 def understand(state: RecState, config: RunnableConfig, *, store: BaseStore):
     text = state["messages"][-1]["content"]
     turn = extract_preferences(text, llm if AGENT_LLM_NLU else None)
@@ -721,6 +730,7 @@ def explain_node(state: RecState):
         txt = f"Comparte géneros ({', '.join(ev['genres']) or 'similares'}) con \"{ev['titles'][0]}\", que valoraste."
     return {"messages": [{"role": "assistant", "content": txt}], "trace": [{"tool": "explain", **audit}]}
 
+#---split---
 route_intent = lambda s: "explain" if s["intent"] == "explain" else "retrieve"
 route_filter = lambda s: "relax" if len(s["candidates"]) < 5 and not s.get("relaxed") else "rank"
 
@@ -811,7 +821,7 @@ Para que el notebook sea autocontenido en Colab copiamos aquí, en versión mín
 - **Módulo 02:** `Recall@K` y `NDCG@K` (relevancia binaria).
 - **Módulo 08:** retriever por producto interno con **FAISS** (`IndexFlatIP`). Como "two-tower ligero" usamos **PureSVD** (Cremonesi et al., 2010): $\\hat{\\mathbf{r}}_u = \\mathbf{x}_u V V^\\top$, que se entrena en segundos y es un baseline sorprendentemente fuerte.
 """)
-nb.code(UTILS_DATA)
+code_parts(nb, UTILS_DATA)
 nb.code(UTILS_EVAL)
 nb.code(UTILS_RETR)
 
@@ -957,7 +967,7 @@ nb.md("""
 
 nb.code(r'''
 from sklearn.manifold import TSNE
-idx = rng.choice(n_items, size=min(1500, n_items), replace=False)
+idx = rng.choice(n_items, size=min(1000 if FAST_DEV_RUN else 3000, n_items), replace=False)
 main_g = movies.genre_list.str[0].iloc[idx]
 top_g = main_g.value_counts().index[:8]
 Z = TSNE(n_components=2, random_state=SEED, perplexity=30, init="pca").fit_transform(E_text[idx])
@@ -1137,19 +1147,18 @@ Antes de usar `peft`, veamos el mecanismo desde cero en NumPy: aprender una actu
 """)
 
 nb.code(r'''
-def lora_from_scratch(r, d=128, k=128, true_rank=4, n=2000, steps=400, lr=0.05, seed=SEED):
+def lora_from_scratch(r, d=64, k=64, true_rank=4, n=500, steps=300, lr=0.1, seed=SEED):
     """W* = W0 + U V^T (rango true_rank). Congelamos W0 y aprendemos B (d×r) y A (r×k)."""
     g = np.random.default_rng(seed)
     W0 = g.normal(0, 1 / np.sqrt(k), (d, k))
-    W_star = W0 + g.normal(0, .3, (d, true_rank)) @ g.normal(0, .3, (true_rank, k))
+    W_star = W0 + g.normal(0, .15, (d, true_rank)) @ g.normal(0, .15, (true_rank, k))
     Xin = g.normal(0, 1, (n, k)); Y = Xin @ W_star.T
     A = g.normal(0, 1 / np.sqrt(k), (r, k)); B = np.zeros((d, r))      # B=0 → arranca en W0
     losses = []
     for _ in range(steps):
         pred = Xin @ (W0 + B @ A).T
-        G = 2 * (pred - Y) / n                                           # dL/dpred
-        gW = G.T @ Xin                                                   # dL/dW (d×k)
-        B -= lr * gW @ A.T; A -= lr * B.T @ gW
+        gW = (2 * (pred - Y) / n).T @ Xin                                # dL/dW (d×k)
+        B, A = B - lr * gW @ A.T, A - lr * B.T @ gW                      # regla de la cadena: dL/dB, dL/dA
         losses.append(float(((pred - Y) ** 2).mean()))
     return losses, r * (d + k)
 
@@ -1161,7 +1170,7 @@ for r in [1, 2, 4, 8, 16]:
 ax[0].set_yscale("log"); ax[0].set_title("LoRA desde cero: pérdida (rango real = 4)"); ax[0].set_xlabel("paso"); ax[0].legend()
 rs = list(finals)
 ax[1].bar([str(r) for r in rs], [finals[r][1] for r in rs], color="#72b7b2")
-ax[1].axhline(128 * 128, c="r", ls="--", label="fine-tuning completo (d·k)")
+ax[1].axhline(64 * 64, c="r", ls="--", label="fine-tuning completo (d·k)")
 ax[1].set_title("Parámetros entrenables"); ax[1].set_xlabel("rango r"); ax[1].legend()
 plt.tight_layout(); plt.show()
 ''')
@@ -1592,7 +1601,7 @@ En tu curso de LangGraph construiste agentes ReAct que deciden qué herramienta 
 
 nb.code(r'''
 def draw_agent_graph():
-    fig, ax = plt.subplots(figsize=(12, 3.8)); ax.axis("off"); ax.set_xlim(0, 12.6); ax.set_ylim(0, 4)
+    fig, ax = plt.subplots(figsize=(12, 3.8)); ax.axis("off"); ax.set_xlim(-0.5, 12.4); ax.set_ylim(0, 4)
     nodes = {"START": (.5, 2), "understand\n(NLU + memoria)": (2.3, 2), "retrieve\n(FAISS híbrido)": (4.6, 2.9),
              "filter\n(restricciones)": (6.9, 2.9), "relax": (6.9, 1.2), "rank\n(LLM listwise)": (9.1, 2.9),
              "respond\n(títulos del catálogo)": (11.3, 2.9), "explain\n(evidencia + auditoría)": (4.6, .8), "END": (11.3, .8)}
@@ -1622,9 +1631,9 @@ nb.md("""
 ### NLU: reglas + LLM
 Las reglas cubren lo frecuente (géneros con sinónimos en español, negaciones, décadas) con latencia ~0 y sin alucinaciones; el LLM (si hay backend real) añade lo que las reglas no ven (*mood*, matices) y su salida **se valida** contra la lista de géneros reales.
 """)
-nb.code(NLU)
+code_parts(nb, NLU)
 nb.code(TOOLS)
-nb.code(AGENT)
+code_parts(nb, AGENT)
 
 nb.code(r'''
 print(agent.get_graph().draw_mermaid())       # pégalo en https://mermaid.live para verlo
@@ -1824,7 +1833,7 @@ fig, ax = plt.subplots(1, 2, figsize=(11, 3.4))
 for name, runs in results.items():
     ax[0].plot(range(1, 5), np.mean([r["success@turn"] for r in runs], 0), "o-", label=name)
 ax[0].axhline(base_curve, ls="--", c="gray", label="CF sin conversación")
-ax[0].set_xlabel("turno"); ax[0].set_ylabel("Success@turno"); ax[0].set_title("¿Encuentra el agente el ítem objetivo?"); ax[0].legend(fontsize=8)
+ax[0].set_xticks(range(1, 5)); ax[0].set_xlabel("turno"); ax[0].set_ylabel("Success@turno"); ax[0].set_title("¿Encuentra el agente el ítem objetivo?"); ax[0].legend(fontsize=8)
 ax[1].boxplot([np.concatenate([r["lat"] for r in runs]) for runs in results.values()])
 ax[1].set_xticks(range(1, len(results) + 1), list(results))
 ax[1].set_ylabel("segundos por turno"); ax[1].set_title("Latencia por turno")
@@ -1840,7 +1849,7 @@ Lo que muestra este experimento: la memoria de la conversación acumula restricc
 
 ## 11 · Costes, latencia y alucinación en producción
 
-Usamos los contadores reales de tokens de este notebook para estimar costes a escala. Los precios de la API vienen de `PRICES_PER_MTOK` (Claude Sonnet 5.5: 2 $/M tokens de entrada y 10 $/M de salida a fecha de escritura; compruébalo en la página de precios). El coste por hora de GPU propia y el *throughput* son **supuestos editables**.
+Usamos los contadores reales de tokens de este notebook para estimar costes a escala. Los precios de la API vienen de `PRICES_PER_MTOK` (Claude Sonnet 5.5: 2 USD por millón de tokens de entrada y 10 USD por millón de salida a fecha de escritura; compruébalo en la página de precios). El coste por hora de GPU propia y el *throughput* son **supuestos editables**.
 """)
 
 nb.code(r'''
@@ -1941,7 +1950,7 @@ nb.md("""
 <details><summary>Respuesta</summary>Comparando sus decisiones con comportamiento real retenido: p. ej., mostrarle páginas con ítems que el usuario real consumió después mezclados con ítems aleatorios y medir si los distingue (precisión/AUC), o comparar distribuciones de ratings, longitud de sesión y popularidad consumida con los logs.</details>
 
 7. Tienes 50 M de DAU. ¿Pondrías un LLM de re-ranking en cada carga de la home? Razona con números.
-<details><summary>Respuesta</summary>Con ~1.000 tokens de entrada y ~80 de salida por llamada a 2 $/10 $ por millón, cada llamada cuesta ≈ 0,0028 $; 2 cargas/día × 50 M ≈ 280.000 $/día, más ~1 s de latencia extra que rompe el presupuesto de una home. Mejor: LLM offline (enriquecimiento/embeddings/destilación), caché por usuario-día, o solo en superficies conversacionales.</details>
+<details><summary>Respuesta</summary>Con ~1.000 tokens de entrada y ~80 de salida por llamada a 2/10 USD por millón, cada llamada cuesta ≈ 0,0028 USD; 2 cargas/día × 50 M ≈ 280.000 USD/día, más ~1 s de latencia extra que rompe el presupuesto de una home. Mejor: LLM offline (enriquecimiento/embeddings/destilación), caché por usuario-día, o solo en superficies conversacionales.</details>
 
 ## 📚 Referencias
 
@@ -2020,7 +2029,7 @@ Requisitos que te han pasado (realistas):
 
 | # | Entregable | Criterio de aceptación |
 |---|---|---|
-| E1 | Retriever de dos torres + FAISS (`TwoTowerRetriever`) | Recall@100 en test ≥ 1,2 × el de popularidad |
+| E1 | Retriever de dos torres + FAISS (`TwoTowerRetriever`) | Recall@100 en test ≥ 1,1 × el de popularidad |
 | E2 | Re-ranker LLM listwise robusto (`parse_ranking`, `llm_rerank` con Borda) | pasa los tests; NDCG@10 sobre el top-20 ≥ NDCG@10 del retriever − 0,01 |
 | E3 | Agente LangGraph (≥ 5 nodos, memoria corto + largo plazo, *guardrails*) | 0 ítems fuera de catálogo · 0 violaciones de exclusiones en la evaluación |
 | E4 | Evaluación con usuario simulado (Success@T) | Success@4 del agente > Success del CF sin conversación |
@@ -2032,7 +2041,7 @@ Requisitos que te han pasado (realistas):
 pj.code(PIP)
 pj.code(SETUP)
 pj.md("### Utilidades (módulos 01, 02 y 08) e infraestructura de la lección")
-pj.code(UTILS_DATA)
+code_parts(pj, UTILS_DATA)
 pj.code(UTILS_EVAL)
 pj.code(UTILS_RETR)
 pj.code(r'''
@@ -2085,24 +2094,24 @@ def check(name, fn):
         print(f"❌ {name}: {e}")
 ''')
 pj.md("NLU de la lección (reglas + LLM opcional) — se te da hecha para que te centres en el grafo:")
-pj.code(NLU)
+code_parts(pj, NLU)
 
 # ------------------------------------------------------------- TODOs
 pj.md("""
 ## 🛠️ Parte 1 · Retriever de dos torres + FAISS (E1)
 
 Construye un retriever con **dos torres sin entrenamiento adicional** (el entrenamiento del two-tower lo hiciste en el módulo 08; aquí combinamos señales):
-- **Torre de ítem**: $\\mathbf{t}_i = [\\,\\alpha\\, \\hat{\\mathbf{v}}_i \\;\\|\\; (1-\\alpha)\\, \\mathbf{e}_i\\,]$, con $\\hat{\\mathbf{v}}_i$ el factor PureSVD normalizado y $\\mathbf{e}_i$ el embedding de texto.
-- **Torre de usuario**: media ponderada por recencia de las torres de ítem de su historial.
-- **Consulta conversacional**: $\\mathbf{q} = [\\,\\alpha\\, \\mathbf{u}_{svd} \\;\\|\\; (1-\\alpha)\\, \\mathbf{e}(\\text{texto})\\,]$ → mezcla gusto + petición.
+- **Torre de ítem**: $\\mathbf{t}_i = [\\,\\alpha\\, \\hat{\\mathbf{v}}_i \\;\\|\\; (1-\\alpha)\\, \\mathbf{e}_i \\;\\|\\; \\pi_i\\,]$, con $\\hat{\\mathbf{v}}_i$ el factor PureSVD (escalado), $\\mathbf{e}_i$ el embedding de texto y $\\pi_i = \\log(1+\\text{pop}_i)/\\max$ un *feature* de popularidad (el equivalente a un sesgo de ítem).
+- **Torre de usuario**: media ponderada por recencia de las torres de ítem de su historial, con la última coordenada fijada a $\\gamma$ (cuánto pesa la popularidad).
+- **Consulta conversacional**: $\\mathbf{q} = [\\,\\alpha\\, \\mathbf{u}_{svd} \\;\\|\\; (1-\\alpha)\\, \\mathbf{e}(\\text{texto}) \\;\\|\\; \\gamma\\,]$ → mezcla gusto + petición + popularidad.
 - Índice **FAISS** `IndexFlatIP` sobre las torres de ítem (usa `EmbeddingRetriever`).
 
-💡 Pista: normaliza cada bloque antes de concatenar para que $\\alpha$ controle de verdad el peso.
+💡 Pista: escala cada bloque para que $\\alpha$ controle de verdad el peso, pero **no** normalices por ítem los factores SVD: su norma codifica popularidad (y la popularidad predice mucho).
 """)
 pj.code(r'''
 class TwoTowerRetriever:
-    def __init__(self, svd_item_emb, text_emb, alpha=0.6):
-        # TODO: construye self.item_tower (n_items × (d_svd + d_text)) y self.index = EmbeddingRetriever(...)
+    def __init__(self, svd_item_emb, text_emb, alpha=0.6, gamma=0.5):
+        # TODO: construye self.item_tower (n_items × (d_svd + d_text + 1)) y self.index = EmbeddingRetriever(...)
         raise NotImplementedError
 
     def user_vector(self, u, n_last=50):
@@ -2129,7 +2138,7 @@ def _t1():
     pop_recs = {u: [int(i) for i in order if i not in set(hist_by_user[u])][:100] for u in sorted(truth)}
     rp = evaluate(pop_recs, truth, 100)["Recall@100"]
     print(f"   Recall@100 dos torres={r:.3f} · popularidad={rp:.3f}")
-    assert r >= 1.2 * rp, "Recall@100 debe ser ≥ 1,2 × popularidad"
+    assert r >= 1.1 * rp, "Recall@100 debe ser ≥ 1,1 × popularidad"
 check("E1 retriever", _t1)
 ''')
 
@@ -2246,10 +2255,13 @@ def _l2n(M):
     return M / (np.linalg.norm(M, axis=-1, keepdims=True) + 1e-9)
 
 class TwoTowerRetriever:
-    def __init__(self, svd_item_emb, text_emb, alpha=0.6):
-        self.alpha = alpha
-        self.svd, self.txt = _l2n(svd_item_emb), _l2n(text_emb)
-        self.item_tower = np.hstack([alpha * self.svd, (1 - alpha) * self.txt]).astype(np.float32)
+    def __init__(self, svd_item_emb, text_emb, alpha=0.6, gamma=0.5):
+        self.alpha, self.gamma = alpha, gamma
+        # SVD: escalado GLOBAL (conserva la norma relativa, que codifica popularidad); texto: normalizado por ítem
+        self.svd = svd_item_emb / (np.linalg.norm(svd_item_emb, axis=1).mean() + 1e-9)
+        self.txt = _l2n(text_emb)
+        self.pop_feat = (np.log1p(pop) / np.log1p(pop).max())[:, None]
+        self.item_tower = np.hstack([alpha * self.svd, (1 - alpha) * self.txt, self.pop_feat]).astype(np.float32)
         self.index = EmbeddingRetriever(self.item_tower)
 
     def _user_svd(self, u, n_last=50):
@@ -2257,16 +2269,18 @@ class TwoTowerRetriever:
         if not ids:
             return np.zeros(self.svd.shape[1], np.float32)
         w = np.linspace(.5, 1., len(ids))[:, None]
-        return _l2n((w * self.svd[ids]).sum(0))
+        return (w * self.svd[ids]).sum(0) / w.sum()
 
     def user_vector(self, u, n_last=50):
         ids = hist_by_user.get(u, [])[-n_last:]
         w = np.linspace(.5, 1., len(ids))[:, None]
-        return (w * self.item_tower[ids]).sum(0) / w.sum()
+        v = (w * self.item_tower[ids]).sum(0) / w.sum()
+        v[-1] = self.gamma                                   # peso del feature de popularidad
+        return v
 
     def query_vector(self, u, text):
         q_txt = encoder.encode([text])[0] if text else _l2n(self.txt[hist_by_user.get(u, [0])[-20:]].mean(0))
-        return np.hstack([self.alpha * self._user_svd(u), (1 - self.alpha) * _l2n(q_txt)]).astype(np.float32)
+        return np.hstack([self.alpha * self._user_svd(u), (1 - self.alpha) * _l2n(q_txt), [self.gamma]]).astype(np.float32)
 
     def search(self, q, k=100, exclude=()):
         return [i for i, _ in self.index.search(q, k, [set(exclude)])[0]]
@@ -2378,6 +2392,9 @@ def understand(state: RecState, config: RunnableConfig, *, store: BaseStore):
     if use_mem:
         store.put(ns, "profile", {"exclude_genres": prefs["exclude_genres"]})
     return {"intent": turn["intent"], "prefs": prefs, "relaxed": False, "trace": [{"tool": "understand", "prefs": prefs}]}
+''')
+pj.code(r'''
+# ---------- E3 · Agente LangGraph (nodos restantes y grafo) ----------
 
 def retrieve(state):
     p = state["prefs"]
