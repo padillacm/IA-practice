@@ -33,7 +33,7 @@
 
 | Función | Qué hace |
 |---|---|
-| `load_movielens(size="100k", data_dir="data", synthetic_fallback=True) -> (ratings, items)` | Descarga de GroupLens (`"100k"`, `"1m"`, `"latest-small"`, `"25m"`, `"32m"`). Sin red → datos sintéticos con el mismo esquema (y un aviso). |
+| `load_movielens(size="100k", data_dir="data", synthetic_fallback=True) -> (ratings, items)` | Descarga de GroupLens (`"100k"`, `"1m"`, `"latest-small"`, `"25m"`, `"32m"`). Si GroupLens no responde, 100k y 1m se bajan de un espejo público en GitHub; sin red → datos sintéticos con el mismo esquema (y un aviso). |
 | `load_users(size)` | Demografía (`user_id, age, gender, occupation, zip`) para 100k/1m; si no, `None`. |
 | `make_synthetic_movielens(n_users, n_items, n_ratings, seed)` | Generador sintético (long tail, gustos por género, sesgos, estrenos). |
 | `dedup_interactions(df, keep="last")` | Un evento por (usuario, ítem). |

@@ -1,12 +1,14 @@
 # ---------------------------------------------------------------------------
-# CineMatch capstone · stack completo = serving (módulo 16) + MLOps (módulo 17) + API del capstone
+# CineMatch capstone · stack = serving (módulo 16) + MLflow ligero + API del capstone (MLOps completo: módulo 17 aparte)
 #   docker compose up -d --build        (requiere Docker Compose ≥ 2.20 por `include`)
 # Copia ./artifacts desde el notebook del proyecto (celda export_artifacts) antes de arrancar.
 # ---------------------------------------------------------------------------
 include:
   - path: ../../16_production_serving/reference_stack/docker-compose.yml   # api (mód. 16), redis, redpanda, nearline, prometheus, grafana
-  - path: ../../17_mlops_monitoring/reference_stack/docker-compose.yml     # mlflow, prefect, evidently, pushgateway, alertmanager
-    project_directory: ../../17_mlops_monitoring/reference_stack
+# ⚠️ No incluimos también el compose del módulo 17: ambos definen `prometheus` y `grafana` (mismos nombres y puertos
+# 9090/3000) y `include` falla con servicios duplicados. Para el stack MLOps completo, arráncalo aparte:
+#   docker compose -f ../../17_mlops_monitoring/reference_stack/docker-compose.yml -p cinematch-mlops up -d
+# (cambiando antes sus puertos de Prometheus/Grafana). Aquí basta un MLflow ligero para el registry del capstone.
 
 services:
   capstone-api:
@@ -17,3 +19,12 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5000
     volumes: ["./artifacts:/artifacts:ro"]
     ports: ["8018:8018"]
+
+  mlflow:
+    # Registry ligero (SQLite + artefactos en volumen). Para Postgres + MinIO usa el stack del módulo 17.
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:////mlflow/mlflow.db --artifacts-destination /mlflow/artifacts
+    volumes: ["mlflow:/mlflow"]
+    ports: ["5000:5000"]
+
+volumes: {mlflow: {}}

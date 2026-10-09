@@ -5,6 +5,7 @@ lightgbm>=4.3
 numpy
 pandas
 pyarrow
+scipy               # co-ocurrencia top-k dispersa (cooc.npz)
 fakeredis>=2.20     # sustituir por redis real (REDIS_HOST) en producción
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch               # solo para la torre de usuario TorchScript (CPU)

@@ -27,7 +27,7 @@ M(rf"""
 |---|---|
 | **Nivel** | 🟢 Básico |
 | **Duración estimada** | 3 h (lección) + 2,5 h (proyecto) |
-| **GPU** | No necesaria. ≈ 0 unidades de Colab (con `SCALE="full"` y MovieLens-1M, CPU alta RAM opcional) |
+| **GPU** | No necesaria. ≈ 0 unidades de Colab (CPU; MovieLens-1M por defecto, `SCALE="small"` → 100K para iterar) |
 | **Prerrequisitos** | Módulo 00 |
 
 > En recomendación, **la mayoría de los errores graves no están en el modelo, sino en los datos y en cómo se parten**. Un split mal hecho puede hacer que un modelo mediocre parezca de estado del arte. Esta lección es la base sobre la que se apoya todo el curso: el pipeline de datos de CineMatch que construyes aquí lo reutilizarán todos los módulos siguientes.
@@ -61,7 +61,7 @@ import scipy.sparse as sp
 
 SEED = 42
 rng = np.random.default_rng(SEED)
-SCALE = "small"                     # "small" → MovieLens-100K · "full" → MovieLens-1M
+SCALE = "full"                      # "full" → MovieLens-1M (recomendado) · "small" → MovieLens-100K (solo para iterar)
 SIZE = "100k" if SCALE == "small" else "1m"
 warnings.filterwarnings("ignore", category=FutureWarning)
 plt.rcParams.update({"figure.dpi": 110, "axes.spines.top": False, "axes.spines.right": False})
@@ -561,7 +561,7 @@ M(r"""
 
 Todas estas funciones viven en `cinematch_data.py`. El pipeline completo en una sola llamada:
 ```python
-data = cd.prepare_cinematch("100k")   # dict con train / val / test / items / ratings
+data = cd.prepare_cinematch("1m")     # dict con train / val / test / items / ratings
 ```
 """)
 
@@ -652,6 +652,7 @@ M(r"""
 5. **"Positivo = rating ≥ 4" vs "positivo = cualquier rating"** pueden duplicar o dividir las métricas: muchas discrepancias entre papers vienen solo de aquí.
 6. **Los falsos negativos existen**: con muestreo por popularidad, los negativos difíciles a veces son simplemente positivos futuros. Las correcciones (logQ, eliminar negativos accidentales) importan.
 7. **Loguea impresiones desde el día 1.** Es imposible reconstruirlas después y son la base de la corrección de sesgos, la exploración y la evaluación off-policy.
+8. **Cuenta los usuarios de tu test antes de mirar la métrica.** En ML-100K el último 10 % del tiempo solo tiene ~50 usuarios (casi todos valoran en una ráfaga al registrarse): ahí la popularidad de 30 días «gana» por 4× a la global por puro ruido. Por eso CineMatch usa ML-1M (~950 usuarios en test) y en el módulo 02 aprenderás a ponerle intervalos de confianza a todo.
 """)
 
 M(r"""
@@ -741,7 +742,9 @@ La home de popularidad del proyecto 00 ya está en producción. Ahora el equipo 
 Este pipeline es el que usarán **todos los módulos siguientes del curso** (`cinematch_data.py`).
 
 ## 📦 Dataset
-**MovieLens-100K** (`SCALE="small"`) o **MovieLens-1M** (`SCALE="full"`) de GroupLens: <https://files.grouplens.org/datasets/movielens/>. Positivo implícito = rating ≥ 4.
+**MovieLens-1M** (`SCALE="full"`, por defecto) o **MovieLens-100K** (`SCALE="small"`, solo para iterar) de GroupLens: <https://files.grouplens.org/datasets/movielens/>. Positivo implícito = rating ≥ 4.
+
+> ⚠️ ¿Por qué 1M y no 100K? En ML-100K casi todos los usuarios valoran en una ráfaga al registrarse, así que el último 10 % del **tiempo** solo contiene ~50 usuarios: cualquier métrica de test es ruido puro (la popularidad de 30 días llega a «ganar» por 4×). Con ML-1M el test temporal tiene ~950 usuarios. Es tu primer encuentro con una regla de élite: **mira cuántos usuarios hay en tu test antes de mirar la métrica**.
 
 ## ✅ Entregables y rúbrica
 | # | Entregable | Criterio de aceptación |
@@ -750,7 +753,7 @@ Este pipeline es el que usarán **todos los módulos siguientes del curso** (`ci
 | 2 | `build_dataset(cfg)` | carga → dedup → implícito → split temporal global → k-core **solo en train** → val/test con usuarios e ítems conocidos |
 | 3 | Validaciones | `validar(splits)` pasa: sin solapamiento temporal, sin duplicados, sin usuarios/ítems fríos en val/test, tipos correctos |
 | 4 | Persistencia | parquet + `metadata.json` (config, tamaños, rangos temporales, sha256 de cada fichero); dos ejecuciones → mismos hashes |
-| 5 | Baselines | aleatorio, popularidad, popularidad reciente (ventana ajustada **en val**), por segmento; Recall@10 y NDCG@10 en test. **Popularidad ≥ 5× aleatorio** |
+| 5 | Baselines | aleatorio, popularidad, popularidad reciente (ventana ajustada **en val**), por segmento; Recall@10 y NDCG@10 en test. **Popularidad ≥ 5× aleatorio** en ML-1M (referencia medida: Recall@10 ≈ 0,044 vs ≈ 0,004) |
 | 6 | Informe de leakage | misma popularidad evaluada con split aleatorio y con popularidad "contaminada" por el test |
 | 7 | Módulo | tu pipeline coincide con `cinematch_data.prepare_cinematch` (mismos tamaños) |
 """)
@@ -771,7 +774,7 @@ import pandas as pd
 
 SEED = 42
 np.random.seed(SEED)
-SCALE = "small"     # "small" → 100k · "full" → 1m
+SCALE = "full"      # "full" → 1m (recomendado) · "small" → 100k (el test temporal solo tiene ~50 usuarios)
 plt.rcParams.update({"figure.dpi": 110, "axes.spines.top": False, "axes.spines.right": False})
 ''')
 

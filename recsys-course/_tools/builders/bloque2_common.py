@@ -21,7 +21,7 @@ Convenciones que usaremos en todo el Bloque II:
 
 | Concepto | Convención |
 |---|---|
-| Dataset | **MovieLens-1M** (en 00–02 usamos 100K para iterar rápido) |
+| Dataset | **MovieLens-1M** (como 01–02; el 00 usa 100K para el EDA) |
 | Columnas | `user_id`, `item_id`, `rating`, `timestamp` (IDs originales de MovieLens) |
 | Índices internos | `uidx`, `iidx` contiguos `0..n-1`, definidos **solo con train** |
 | Split | temporal **global**: el 80 % más antiguo de las interacciones → train, el 20 % más reciente → test (sin val aparte: cuando hay que ajustar, se hace un segundo corte temporal *dentro* de train) |

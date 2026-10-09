@@ -10,6 +10,23 @@ sys.path.insert(0, "recsys-course/_tools/builders")
 from nbbuild import Notebook  # noqa: E402
 from _b4_common import UTILS_MD, UTILS_LOAD, UTILS_SEQ, UTILS_EVAL  # noqa: E402
 
+# Fallback adicional (solo módulo 09): espejo público de ML-1M en GitHub antes de caer a datos sintéticos.
+_OLD_FALLBACK = '''        print(f"⚠️ No se pudo descargar MovieLens-1M ({type(e).__name__}). Uso datos SINTÉTICOS.")
+        return make_synthetic_ml()'''
+_NEW_FALLBACK = '''        try:   # espejo público de ML-1M (mismo contenido, CSV con tabuladores)
+            print(f"GroupLens no disponible ({type(e).__name__}); usando espejo de ML-1M en GitHub…")
+            base = "https://raw.githubusercontent.com/khanhnamle1994/movielens/master"
+            ratings = pd.read_csv(f"{base}/ratings.csv", sep="\\t", index_col=0, encoding="latin-1")
+            movies = pd.read_csv(f"{base}/movies.csv", sep="\\t", index_col=0, encoding="latin-1")
+            ratings = ratings.rename(columns={"user_id": "user", "movie_id": "item", "timestamp": "ts"})[["user", "item", "rating", "ts"]]
+            movies = movies.rename(columns={"movie_id": "item"})[["item", "title", "genres"]]
+            return ratings, movies
+        except Exception as e2:
+            print(f"⚠️ No se pudo descargar MovieLens-1M ({type(e2).__name__}). Uso datos SINTÉTICOS.")
+            return make_synthetic_ml()'''
+assert _OLD_FALLBACK in UTILS_LOAD
+UTILS_LOAD = UTILS_LOAD.replace(_OLD_FALLBACK, _NEW_FALLBACK)
+
 MOD = "recsys-course/09_sequential"
 LESSON = f"{MOD}/09_sequential.ipynb"
 PROJECT = f"{MOD}/09_proyecto_sasrec_cinematch.ipynb"
@@ -31,7 +48,7 @@ seed = 42
 random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 USE_AMP = device == "cuda" and torch.cuda.is_bf16_supported()   # bf16 en L4/A100 (no en T4)
-FAST_DEV_RUN = False          # True = iterar rápido (pocas épocas, subconjunto); False = experimento completo en GPU
+FAST_DEV_RUN = True           # True = iterar rápido (pocas épocas); False = experimento completo en GPU (L4/A100)
 plt.rcParams.update({"figure.dpi": 110, "axes.grid": True, "grid.alpha": 0.3})
 print("device:", device, "| bf16:", USE_AMP, "| torch", torch.__version__)
 """
@@ -873,10 +890,10 @@ nb.md(r"""
 1. **La pérdida importa más que la arquitectura.** Klenitskiy & Vasilev (RecSys 2023) mostraron que la supuesta superioridad de BERT4Rec sobre SASRec venía de la *full softmax*: SASRec entrenado con CE (SASRec+) supera a BERT4Rec en calidad **y** tiempo. Antes de cambiar de arquitectura, cambia la pérdida.
 2. **BCE con 1 negativo es la configuración por defecto… y la peor.** Sobreconfianza (gSASRec, Petrov & Macdonald RecSys 2023). Si el catálogo es enorme y no cabe la softmax completa: *sampled softmax* con logQ, gBCE con 128–256 negativos o SCE (Mezentsev et al., RecSys 2024), que busca negativos «duros» vía MIPS y reduce mucho la memoria frente a la CE completa.
 3. **Las métricas muestreadas mienten.** Evaluar contra 100 negativos aleatorios puede **invertir** el orden entre modelos (Krichene & Rendle, KDD 2020). Usa *full ranking* siempre que el catálogo lo permita.
-4. **Leave-one-out filtra el futuro.** Con *leave-one-out* el «último ítem» de un usuario de 2003 se predice usando un modelo entrenado con interacciones de 2004 de otros usuarios. Para decisiones de producto usa un **split temporal global** (módulo 01) y compara en ambos.
+4. **Leave-one-out filtra el futuro.** Con *leave-one-out* el «último ítem» de un usuario de 2003 se predice usando un modelo entrenado con interacciones de 2004 de otros usuarios (lo mediste en el módulo 01). Gusak et al. (RecSys 2025, *Time to Split*) muestran que, en recomendación secuencial, cambiar LOO por splits temporales globales **cambia el orden de los modelos**. LOO es el protocolo de los papers (y lo usamos aquí para comparar con ellos); para decisiones de producto usa un **split temporal global** y compara en ambos.
 5. **Re-implementaciones de terceros.** Hidasi & Czapp (RecSys 2023) encontraron implementaciones populares de GRU4Rec con errores que hundían la precisión. Valida tu *baseline* reproduciendo un número publicado antes de compararte con él.
 6. **Repeticiones.** En música, *grocery* o sesiones, re-consumir es lo normal: enmascarar lo visto destruye la métrica y el producto. En películas suele convenir enmascarar. Decide por dominio, no por costumbre.
-7. **Más negativos > más capas.** En nuestro barrido, pasar de 1 a 256 negativos mueve más el NDCG que duplicar profundidad. Las mejoras de los papers recientes (eSASRec, RecSys 2025) combinan pérdida *sampled softmax* + capas modernas (LiGR) sobre el objetivo de SASRec.
+7. **Antes de añadir capas, añade negativos.** El barrido de la sección 4.1 muestra lo mucho que se mueve el NDCG al pasar de 1 a 256 negativos con la misma red (compáralo tú con duplicar `n_layers`: es un reto barato). Las mejoras de los papers recientes (eSASRec, RecSys 2025) combinan pérdida *sampled softmax* + capas modernas (LiGR) sobre el objetivo de SASRec.
 8. **El token de posición y el *padding* son fuentes de bugs silenciosos**: si haces padding a la derecha con posiciones absolutas, el último ítem cae en posiciones distintas por usuario y el modelo rinde peor sin dar error.
 """)
 
@@ -938,6 +955,7 @@ nb.md(r"""
 - Chang et al. (2023). *TWIN: TWo-stage Interest Network for Lifelong User Behavior Modeling in CTR Prediction at Kuaishou*. KDD. https://arxiv.org/abs/2302.02352
 - Pancha, Zhai, Leskovec & Rosenberg (2022). *PinnerFormer: Sequence Modeling for User Representation at Pinterest*. KDD. https://arxiv.org/abs/2205.04507
 - Moreira et al. (2021). *Transformers4Rec: Bridging the Gap between NLP and Sequential / Session-Based Recommendation*. RecSys. https://doi.org/10.1145/3460231.3474255
+- Gusak et al. (2025). *Time to Split: Exploring Data Splitting Strategies for Offline Evaluation of Sequential Recommenders*. RecSys. https://arxiv.org/abs/2507.16289
 - Jain & Wallace (2019). *Attention is not Explanation*. NAACL. https://arxiv.org/abs/1902.10186
 
 **Código y librerías**
@@ -985,7 +1003,7 @@ Protocolo: *leave-one-out* (último ítem = test, penúltimo = validación), *fu
 |---|---|
 | Popularidad y Markov implementados y evaluados | obligatorio |
 | GRU4Rec entrenado (CE) | NDCG@10 test > Markov |
-| SASRec entrenado con **CE completa** | **NDCG@10 ≥ 0,15** y HR@10 ≥ 0,27 en test (orientativo, ML-1M real) |
+| SASRec entrenado con **CE completa** | **NDCG@10 ≥ 0,15** y HR@10 ≥ 0,27 en test (ML-1M real con `FAST_DEV_RUN=False`; referencia publicada: SASRec con *sampled softmax* ≈ 0,160 / 0,285 en el repo de HSTU). Con `FAST_DEV_RUN=True` (3 épocas) solo comprueba que todo corre |
 | Comparación BCE(1 neg) vs gBCE vs CE en SASRec | tabla + gráfico + 3 frases de interpretación |
 | Intervalo de confianza *bootstrap* del ΔNDCG@10 SASRec − GRU4Rec | IC 95 % reportado |
 | Recomendación final a producto (coste vs calidad) | ≤ 10 líneas |

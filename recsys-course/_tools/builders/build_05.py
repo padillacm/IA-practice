@@ -775,7 +775,7 @@ cualquier rating; relevante = rating ≥ 4.
 |---|---|---|
 | 1 | `train_bpr()` en PyTorch con negativos uniformes y opción de **negativos por popularidad** | Corre en GPU; curva de pérdida y NDCG |
 | 2 | Estudios Optuna para iALS y BPR (mismo nº de trials) | ≥ 40 trials cada uno con `FAST_DEV_RUN=False` (en GPU) |
-| 3 | Tabla final en test (NDCG@10, Recall@10, Coverage) con Popularidad, EASE, iALS, BPR | **iALS ≥ 0,225** NDCG@10; **BPR ≥ 0,17** (reto: ≥ 0,21, el nivel de `cornac` BPR en la lección) |
+| 3 | Tabla final en test (NDCG@10, Recall@10, Coverage) con Popularidad, EASE, iALS, BPR | **iALS ≥ 0,225** y **BPR ≥ 0,20** NDCG@10 (referencia medida con `FAST_DEV_RUN=True`: popularidad ≈ 0,214 · EASE ≈ 0,232 · iALS ≈ 0,230 · BPR ≈ 0,222). Reto: **igualar o batir a EASE** con `FAST_DEV_RUN=False` |
 | 4 | Importancia de hiperparámetros (Optuna) + interpretación | 1 párrafo |
 | 5 | `recommend_new_user(liked_titles)` con **fold-in** y su latencia | < 5 ms por usuario en CPU |
 """)
@@ -975,8 +975,15 @@ pj.md("""
   popularidad reciente. El nº de épocas y el *learning rate* actúan como regularizadores.
 - BPR con negativos por popularidad suele converger más rápido que con negativos uniformes y es más
   sensible al *learning rate*; con el mismo presupuesto de trials suele quedar por detrás de iALS.
-- iALS iguala o supera a EASE con vectores de 64–512 dimensiones que **sí** se pueden indexar en un ANN
-  y servir con fold-in: es la opción para producción a escala.
+- iALS queda **prácticamente empatado con EASE** (≈ 0,230 vs ≈ 0,232 en la ejecución de referencia) con
+  vectores de 64–512 dimensiones que **sí** se pueden indexar en un ANN y servir con fold-in: es la opción
+  para producción a escala. Fíjate en la coverage: BPR (≈ 0,20) recomienda mucho más catálogo que iALS
+  (≈ 0,06) con NDCG parecido — otro argumento para reportar siempre coverage.
+- Mira con espíritu crítico el fold-in de «familia con niños»: con α pequeño (Optuna lo eligió ≈ 0,26) y
+  solo 3 interacciones, el vector del usuario apenas se aleja del «usuario medio» y salen éxitos generales
+  (*Forrest Gump*, *Pulp Fiction*). El hiperparámetro óptimo para NDCG en el split temporal no es el óptimo
+  para el *cold start*: en producción se suele usar un α (o un peso de las interacciones de onboarding) mayor
+  para el fold-in.
 
 ## 🚀 Retos extra (nivel experto)
 1. **iALS revisitado**: implementa la regularización escalada por frecuencia de Rendle et al. (2022) en

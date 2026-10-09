@@ -44,11 +44,11 @@ def binary_matrix(df):
 
 
 def topk_cosine_cooc(X, k=200, block=1024):
-    '''Item-kNN coseno DISPERSO: guarda solo los k vecinos más similares de cada ítem.
+    """Item-kNN coseno DISPERSO: guarda solo los k vecinos más similares de cada ítem.
 
     Una matriz densa N×N no escala: con ml-latest-small los movieId llegan a ~193.000 (≈150 GB en float32) y con
     ~10⁴ ítems reales ya son cientos de MB que además se copian a MLflow. Calculamos XᵀX por bloques de filas
-    (siempre disperso) y truncamos a top-k por fila → memoria O(N·k). Es lo que hace cualquier item-kNN en producción.'''
+    (siempre disperso) y truncamos a top-k por fila → memoria O(N·k). Es lo que hace cualquier item-kNN en producción."""
     n = np.sqrt(np.asarray(X.sum(0)).ravel()).astype(np.float32) + 1e-8
     XT = X.T.tocsr()
     active = np.where(np.diff(XT.indptr) > 0)[0]
@@ -69,7 +69,7 @@ def topk_cosine_cooc(X, k=200, block=1024):
 
 
 def cooc_scores(cooc, hist, seen, k):
-    '''Suma de similitudes de los últimos 50 ítems → top-k ítems con score > 0 (no vistos, sin el padding 0).'''
+    """Suma de similitudes de los últimos 50 ítems → top-k ítems con score > 0 (no vistos, sin el padding 0)."""
     cs = np.asarray(cooc[hist[-50:]].sum(0)).ravel()
     cs[list(seen)] = 0; cs[0] = 0
     nz = np.flatnonzero(cs > 0)
@@ -539,7 +539,7 @@ def lesson() -> None:
     33. **Optimiza la cola (p99) del fan-out**, no la media; *hedged requests* y timeouts por etapa. — Dean & Barroso, *The Tail at Scale*, CACM 2013.
     34. **Las tablas de embeddings son el modelo**: el sharding (table/row/column-wise) y la comunicación all-to-all dominan el coste de entrenar DLRMs. — Naumov et al., DLRM, 2019; TorchRec (RecSys 2022).
     35. **Hashing sin colisiones + expiración de IDs + entrenamiento online** es lo que permite reaccionar en minutos. — Liu et al., *Monolith* (ByteDance), 2022.
-    36. **Las leyes de escala llegan a recsys** cuando el problema se reformula como generación secuencial: HSTU escala con el cómputo hasta billones de parámetros. — Zhai et al., *Actions Speak Louder than Words*, ICML 2024; Netflix (2025) reporta lo mismo con su foundation model.
+    36. **Las leyes de escala llegan a recsys** cuando el problema se reformula como generación secuencial: HSTU escala con el cómputo hasta billones de parámetros. — Zhai et al., *Actions Speak Louder than Words*, ICML 2024; Netflix (2025, blog; 2026, arXiv:2605.23312) reporta mejoras al escalar su *backbone* de 2 M a 1.000 M de parámetros, con algunas tareas acercándose a un techo.
     37. **Los *semantic IDs* comparten estadística entre ítems similares** y ayudan en cold start frente a IDs atómicos. — Rajput et al., *TIGER*, NeurIPS 2023; Singh et al., *Better Generalization with Semantic IDs*, RecSys 2024.
     38. **Los LLMs como rankers zero-shot tienen sesgo de posición** y les cuesta usar el orden del historial; mitigarlo (bootstrapping, prompts con recencia) es parte del diseño. — Hou et al., *Large Language Models are Zero-Shot Rankers for Recommender Systems*, ECIR 2024.
     """)
@@ -894,7 +894,23 @@ def lesson() -> None:
     - Singh, A. et al. (2024). *Better Generalization with Semantic IDs: A Case Study in Ranking for Recommendations*. RecSys. arXiv:2306.08121
     - Yan, E. *System Design for Recommendations and Search*. https://eugeneyan.com/writing/system-design-for-discovery/
     - Carbonell, J. & Goldstein, J. (1998). *The Use of MMR, Diversity-Based Reranking for Reordering Documents and Producing Summaries*. SIGIR.
-    - Harper, F. M. & Konstan, J. A. (2015). *The MovieLens Datasets: History and Context*. ACM TiiS.
+    - Harper, F. M. & Konstan, J. A. (2015). *The MovieLens Datasets: History and Context*. ACM TiiS. https://doi.org/10.1145/2827872
+
+    **Enlaces de las fuentes del compendio (§3)** — para leer el original de cada «secreto»:
+    - Krichene & Rendle (2020), sampled metrics: https://doi.org/10.1145/3394486.3403226 · Ferrari Dacrema et al. (2019): https://arxiv.org/abs/1907.06902
+    - Rendle et al. (2020), NCF vs MF: https://arxiv.org/abs/2005.09683 · Rendle et al. (2022), iALS revisitado: https://arxiv.org/abs/2110.14037 · Steck (2019), EASE: https://arxiv.org/abs/1905.03375
+    - Ji et al. (2023), leakage en evaluación offline: https://arxiv.org/abs/2010.11060 · Klenitskiy & Vasilev (2023), SASRec vs BERT4Rec: https://arxiv.org/abs/2309.07602
+    - Petrov & Macdonald (2022), replicabilidad de BERT4Rec: https://arxiv.org/abs/2207.07483 · gSASRec (2023): https://arxiv.org/abs/2308.07192 · DIN/GAUC (2018): https://arxiv.org/abs/1706.06978
+    - He et al. (2014), Facebook ads: https://doi.org/10.1145/2648584.2648589 · ESMM (2018): https://arxiv.org/abs/1804.07931 · Covington et al. (2016): https://doi.org/10.1145/2959100.2959190
+    - Yi et al. (2019), logQ: https://doi.org/10.1145/3298689.3346996 · Yang et al. (2020), mixed negative sampling: https://doi.org/10.1145/3366424.3386195 · Pixie (2018): https://arxiv.org/abs/1711.07601
+    - Grbovic & Cheng (2018), Airbnb: https://doi.org/10.1145/3219819.3219885 · MMoE en YouTube (2019): https://doi.org/10.1145/3298689.3346997 · PLE (2020): https://doi.org/10.1145/3383313.3412236 · PAL (2019): https://doi.org/10.1145/3298689.3347033
+    - Wilhelm et al. (2018), DPP YouTube: https://doi.org/10.1145/3269206.3272018 · Steck (2018), calibración: https://doi.org/10.1145/3240323.3240372
+    - Open Bandit Dataset (2021): https://arxiv.org/abs/2008.07146 · Top-K off-policy correction (2019): https://arxiv.org/abs/1812.02353
+    - Netflix, artwork (2017): https://netflixtechblog.com/artwork-personalization-c589f074ad76 · interleaving (2017): https://netflixtechblog.com/using-interleaving-in-online-experiments-to-accelerate-algorithm-innovation-at-netflix-a04ee392ec55
+    - CUPED (2013): https://doi.org/10.1145/2433396.2433413 · Bernardi et al. (2019), Booking: https://doi.org/10.1145/3292500.3330744 · Chaney et al. (2018): https://arxiv.org/abs/1710.11214
+    - The Tail at Scale (2013): https://doi.org/10.1145/2408776.2408794 · DLRM: https://arxiv.org/abs/1906.00091 · Monolith: https://arxiv.org/abs/2209.07663
+    - HSTU (2024): https://arxiv.org/abs/2402.17152 · TIGER (2023): https://arxiv.org/abs/2305.05065 · LLM rankers zero-shot (Hou et al.): https://arxiv.org/abs/2305.08845
+    - Netflix (2026), generative recommender de 1B de parámetros: https://arxiv.org/abs/2605.23312 · DeLorean (SysML 2018): https://web.archive.org/web/20180413124347/http://www.sysml.cc/doc/108.pdf
 
     ➡️ **Ahora:** el proyecto capstone (`18_proyecto_capstone_cinematch.ipynb`). Es largo: planifícalo como un sprint.
     """)

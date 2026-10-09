@@ -137,10 +137,10 @@ def lesson() -> None:
              (7.5, "§6 versiones de\nembeddings desalineadas"), (9.15, "§4 candidate mismatch\nexposure bias"),
              (10.8, "§7 latencia · caché stale\n§5 Goodhart")]
     for x, t in fails:
-        ax.text(x, 4.25, t, ha="center", va="center", fontsize=7.6, color="#b91c1c",
+        ax.text(x, 4.25, t, ha="center", va="center", fontsize=6.6, color="#b91c1c",
                 bbox=dict(fc="#fee2e2", ec="#b91c1c", boxstyle="round,pad=0.25"))
         arrow(ax, (x, 3.85), (x, 3.25), color="#b91c1c")
-    ax.text(3.0, 0.55, "feedback loop: el sistema genera sus propios datos (§4)", fontsize=8, color="#475569")
+    ax.text(1.2, 1.25, "feedback loop: el sistema\ngenera sus propios datos (§4)", fontsize=8, color="#475569")
     ax.set_title("Mapa de fallos: los incidentes viven en las costuras entre etapas", fontsize=11)
     plt.show()
     ''')
@@ -2079,10 +2079,14 @@ EXPLORE_WEIGHT = 5.0
 '''
 
 SERVE_CELL = r'''
+import copy
+
+
 def simulate_online(pipe, days=N_ONLINE_DAYS, seed_=7, policy="v2", log_requests=True):
     """Producción: CineMatch sirve a los usuarios durante `days` días. Devuelve métricas por petición y un log
     (log-and-wait) con las features EXACTAS servidas y el estado de la caché. Las métricas «reales» usan el gemelo digital."""
-    cfg, model, counters = pipe["cfg"], pipe["model"], pipe["counters"]
+    cfg, model = pipe["cfg"], pipe["model"]
+    counters = copy.deepcopy(pipe["counters"])            # el streaming de producción sigue alimentando los contadores
     r = np.random.default_rng(seed_)
     hist = {u: list(h) for u, h in hist_after_logs.items()}
     recent = set(logs[logs.day >= N_LOG_DAYS - 3].user_id)
@@ -2111,6 +2115,12 @@ def simulate_online(pipe, days=N_ONLINE_DAYS, seed_=7, policy="v2", log_requests
             exp_conv = float((p_click * true_conv_prob(u, top)).sum())
             clk = r.random(10) < p_click
             hist[u] += [int(i) for i in top[clk]]
+            b = counters.bucket(top)
+            np.add.at(counters.imps[day], b, 1); np.add.at(counters.clk[day], b, clk)
+            conv = clk & (r.random(10) < true_conv_prob(u, top))
+            conv_day = np.floor(t + r.exponential(CONV_DELAY_MEAN, 10)).astype(int)
+            ok = conv & (conv_day < counters.cnv.shape[0])
+            np.add.at(counters.cnv, (conv_day[ok], b[ok]), 1)
             if policy != "v1" and cfg["cache_invalidate_on_event"] and clk.any():
                 cache.pop(u, None)
             res.append({"day": day, "user_id": u, "conv_esperadas": exp_conv, "ya_visto": already.mean(),
@@ -2518,6 +2528,8 @@ def project() -> None:
     av_good = adversarial_validation(pipe_6["train_frame"], on_12.served_log)
     print(f"🚨 Bug 6 · adversarial validation: AUC train-vs-serving {av_bad['AUC train-vs-serving']:.3f} (solo impresiones) "
           f"→ {av_good['AUC train-vs-serving']:.3f} (con exploración ponderada)")
+    print("   La AUC multivariante ≈ 1 en ambos casos (impresiones ≠ top-100 del retriever siempre); lo que delata el bug es QUÉ "
+          "feature separa: item_pop_hist (el prefiltro de popularidad de v1) y cómo baja al añadir la exploración.")
     display(pd.DataFrame({"solo impresiones": av_bad["AUC univariante"], "con exploración": av_good["AUC univariante"]}))
     FIX_6 = {"train_on": "all_ipw"}
     ''')
@@ -2575,6 +2587,12 @@ def project() -> None:
     6. **Candidate mismatch**: el ranker solo vio películas populares (el prefiltro de v1); el retriever v2 trae cola larga
        con mucho «relleno» de baja calidad que el ranker no sabe penalizar. La *adversarial validation* lo delata
        (`item_pop_hist` separa train de serving) y usar el tráfico de exploración ponderado lo corrige.
+
+    ⚠️ **Sobre el ruido.** Con `FAST_DEV_RUN` hay solo 4 días de producción: los efectos de ±1–2 % (skew, hash, candidate
+    mismatch) están cerca del ruido de simulación y a veces cambian de signo entre las dos vistas de la tabla de impacto.
+    Es exactamente lo que pasa en un incidente real: los bugs grandes (caché, fuga, label delay) se ven claros; los pequeños
+    hay que confirmarlos con más tráfico (`FAST_DEV_RUN=False`, varias semillas) antes de atribuirles impacto en el
+    *postmortem*. Todos se arreglan igualmente: son defectos, aunque hoy cuesten poco.
 
     ## 🚀 Retos extra (nivel experto)
     - Sustituye `EXPLORE_WEIGHT` por pesos IPS exactos a partir de la propensión de cada hueco de exploración y compara.

@@ -62,7 +62,7 @@ from scipy import stats
 
 SEED = 42
 rng = np.random.default_rng(SEED)
-SCALE = "small"                 # "small" → MovieLens-100K · "full" → MovieLens-1M
+SCALE = "full"                  # "full" → MovieLens-1M (recomendado) · "small" → MovieLens-100K (solo para iterar)
 SIZE = "100k" if SCALE == "small" else "1m"
 K = 10
 warnings.filterwarnings("ignore")
@@ -713,7 +713,7 @@ res = evaluate(recs, test, k=10, train=train, items=items)
 ```
 
 ## 📦 Dataset
-CineMatch (MovieLens-100K o 1M) con el pipeline del proyecto 01: `cinematch_data.prepare_cinematch(...)` → train / val / test temporales, positivo = rating ≥ 4.
+CineMatch (MovieLens-1M por defecto; 100K solo para iterar, su test temporal tiene ~50 usuarios) con el pipeline del proyecto 01: `cinematch_data.prepare_cinematch(...)` → train / val / test temporales, positivo = rating ≥ 4.
 
 ## ✅ Entregables y rúbrica
 | # | Entregable | Criterio |
@@ -743,7 +743,7 @@ from scipy import stats
 
 SEED = 42
 rng = np.random.default_rng(SEED)
-SCALE = "small"
+SCALE = "full"      # "full" → 1m · "small" → 100k (test temporal de ~50 usuarios: demasiado ruidoso)
 SIZE = "100k" if SCALE == "small" else "1m"
 K = 10
 plt.rcParams.update({"figure.dpi": 110, "axes.spines.top": False, "axes.spines.right": False})
