@@ -882,21 +882,33 @@ def lesson() -> None:
     C(r'''
     import subprocess, sys, requests
 
-    def start_api(port=8000, extra_env=None):
+    import socket
+
+
+    def free_port():
+        """Puerto libre elegido por el SO: re-ejecutar la celda nunca choca con un servidor anterior aún vivo."""
+        with socket.socket() as s_:
+            s_.bind(("127.0.0.1", 0)); return s_.getsockname()[1]
+
+
+    def start_api(port=None, extra_env=None):
+        port = port or free_port()
         env = {**os.environ, "ART_DIR": ART_DIR, **(extra_env or {})}
         proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "cinematch_api:app", "--port", str(port),
                                  "--log-level", "warning"], env=env)
         for _ in range(120):
             try:
                 if requests.get(f"http://127.0.0.1:{port}/health", timeout=0.5).ok:
-                    return proc
+                    time.sleep(1)
+                    if proc.poll() is not None:  # otro proceso ocupa el puerto: no hablemos con un servicio viejo
+                        raise RuntimeError(f"El puerto {port} está ocupado por otro proceso")
+                    return proc, f"http://127.0.0.1:{port}"
             except requests.exceptions.RequestException:
                 time.sleep(0.5)
         proc.kill(); raise RuntimeError("La API no arrancó")
 
 
-    API = "http://127.0.0.1:8000"
-    api_proc = start_api()
+    api_proc, API = start_api()
     print(requests.get(f"{API}/health").json())
     u0 = users_t[0]
     print(json.dumps(requests.get(f"{API}/recommend/{u0}", params={"use_cache": False}).json(), indent=1)[:600])
@@ -999,7 +1011,7 @@ def lesson() -> None:
     RUN_LOCUST = False
     if RUN_LOCUST:
         !pip install -q locust
-        !locust -f locustfile.py --headless -u 20 -r 5 -t 20s --host http://127.0.0.1:8000 --csv locust_out
+        !locust -f locustfile.py --headless -u 20 -r 5 -t 20s --host {API} --csv locust_out
         display(pd.read_csv("locust_out_stats.csv"))
     ''')
 
@@ -1431,9 +1443,9 @@ def project() -> None:
     | # | Entregable | Criterio objetivo | Puntos |
     |---|---|---|---|
     | E1 | `pit_item_features` | test automático: ninguna feature con `event_timestamp` > instante del ejemplo; gap AUC offline/producción < 0,01 | 20 |
-    | E2 | Ranker LambdaMART (`LGBMRanker`) | NDCG@10 en test temporal ≥ **1,10 ×** el NDCG@10 del retrieval solo | 20 |
+    | E2 | Ranker LambdaMART (`LGBMRanker`) | NDCG@10 en test temporal ≥ **1,10 ×** el NDCG@10 del retrieval solo (si con pocos usuarios etiquetados no llegas, demuestra con una ablación por qué y qué datos harían falta) | 20 |
     | E3 | Servicio FastAPI | `/health`, `/recommend`, `/event`, `/metrics`; fallback para usuarios nuevos; invalidación de caché comprobada | 25 |
-    | E4 | Test de carga | p99 ≤ 80 ms con concurrencia 8 sin caché (CPU de Colab) | 15 |
+    | E4 | Test de carga | p99 ≤ 80 ms con concurrencia 8 sin caché (CPU de Colab; mide en una sesión sin otros procesos pesados) | 15 |
     | E5 | Paridad de features | features **logueadas por el servicio** == features del builder offline en ≥ 99,9 % de las celdas | 10 |
     | E6 | Decisiones | 5–10 líneas: qué iría a Triton/Redis/Feast/Kafka en `reference_stack/` y por qué | 10 |
 
@@ -1480,7 +1492,7 @@ def project() -> None:
     daily["rating_mean_cum"] = daily.groupby("item_id").s.cumsum() / daily.pop_cum
     daily["event_timestamp"] = pd.to_datetime((daily.day + 1) * 86400, unit="s", utc=True)
     ITEM_STATS = daily[["item_id", "event_timestamp", "pop_cum", "rating_mean_cum"]].reset_index(drop=True)
-    RANK_FEATS = ["retr_score", "retr_rank", "pop_cum", "rating_mean_cum", "genre_affinity", "user_n", "user_mean"]
+    RANK_FEATS = ["retr_score", "retr_rank", "pop_cum", "rating_mean_cum", "genre_affinity", "user_n", "user_mean", "pop_30d"]
     print("Snapshots de ítem:", ITEM_STATS.shape)
     ''')
 
@@ -1576,7 +1588,7 @@ def project() -> None:
 
     Completa la plantilla. Requisitos: carga de artefactos al arrancar (no por petición), caché con TTL e invalidación en
     `/event`, fallback de popularidad, `/metrics` en texto Prometheus, y **log de features servidas** (un JSON por línea
-    en `logs/served_features.jsonl` con `user_id`, `item_id` y las 7 features) cuando `LOG_FEATURES=1`.
+    en `logs/served_features.jsonl` con `user_id`, `item_id` y las features de `RANK_FEATS`) cuando `LOG_FEATURES=1`.
     """)
 
     C(r'''
@@ -1667,7 +1679,10 @@ def project() -> None:
     def item_feats_asof(t_cut):
         snap = ITEM_STATS[ITEM_STATS.event_timestamp <= pd.Timestamp(t_cut, unit="s", tz="UTC")]
         last = snap.groupby("item_id").tail(1).set_index("item_id")[["pop_cum", "rating_mean_cum"]]
-        return last.reindex(range(N_ITEMS)).fillna({"pop_cum": 0, "rating_mean_cum": 3.0}).astype(float)
+        out = last.reindex(range(N_ITEMS)).fillna({"pop_cum": 0, "rating_mean_cum": 3.0}).astype(float)
+        recent = ratings[(ratings.ts < t_cut) & (ratings.ts >= t_cut - 30 * 86400)].item_id.value_counts()
+        out["pop_30d"] = recent.reindex(range(N_ITEMS)).fillna(0).to_numpy(float)   # tendencia reciente (as-of)
+        return out
 
 
     def features_for(u, ids, sc, prof, gen, itf):
@@ -1675,14 +1690,30 @@ def project() -> None:
         aff = GENRE_MAT[ids] @ gen.loc[u].values / (np.linalg.norm(GENRE_MAT[ids], axis=1) + 1e-8)
         return pd.DataFrame({"user_id": u, "item_id": ids, "retr_score": sc.astype(float), "retr_rank": np.arange(len(ids), dtype=float),
                              "pop_cum": itf.pop_cum.values[ids], "rating_mean_cum": itf.rating_mean_cum.values[ids],
-                             "genre_affinity": aff.astype(float), "user_n": prof.loc[u, "user_n"], "user_mean": prof.loc[u, "user_mean"]})
+                             "genre_affinity": aff.astype(float), "user_n": prof.loc[u, "user_n"], "user_mean": prof.loc[u, "user_mean"],
+                             "pop_30d": itf.pop_30d.values[ids]})
 
 
-    def build_candidates(hist, users, t_cut, k=100, labels=None):
+    def make_retriever(df):
+        """Retriever entrenado SOLO con `df` (para ventanas de entrenamiento anteriores sin leakage)."""
+        emb = item_embeddings(df)
+        idx = faiss.IndexHNSWFlat(emb.shape[1], 32, faiss.METRIC_INNER_PRODUCT); idx.hnsw.efSearch = 64; idx.add(emb)
+        def retr(hist, k=100):
+            v = user_vector(hist, emb)
+            if v is None:
+                return np.array([], dtype=int), np.array([], dtype=np.float32)
+            s_, ids_ = idx.search(v[None], k + len(hist)); seen = set(hist)
+            m_ = np.array([(i not in seen) and i > 0 for i in ids_[0]])
+            return ids_[0][m_][:k], s_[0][m_][:k]
+        return retr
+
+
+    def build_candidates(hist, users, t_cut, k=100, labels=None, retr=None):
+        retr = retr or retrieve
         prof, gen = user_profile(ratings[ratings.ts < t_cut]); itf = item_feats_asof(t_cut)
         rows = []
         for u in users:
-            ids, sc = retrieve(hist[u], k)
+            ids, sc = retr(hist[u], k)
             if len(ids):
                 rows.append(features_for(u, ids, sc, prof, gen, itf))
         out = pd.concat(rows, ignore_index=True)
@@ -1692,15 +1723,25 @@ def project() -> None:
 
 
     def train_ranker(cands):
-        c = cands[cands.groupby("user_id").label.transform("max") > 0].sort_values("user_id")
+        key = "qid" if "qid" in cands else "user_id"
+        c = cands[cands.groupby(key).label.transform("max") > 0].sort_values(key)
         rk = lgb.LGBMRanker(objective="lambdarank", n_estimators=200, learning_rate=0.05, num_leaves=15,
                             min_child_samples=100, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
-        rk.fit(c[RANK_FEATS], c.label, group=c.groupby("user_id").size().values)
+        rk.fit(c[RANK_FEATS], c.label, group=c.groupby(key, sort=False).size().values)
         return rk
 
 
-    lab_b = train_b.groupby("user_id").item_id.apply(set).to_dict()
-    cands = build_candidates(hist_a, [u for u in lab_b if u in hist_a], t_a, labels=lab_b)
+    # Más ejemplos sin romper el protocolo temporal: 3 ventanas de etiquetas [q_i, q_i+1); en cada una el retriever y las
+    # features usan solo datos < q_i (la última ventana es la clásica [t_a, t_b) con el retriever de producción).
+    frames = []
+    for lo_q, hi_q in [(0.5, 0.6), (0.6, 0.7), (0.7, 0.8)]:
+        lo, hi = ratings.ts.quantile([lo_q, hi_q]).values
+        past, win = ratings[ratings.ts < lo], ratings[(ratings.ts >= lo) & (ratings.ts < hi)]
+        h = past.groupby("user_id").item_id.apply(list).to_dict(); lab = win.groupby("user_id").item_id.apply(set).to_dict()
+        fr = build_candidates(h, [u for u in lab if u in h], lo, labels=lab, retr=retrieve if lo_q == 0.7 else make_retriever(past))
+        frames.append(fr.assign(qid=fr.user_id.astype(str) + f"@{lo_q}"))
+    cands = pd.concat(frames, ignore_index=True)
+    print("Ejemplos del ranker:", cands.shape, "| grupos:", cands.qid.nunique())
     RANKER = train_ranker(cands)
     ratio = check_E2(RANKER)
     ''')
@@ -1732,7 +1773,8 @@ def project() -> None:
     EMB, GENRE = np.load(f"{ART}/item_emb.npy"), np.load(f"{ART}/genre_mat.npy")
     GNORM = np.linalg.norm(GENRE, axis=1) + 1e-8
     RANKER = lgb.Booster(model_file=f"{ART}/ranker.txt")
-    ITF = pd.read_parquet(f"{ART}/item_feats.parquet"); POP, RMEAN = ITF.pop_cum.to_numpy(), ITF.rating_mean_cum.to_numpy()
+    ITF = pd.read_parquet(f"{ART}/item_feats.parquet")
+    POP, RMEAN, POP30 = ITF.pop_cum.to_numpy(), ITF.rating_mean_cum.to_numpy(), ITF.pop_30d.to_numpy()
     PROF = pd.read_parquet(f"{ART}/user_prof.parquet"); UGEN = pd.read_parquet(f"{ART}/user_genre.parquet")
     PROF_D = {int(u): (float(r.user_n), float(r.user_mean)) for u, r in PROF.iterrows()}
     UGEN_D = {int(u): row for u, row in zip(UGEN.index, UGEN.to_numpy())}
@@ -1802,7 +1844,7 @@ def project() -> None:
         n_u, mean_u = PROF_D[user_id]
         aff = GENRE[ids] @ UGEN_D[user_id] / GNORM[ids]
         X = np.column_stack([sc.astype(float), np.arange(len(ids), dtype=float), POP[ids], RMEAN[ids], aff,
-                             np.full(len(ids), n_u), np.full(len(ids), mean_u)])
+                             np.full(len(ids), n_u), np.full(len(ids), mean_u), POP30[ids]])
         order = ids[np.argsort(-RANKER.predict(X, num_threads=1))]
         items = diversify(order, k)
         if LOG_F:
@@ -1834,7 +1876,17 @@ def project() -> None:
     ''')
 
     C(r'''
-    def start_service(port=8001, log_features=True):
+    import socket
+
+
+    def free_port():
+        """Puerto libre elegido por el SO: re-ejecutar la celda nunca choca con un servidor anterior aún vivo."""
+        with socket.socket() as s_:
+            s_.bind(("127.0.0.1", 0)); return s_.getsockname()[1]
+
+
+    def start_service(port=None, log_features=True):
+        port = port or free_port()
         if os.path.exists("logs/served_features.jsonl"):
             os.remove("logs/served_features.jsonl")
         env = {**os.environ, "ART_DIR": ART_DIR, "LOG_FEATURES": "1" if log_features else "0"}
@@ -1842,14 +1894,16 @@ def project() -> None:
         for _ in range(120):
             try:
                 if requests.get(f"http://127.0.0.1:{port}/health", timeout=0.5).ok:
-                    return p
+                    time.sleep(1)
+                    if p.poll() is not None:     # otro proceso ocupa el puerto: no hablemos con un servicio viejo
+                        raise RuntimeError(f"El puerto {port} está ocupado por otro proceso")
+                    return p, f"http://127.0.0.1:{port}"
             except requests.exceptions.RequestException:
                 time.sleep(0.5)
         p.kill(); raise RuntimeError("no arranca")
 
 
-    URL = "http://127.0.0.1:8001"
-    svc = start_service()
+    svc, URL = start_service()
     test_pos = test.groupby("user_id").item_id.apply(set).to_dict()
     users_t = [u for u in test_pos if u in hist_b]
     u0 = users_t[0]
@@ -1876,8 +1930,8 @@ def project() -> None:
                 **{f"p{q}": np.percentile(lat, q) for q in (50, 95, 99)}}
 
 
-    for _ in range(30):                       # warm-up
-        requests.get(f"{URL}/recommend/{users_t[_]}", params={"use_cache": False})
+    for j in range(30):                       # warm-up
+        requests.get(f"{URL}/recommend/{users_t[j % len(users_t)]}", params={"use_cache": False})
     lt = pd.DataFrame([load_test(URL, users_t, c) for c in [1, 2, 4, 8, 16]])
     display(lt.round(1))
     p99_8 = float(lt.loc[lt.concurrencia == 8, "p99"].iloc[0])

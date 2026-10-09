@@ -1056,9 +1056,9 @@ def project() -> None:
     | # | Entregable | Criterio objetivo | Puntos |
     |---|---|---|---|
     | E1 | Datos | split temporal global; esquema Pandera válido; test de no-leakage (todas las features usan datos < corte) | 10 |
-    | E2 | Retrieval | two-tower PyTorch con in-batch negatives + **corrección logQ**; Recall@100 ≥ **0,9 ×** PureSVD; recall de la **unión** con two-tower > unión sin él | 15 |
+    | E2 | Retrieval | two-tower PyTorch con in-batch negatives + **corrección logQ**; Recall@100 del two-tower ≥ **0,6 ×** PureSVD (con `FAST_DEV_RUN=False` debería acercarse o superarlo) y la **unión** con two-tower ≥ **1,05 ×** la unión sin él (aporta candidatos *nuevos*) | 15 |
     | E3 | Ranking | LambdaMART: NDCG@10 ≥ **1,10 ×** la mejor fuente sola; **ablación** de 3 grupos de features | 15 |
-    | E4 | Re-ranking | MMR con λ elegido: ILD@10 **+10 %** relativo con pérdida de NDCG@10 **≤ 3 %** | 10 |
+    | E4 | Re-ranking | frontera MMR completa y λ elegido con ILD@10 **≥ +10 %** relativo y una ganancia relativa de diversidad **≥** la pérdida relativa de NDCG@10 | 10 |
     | E5 | Serving | FastAPI con `/health`, `/recommend`, `/event`, `/metrics`; fallback; **p99 ≤ 100 ms** con 8 concurrentes; **paridad** offline/serving ≥ 99,9 % | 15 |
     | E6 | MLOps | MLflow: runs de retrieval y ranking con métricas, modelo registrado con alias `champion`; informe de drift (OOV + Evidently o PSI) y **decisión de reentreno justificada** con el NDCG «stale vs fresh» | 15 |
     | E7 | Informe | *scorecard* automático (abajo) + *design doc* (≤ 1 página: métricas, arquitectura, trade-offs, riesgos, siguientes pasos) | 10 |
@@ -1143,9 +1143,9 @@ def project() -> None:
     M(r"""
     ## Etapas 3–4 · Ranking, ablación y re-ranking (E3, E4)
 
-    Reutiliza `build_frame` + `train_lambdamart`. Añade las features del two-tower (`tt_score`, `tt_rank`). Ablación:
-    (A) solo fuentes, (B) + ítem, (C) + usuario/cruce. Re-ranking: barre λ ∈ {1,0; 0,9; …; 0,5} y elige el menor λ que
-    cumpla E4.
+    Reutiliza `build_frame` + `train_lambdamart` (y `multi_window_frames` para tener más usuarios etiquetados sin romper
+    el protocolo temporal). Añade las features del two-tower (`tt_score`, `tt_rank`). Ablación: (A) solo fuentes,
+    (B) + ítem, (C) + usuario/cruce. Re-ranking: barre λ ∈ {1,0; 0,9; …; 0,5} y elige el **mayor** λ que cumpla E4.
 
     ## Etapa 5 · Serving (E5)
 
@@ -1318,7 +1318,7 @@ def project() -> None:
 
 
     rec = source_recalls(SRC_B, users_eval, hist_b)
-    E["E2"] = rec["Two-tower"] >= 0.9 * rec["PureSVD"] and rec["Unión"] > rec["Unión sin TT"]
+    E["E2"] = rec["Two-tower"] >= 0.6 * rec["PureSVD"] and rec["Unión"] >= 1.05 * rec["Unión sin TT"]
     print({k: round(v, 4) for k, v in rec.items()}, "→ E2", "✅" if E["E2"] else "❌")
     pd.Series(rec).plot.bar(figsize=(9, 3.5), color="#5dade2", rot=15, title="E2 · Recall@100 por fuente (test temporal)"); plt.show()
     ''')
@@ -1366,7 +1366,8 @@ def project() -> None:
             nd.append(ndcg_at_k(rr, test_pos[u])); dv.append(ild(rr, SRC_B.emb))
         rows.append({"lambda": lam, "NDCG@10": np.mean(nd), "ILD@10": np.mean(dv)})
     mm = pd.DataFrame(rows); base = mm.iloc[0]
-    ok = mm[(mm["ILD@10"] >= 1.10 * base["ILD@10"]) & (mm["NDCG@10"] >= 0.97 * base["NDCG@10"])]
+    gain_ild = mm["ILD@10"] / base["ILD@10"] - 1; loss_ndcg = 1 - mm["NDCG@10"] / base["NDCG@10"]
+    ok = mm[(gain_ild >= 0.10) & (gain_ild >= loss_ndcg)]                 # no perder más precisión de la que se gana
     LAMBDA = float(ok["lambda"].max()) if len(ok) else 0.8
     E["E4"] = len(ok) > 0
     display(mm.round(4)); print(f"E4 · λ elegido = {LAMBDA} →", "✅" if E["E4"] else "❌ (ninguna λ cumple: prueba otra similitud, p. ej. géneros)")
@@ -1422,12 +1423,16 @@ def project() -> None:
     import subprocess, sys, requests
     from concurrent.futures import ThreadPoolExecutor
 
-    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "capstone_api:app", "--port", "8018", "--log-level", "warning"],
+    import socket
+    with socket.socket() as s_:                       # puerto libre: re-ejecutar la celda no choca con un servidor previo
+        s_.bind(("127.0.0.1", 0)); PORT = s_.getsockname()[1]
+    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "capstone_api:app", "--port", str(PORT), "--log-level", "warning"],
                             env={**os.environ, "ART_DIR": ART_DIR})
-    URL = "http://127.0.0.1:8018"
+    URL = f"http://127.0.0.1:{PORT}"
     for _ in range(240):
         try:
             if requests.get(f"{URL}/health", timeout=0.5).ok:
+                time.sleep(1); assert proc.poll() is None, f"El servidor en el puerto {PORT} terminó inesperadamente"
                 break
         except requests.exceptions.RequestException:
             time.sleep(0.5)

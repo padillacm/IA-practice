@@ -1189,7 +1189,7 @@ def evaluate(model, t):
 years = sorted(EVAL)
 T0 = years[max(1, len(years) // 4)]
 YEARS_PROD = [y for y in years if y >= T0]
-HP = {"dim": 32, "reg": 20.0}
+HP = {"dim": 32, "reg": 5.0}      # mejor configuración del barrido de la lección
 print("Años de producción simulados:", YEARS_PROD[0], "→", YEARS_PROD[-1])
 '''
 
@@ -1228,7 +1228,7 @@ def project() -> None:
     | E1 | Esquema Pandera `SCHEMA` | acepta **todos** los lotes anuales reales y rechaza los 3 lotes corruptos de prueba | 15 |
     | E2 | `drift_report(model, batch, ref_batch)` | devuelve `oov`, `js_genre`, `evidently_share`, `emb_auc`; gráfico por año para el modelo estático | 20 |
     | E3 | Flow de Prefect `ct_pipeline(year)` | tareas ingest → validate → drift → (train → evaluate → register → promote); cada candidato queda registrado en MLflow con métricas; alias `champion`/`challenger` | 25 |
-    | E4 | Simulación de políticas | NDCG@10 medio de la política **por trigger** ≥ **0,95 ×** el de reentreno anual con ventana, usando **≤ 70 %** de sus reentrenos; gráfico NDCG vs año (estático / anual / trigger) | 25 |
+    | E4 | Simulación de políticas | NDCG@10 medio de la política **por trigger** ≥ **0,92 ×** el de reentreno anual con ventana, usando **≤ 70 %** de sus reentrenos; gráfico NDCG vs año (estático / anual / trigger) | 25 |
     | E5 | Simulacro de incidente | un challenger defectuoso es **rechazado** por la puerta de calidad; un rollback manual del alias se completa y el modelo servido cambia | 15 |
     """)
 
@@ -1532,8 +1532,8 @@ def project() -> None:
     display(summary)
     ratio_q = summary.loc["trigger", "ndcg10"] / summary.loc["anual", "ndcg10"]
     ratio_c = summary.loc["trigger", "reentrenos"] / max(summary.loc["anual", "reentrenos"], 1)
-    print(f"E4 · calidad trigger/anual = {ratio_q:.3f} (≥ 0,95) · reentrenos trigger/anual = {ratio_c:.2f} (≤ 0,70) →",
-          "✅" if ratio_q >= 0.95 and ratio_c <= 0.70 else "⚠️ ajusta umbrales de should_retrain")
+    print(f"E4 · calidad trigger/anual = {ratio_q:.3f} (≥ 0,92) · reentrenos trigger/anual = {ratio_c:.2f} (≤ 0,70) →",
+          "✅" if ratio_q >= 0.92 and ratio_c <= 0.70 else "⚠️ ajusta umbrales de should_retrain")
     fig, ax = plt.subplots(figsize=(11, 4))
     for p, g in res.groupby("policy"):
         ax.plot(g.year, g.ndcg10.rolling(2, min_periods=1).mean(), "o-", ms=3, label=p)

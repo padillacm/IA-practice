@@ -72,11 +72,12 @@ class GRU4Rec(nn.Module):
         nn.init.normal_(self.item_emb.weight, std=0.02)
         self.gru = nn.GRU(d, hidden, n_layers, batch_first=True, dropout=dropout if n_layers > 1 else 0.0)
         self.proj = nn.Linear(hidden, d)
+        self.ln = nn.LayerNorm(d)              # misma escala de salida que SASRec (acelera mucho la convergencia)
         self.drop = nn.Dropout(dropout)
 
     def encode(self, seq):                     # seq [B, L] -> [B, L, d]
         h, _ = self.gru(self.drop(self.item_emb(seq)))
-        return self.proj(self.drop(h))
+        return self.ln(self.proj(self.drop(h)))
 
 
 class SelfAttention(nn.Module):

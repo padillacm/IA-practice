@@ -67,7 +67,7 @@ def rp3beta(X: sp.csr_matrix, alpha: float = 1.0, beta: float = 0.5, k: int = 10
     pop = np.asarray(X.sum(0)).ravel()
     W = W @ sp.diags(1.0 / np.power(np.maximum(pop, 1), beta))
     W.setdiag(0)
-    return prune_topk(W, k)
+    return prune_topk(W.T, k).T.tocsr()                # top-k destinos por ítem ORIGEN (como la implementación de Dacrema et al.)
 '''
 
 EASE_CODE = r'''
@@ -443,7 +443,7 @@ Toda la derivación de la sección 2.6 se reduce a una inversa y una división p
 """)
 nb.code(EASE_CODE)
 nb.code(r'''
-lams = [100, 300, 1000, 3000, 10000] if FAST_DEV_RUN else [50, 100, 200, 500, 1000, 2000, 3000, 5000, 10000, 20000]
+lams = [300, 1000, 3000, 10000, 30000] if FAST_DEV_RUN else [100, 300, 1000, 2000, 3000, 5000, 10000, 20000, 30000, 50000]
 ease_val = {}
 for lam in lams:
     t0 = time.time(); B = ease(Xv, lam)
@@ -478,11 +478,14 @@ una película y su versión doblada/remasterizada, o dos títulos que compiten p
 Ningún kNN con similitudes ≥ 0 puede expresar eso.
 
 ### 4.6 SLIM vía ADMM (para ver qué aporta la dispersión)
+
+⚠️ Cada iteración son dos productos $|I|\times|I|$ densos: segundos en GPU, minutos en CPU. Con
+`FAST_DEV_RUN=True` hacemos solo 5 iteraciones.
 """)
 nb.code(SLIM_CODE)
 nb.code(r'''
 t0 = time.time()
-C_slim, res_hist = slim_admm(X, l1=5.0, l2=lam_b, iters=10 if FAST_DEV_RUN else 40)
+C_slim, res_hist = slim_admm(X, l1=5.0, l2=lam_b, iters=5 if FAST_DEV_RUN else 40)
 print(f"SLIM-ADMM: {time.time() - t0:.1f}s · densidad de C = {(C_slim > 0).mean():.2%} (EASE: 100 %)")
 results["SLIM (ADMM)"] = evaluate_topk(dense_score_fn(X, C_slim), X, rel)
 fig, ax = plt.subplots(figsize=(6, 3.2)); ax.semilogy(res_hist, "o-"); ax.set_xlabel("iteración ADMM")
@@ -508,6 +511,7 @@ for name, model in [("implicit Cosine (K=100)", CosineRecommender(K=100)),
     results[name] = evaluate_topk(sparse_score_fn(X, Sim), X, rel); lib[name] = time.time() - t0
     print(f"{name}: {lib[name]:.2f}s · NDCG@10 = {results[name]['NDCG@10']:.4f}")
 ids, scores = model.recommend(0, X[0], N=5, filter_already_liked_items=True)
+# Nota: en ML-1M el pesado BM25 no ayuda (no hay «usuarios aspiradora» ni bots); en logs de producción suele ser al revés.
 print("API de recomendación de implicit para el usuario 0:", titles[ids])
 ''')
 nb.md("""
@@ -562,7 +566,7 @@ res_df.round(4)
 ''')
 nb.md("""
 🧪 **Cómo leer esto**: con un split temporal honesto, los métodos lineales/vecindarios bien tuneados
-apenas superan a la popularidad en NDCG, pero lo hacen con **5–10× más coverage**. Pequeñas
+superan a la popularidad en NDCG por poco, pero lo hacen con **2–3× más coverage**. Pequeñas
 diferencias de NDCG pueden no ser significativas: en el proyecto calcularás intervalos de confianza
 con bootstrap (módulo 02).
 """)
