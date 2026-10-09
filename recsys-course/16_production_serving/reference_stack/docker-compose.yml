@@ -84,7 +84,7 @@ services:
     # Servidor de modelos para el ranker neuronal exportado a ONNX (lección §10).
     profiles: ["gpu"]
     image: nvcr.io/nvidia/tritonserver:24.08-py3
-    command: ["tritonserver", "--model-repository=/models", "--strict-model-config=false"]
+    command: ["tritonserver", "--model-repository=/models"]   # config.pbtxt explícito: no hace falta autocompletar
     volumes:
       - ./triton/model_repository:/models:ro
     ports: ["8001:8001", "8002:8002"]   # 8001 gRPC · 8002 métricas Prometheus

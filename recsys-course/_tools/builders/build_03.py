@@ -884,9 +884,10 @@ nb.md("""
 3. **Prefijos y normalización importan.** Olvidar `query: `/`passage: ` en E5 o no normalizar los
    embeddings degrada la calidad sin dar ningún error. Y **centrar** (restar la media) corrige la
    anisotropía casi gratis (Su et al., 2021).
-4. **Las features «aburridas» ganan.** El año y los géneros suelen pesar más que la sinopsis para
-   predecir co-consumo: el público de una película se parece al de otras **de su época**. Pruébalo en
-   el proyecto añadiendo una penalización por diferencia de año.
+4. **Las features «aburridas» ganan.** En ML-1M, para predecir co-consumo, géneros + una simple
+   penalización por diferencia de año suben el CoWatch-HR@10 del proyecto de ≈ 0,21 a ≈ 0,33, más de lo
+   que aporta un TF-IDF de títulos (≈ 0,17): el público de una película se parece al de otras **de su
+   época**. Antes de un encoder de 600 M parámetros, mide las *features* baratas.
 5. **El contenido puro casi nunca va solo a producción.** Se usa como fuente de candidatos para ítems
    fríos, como feature del ranker o como *fallback*. Medido honestamente (split temporal), pierde
    contra popularidad en ítems con historial — si tu experimento dice lo contrario, busca una fuga.
@@ -994,7 +995,7 @@ MovieLens 1M + sinopsis y pósters TMDB vía M³L (mismo loader que la lección,
 |---|---|---|
 | 1 | `item_vectors()` que fusiona géneros + texto (+ póster opcional) | Código limpio y documentado |
 | 2 | `more_like_this(item_id, k)` | Devuelve títulos coherentes para 5 películas de prueba |
-| 3 | **CoWatch-HR@10** (proporción de los 10 vecinos de contenido que están entre los 50 vecinos colaborativos) | **≥ 0,25** (géneros solos ≈ 0,20; reto experto: ≥ 0,35) |
+| 3 | **CoWatch-HR@10** en películas de test (proporción de los 10 vecinos de contenido que están entre los 50 vecinos colaborativos) | **≥ 0,30** (referencias medidas en ML-1M: aleatorio ≈ 0,03 · géneros solos ≈ 0,21 · géneros + penalización por año ≈ 0,33). Reto experto: **batir a géneros + año** añadiendo texto/póster |
 | 4 | **Cold start**: NDCG@10 entre «estrenos» simulados (perfil centrado) | **≥ 2× el aleatorio** (reto: ≥ 3×) |
 | 5 | Grid de pósters de 3 consultas + 1 párrafo de análisis de errores | Cualitativo |
 

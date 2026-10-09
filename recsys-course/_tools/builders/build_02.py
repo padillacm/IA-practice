@@ -30,7 +30,7 @@ M(rf"""
 | **GPU** | No necesaria. ≈ 0 unidades de Colab |
 | **Prerrequisitos** | Módulos 00 y 01 (`cinematch_data.py`) |
 
-> "Si no lo puedes medir, no lo puedes mejorar" — y en recomendación es facilísimo medir mal. Media literatura publicada entre 2015 y 2019 resultó no superar a baselines simples **por culpa de la evaluación**. Este módulo te da el evaluador que usarás el resto del curso y, sobre todo, el criterio para no engañarte.
+> "Si no lo puedes medir, no lo puedes mejorar" — y en recomendación es facilísimo medir mal. Cuando Ferrari Dacrema et al. (2019) intentaron reproducir 18 modelos neuronales publicados en conferencias de primer nivel, solo 7 eran reproducibles y 6 de esos 7 perdían frente a baselines simples bien ajustados: **la "mejora" estaba en la evaluación, no en el modelo**. Este módulo te da el evaluador que usarás el resto del curso y, sobre todo, el criterio para no engañarte.
 """)
 
 M(r"""
@@ -612,12 +612,13 @@ Garcin et al. (RecSys 2014, swissinfo.ch) compararon el mismo conjunto de recome
 
 ## 🧠 Secretos de la élite
 1. **Nunca uses sampled metrics para decidir** (Krichene & Rendle, 2020). Si un paper las usa, sus conclusiones pueden no sobrevivir al full ranking.
-2. **Tunea los baselines como si fueran tu modelo.** La mitad de las "mejoras" publicadas desaparecen con baselines bien ajustados (Ferrari Dacrema et al., 2019; Rendle et al., 2019).
-3. **La popularidad (reciente) en split temporal es el listón real.** Si tu modelo no la bate con IC 95 % que no se solapen, no hay mejora.
+2. **Tunea los baselines como si fueran tu modelo.** 6 de los 7 modelos neuronales reproducibles de Ferrari Dacrema et al. (2019) perdían contra kNN/grafos bien ajustados, y Rendle, Zhang & Koren (2019) batieron años de "estado del arte" en ML-10M con una simple MF bien tuneada. Mismo presupuesto de búsqueda de hiperparámetros (nº de pruebas, mismo val) para todos.
+3. **La popularidad (reciente) en split temporal es el listón real.** Si tu modelo no la bate con un **test pareado** significativo (no "IC que no se solapan", que es demasiado conservador; ver pregunta 5), no hay mejora.
 4. **Las definiciones de métricas varían entre librerías** (denominador de AP, ganancia de NDCG, cómo se tratan los usuarios sin relevantes o sin recomendaciones). Diferencias de "+3 %" entre papers pueden ser solo eso. Verifica contra `ranx`.
 5. **Evalúa por segmentos**: usuarios nuevos vs veteranos, cabeza vs cola, por país/dispositivo. Una mejora media puede ocultar un empeoramiento grave en usuarios nuevos — que son los que más churn tienen.
 6. **Elige el $K$ y el candidato set del producto**: una fila de la home muestra ~10 ítems en pantalla; un retrieval alimenta al ranker con ~1.000. Mide Recall@1000 para retrieval y NDCG@10 para ranking.
 7. **Offline es un filtro, no un juez.** Correlaciona tus métricas offline con resultados de A/B pasados antes de confiar en ellas.
+8. **Declara lo que quitas del test.** Filtrar el test a usuarios e ítems vistos en train (como hace `prepare_cinematch`) evalúa solo el caso *warm*; en producción una parte del tráfico es de usuarios nuevos y estrenos. Reporta qué fracción de interacciones de test descartas y evalúa el *cold start* aparte (módulo 03).
 """)
 
 M(r"""

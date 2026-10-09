@@ -1116,14 +1116,17 @@ def lesson() -> None:
 
     **Dynamic batching** (Triton/BentoML/Ray): el servidor espera unos microsegundos para juntar peticiones y aprovechar la
     GPU; en recsys cada petición ya es un «batch» de ~100–1000 candidatos, así que el beneficio está en juntar **peticiones de
-    usuarios distintos**. Ejemplo de `config.pbtxt` de Triton para nuestro ranker ONNX (también en `reference_stack/triton/`):
+    usuarios distintos**. Ejemplo de `config.pbtxt` de Triton para nuestro ranker ONNX (también en `reference_stack/triton/`).
+    Ojo con las formas: con `max_batch_size > 0` Triton antepone la dimensión de batch a `dims`; como nuestro modelo devuelve
+    un vector `[batch]` (hicimos `squeeze(-1)`), la salida se declara `dims: [1]` con `reshape: { shape: [] }` (patrón de la
+    documentación de Triton; `dims: []` es inválido):
 
     ```protobuf
     name: "ranker"
     backend: "onnxruntime"
     max_batch_size: 4096
     input  [{ name: "x", data_type: TYPE_FP32, dims: [7] }]
-    output [{ name: "p", data_type: TYPE_FP32, dims: [] }]
+    output [{ name: "p", data_type: TYPE_FP32, dims: [1], reshape: { shape: [] } }]   # el modelo devuelve [batch]
     dynamic_batching { max_queue_delay_microseconds: 500 }
     instance_group [{ kind: KIND_GPU, count: 2 }]
     ```
@@ -1351,7 +1354,7 @@ def lesson() -> None:
     **Arquitectura y blogs de ingeniería**
     - Amatriain, X. & Basilico, J. (2013). *System Architectures for Personalization and Recommendation*. Netflix Tech Blog. https://netflixtechblog.com/system-architectures-for-personalization-and-recommendation-e081aa94b5d8
     - Netflix Tech Blog (2025). *Foundation Model for Personalized Recommendation*. https://netflixtechblog.com/foundation-model-for-personalized-recommendation-1a0bd8e02d39
-    - Sadekar, K. & Jiang, H. (2018). *Time Travel based Feature Generation*. SysML 2018 (Netflix, DeLorean).
+    - Sadekar, K. & Jiang, H. (2018). *Time Travel based Feature Generation*. SysML 2018 (Netflix, DeLorean). https://web.archive.org/web/20180413124347/http://www.sysml.cc/doc/108.pdf
     - Del Balso, M. & Hermann, J. (2017). *Meet Michelangelo: Uber's Machine Learning Platform*. https://www.uber.com/blog/michelangelo-machine-learning-platform/
     - Meta Engineering (2023). *Scaling the Instagram Explore recommendations system*. https://engineering.fb.com/2023/08/09/ml-applications/scaling-instagram-explore-recommendations-system/
     - Twitter/X Engineering (2023). *Twitter's Recommendation Algorithm*. https://blog.x.com/engineering/en_us/topics/open-source/2023/twitter-recommendation-algorithm
@@ -1361,14 +1364,23 @@ def lesson() -> None:
 
     **Papers**
     - Sculley, D. et al. (2015). *Hidden Technical Debt in Machine Learning Systems*. NeurIPS.
-    - Dean, J. & Barroso, L. A. (2013). *The Tail at Scale*. Communications of the ACM 56(2).
-    - Covington, P., Adams, J., Sargin, E. (2016). *Deep Neural Networks for YouTube Recommendations*. RecSys.
-    - Cremonesi, P., Koren, Y., Turrin, R. (2010). *Performance of Recommender Algorithms on Top-N Recommendation Tasks*. RecSys.
-    - Naumov, M. et al. (2019). *Deep Learning Recommendation Model for Personalization and Recommendation Systems* (DLRM). arXiv:1906.00091
-    - Ivchenko, D. et al. (2022). *TorchRec: a PyTorch Domain Library for Recommendation Systems*. RecSys.
-    - Wang, Z. et al. (2022). *Merlin HugeCTR: GPU-accelerated Recommender System Training and Inference*. RecSys. arXiv:2210.08803
-    - Liu, Z. et al. (2022). *Monolith: Real Time Recommendation System With Collisionless Embedding Table*. arXiv:2209.07663
-    - Johnson, J., Douze, M., Jégou, H. (2017). *Billion-scale similarity search with GPUs* (FAISS). arXiv:1702.08734
+    - Dean, J. & Barroso, L. A. (2013). *The Tail at Scale*. Communications of the ACM 56(2). https://doi.org/10.1145/2408776.2408794
+    - Covington, P., Adams, J., Sargin, E. (2016). *Deep Neural Networks for YouTube Recommendations*. RecSys. https://doi.org/10.1145/2959100.2959190
+    - Cremonesi, P., Koren, Y., Turrin, R. (2010). *Performance of Recommender Algorithms on Top-N Recommendation Tasks*. RecSys. https://doi.org/10.1145/1864708.1864721
+    - Naumov, M. et al. (2019). *Deep Learning Recommendation Model for Personalization and Recommendation Systems* (DLRM). https://arxiv.org/abs/1906.00091
+    - Ivchenko, D. et al. (2022). *TorchRec: a PyTorch Domain Library for Recommendation Systems*. RecSys. https://doi.org/10.1145/3523227.3547387
+    - Wang, Z. et al. (2022). *Merlin HugeCTR: GPU-accelerated Recommender System Training and Inference*. RecSys. https://arxiv.org/abs/2210.08803
+    - Liu, Z. et al. (2022). *Monolith: Real Time Recommendation System With Collisionless Embedding Table*. https://arxiv.org/abs/2209.07663
+    - Johnson, J., Douze, M., Jégou, H. (2017). *Billion-scale similarity search with GPUs* (FAISS). https://arxiv.org/abs/1702.08734
+    - Malkov, Y. & Yashunin, D. (2016). *Efficient and robust approximate nearest neighbor search using HNSW graphs*. https://arxiv.org/abs/1603.09320
+
+    **Documentación oficial (versiones que cambian rápido: compruébalas)**
+    - Feast: https://docs.feast.dev · point-in-time joins: https://docs.feast.dev/v0.46/getting-started/concepts/point-in-time-joins
+    - NVIDIA Triton (configuración de modelos, *dynamic batching*, `reshape`): https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html
+    - Ray Serve: https://docs.ray.io/en/latest/serve/index.html · BentoML: https://docs.bentoml.com · TorchServe (estado del proyecto): https://github.com/pytorch/serve
+    - TorchRec: https://pytorch.org/torchrec/ · NVIDIA Merlin: https://github.com/NVIDIA-Merlin/Merlin
+    - ONNX Runtime: https://onnxruntime.ai · Prometheus (histogramas y `histogram_quantile`): https://prometheus.io/docs/practices/histograms/
+    - Redpanda (Kafka API): https://docs.redpanda.com · Locust: https://docs.locust.io
 
     **Herramientas:** Feast (https://docs.feast.dev) · FastAPI · FAISS · LightGBM · Redis · Apache Kafka / Redpanda · Locust (https://locust.io) · ONNX Runtime · NVIDIA Triton Inference Server · BentoML · Ray Serve · TorchRec · NVIDIA Merlin.
 

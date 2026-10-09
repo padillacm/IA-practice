@@ -379,9 +379,9 @@ def lesson() -> None:
     ## 5. Tracking y registry con MLflow
 
     MLflow tiene cuatro piezas: **Tracking** (runs con params, métricas, artefactos), **Models** (formato + *flavors*;
-    `pyfunc` para lógica propia), **Model Registry** (versiones de un modelo con nombre) y, desde la 2.8, **aliases**:
+    `pyfunc` para lógica propia), **Model Registry** (versiones de un modelo con nombre) y, desde la 2.3, **aliases**:
     punteros mutables a versiones (`models:/cinematch-retrieval@champion`). Los *stages* (Staging/Production) están
-    obsoletos en favor de aliases y tags.
+    obsoletos (deprecados desde la 2.9) en favor de aliases y tags.
 
     Patrón **champion/challenger**: el servicio carga siempre `@champion`; el pipeline registra cada candidato como
     `@challenger`; si supera al champion en evaluación offline (y luego en canary), se mueve el alias. **Rollback = volver
@@ -956,6 +956,11 @@ def lesson() -> None:
     - **Interleaving** (Netflix, 2017) para comparar rankers con muchísimos menos usuarios.
 
     Simulamos un canary con un challenger **malo** (CTR real 4,7 % vs 5,0 %) y otro **bueno** (5,2 %).
+
+    ⚠️ Mirar el resultado en cada escalón es *peeking* (módulo 15): con 5 miradas a α = 5 % unilateral, la probabilidad de
+    hacer rollback de un challenger **igual** de bueno que el champion sube muy por encima del 5 %. Para un guardrail de
+    seguridad es aceptable (el error es conservador: un rollback de más), pero si el canary también se usa para **decidir**,
+    usa umbrales secuenciales (O'Brien–Fleming, mSPRT) como en el módulo 15.
     """)
 
     C(r'''
@@ -1100,21 +1105,23 @@ def lesson() -> None:
 
     - Sculley, D. et al. (2015). *Hidden Technical Debt in Machine Learning Systems*. NeurIPS.
     - Breck, E., Cai, S., Nielsen, E., Salib, M., Sculley, D. (2017). *The ML Test Score: A Rubric for ML Production Readiness and Technical Debt Reduction*. IEEE Big Data.
-    - Shankar, S., Garcia, R., Hellerstein, J. M., Parameswaran, A. (2022). *Operationalizing Machine Learning: An Interview Study*. arXiv:2209.09125
-    - Bernardi, L., Mavridis, T., Estevez, P. (2019). *150 Successful Machine Learning Models: 6 Lessons Learned at Booking.com*. KDD.
-    - Chaney, A., Stewart, B., Engelhardt, B. (2018). *How Algorithmic Confounding in Recommendation Systems Increases Homogeneity and Decreases Utility*. RecSys. arXiv:1710.11214
-    - Gama, J. et al. (2014). *A Survey on Concept Drift Adaptation*. ACM Computing Surveys.
-    - Rabanser, S., Günnemann, S., Lipton, Z. (2019). *Failing Loudly: An Empirical Study of Methods for Detecting Dataset Shift*. NeurIPS. arXiv:1810.11953
-    - Gretton, A. et al. (2012). *A Kernel Two-Sample Test*. JMLR (MMD).
-    - Liu, Z. et al. (2022). *Monolith: Real Time Recommendation System With Collisionless Embedding Table*. arXiv:2209.07663
-    - Hu, Y., Koren, Y., Volinsky, C. (2008). *Collaborative Filtering for Implicit Feedback Datasets*. ICDM.
+    - Shankar, S., Garcia, R., Hellerstein, J. M., Parameswaran, A. (2022). *Operationalizing Machine Learning: An Interview Study*. https://arxiv.org/abs/2209.09125
+    - Bernardi, L., Mavridis, T., Estevez, P. (2019). *150 Successful Machine Learning Models: 6 Lessons Learned at Booking.com*. KDD. https://doi.org/10.1145/3292500.3330744
+    - Chaney, A., Stewart, B., Engelhardt, B. (2018). *How Algorithmic Confounding in Recommendation Systems Increases Homogeneity and Decreases Utility*. RecSys. https://arxiv.org/abs/1710.11214
+    - Gama, J. et al. (2014). *A Survey on Concept Drift Adaptation*. ACM Computing Surveys. https://doi.org/10.1145/2523813
+    - Rabanser, S., Günnemann, S., Lipton, Z. (2019). *Failing Loudly: An Empirical Study of Methods for Detecting Dataset Shift*. NeurIPS. https://arxiv.org/abs/1810.11953
+    - Gretton, A. et al. (2012). *A Kernel Two-Sample Test*. JMLR 13 (MMD). https://jmlr.org/papers/v13/gretton12a.html
+    - Liu, Z. et al. (2022). *Monolith: Real Time Recommendation System With Collisionless Embedding Table*. https://arxiv.org/abs/2209.07663
+    - Hu, Y., Koren, Y., Volinsky, C. (2008). *Collaborative Filtering for Implicit Feedback Datasets*. ICDM. https://doi.org/10.1109/ICDM.2008.22
     - Google Cloud. *MLOps: Continuous delivery and automation pipelines in machine learning*. https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning
     - Evidently AI (2023). *Shift happens: we compared 5 methods to detect drift in ML embeddings*. https://www.evidentlyai.com/blog/embedding-drift-detection
     - Netflix Tech Blog (2019). *Open-Sourcing Metaflow, a Human-Centric Framework for Data Science*.
     - Del Balso, M. & Hermann, J. (2017). *Meet Michelangelo: Uber's Machine Learning Platform*. https://www.uber.com/blog/michelangelo-machine-learning-platform/
-    - Harper, F. M. & Konstan, J. A. (2015). *The MovieLens Datasets: History and Context*. ACM TiiS.
+    - Harper, F. M. & Konstan, J. A. (2015). *The MovieLens Datasets: History and Context*. ACM TiiS. https://doi.org/10.1145/2827872
+    - Mansoury, M. et al. (2020). *Feedback Loop and Bias Amplification in Recommender Systems*. CIKM. https://arxiv.org/abs/2007.13019
+    - Netflix (2024). *Maestro*: orquestador de workflows de Netflix, open source. https://github.com/Netflix/maestro
 
-    **Herramientas:** MLflow (https://mlflow.org) · Prefect (https://docs.prefect.io) · Evidently (https://docs.evidentlyai.com) · Pandera · Great Expectations · Apache Airflow · Kubeflow Pipelines · Metaflow (https://metaflow.org) · Prometheus + Grafana.
+    **Herramientas:** MLflow (https://mlflow.org; registry y aliases: https://mlflow.org/docs/latest/ml/model-registry/) · Prefect (https://docs.prefect.io) · Evidently (https://docs.evidentlyai.com) · Pandera (https://pandera.readthedocs.io) · Great Expectations (https://docs.greatexpectations.io) · Apache Airflow (https://airflow.apache.org) · Kubeflow Pipelines (https://www.kubeflow.org/docs/components/pipelines/) · Metaflow (https://metaflow.org) · Prometheus (https://prometheus.io) + Grafana.
 
     ➡️ **Siguiente:** el proyecto (pipeline CT completo con MLflow + Prefect + Evidently) y el capstone (módulo 18).
     """)
@@ -1189,7 +1196,7 @@ def evaluate(model, t):
 years = sorted(EVAL)
 T0 = years[max(1, len(years) // 4)]
 YEARS_PROD = [y for y in years if y >= T0]
-HP = {"dim": 32, "reg": 5.0}      # mejor configuración del barrido de la lección
+HP = {"dim": 32, "reg": 5.0}      # configuración razonable del barrido de la lección (re-tunéala si cambias SCALE)
 print("Años de producción simulados:", YEARS_PROD[0], "→", YEARS_PROD[-1])
 '''
 

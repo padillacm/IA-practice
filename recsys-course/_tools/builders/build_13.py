@@ -813,9 +813,12 @@ nb.md("""
 
 ### 📐 Exposición y mérito (Singh & Joachims, KDD 2018)
 La atención cae con la posición; con el modelo DCG, la exposición de la posición $k$ es $v_k = 1/\\log_2(1+k)$. Para un grupo de ítems $G$ (p. ej., productoras independientes):
-$$\\operatorname{Exp}(G) = \\frac{1}{\\lvert U \\rvert}\\sum_u \\sum_{i \\in G \\cap L_u} v_{\\operatorname{pos}_u(i)}, \\qquad \\operatorname{Merit}(G) = \\frac{1}{\\lvert G \\rvert}\\sum_{i \\in G} \\bar r_i$$
-- **Paridad demográfica**: $\\operatorname{Exp}(G_0) / \\lvert G_0 \\rvert \\approx \\operatorname{Exp}(G_1) / \\lvert G_1\\rvert$ (rara vez deseable: ignora la relevancia).
+$$\\operatorname{Exp}(G) = \\frac{1}{\\lvert G \\rvert}\\sum_{i \\in G} \\frac{1}{\\lvert U \\rvert}\\sum_u v_{\\operatorname{pos}_u(i)}, \\qquad \\operatorname{Merit}(G) = \\frac{1}{\\lvert G \\rvert}\\sum_{i \\in G} \\bar r_i$$
+(ambas son **medias por ítem** del grupo, como en el paper; $v=0$ si el ítem no aparece en la lista).
+- **Paridad demográfica**: $\\operatorname{Exp}(G_0) \\approx \\operatorname{Exp}(G_1)$ (rara vez deseable: ignora la relevancia).
 - **Trato dispar** (*disparate treatment*): la exposición debe ser **proporcional al mérito**: $\\dfrac{\\operatorname{Exp}(G_0)}{\\operatorname{Merit}(G_0)} \\approx \\dfrac{\\operatorname{Exp}(G_1)}{\\operatorname{Merit}(G_1)}$.
+
+En el ratio de trato dispar el factor $1/\\lvert G\\rvert$ se cancela, así que basta con comparar **cuotas** de exposición y de mérito: es lo que calcula `exposure_report` (exposición y mérito sumados por grupo y normalizados).
 
 Como proxy de "proveedor" usamos **cabeza** (top-10 % por popularidad: grandes estudios) frente a **cola** (independientes). Comparamos tres re-rankers: baseline, **cuota por prefijo** (estilo FA*IR, Zehlike et al. 2017: en cada prefijo de longitud $k$, al menos $\\lfloor p\\,k \\rfloor$ ítems del grupo protegido) y **amortizado** (Biega et al., SIGIR 2018: la equidad se mide acumulada entre muchos rankings; damos un bonus al grupo con déficit acumulado de exposición respecto a su mérito).
 """)
@@ -956,7 +959,8 @@ La home de Netflix no es una lista: es una **página 2D** de filas temáticas ("
 ### 📐 Modelo
 - **Atención**: $A(r, c) = \\gamma^{r} \\cdot \\delta(c)$, con $\\gamma<1$ (las filas de abajo se miran menos) y $\\delta(c) = 1$ en las columnas visibles sin desplazar y decayendo después.
 - **Utilidad de página** (con deduplicación): $U(\\text{página}) = \\sum_{(r,c)} A(r,c)\\, \\operatorname{rel}(i_{r,c})\\, \\mathbb{1}[i_{r,c} \\text{ no apareció antes}]$.
-- **Greedy por filas**: en cada posición vertical, elegimos la fila candidata con mayor ganancia **marginal** (sus ítems ya mostrados valen 0) y una penalización si es del mismo "tipo" que la anterior. Como la utilidad con deduplicación es una función de cobertura (monótona y submodular), el greedy tiene garantía $(1-1/e)$.
+- **Greedy por filas**: en cada posición vertical, elegimos la fila candidata con mayor ganancia **marginal** (sus ítems ya mostrados valen 0) y una penalización si es del mismo "tipo" que la anterior.
+- ¿Garantías? Si todas las posiciones pesaran igual y no hubiera penalización de tipo, la utilidad deduplicada sería una **función de cobertura ponderada** (monótona y submodular) y el greedy tendría la garantía $(1-1/e)$ de Nemhauser et al. Con atención decreciente por fila y la penalización, el problema pasa a ser de asignación ordenada y esa garantía **no aplica tal cual**: el greedy es la heurística estándar (y suele ser muy buena), no un óptimo certificado.
 """)
 
 nb.code(r'''
@@ -1214,8 +1218,8 @@ nb.md("""
 6. Diferencia entre paridad demográfica de exposición y trato dispar (Singh & Joachims).
 <details><summary>Respuesta</summary>La paridad exige igual exposición media por ítem en cada grupo, ignorando la relevancia. El trato dispar exige exposición **proporcional al mérito** (relevancia media) de cada grupo: si un grupo es igual de relevante debe recibir la misma exposición relativa.</details>
 
-7. ¿Por qué el greedy de página con deduplicación tiene una garantía de aproximación y la ordenación independiente de filas no?
-<details><summary>Respuesta</summary>Con deduplicación, la utilidad de página es una función de cobertura ponderada (monótona y submodular): el greedy obtiene al menos $(1-1/e)$ del óptimo (Nemhauser et al., 1978). Las filas independientes ni siquiera optimizan esa función: cuentan varias veces el mismo título.</details>
+7. ¿Por qué el greedy de página con deduplicación es preferible a ordenar filas de forma independiente, y cuándo tiene garantía de aproximación?
+<details><summary>Respuesta</summary>En la versión simplificada (mismo peso por posición, sin penalización de tipo) la utilidad deduplicada es una función de cobertura ponderada (monótona y submodular), así que el greedy obtiene al menos $(1-1/e)$ del óptimo (Nemhauser et al., 1978). Con atención decreciente por fila la garantía formal no se transfiere directamente, pero el greedy sigue optimizando la función correcta. Las filas independientes ni siquiera optimizan esa función: cuentan varias veces el mismo título.</details>
 
 ## 📚 Referencias
 

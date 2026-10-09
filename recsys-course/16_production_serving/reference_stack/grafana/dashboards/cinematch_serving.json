@@ -33,6 +33,11 @@
           "refId": "A",
           "expr": "histogram_quantile(0.99, sum by (le, stage) (rate(cinematch_stage_latency_seconds_bucket[5m])))",
           "legendFormat": "{{stage}}"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(cinematch_request_latency_seconds_bucket{cache=\"false\"}[5m])))",
+          "legendFormat": "petición completa (sin caché)"
         }
       ]
     },

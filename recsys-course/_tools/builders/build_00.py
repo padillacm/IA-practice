@@ -263,7 +263,9 @@ pd.DataFrame({"contenido (coseno)": s_contenido, "colaborativo (rating predicho)
 M(r"""
 Fíjate en lo que ha pasado:
 - **Contenido** recomienda *Alien* porque comparte ciencia ficción y acción con *Matrix* e *Interstellar*, que Ana adora. No necesita a nadie más… pero **nunca saldrá de lo que ya conoce** (si solo ves sci-fi, solo te recomendará sci-fi).
-- **Colaborativo** llega a la misma conclusión por otro camino: Ana se parece a **Bruno** y a **David** (gustos idénticos: aman *Matrix*, odian *Notting Hill*), y a ambos les encantó *Alien*; en cambio a Bruno *Titanic* no le gustó nada. No ha mirado ni un solo género: solo co-consumo. Su debilidad: un ítem **nuevo**, sin ratings, es invisible (*cold start*).
+- **Colaborativo** llega a la misma conclusión por otro camino: Ana se parece muchísimo a **David** (similitud ≈ 0,98: los dos ponen bien *Matrix* y odian *Notting Hill*) y algo a **Bruno** (≈ 0,38), y a ambos les encantó *Alien*. Fíjate también en **Carla**, de gustos opuestos a Ana (similitud ≈ −0,81): ella odió *Alien*, y con una similitud negativa eso **también suma** a favor de *Alien* (la predicción sale de la escala y la recortamos a 5). En cambio, *Titanic* la adoran Carla y Elena — justo las usuarias con gustos contrarios — y la odió Bruno, así que baja. No ha mirado ni un solo género: solo co-consumo. Su debilidad: un ítem **nuevo**, sin ratings, es invisible (*cold start*).
+
+> ⚠️ Con 5 usuarios todo es frágil: similitudes calculadas sobre 2 películas en común son puro ruido. En el módulo 04 verás el *shrinkage* (penalizar similitudes con poco soporte) y por qué muchos sistemas descartan las similitudes negativas.
 
 Que dos señales independientes coincidan es justo la idea de los **híbridos**. En producción se combinan para cubrir los puntos ciegos de cada una.
 """)
@@ -623,12 +625,12 @@ M(r"""
 ---
 ## 11. 🧠 Secretos de la élite
 
-1. **La popularidad es un baseline brutalmente fuerte.** En muchos datasets públicos, un recomendador de "lo más popular (reciente)" bate a modelos personalizados mal ajustados. Si tu modelo nuevo no gana con claridad a popularidad en un split temporal, no tienes modelo. Ferrari Dacrema et al. (2019) mostraron que la mayoría de modelos neuronales publicados que pudieron reproducir **perdían frente a baselines simples bien ajustados**.
+1. **La popularidad es un baseline brutalmente fuerte.** En muchos datasets públicos, un recomendador de "lo más popular (reciente)" bate a modelos personalizados mal ajustados. Si tu modelo nuevo no gana con claridad a popularidad en un split temporal, no tienes modelo. Ferrari Dacrema et al. (2019) intentaron reproducir 18 modelos neuronales de conferencias top: solo 7 eran reproducibles y **6 de esos 7 perdían frente a baselines simples bien ajustados** (kNN, grafos, popularidad en algunos casos).
 2. **La métrica offline no es el negocio.** Los equipos de élite usan la evaluación offline para **filtrar** ideas y el test A/B como **juez final**: mejoras offline que no se trasladan online (*offline-online gap*) son lo normal, no la excepción. Netflix lo explica en Gomez-Uribe & Hunt (2015).
 3. **El objetivo importa más que la arquitectura.** YouTube anunció en 2012 que pasaba a optimizar **tiempo de visualización** en lugar de clics, para premiar vídeos que la gente realmente ve y no *clickbait*. Elegir el "positivo" (clic, play, 70 % visto, retención a 30 días) cambia el producto más que cambiar de modelo.
 4. **El retrieval pone el techo.** Los equipos dedican tanto esfuerzo a la generación de candidatos (varias fuentes, *recall@1000*) como al ranker, porque un ítem que no entra en el embudo no existe.
 5. **Tu sistema contamina sus propios datos.** Solo observas feedback de lo que mostraste. Entrenar ingenuamente sobre esos logs amplifica sesgos y homogeneiza el consumo (Chaney, Stewart & Engelhardt, RecSys 2018). Por eso los grandes reservan tráfico de **exploración** o inserciones aleatorias (KuaiRand, 2022, se construyó así).
-6. **Los datos y la frescura ganan a los modelos.** Reentrenar más a menudo, añadir *features* de contexto y de "lo que pasó hace 5 minutos" suele mover más la aguja que un modelo más grande — de ahí el énfasis de TikTok en entrenamiento en tiempo real (Monolith).
+6. **La frescura es una *feature*, no un detalle.** Un modelo entrenado con logs históricos aprende la popularidad *media* del pasado y infravalora lo recién llegado. YouTube lo resolvió con una sola *feature*, la **edad del ejemplo de entrenamiento** (*example age*), que se pone a 0 en serving: el modelo aprende la dependencia temporal de la popularidad y deja de penalizar el contenido nuevo (Covington et al., 2016, sección 3.3). TikTok lleva la idea al extremo actualizando el modelo en minutos (Monolith, Liu et al., 2022).
 7. **La página es el producto, no la lista.** Optimizar cada fila por separado produce una home repetitiva; los sistemas maduros optimizan la página entera (diversidad entre filas, deduplicación, posición).
 """)
 
@@ -817,7 +819,7 @@ La nota media "cruda" premia películas con **un solo** rating de 5★. La **med
 
 $$\text{WR}_i = \frac{n_i}{n_i + m}\,\bar r_i + \frac{m}{n_i + m}\,\mu$$
 
-Implementa tres funciones que devuelvan una `pd.Series` `item_id → puntuación` ordenada de mayor a menor. Prueba $m$ = percentil 75 del nº de ratings por película (pista: unas decenas).
+Implementa tres funciones que devuelvan una `pd.Series` `item_id → puntuación` ordenada de mayor a menor. Prueba $m$ = percentil 75 del nº de ratings por película (pista: en ML-100K sale $m = 80$).
 """)
 
 C(r'''

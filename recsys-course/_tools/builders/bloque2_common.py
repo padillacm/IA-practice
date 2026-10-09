@@ -10,25 +10,33 @@ UTILS_MD = """
 ## 🧰 Utilidades del curso
 
 Para que este notebook sea **autocontenido en Colab**, las tres celdas siguientes
-contienen versiones mínimas de las utilidades que construimos en
+contienen versiones **simplificadas y vectorizadas** de las utilidades que construimos en
 [01_data](../01_data) (carga de MovieLens + **split temporal global**) y
-[02_evaluation](../02_evaluation) (**NDCG@K, Recall@K, coverage**). Son las mismas
-definiciones; si ya tienes tu propia librería de los módulos 01/02, puedes
-importarla en su lugar.
+[02_evaluation](../02_evaluation) (**NDCG@K, Recall@K, coverage**). Las métricas tienen
+las mismas definiciones que `cinematch_eval` (NDCG binario con ganancia lineal, Recall
+dividido por $|\\mathcal{R}_u|$, promedio sobre todos los usuarios con algún relevante),
+pero trabajan con índices y matrices para poder puntuar el catálogo entero por lotes.
 
 Convenciones que usaremos en todo el Bloque II:
 
 | Concepto | Convención |
 |---|---|
+| Dataset | **MovieLens-1M** (en 00–02 usamos 100K para iterar rápido) |
 | Columnas | `user_id`, `item_id`, `rating`, `timestamp` (IDs originales de MovieLens) |
 | Índices internos | `uidx`, `iidx` contiguos `0..n-1`, definidos **solo con train** |
-| Split | temporal **global**: el 80 % más antiguo de las interacciones → train, el 20 % más reciente → test |
-| Implícito | positivo = `rating ≥ 4` (protocolo de Liang et al. 2018 / Steck 2019) |
+| Split | temporal **global**: el 80 % más antiguo de las interacciones → train, el 20 % más reciente → test (sin val aparte: cuando hay que ajustar, se hace un segundo corte temporal *dentro* de train) |
+| Train | **todos** los ratings ("visto" = cualquier rating; los modelos explícitos usan su valor) |
+| Relevantes en test | `rating ≥ 4` (la binarización de Liang et al. 2018 / Steck 2019) |
 | Evaluación | *full ranking* sobre todo el catálogo, excluyendo lo ya visto en train |
+
+> ⚠️ **Diferencias con `prepare_cinematch` (módulo 01)**: allí el train también se filtraba a
+> `rating ≥ 4`, había un 10 % de validación y k-core 5 sobre train. Por eso los números del
+> Bloque II **no son comparables** con los de 01–02 (otro dataset, otro protocolo): compara
+> siempre modelos dentro del mismo protocolo, como aprendiste en el módulo 02.
 """
 
 UTILS_DATA = r'''
-# 🧰 Utilidades del curso (1/3) — carga de datos. Mismas funciones que en 01_data.
+# 🧰 Utilidades del curso (1/3) — carga de MovieLens-1M (como cinematch_data.load_movielens('1m')).
 import io, os, zipfile, urllib.request
 from pathlib import Path
 import numpy as np
@@ -70,7 +78,7 @@ def load_movielens_1m(data_dir: Path = DATA_DIR):
 '''
 
 UTILS_SPLIT = r'''
-# 🧰 Utilidades del curso (2/3) — split temporal y codificación. Mismas funciones que en 01_data.
+# 🧰 Utilidades del curso (2/3) — split temporal global (versión 80/20 sin val de cinematch_data.temporal_split).
 def temporal_split(df: pd.DataFrame, test_frac: float = 0.2, ts_col: str = "timestamp"):
     """Split temporal GLOBAL: todo lo anterior al corte → train; lo posterior → test.
     El test se filtra a usuarios e ítems vistos en train (warm-start)."""
@@ -102,7 +110,7 @@ class Encoder:
 '''
 
 UTILS_METRICS = r'''
-# 🧰 Utilidades del curso (3/3) — métricas top-K. Mismas definiciones que en 02_evaluation.
+# 🧰 Utilidades del curso (3/3) — métricas top-K vectorizadas (mismas definiciones que cinematch_eval).
 from typing import Callable, Dict
 
 

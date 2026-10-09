@@ -395,10 +395,12 @@ def eval_generative(model, histories, targets, trie, item_tokens, beam=20, ks=(1
         items = trie.lookup(codes)                                       # [B, beam] (0 = ID inexistente)
         valid = (items > 0) & torch.isfinite(scores)
         invalid += int((~valid).sum()); total += valid.numel()
-        for i, h in enumerate(Hs):                                       # no recomendar lo ya visto (igual que en 09)
-            valid[i] &= ~torch.isin(items[i], torch.as_tensor(h[-200:], device=items.device))
+        tg = torch.as_tensor(targets[b:b + batch_size], device=items.device)
+        for i, h in enumerate(Hs):                                       # no recomendar lo ya visto (igual que en 09:
+            seen = torch.isin(items[i], torch.as_tensor(h[-200:], device=items.device))   # el objetivo nunca se enmascara)
+            valid[i] &= ~(seen & (items[i] != tg[i]))
         rank_in_valid = valid.long().cumsum(1) - 1                       # posición tras filtrar
-        hit = valid & (items == torch.as_tensor(targets[b:b + batch_size], device=items.device)[:, None])
+        hit = valid & (items == tg[:, None])
         r = torch.where(hit.any(1), (rank_in_valid * hit).sum(1), torch.full_like(hit[:, 0], 10**6, dtype=torch.long))
         ranks.append(r.cpu())
     ranks = torch.cat(ranks).numpy()
@@ -470,7 +472,7 @@ class HSTULayer(nn.Module):
         ar = torch.arange(L, device=x.device)
         rel = (ar[:, None] - ar[None, :]).clamp(0, self.pos_bias.size(1) - 1)            # i - j
         dt = (ts[:, :, None] - ts[:, None, :]).abs().clamp(min=1).float()
-        bucket = (torch.log(dt) / 0.301).long().clamp(0, self.nb - 1)                     # cubos log2
+        bucket = (torch.log(dt) / 0.301).long().clamp(0, self.nb - 1)                     # cubos log (base e^0,301≈1,35), como el código de Meta
         rab = self.pos_bias[:, rel][None] + self.time_bias(bucket).permute(0, 3, 1, 2)    # [B, h, L, L]
         a = F.silu((q @ k.transpose(-2, -1)) / math.sqrt(self.dh) + rab) / L
         a = a * allowed                                                                   # causal + padding (sin -inf)
@@ -791,11 +793,11 @@ draw_trie(sid_codes, item_title[1:])
 
 # ---------------- TIGER
 nb.md(r"""
-## 🧠 5. Generative retrieval estilo TIGER
+## 🛠️ 5. Generative retrieval estilo TIGER
 
 **Tokens**: cada nivel tiene su propio rango del vocabulario (offset), así el token `5` del nivel 1 y el `5` del nivel 2 son tokens distintos. `0` = *padding*, último token = `BOS`.
 **Entrada**: los últimos 20 ítems del historial → 80 tokens. **Salida**: 4 tokens del siguiente ítem.
-**Modelo**: `nn.Transformer` encoder-decoder (4+4 capas, $d=128$, FFN 1024), parecido en tamaño al de TIGER (~13 M parámetros), con una máscara que obliga a la posición $l$ a emitir sólo tokens del nivel $l$.
+**Modelo**: `nn.Transformer` encoder-decoder con la misma configuración de capas que TIGER (4+4 capas, $d=128$, FFN 1024) y una máscara que obliga a la posición $l$ a emitir sólo tokens del nivel $l$. TIGER reporta ~13 M de parámetros porque añade cabezas más anchas y *tokens* de usuario hasheados; nuestro TIGER-mini tiene ~3 M (la celda lo imprime).
 """)
 nb.code(TIGER)
 nb.code(TIGER_DATA)
@@ -1011,7 +1013,7 @@ Las *scaling laws* de recomendación reportadas en la industria tienen letra peq
 - Wukong (Meta, 2024): escalado de modelos de interacción de *features* (FM apiladas) durante dos órdenes de magnitud de complejidad.
 - Zhang et al. (2023, RecSys 2024): escalado de modelos secuenciales puramente basados en IDs hasta ~0,8 B parámetros.
 - Netflix (2026): de 2 M a 1.000 M de parámetros de *backbone*; algunas tareas se acercan a un techo empírico y otras siguen mejorando.
-- Con semantic IDs, un estudio de 2025 observó **saturación** al agrandar *encoder*, *tokenizer* y recomendador: el cuello de botella puede estar en el tokenizador.
+- Con semantic IDs, Liu et al. (Snap, 2025; arXiv:2509.25522) observan que el rendimiento de un TIGER **se satura** al agrandar el *encoder* de contenido, el tokenizador o el recomendador (el recomendador deja de mejorar a partir de ~13 M de parámetros en su estudio): el cuello de botella es la capacidad del SID para codificar información del ítem. Un LLM usado directamente como recomendador sí siguió escalando (hasta +20 % sobre el mejor SID-GR).
 """)
 
 # ---------------- Producción
@@ -1023,7 +1025,7 @@ nb.md(r"""
 | **Meta** | Generative Recommenders (HSTU) | Sustituye DLRM por un transductor secuencial sobre la historia completa de acciones; retrieval y ranking generativos | Modelos de 1,5 billones (*1.5 trillion*) de parámetros, +12,4 % en la métrica online de A/B, desplegado en varias superficies (ICML 2024) |
 | **Kuaishou** | OneRec (V1, feb 2025) | Encoder-decoder con MoE que genera la **sesión** de vídeos completa + alineamiento de preferencias (DPO iterativo) | +1,6 % de watch-time en la escena principal |
 | **Kuaishou** | OneRec Technical Report (jun 2025) | Generación *end-to-end* sustituyendo la cascada; RL con recompensas | 25 % del QPS de Kuaishou/Kuaishou Lite; coste operativo ≈ 10,6 % del pipeline tradicional; MFU 23,7 %/28,8 % (train/inferencia) |
-| **Kuaishou** | OneRec-V2 (ago 2025) | Arquitectura *lazy decoder-only* (−94 % cómputo), escala a 8 B; RL con feedback real de usuario | +0,467 %/+0,741 % App Stay Time; **caída fuerte de vistas de vídeos cold-start** (trade-off reportado) |
+| **Kuaishou** | OneRec-V2 (ago 2025) | Arquitectura *lazy decoder-only* (−94 % cómputo), escala a 8 B; RL con feedback real de usuario | +0,467 %/+0,741 % App Stay Time; en un test sin caché reportan subidas grandes de likes/comentarios pero **caída fuerte de vistas de vídeos cold-start** (trade-off de ecosistema) |
 | **Netflix** | *Foundation model* de recomendación (blog, mar 2025) | Un único Transformer autoregresivo sobre interacciones de todos los usuarios; **predicción multi-token**; IDs + metadatos para *cold start*; se consume vía embeddings, como subgrafo o con *fine-tuning* | El blog describe mejoras al escalar datos y parámetros; paper 2026: *backbone* de 2 M → 1 B parámetros, +22,5 % MRR relativo en una tarea en *shadow* |
 | **YouTube / Google** | Semantic IDs en ranking (RecSys 2024); **PLUM** (2025) | SIDs en lugar de IDs aleatorios para generalizar en cola larga; PLUM adapta un LLM pre-entrenado (tokenización SID-v2, pre-entrenamiento continuo, *fine-tuning*) | PLUM en producción para retrieval de vídeos largos y Shorts |
 | **Pinterest** | PinRec (2025) | Generative retrieval **condicionado al resultado** (pesos de guardar/clicar) y generación multi-token para diversidad | Ganancias online en clics y *repins* |
@@ -1094,11 +1096,12 @@ nb.md(r"""
 - Deng et al. (2025). *OneRec: Unifying Retrieve and Rank with Generative Recommender and Iterative Preference Alignment*. https://arxiv.org/abs/2502.18965
 - OneRec Team (2025). *OneRec Technical Report*. https://arxiv.org/abs/2506.13695
 - OneRec Team (2025). *OneRec-V2 Technical Report*. https://arxiv.org/abs/2508.20900
-- Hsiao, Feng & Lamkhede (2025, marzo). *Foundation Model for Personalized Recommendation*. Netflix Tech Blog — https://netflixtechblog.com (busca el título)
+- Hsiao, Feng & Lamkhede (2025, marzo). *Foundation Model for Personalized Recommendation*. Netflix Tech Blog — https://netflixtechblog.com/foundation-model-for-personalized-recommendation-1a0bd8e02d39
 - Xu, Hsiao & Bhattacharya (2026). *Towards Generalizable and Efficient Large-Scale Generative Recommenders* (Netflix). https://arxiv.org/abs/2605.23312
 
 **Scaling laws**
 - Zhang et al. (2023). *Scaling Law of Large Sequential Recommendation Models*. RecSys 2024. https://arxiv.org/abs/2311.11351
+- Liu, Collins, Tang, Zhao, Shah & Ju (2025). *Understanding Generative Recommendation with Semantic IDs from a Model-scaling View* (Snap). https://arxiv.org/abs/2509.25522
 - Zhang et al. (2024). *Wukong: Towards a Scaling Law for Large-Scale Recommendation*. ICML. https://arxiv.org/abs/2403.02545
 - Kaplan et al. (2020). *Scaling Laws for Neural Language Models*. https://arxiv.org/abs/2001.08361
 

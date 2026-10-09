@@ -646,7 +646,7 @@ M(r"""
 ## 🧠 Secretos de la élite
 
 1. **El split temporal global es innegociable** para decidir qué modelo va a producción. Ji et al. (2023) muestran que el leakage de los splits aleatorios/LOO cambia el ranking de modelos. Si un paper usa LOO, sus números no son comparables con tu evaluación temporal.
-2. **La popularidad reciente es el baseline que más modelos "deep" no consiguen batir** en catálogos con novedades. Ajusta la ventana en validación y ponla siempre en tu tabla.
+2. **El split forma parte del resultado.** Meng, McCreadie, Macdonald & Ounis (RecSys 2020, *Exploring Data Splitting Strategies for the Evaluation of Recommendation Models*) evaluaron los mismos modelos con distintos splits y el **orden relativo de los algoritmos cambiaba**. Por eso la popularidad *reciente* (ventana ajustada en validación) tiene que estar siempre en tu tabla: en catálogos con estrenos es el baseline temporal que más modelos dejan en evidencia.
 3. **Toda estadística del pipeline se calcula solo con train**: popularidad, vocabularios de IDs, medias para normalizar, k-core, umbrales. Un `value_counts()` sobre el DataFrame completo es leakage.
 4. **El k-core infla las métricas.** Reporta siempre qué filtrado usas; evalúa también en los usuarios con poco historial, que en producción son mayoría.
 5. **"Positivo = rating ≥ 4" vs "positivo = cualquier rating"** pueden duplicar o dividir las métricas: muchas discrepancias entre papers vienen solo de aquí.
@@ -703,6 +703,7 @@ M(r"""
 - Chaney, Stewart & Engelhardt (2018). *How Algorithmic Confounding in Recommendation Systems Increases Homogeneity and Decreases Utility*. RecSys. <https://arxiv.org/abs/1710.11214>
 - Chen et al. (2023). *Bias and Debias in Recommender System: A Survey and Future Directions*. ACM TOIS. <https://arxiv.org/abs/2010.03240>
 - Ji, Sun, Zhang & Li (2023). *A Critical Study on Data Leakage in Recommender System Offline Evaluation*. ACM TOIS. <https://arxiv.org/abs/2010.11060>
+- Meng, McCreadie, Macdonald & Ounis (2020). *Exploring Data Splitting Strategies for the Evaluation of Recommendation Models*. RecSys. <https://arxiv.org/abs/2007.13237>
 - Sun et al. (2020). *Are We Evaluating Rigorously? Benchmarking Recommendation for Reproducible Evaluation and Fair Comparison*. RecSys. <https://doi.org/10.1145/3383313.3412489>
 - Wu et al. (2020). *MIND: A Large-scale Dataset for News Recommendation*. ACL. <https://aclanthology.org/2020.acl-main.331/>
 - Gao et al. (2022). *KuaiRec: A Fully-observed Dataset and Insights for Evaluating Recommender Systems*. CIKM. <https://arxiv.org/abs/2202.10842>

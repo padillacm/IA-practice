@@ -37,7 +37,11 @@ CACHE_HITS = Counter("cinematch_cache_hits_total", "Aciertos de caché")
 DEGRADED = Counter("cinematch_degraded_total", "Respuestas degradadas (sin ranker)", ["reason"])
 STAGE = Histogram("cinematch_stage_latency_seconds", "Latencia por etapa", ["stage"],
                   buckets=(0.0005, 0.001, 0.0025, 0.005, 0.01, 0.02, 0.04, 0.08, 0.16, 0.32))
-SCORE = Histogram("cinematch_top1_score", "Score del top-1 (para prediction drift)",
+REQ_LAT = Histogram("cinematch_request_latency_seconds", "Latencia de la petición completa (SLO)", ["cache"],
+                    buckets=(0.001, 0.0025, 0.005, 0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.16, 0.32, 0.64))
+# Score del top-1 para *prediction drift*. Con el ranker binario de la lección es una probabilidad; con el LGBMRanker
+# (lambdarank) del proyecto es un score sin escala → lo pasamos por una sigmoide solo para poder histogramarlo.
+SCORE = Histogram("cinematch_top1_score", "Score del top-1 (sigmoide si el ranker no es probabilístico)",
                   buckets=[i / 20 for i in range(21)])
 
 S: dict = {}  # estado global cargado una vez por worker
@@ -49,8 +53,10 @@ def load_artifacts() -> None:
     S["genre"] = np.load(f"{ART}/genre_mat.npy")
     S["gnorm"] = np.linalg.norm(S["genre"], axis=1) + 1e-8
     S["ranker"] = lgb.Booster(model_file=f"{ART}/ranker.txt")
+    S["prob_output"] = "binary" in str(S["ranker"].dump_model().get("objective", ""))   # ¿predict devuelve probabilidad?
     itf = pd.read_parquet(f"{ART}/item_feats.parquet")
     S["pop"], S["rmean"] = itf.pop_cum.to_numpy(), itf.rating_mean_cum.to_numpy()
+    S["pop30"] = itf.pop_30d.to_numpy() if "pop_30d" in itf else None    # el ranker del proyecto 16 la usa
     prof = pd.read_parquet(f"{ART}/user_prof.parquet")
     S["prof"] = {int(u): (float(r.user_n), float(r.user_mean)) for u, r in prof.iterrows()}
     ugen = pd.read_parquet(f"{ART}/user_genre.parquet")
@@ -131,12 +137,34 @@ def health():
 
 @app.get("/recommend/{user_id}")
 def recommend(user_id: int, k: int = 10, use_cache: bool = True):
+    t0 = time.perf_counter()
     R = S["redis"]
     key = f"recs:{S['meta']['model_version']}:{user_id}:{k}"   # la versión del modelo forma parte de la clave
     if use_cache and (hit := R.get(key)):
         CACHE_HITS.inc()
+        REQ_LAT.labels("true").observe(time.perf_counter() - t0)
         return {**json.loads(hit), "cache": True}
+    resp = _recommend_uncached(R, key, user_id, k)
+    REQ_LAT.labels("false").observe(time.perf_counter() - t0)
+    return resp
 
+
+def build_features(ids, sc, user_id) -> np.ndarray:
+    """Matriz de features en el ORDEN de meta["rank_feats"] (contrato con el entrenamiento: nunca por posición fija)."""
+    pop, rmean = item_features(ids)
+    n_u, mean_u = S["prof"][user_id]
+    cols = {"retr_score": sc, "retr_rank": np.arange(len(ids), dtype=float), "pop_cum": pop, "rating_mean_cum": rmean,
+            "genre_affinity": S["genre"][ids] @ S["ugen"][user_id] / S["gnorm"][ids],
+            "user_n": np.full(len(ids), n_u), "user_mean": np.full(len(ids), mean_u)}
+    if S["pop30"] is not None:
+        cols["pop_30d"] = S["pop30"][ids]
+    missing = [f for f in S["meta"]["rank_feats"] if f not in cols]
+    if missing:
+        raise KeyError(f"features sin implementar en serving: {missing}")
+    return np.column_stack([cols[f] for f in S["meta"]["rank_feats"]]).astype(float)
+
+
+def _recommend_uncached(R, key: str, user_id: int, k: int) -> dict:
     with STAGE.labels("user_features").time():
         hist = [int(x) for x in R.lrange(f"hist:{user_id}", 0, -1)]   # completo, para excluir lo visto
     if not hist or user_id not in S["prof"]:
@@ -156,15 +184,12 @@ def recommend(user_id: int, k: int = 10, use_cache: bool = True):
     strategy = "two_stage"
     try:
         with STAGE.labels("item_features").time():
-            pop, rmean = item_features(ids)
-            n_u, mean_u = S["prof"][user_id]
-            aff = S["genre"][ids] @ S["ugen"][user_id] / S["gnorm"][ids]
-            X = np.column_stack([sc, np.arange(len(ids)), pop, rmean, aff,
-                                 np.full(len(ids), n_u), np.full(len(ids), mean_u)])
+            X = build_features(ids, sc, user_id)
         with STAGE.labels("ranking").time():
             p = S["ranker"].predict(X, num_threads=1)
             order = ids[np.argsort(-p)]
-            SCORE.observe(float(np.clip(p.max(), 0, 1)))   # booster binario → probabilidad
+            top = float(p.max())
+            SCORE.observe(top if S["prob_output"] else float(1 / (1 + np.exp(-top))))
     except Exception as e:  # degradación elegante: mejor una lista sin ranker que un 500
         log.exception("ranker falló: %s", e)
         DEGRADED.labels("ranker_error").inc()

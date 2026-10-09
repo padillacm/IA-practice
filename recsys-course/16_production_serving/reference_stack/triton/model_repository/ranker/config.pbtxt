@@ -3,10 +3,12 @@ name: "ranker"
 backend: "onnxruntime"
 max_batch_size: 4096
 input [
-  { name: "x", data_type: TYPE_FP32, dims: [ 7 ] }   # 7 features de RANK_FEATS (orden fijo: ¡contrato!)
+  { name: "x", data_type: TYPE_FP32, dims: [ 7 ] }   # 7 features de RANK_FEATS de la lección (orden fijo: ¡contrato!)
 ]
 output [
-  { name: "p", data_type: TYPE_FP32, dims: [ ] }
+  # El ONNX devuelve shape [batch] (squeeze(-1)). Triton exige rango ≥ 1 en dims y antepone el batch:
+  # se declara [1] y se reinterpreta como escalar por elemento con reshape (patrón de la documentación de Triton).
+  { name: "p", data_type: TYPE_FP32, dims: [ 1 ], reshape: { shape: [ ] } }
 ]
 # Junta peticiones de distintos usuarios hasta 500 µs para aprovechar la GPU
 dynamic_batching {

@@ -19,6 +19,7 @@ os.makedirs(MOD, exist_ok=True)
 # ---------------------------------------------------------------------------
 CORE_CELL = r'''
 import faiss, lightgbm as lgb
+import scipy.sparse as sp
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 
@@ -38,7 +39,42 @@ test_pos = test.groupby("user_id").item_id.apply(set).to_dict()
 
 
 def binary_matrix(df):
-    return csr_matrix((np.ones(len(df), np.float32), (df.user_id, df.item_id)), shape=(N_USERS, N_ITEMS))
+    d = df.drop_duplicates(["user_id", "item_id"])
+    return csr_matrix((np.ones(len(d), np.float32), (d.user_id, d.item_id)), shape=(N_USERS, N_ITEMS))
+
+
+def topk_cosine_cooc(X, k=200, block=1024):
+    '''Item-kNN coseno DISPERSO: guarda solo los k vecinos más similares de cada ítem.
+
+    Una matriz densa N×N no escala: con ml-latest-small los movieId llegan a ~193.000 (≈150 GB en float32) y con
+    ~10⁴ ítems reales ya son cientos de MB que además se copian a MLflow. Calculamos XᵀX por bloques de filas
+    (siempre disperso) y truncamos a top-k por fila → memoria O(N·k). Es lo que hace cualquier item-kNN en producción.'''
+    n = np.sqrt(np.asarray(X.sum(0)).ravel()).astype(np.float32) + 1e-8
+    XT = X.T.tocsr()
+    active = np.where(np.diff(XT.indptr) > 0)[0]
+    R, C, V = [], [], []
+    for s0 in range(0, len(active), block):
+        rows = active[s0:s0 + block]
+        B = (XT[rows] @ X).tocsr()                          # bloque × N_ITEMS, disperso
+        for r, i in enumerate(rows):
+            a, b = B.indptr[r], B.indptr[r + 1]
+            c, v = B.indices[a:b], B.data[a:b] / (n[i] * n[B.indices[a:b]])
+            keep = c != i
+            c, v = c[keep], v[keep]
+            if len(v) > k:
+                sel = np.argpartition(-v, k)[:k]; c, v = c[sel], v[sel]
+            R.append(np.full(len(c), i)); C.append(c); V.append(v)
+    R, C, V = (np.concatenate(x) if x else np.array([]) for x in (R, C, V))
+    return csr_matrix((V.astype(np.float32), (R, C)), shape=X.shape[1:] * 2)
+
+
+def cooc_scores(cooc, hist, seen, k):
+    '''Suma de similitudes de los últimos 50 ítems → top-k ítems con score > 0 (no vistos, sin el padding 0).'''
+    cs = np.asarray(cooc[hist[-50:]].sum(0)).ravel()
+    cs[list(seen)] = 0; cs[0] = 0
+    nz = np.flatnonzero(cs > 0)
+    top = nz[np.argsort(-cs[nz])[:k]]
+    return top, cs
 
 
 class Sources:
@@ -53,9 +89,7 @@ class Sources:
         self.index = faiss.IndexHNSWFlat(self.emb.shape[1], 32, faiss.METRIC_INNER_PRODUCT)
         self.index.hnsw.efSearch = 128
         self.index.add(self.emb)
-        C = (X.T @ X).toarray().astype(np.float32)             # item-kNN coseno (Linden et al. 2003)
-        np.fill_diagonal(C, 0); n = np.sqrt(np.asarray(X.sum(0)).ravel()) + 1e-8
-        self.cooc = C / n[:, None] / n[None]
+        self.cooc = topk_cosine_cooc(X)                        # item-kNN coseno top-200 (Linden et al. 2003), disperso
         recent = df[df.ts >= df.ts.max() - 30 * 86400]
         self.pop = recent.item_id.value_counts().index.to_numpy()
 
@@ -71,8 +105,7 @@ class Sources:
         ids, sc = self.ann(hist, k)
         for r, (i, s) in enumerate([(i, s) for i, s in zip(ids, sc) if i not in seen and i > 0][:k]):
             out.setdefault(int(i), {})["ann_score"], out[int(i)]["ann_rank"] = float(s), r
-        cs = self.cooc[hist[-50:]].sum(0); cs[list(seen)] = -1; cs[0] = -1
-        top = np.argpartition(-cs, k)[:k]; top = top[np.argsort(-cs[top])]
+        top, cs = cooc_scores(self.cooc, hist, seen, k)
         for r, i in enumerate(top):
             out.setdefault(int(i), {})["cooc_score"], out[int(i)]["cooc_rank"] = float(cs[i]), r
         for r, i in enumerate([i for i in self.pop if i not in seen][: k // 2]):
@@ -874,6 +907,7 @@ SERVING_MODULE = r'''
 """CineMatch · motor de recomendación de serving (capstone). Lo usan la API y el notebook (paridad por construcción)."""
 import json, os, time
 import faiss, lightgbm as lgb, numpy as np, pandas as pd
+import scipy.sparse as sp
 
 
 class Recommender:
@@ -883,7 +917,7 @@ class Recommender:
         self.genre = np.load(f"{art}/genre_mat.npy"); self.gnorm = np.linalg.norm(self.genre, axis=1) + 1e-8
         self.svd = np.load(f"{art}/svd_emb.npy"); self.svd_index = faiss.read_index(f"{art}/svd.faiss")
         self.svd_index.hnsw.efSearch = 128
-        self.cooc = np.load(f"{art}/cooc.npy"); self.pop = np.load(f"{art}/pop_recent.npy")
+        self.cooc = sp.load_npz(f"{art}/cooc.npz").tocsr(); self.pop = np.load(f"{art}/pop_recent.npy")   # top-k disperso
         self.tt_user = None
         if os.path.exists(f"{art}/tt_user.pt"):
             import torch
@@ -914,8 +948,8 @@ class Recommender:
         out, seen = {}, set(hist)
         v = self.svd[hist[-50:]].mean(0, keepdims=True); v /= np.linalg.norm(v) + 1e-8
         self._ann(self.svd_index, v, hist, k, "ann", out)
-        cs = self.cooc[hist[-50:]].sum(0); cs[list(seen)] = -1; cs[0] = -1
-        top = np.argpartition(-cs, k)[:k]; top = top[np.argsort(-cs[top])]
+        cs = np.asarray(self.cooc[hist[-50:]].sum(0)).ravel(); cs[list(seen)] = 0; cs[0] = 0   # misma lógica que
+        nz = np.flatnonzero(cs > 0); top = nz[np.argsort(-cs[nz])[:k]]                          # cooc_scores (paridad)
         for r, i in enumerate(top):
             out.setdefault(int(i), {})["cooc_score"], out[int(i)]["cooc_rank"] = float(cs[i]), r
         for r, i in enumerate([i for i in self.pop if i not in seen][: k // 2]):
@@ -1381,7 +1415,7 @@ def project() -> None:
     def export_artifacts(art=ART_DIR):
         os.makedirs(art, exist_ok=True)
         np.save(f"{art}/genre_mat.npy", GENRE_MAT); np.save(f"{art}/svd_emb.npy", SRC_B.emb)
-        faiss.write_index(SRC_B.index, f"{art}/svd.faiss"); np.save(f"{art}/cooc.npy", SRC_B.cooc)
+        faiss.write_index(SRC_B.index, f"{art}/svd.faiss"); sp.save_npz(f"{art}/cooc.npz", SRC_B.cooc)
         np.save(f"{art}/pop_recent.npy", SRC_B.pop); np.save(f"{art}/tt_item_emb.npy", SRC_B.tt_emb)
         faiss.write_index(SRC_B.tt_index, f"{art}/tt.faiss")
         ut = torch.jit.trace(UserTower(TT_B).cpu().eval(), torch.zeros(1, 50, dtype=torch.long)); ut.save(f"{art}/tt_user.pt")

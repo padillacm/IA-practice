@@ -85,8 +85,11 @@ def register_model(model: dict, name: str, params: dict, metrics: dict) -> int:
     with mlflow.start_run(run_name=f"ct-{params.get('run_date', '')}"):
         mlflow.log_params(params)
         mlflow.log_metrics(metrics)
-        mlflow.pyfunc.log_model(name="model", python_model=ALSPyfunc(), artifacts={"model": "/tmp/model.npz"},
-                                registered_model_name=name)
+        kw = dict(python_model=ALSPyfunc(), artifacts={"model": "/tmp/model.npz"}, registered_model_name=name)
+        try:
+            mlflow.pyfunc.log_model(name="model", **kw)            # MLflow ≥ 3
+        except TypeError:
+            mlflow.pyfunc.log_model(artifact_path="model", **kw)   # MLflow 2.x
     return max(int(v.version) for v in MlflowClient().search_model_versions(f"name='{name}'"))
 
 

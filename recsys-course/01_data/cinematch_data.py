@@ -16,7 +16,8 @@ Interfaz estable que reutilizan los módulos posteriores:
 Convenciones de columnas: user_id (int), item_id (int), rating (float),
 timestamp (int, segundos Unix). items: item_id, title, year, genres (str "A|B").
 
-Si la descarga de GroupLens falla (sin red), `load_movielens` genera un dataset
+Si GroupLens no responde, 100k y 1m se descargan de un espejo público en GitHub
+(mismo contenido); si tampoco hay red, `load_movielens` genera un dataset
 sintético con el mismo esquema (`make_synthetic_movielens`) y avisa.
 """
 from __future__ import annotations
@@ -61,9 +62,56 @@ def download_movielens(size: str = "100k", data_dir: str | Path = "data") -> Pat
     data_dir.mkdir(parents=True, exist_ok=True)
     url = f"{BASE_URL}/{name}.zip"
     print(f"Descargando {url} ...")
-    with urllib.request.urlopen(url, timeout=60) as resp:
-        zipfile.ZipFile(io.BytesIO(resp.read())).extractall(data_dir)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            zipfile.ZipFile(io.BytesIO(resp.read())).extractall(data_dir)
+    except Exception as e:
+        if size not in MIRRORS:
+            raise
+        print(f"GroupLens no responde ({e.__class__.__name__}); probando espejo público en GitHub…")
+        _download_mirror(size, folder)
     return folder
+
+
+# Espejos públicos (mismo contenido que GroupLens) por si files.grouplens.org no responde.
+MIRRORS = {
+    "100k": "https://raw.githubusercontent.com/RUCAIBox/RecBole/master/dataset/ml-100k",
+    "1m": "https://raw.githubusercontent.com/khanhnamle1994/movielens/master",
+}
+
+
+def _write_dat(df: pd.DataFrame, path: Path) -> None:
+    """Escribe en el formato '::' de MovieLens-1M."""
+    lines = ("::".join(map(str, row)) for row in df.itertuples(index=False))
+    path.write_text("\n".join(lines) + "\n", encoding="latin-1", errors="replace")
+
+
+def _download_mirror(size: str, folder: Path) -> None:
+    """Descarga el espejo y lo reescribe con los nombres y el formato originales de
+    GroupLens, para que `_read_folder` y `load_users` funcionen sin cambios."""
+    import csv
+    base, tmp = MIRRORS[size], folder.with_name(folder.name + ".tmp")
+    tmp.mkdir(parents=True, exist_ok=True)
+    if size == "100k":
+        rd = lambda f: pd.read_csv(f"{base}/ml-100k.{f}", sep="\t", quoting=csv.QUOTE_NONE)
+        inter, it, us = rd("inter"), rd("item"), rd("user")
+        inter.columns, it.columns = ["u", "i", "r", "t"], ["item_id", "title", "year", "genres"]
+        inter.astype("int64").to_csv(tmp / "u.data", sep="\t", header=False, index=False)
+        year = pd.to_numeric(it["year"], errors="coerce")
+        title = [f"{t} ({int(y)})" if y == y else t for t, y in zip(it["title"], year)]
+        flags = pd.DataFrame({g: it["genres"].str.split(" ").apply(lambda gs: int(g in gs))
+                              for g in GENRES_100K})
+        u_item = pd.concat([it[["item_id"]], pd.Series(title, name="title"),
+                            pd.DataFrame({"rd": "", "vrd": "", "url": ""}, index=it.index), flags], axis=1)
+        u_item.to_csv(tmp / "u.item", sep="|", header=False, index=False, encoding="latin-1",
+                      errors="replace", quoting=csv.QUOTE_NONE, escapechar="\\")
+        us.to_csv(tmp / "u.user", sep="|", header=False, index=False)
+    else:  # 1m
+        rd = lambda f: pd.read_csv(f"{base}/{f}.csv", sep="\t", index_col=0, encoding="latin-1")
+        _write_dat(rd("ratings")[["user_id", "movie_id", "rating", "timestamp"]], tmp / "ratings.dat")
+        _write_dat(rd("movies")[["movie_id", "title", "genres"]], tmp / "movies.dat")
+        _write_dat(rd("users")[["user_id", "gender", "age", "occupation", "zipcode"]], tmp / "users.dat")
+    tmp.rename(folder)
 
 
 def _split_title_year(titles: pd.Series) -> tuple[pd.Series, pd.Series]:

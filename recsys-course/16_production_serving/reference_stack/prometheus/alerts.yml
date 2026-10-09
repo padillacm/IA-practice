@@ -3,9 +3,11 @@ groups:
   - name: cinematch-serving
     rules:
       - alert: CineMatchP99LatencyHigh
-        # p99 de la suma de etapas > 80 ms durante 5 min (SLO del contrato con backend)
+        # p99 de la PETICIÓN COMPLETA > 80 ms durante 5 min (SLO del contrato con backend).
+        # ⚠️ No uses el histograma por etapa sumando `stage`: mezclaría observaciones de etapas distintas y daría el
+        # p99 de "una etapa cualquiera", no el de la petición. Por eso el servicio expone un histograma propio.
         expr: |
-          histogram_quantile(0.99, sum by (le) (rate(cinematch_stage_latency_seconds_bucket[5m]))) > 0.08
+          histogram_quantile(0.99, sum by (le) (rate(cinematch_request_latency_seconds_bucket{cache="false"}[5m]))) > 0.08
         for: 5m
         labels: {severity: page}
         annotations:

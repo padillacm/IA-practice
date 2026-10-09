@@ -643,8 +643,9 @@ nb.md("""
   *ensemble* ganador del Grand Prize **no compensaba** el esfuerzo de ingeniería frente a la ganancia
   medida, y que el negocio ya se había movido al **streaming** (feedback implícito, no estrellas)
   (Amatriain & Basilico, Netflix Tech Blog, 2012).
-- **Spotify**: factorización implícita a escala (Johnson, 2014, *Logistic Matrix Factorization for
-  Implicit Feedback Data*) para *Discover Weekly* y similares; vectores servidos con ANN (Annoy, creado en Spotify).
+- **Spotify**: Johnson (2014, *Logistic Matrix Factorization for Implicit Feedback Data*) describe la
+  factorización implícita de escuchas que usaban a escala; los vectores se sirven con ANN (**Annoy**, la
+  librería de vecinos aproximados que Erik Bernhardsson creó en Spotify).
 - **Facebook/Meta**: ALS distribuido en Apache Giraph para recomendar a más de mil millones de
   personas (Kabiljo & Ilic, *Recommending items to more than a billion people*, Engineering at Meta, 2015).
 - **Google**: WALS (*weighted* ALS, la misma idea que iALS) en TensorFlow y en sus soluciones de

@@ -34,10 +34,12 @@ ML_UTILS_MD = """
 Para que este notebook sea **autocontenido en Colab** repetimos aquí, en versión
 compacta, tres piezas que ya construiste antes:
 
-1. `load_movielens(size)` — descarga MovieLens desde GroupLens (módulo 01). Si no hay
-   red, genera un **MovieLens sintético** con el mismo esquema para que nada se bloquee.
-2. `temporal_split(...)` — split **temporal global** (módulo 01): entrenamos con el
-   pasado y evaluamos con el futuro, como en producción.
+1. `load_movielens(size)` — descarga MovieLens desde GroupLens (módulo 01); si GroupLens
+   no responde, usa un espejo de ML-1M en GitHub, y si no hay red, genera un **MovieLens
+   sintético** con el mismo esquema para que nada se bloquee.
+2. `temporal_split(...)` — split **temporal global** 80/10/10 (módulo 01): entrenamos con el
+   pasado y evaluamos con el futuro, como en producción. A diferencia de `prepare_cinematch`,
+   aquí **no** se filtran ratings ni usuarios/ítems fríos: cada notebook decide qué hacer con ellos.
 3. `recall_at_k`, `ndcg_at_k` — métricas de ranking de top-K (módulo 02).
 """
 
@@ -47,6 +49,8 @@ import os, io, zipfile, urllib.request
 import numpy as np
 import pandas as pd
 
+# Espejo público de ML-1M (mismo contenido, CSV con tabuladores) por si GroupLens no responde
+ML1M_MIRROR = "https://raw.githubusercontent.com/khanhnamle1994/movielens/master"
 ML_URLS = {
     "1m": "https://files.grouplens.org/datasets/movielens/ml-1m.zip",
     "25m": "https://files.grouplens.org/datasets/movielens/ml-25m.zip",
@@ -110,9 +114,19 @@ def load_movielens(size: str = "1m", data_dir: str = "data"):
                 movies = pd.read_csv(z.open("ml-25m/movies.csv")).rename(columns={"movieId": "item_id"})
                 users = None
         print(f"MovieLens-{size} real: {len(ratings):,} ratings")
-    except Exception as e:  # sin red / URL caída → fallback sintético
-        print(f"⚠️ No se pudo descargar MovieLens ({type(e).__name__}). Uso datos SINTÉTICOS.")
-        ratings, movies, users = _synthetic_movielens()
+    except Exception as e:  # GroupLens caído → espejo de ML-1M en GitHub → fallback sintético
+        try:
+            if size != "1m":
+                raise
+            print(f"GroupLens no disponible ({type(e).__name__}); usando espejo de ML-1M en GitHub…")
+            rd = lambda f: pd.read_csv(f"{ML1M_MIRROR}/{f}", sep="\t", index_col=0, encoding="latin-1")
+            ratings = rd("ratings.csv").rename(columns={"movie_id": "item_id"})[["user_id", "item_id", "rating", "timestamp"]]
+            movies = rd("movies.csv").rename(columns={"movie_id": "item_id"})[["item_id", "title", "genres"]]
+            users = rd("users.csv").rename(columns={"zipcode": "zip"})[["user_id", "gender", "age", "occupation", "zip"]]
+            print(f"MovieLens-1M real (espejo): {len(ratings):,} ratings")
+        except Exception as e2:
+            print(f"⚠️ No se pudo descargar MovieLens ({type(e2).__name__}). Uso datos SINTÉTICOS.")
+            ratings, movies, users = _synthetic_movielens()
     return ratings, movies, users
 
 def temporal_split(df: pd.DataFrame, val_frac=0.1, test_frac=0.1, ts_col="timestamp"):

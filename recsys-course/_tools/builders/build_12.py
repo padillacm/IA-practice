@@ -1899,8 +1899,8 @@ Para generación *restringida al catálogo* existen dos caminos: **decodificaci�
 
 ## 🏭 En producción
 
-- **Spotify** describió en 2024 (con Meta) cómo adapta **Llama** para generar explicaciones contextualizadas de recomendaciones y comentarios del **AI DJ**, con *fine-tuning* adaptado al dominio, *instruction tuning*, ingeniería de prompts y revisión de editores y tests adversariales. El AI DJ (2023) usó tecnología de OpenAI más el conocimiento de sus editores, y **AI Playlist** (2024) interpreta prompts de texto con LLMs. En 2025 Spotify ha presentado un enfoque de modelos de lenguaje abiertos combinados con embeddings de usuario y *semantic IDs* del catálogo para productos como Discover Weekly, DJ o *Prompted Playlist*.
-- **Netflix** publicó (2025) su **foundation model** para recomendación: un transformer entrenado con objetivos tipo *next-token* sobre cientos de miles de millones de interacciones, que centraliza el aprendizaje de preferencias y se consume como embeddings, como subgrafo de otros modelos o con *fine-tuning*. En 2026 describió **GenRec**, un ranker basado en un LLM post-entrenado que verbaliza historial, metadatos y contexto ("context engineering").
+- **Spotify** describió en 2024 (con Meta) cómo adapta **Llama** para generar explicaciones contextualizadas de recomendaciones y comentarios del **AI DJ**, con *fine-tuning* adaptado al dominio, *instruction tuning*, ingeniería de prompts y revisión de editores y tests adversariales. El AI DJ (2023) usó tecnología de OpenAI más el conocimiento de sus editores, y **AI Playlist** (2024) interpreta prompts de texto con LLMs. En 2025 Spotify publicó *Text2Tracks* (arXiv:2503.24193: recomendación por *prompt* como *generative retrieval*, donde los *semantic IDs* colaborativos superan claramente a usar títulos como identificadores) y presentó (AI Engineer World's Fair 2025) su enfoque de LLMs abiertos con vectores de usuario y *semantic IDs* del catálogo, que conecta con Discover Weekly, DJ y *Prompted Playlist* (lanzado en EE. UU./Canadá en 2026).
+- **Netflix** publicó (2025) su **foundation model** para recomendación: un transformer entrenado con objetivos tipo *next-token* sobre cientos de miles de millones de interacciones, que centraliza el aprendizaje de preferencias y se consume como embeddings, como subgrafo de otros modelos o con *fine-tuning*. En 2026 describió **GenRec** (arXiv:2608.10257), un *ranker* construido sobre un LLM propio adaptado en dos fases (pre-entrenamiento continuo en datos de Netflix + post-entrenamiento con etiquetas de ranking y recompensas de valor a largo plazo) que verbaliza historial, metadatos y contexto (*context engineering* en vez de *feature engineering*) y emite una distribución sobre el catálogo real (no puede alucinar títulos).
 - **YouTube / Google DeepMind** presentó **PLUM** (2025): adaptar LLMs preentrenados a recomendación generativa a escala de YouTube con *semantic IDs*, preentrenamiento continuo en datos del dominio y *fine-tuning* para retrieval.
 - **LinkedIn** presentó **360Brew** (2025): un modelo decoder-only de 150B parámetros con interfaz textual que aborda más de 30 tareas de ranking y recomendación, sustituyendo modelos especializados y gran parte de la ingeniería de features.
 - **Amazon** lanzó **Rufus** (2024), asistente de compra conversacional con un LLM especializado entrenado sobre catálogo, reseñas y Q&A, que también da recomendaciones.
@@ -1923,7 +1923,7 @@ Patrón común: el LLM se usa sobre todo **offline o como modelo fundacional del
 - No fijar `temperature=0` / `do_sample=False` en ranking y evaluación → resultados no reproducibles.
 - Comparar un LLM con 40 usuarios y declarar victoria sin intervalos de confianza.
 - *Leakage* en TALLRec: separar por interacción en vez de por usuario, o usar ratings futuros en el historial.
-- Ignorar el coste de los **tokens de entrada**: el historial y los candidatos dominan el prompt; 20 candidatos × 15 tokens + 30 títulos de historial ≈ 1.000 tokens por llamada.
+- Ignorar el coste de los **tokens de entrada**: el historial y los candidatos dominan el prompt; 20 candidatos + 15 títulos de historial a ~12–15 tokens por título, más instrucciones, ≈ 600–1.000 tokens por llamada (mídelo con `llm.usage()`).
 - Usar memoria a largo plazo sin caducidad ni opción de borrado (privacidad, RGPD): el usuario debe poder ver y borrar lo que el agente "recuerda".
 - Confiar en un simulador LLM sin medir su fidelidad frente a datos reales.
 """)
@@ -1986,9 +1986,11 @@ nb.md("""
 **Industria**
 - Meta AI (2024). *How Spotify is using Llama to provide personalized recommendations*. [ai.meta.com](https://ai.meta.com/blog/spotify-personalized-recommendations-built-with-llama/)
 - Spotify Research (2024). *Contextualized Recommendations Through Personalized Narratives using LLMs*. research.atspotify.com
+- Palumbo et al. (2025). *Text2Tracks: Prompt-based Music Recommendation via Generative Retrieval* (Spotify). [arXiv:2503.24193](https://arxiv.org/abs/2503.24193)
 - Verma, S. (2025). *Personalization in the era of LLMs* (Spotify, AI Engineer World's Fair). [ai.engineer](https://ai.engineer/talks/personalization-in-the-era-of-llms)
 - Netflix TechBlog (2025). *Foundation Model for Personalized Recommendation*. netflixtechblog.com
-- Netflix (2026). *GenRec: Towards LLM-native recommendation at Netflix*. [arXiv:2608.10257](https://arxiv.org/abs/2608.10257)
+- Netflix (2026). *GenRec: An LLM-Backed Recommendation Ranker at Netflix*. [arXiv:2608.10257](https://arxiv.org/abs/2608.10257) · post del TechBlog (jul. 2026): *GenRec: Towards LLM-Native Recommendation at Netflix*
+- Xu, Hsiao & Bhattacharya (2026). *Towards Generalizable and Efficient Large-Scale Generative Recommenders* (Netflix). [arXiv:2605.23312](https://arxiv.org/abs/2605.23312)
 - He, R. et al. (2025). *PLUM: Adapting Pre-trained Language Models for Industrial-scale Generative Recommendations* (YouTube). [arXiv:2510.07784](https://arxiv.org/abs/2510.07784)
 - Firooz, H., Sanjabi, M. et al. (2025). *360Brew: A Decoder-only Foundation Model for Personalized Ranking and Recommendation* (LinkedIn). [arXiv:2501.16450](https://arxiv.org/abs/2501.16450)
 

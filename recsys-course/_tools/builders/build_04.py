@@ -249,7 +249,7 @@ encoger hacia 0 según el soporte $n_{ij}$ (nº de usuarios en común):
 
 $$s^{\text{shrunk}}_{ij}=\frac{n_{ij}}{n_{ij}+\lambda}\,s_{ij}$$
 
-En top-N implícito se usa la variante equivalente en el denominador:
+En top-N implícito se usa una variante análoga en el denominador:
 $s_{ij}=\dfrac{c_{ij}}{\sqrt{n_i n_j}+h}$ (la que implementamos). Es un **prior bayesiano**: con
 pocos datos, la similitud tiende a 0.
 
@@ -386,16 +386,19 @@ plt.tight_layout(); plt.show()
 nb.md("""
 🧪 Dos lecciones que aparecen en casi cualquier dataset:
 
-- **Shrinkage alto y α > 0,5 suben el NDCG pero bajan la coverage**: ambos empujan hacia ítems
-  populares (con más soporte). En un split temporal la popularidad «paga», así que el óptimo de NDCG
-  está sesgado hacia lo popular. Por eso siempre reportamos coverage al lado.
+- **Shrinkage alto y α < 0,5 suben el NDCG pero bajan la coverage**: ambos empujan hacia ítems
+  populares (el shrinkage castiga los pares con poco soporte, es decir, los raros; con α pequeño el
+  denominador apenas depende de la popularidad del destino $n_i$). Al revés, α → 1 penaliza al
+  destino popular: más coverage, menos NDCG (en ML-1M, en validación: α = 0,3 → NDCG ≈ 0,13 con
+  coverage ≈ 0,13; α = 0,9 → NDCG ≈ 0,03 con coverage ≈ 0,35). En un split temporal la popularidad
+  «paga», así que el óptimo de NDCG está sesgado hacia lo popular. Por eso siempre reportamos coverage al lado.
 - **Más vecinos ayuda** hasta saturar: con 3 700 ítems, $k$ de cientos es razonable.
 """)
 nb.code(r'''
 # Combinación elegida en validación (búsqueda conjunta pequeña) → evaluamos UNA vez en test
 grid = {}
 for h in [0, 200, 1000]:
-    for a in [0.5, 0.7]:
+    for a in [0.3, 0.5, 0.7]:
         for k in [100, 300]:
             grid[(h, a, k)] = evaluate_topk(sparse_score_fn(Xv, item_knn(Xv, k, shrink=h, alpha=a)), Xv, relv)["NDCG@10"]
 h_b, a_b, k_b = max(grid, key=grid.get)
@@ -598,9 +601,11 @@ nb.md("""
 1. **Los modelos lineales siguen ganando a muchos deep.** Dacrema, Cremonesi & Jannach (RecSys 2019)
    reprodujeron 18 algoritmos neuronales de conferencias top: solo 7 se pudieron reproducir y 6 de
    ellos perdían contra item-kNN/user-kNN/RP3β/SLIM bien tuneados. Anelli et al. (UMAP 2022)
-   compararon 10 algoritmos en 3 datasets: RP3β y EASE^R estaban entre los mejores, por delante de
-   NeuMF o MultVAE. **Nunca publiques ni despliegues un modelo deep sin un EASE/RP3β tuneado al lado.**
-2. **EASE es imbatible en catálogos de hasta ~50–100 k ítems**, pero su $\\mathbf B$ es **denso**
+   compararon 10 algoritmos clásicos y neuronales, bien tuneados, en 3 datasets: **ningún modelo
+   neuronal fue el mejor en ninguna métrica**; lineales, vecindarios y MF clásica rindieron de forma
+   consistente. **Nunca publiques ni despliegues un modelo deep sin un EASE/RP3β tuneado al lado.**
+2. **EASE es un baseline de primera en catálogos de hasta ~50–100 k ítems** (el límite lo pone la
+   memoria y la inversa $O(|I|^3)$), pero su $\\mathbf B$ es **denso**
    ($|I|^2$ floats: 100 k ítems = 40 GB en float32). Para más ítems: podar $\\mathbf B$, restringir a
    los ítems más populares, o variantes dispersas como SANSA (Spišák et al., RecSys 2023).
 3. **El shrinkage y la normalización por popularidad son los hiperparámetros que más mueven las
@@ -704,7 +709,7 @@ MovieLens 1M, split temporal global 80/20 (utilidades del curso), validación te
 | 1 | `item_knn()` con shrinkage, α y poda top-k | Tests unitarios de la celda pasan |
 | 2 | `ease()` en forma cerrada | Diagonal exactamente 0; test de la celda pasa |
 | 3 | Tuning **en validación** (grid u Optuna) de ambos | Sin tocar el test hasta el final |
-| 4 | Tabla final en test: NDCG@10, Recall@10, Coverage | **EASE ≥ 0,215** y **item-kNN tuneado ≥ 0,205** NDCG@10 (popularidad ≈ 0,214) |
+| 4 | Tabla final en test: NDCG@10, Recall@10, Coverage | **EASE ≥ 0,230** y **item-kNN tuneado ≥ 0,220** NDCG@10 (referencia medida: popularidad ≈ 0,214 · kNN heredado ≈ 0,186 · kNN tuneado ≈ 0,227 · EASE ≈ 0,237). Coverage reportada para todos |
 | 5 | **IC 95 % por bootstrap pareado** de ΔNDCG (EASE − kNN) y (EASE − popularidad) | Conclusión explícita: ¿es significativo? |
 | 6 | Análisis de coste: memoria de B vs S y latencia por usuario | Extrapolación a 50 k y 500 k ítems |
 """)
@@ -911,14 +916,20 @@ cost.round(3)
 pj.md("""
 ### 📝 Informe (solución de referencia)
 
-- En el split temporal, **EASE tuneado y el item-kNN tuneado quedan muy cerca** y ambos rozan o superan
-  ligeramente a la popularidad en NDCG@10, con **mucha más coverage**. Revisa la tabla de IC: si el
-  intervalo de una diferencia contiene 0, **no** puedes afirmar que un modelo es mejor.
-- **Tunear el kNN heredado** suele dar más mejora que cambiar de algoritmo (lección clásica de Dacrema et al.).
+- Ejecución de referencia (ML-1M, `FAST_DEV_RUN=True`): popularidad ≈ 0,214 · kNN heredado ≈ 0,186 ·
+  kNN tuneado ≈ 0,227 · EASE ≈ 0,237 NDCG@10. **EASE gana al kNN tuneado (+0,010) y a la popularidad
+  (+0,023) con IC 95 % pareado que excluye el 0**. Revisa siempre la tabla de IC: si el intervalo de una
+  diferencia contiene 0, **no** puedes afirmar que un modelo es mejor.
+- **Tunear el kNN heredado** da la mayor mejora (+0,04, más que pasar de kNN tuneado a EASE): la lección
+  clásica de Dacrema et al. Pero mira **cómo** mejora: Optuna elige shrinkage muy alto y α < 0,5, y la
+  coverage se desploma de ≈ 0,22 a ≈ 0,05 — el kNN «tuneado» se ha convertido casi en un recomendador de
+  popularidad. EASE consigue más NDCG **y** más coverage (≈ 0,07). Optimizar solo NDCG en un split temporal
+  empuja hacia lo popular: por eso coverage (o novedad) debe ser un *guardrail* del A/B.
 - **Coste**: con 3,7 k ítems EASE ocupa ~50 MB y es trivial; a 500 k ítems necesitaría ~1 TB → inviable
   sin poda/aproximación. El kNN escala linealmente en el nº de ítems.
-- **Recomendación**: desplegar el kNN tuneado ya (riesgo bajo) y llevar EASE a un **A/B test**
-  (módulo 15) solo si el IC frente al kNN tuneado es positivo.
+- **Recomendación**: llevar EASE a un **A/B test** (módulo 15) contra el kNN heredado, con coverage y
+  % de estrenos como *guardrails*; el kNN tuneado es un plan B barato, pero vigila su coverage. Si los
+  números de tu ejecución difieren (otra semilla, `FAST_DEV_RUN=False`), la conclusión debe salir de **tu** tabla de IC.
 
 ## 🚀 Retos extra
 1. Añade **RP3β** y un **ensemble** lineal EASE + kNN (pesos en validación). ¿Gana a ambos con IC > 0?

@@ -353,14 +353,14 @@ t0 = time.time(); walks = random_walks(starts, length=20, p=1.0, q=1.0)
 print(f"{len(walks):,} paseos DeepWalk en {time.time()-t0:.1f}s")
 """)
 nb.code(r"""
-# 📊 Gráfico 3 — Qué hacen p y q: distancia media (en saltos) entre el inicio y el nodo t del paseo
+# 📊 Gráfico 3 — Qué hacen p y q: tasa de vuelta atrás y nº de nodos distintos que visitan los paseos
 def mean_return_rate(W):
     return (W[:, 2:] == W[:, :-2]).mean()          # fracción de pasos que vuelven al nodo de hace 2 pasos
 
 configs = [(1, 1), (4, 1), (0.25, 1), (1, 4), (1, 0.25)]
 sub = np.random.default_rng(1).choice(starts, 3000)
 rates = [mean_return_rate(random_walks(sub, 20, p, q)) for p, q in configs]
-uniq = [len(np.unique(random_walks(sub, 20, p, q)[:, 1:], axis=None)) / 1 for p, q in configs]
+uniq = [len(np.unique(random_walks(sub, 20, p, q)[:, 1:])) for p, q in configs]
 fig, ax = plt.subplots(1, 2, figsize=(12, 3.6))
 lbl = [f"p={p}, q={q}" for p, q in configs]
 ax[0].bar(lbl, rates, color="#8b5cf6"); ax[0].set(title="Tasa de «vuelta atrás» del paseo", ylabel="fracción")
@@ -642,8 +642,8 @@ nb.md(r"""
 ## 🧠 11. Secretos de la élite
 1. **Un MF bien tuneado es un rival muy serio.** Rendle et al. (2020, *Neural Collaborative Filtering vs. Matrix Factorization Revisited*) y la crisis de reproducibilidad (Dacrema et al. 2019, módulo 02) muestran que muchos modelos neuronales pierden contra MF/EASE bien ajustados. Compara siempre contra LightGCN con $K=0$ (MF) con el mismo presupuesto de *tuning*.
 2. **LightGCN es un filtro paso-bajo.** Shen et al. (CIKM 2021, *How Powerful is Graph Convolution for Recommendation?*) mostraron que filtros espectrales **sin entrenamiento** (GF-CF) son competitivos con LightGCN. Si tienes poco tiempo, un filtro sobre la matriz de similitud de ítems normalizada es un *baseline* fortísimo.
-3. **Hiperparámetros de word2vec ≠ NLP.** Caselles-Dupré et al. (RecSys 2018) mejoraron item2vec hasta un orden de magnitud en algunas tareas ajustando el exponente de negativos (¡a veces negativo!), las épocas, el *subsampling* y la ventana. No uses los valores por defecto de gensim.
-4. **La regularización va sobre $E^{(0)}$**, no sobre los embeddings propagados, y la normalización simétrica $D^{-1/2}AD^{-1/2}$ importa: con $D^{-1}A$ (paseo aleatorio) los ítems populares dominan.
+3. **Hiperparámetros de word2vec ≠ NLP.** Caselles-Dupré et al. (RecSys 2018) reportan mejoras de hasta **10×** en la métrica de recomendación ajustando cuatro hiperparámetros que se suelen dejar por defecto: la distribución de negativos (`ns_exponent`, ¡a veces negativo, que favorece la cola!), las épocas, el *subsampling* y la ventana. No uses los valores por defecto de gensim: haz un barrido con el split temporal.
+4. **La regularización va sobre $E^{(0)}$**, no sobre los embeddings propagados (así lo hace el código oficial de LightGCN), y **la normalización es un hiperparámetro de sesgo de popularidad**: $D^{-1/2}AD^{-1/2}$ reparte la masa de forma simétrica; variantes como $D^{-1}A$ o exponentes asimétricos $D_u^{-\alpha}AD_i^{-(1-\alpha)}$ desplazan el peso hacia ítems populares o de cola. Trabajos posteriores (p. ej. GF-CF, Shen et al. 2021) ajustan precisamente estos exponentes y ganan puntos sin tocar el modelo.
 5. **Transductivo vs inductivo.** LightGCN no sabe qué hacer con un ítem nuevo; PinSage sí (usa *features*). En catálogos con mucha rotación (noticias, vídeo corto) eso decide la arquitectura.
 6. **El coste está en la propagación completa por paso.** Para grafos grandes: *neighbor sampling* (GraphSAGE/PinSage), precomputar $\hat A^k X$ (SIGN/SGC) o entrenar MF y propagar **una sola vez** al final (una «LightGCN post-hoc» barata que a menudo recupera parte de la ganancia).
 7. **Muestreo negativo uniforme en BPR** deja de aprender pronto: negativos duros (por popularidad o del propio modelo, como el *curriculum* de PinSage) suelen dar más que añadir capas.
