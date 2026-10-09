@@ -28,7 +28,7 @@ flowchart LR
         M13[13 Diversidad, calibración, fairness] --> M14[14 Bandits, RL y OPE] --> M15[15 Experimentación online]
     end
     subgraph VI["VI · Producción y MLOps 🟠🔴"]
-        M16[16 Arquitectura y serving] --> M17[17 Monitoreo y reentreno] --> M18[18 Capstone y élite]
+        M16[16 Arquitectura y serving] --> M17[17 Monitoreo y reentreno] --> M18[18 Capstone y élite] --> M19[19 Masterclass élite]
     end
     I --> II --> III --> IV --> V --> VI
 ```
@@ -77,6 +77,7 @@ Nivel: 🟢 Básico · 🟡 Intermedio · 🟠 Avanzado · 🔴 Experto
 | 16 | [Arquitectura de producción y serving](16_production_serving/) | 🔴 | Offline/nearline/online, latencia, **Feast**, **Kafka**, Redis, FastAPI, **Triton**, BentoML, Ray Serve, **TorchRec**, **Merlin** | CineMatch como microservicio |
 | 17 | [MLOps: monitoreo y reentreno](17_mlops_monitoring/) | 🔴 | **MLflow**, Prefect/Airflow/Metaflow, Pandera, **Evidently**, drift, feedback loops, reentreno continuo, shadow/canary | Pipeline de entrenamiento continuo con detección de drift |
 | 18 | [Capstone y lo que sabe la élite](18_capstone/) | 🔴 | Sistema end-to-end, compendio de secretos de la élite, *system design interviews*, mapa de papers, ruta de carrera | **CineMatch end-to-end** |
+| 19 | [Masterclass: el playbook de la élite](19_elite_playbook/) | 🔴 | Compresión de tablas de embeddings (hashing, QR, TT-Rec), entrenamiento en tiempo real (Monolith), *label delay*, *training-serving skew*, consistencia entre etapas del embudo, *global holdouts*, casebook de "offline sube / online baja", capacity planning | *Pager duty*: diagnosticar y arreglar 6 bugs plantados en producción |
 
 Cada carpeta contiene:
 - `README.md`: objetivos, lecturas y datasets del módulo.

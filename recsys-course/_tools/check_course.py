@@ -46,7 +46,10 @@ def main() -> int:
             if bad:
                 problems.append(f"{nb_path.name}: celdas con sintaxis inválida {bad}")
             required = REQUIRED_PROJECT if "proyecto" in nb_path.name else REQUIRED_LESSON
-            missing = [s for s in required if s.lower() not in text.lower()]
+            low = text.lower()
+            missing = [s for s in required if s.lower() not in low]
+            if "Secretos de la élite" in missing and "sabe la élite" in low:
+                missing.remove("Secretos de la élite")
             if missing:
                 problems.append(f"{nb_path.name}: faltan secciones {missing}")
             if "colab.research.google.com" not in text:

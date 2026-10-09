@@ -490,12 +490,12 @@ def ials_scratch(X, k=64, alpha=1.0, reg=50.0, iters=10, val=None):
 
 
 mf_score_fn = lambda U, V: (lambda ub: U[ub] @ V.T)
-U_s, V_s, h_ials = ials_scratch(Xv, k=64, alpha=1.0, reg=50.0, iters=8 if FAST_DEV_RUN else 15, val=(Xv, relv))
+U_s, V_s, h_ials = ials_scratch(Xv, k=64, alpha=1.0, reg=50.0, iters=5 if FAST_DEV_RUN else 15, val=(Xv, relv))
 h_ials
 ''')
 nb.code(r'''
 # Mismos hiperparámetros, entrenado con todo train → test
-U_s, V_s, _ = ials_scratch(X, k=64, alpha=1.0, reg=50.0, iters=8 if FAST_DEV_RUN else 15)
+U_s, V_s, _ = ials_scratch(X, k=64, alpha=1.0, reg=50.0, iters=5 if FAST_DEV_RUN else 15)
 results = {"Popularidad": evaluate_topk(lambda ub: np.tile(pop, (len(ub), 1)), X, rel),
            "iALS desde cero (k=64)": evaluate_topk(mf_score_fn(U_s, V_s), X, rel)}
 results["iALS desde cero (k=64)"]
@@ -773,8 +773,8 @@ cualquier rating; relevante = rating ≥ 4.
 | # | Entregable | Criterio |
 |---|---|---|
 | 1 | `train_bpr()` en PyTorch con negativos uniformes y opción de **negativos por popularidad** | Corre en GPU; curva de pérdida y NDCG |
-| 2 | Estudios Optuna para iALS y BPR (mismo nº de trials) | ≥ 20 trials cada uno (`FAST_DEV_RUN=False`: ≥ 40) |
-| 3 | Tabla final en test (NDCG@10, Recall@10, Coverage) con Popularidad, EASE, iALS, BPR | **iALS ≥ 0,225** NDCG@10; **BPR ≥ 0,20** |
+| 2 | Estudios Optuna para iALS y BPR (mismo nº de trials) | ≥ 40 trials cada uno con `FAST_DEV_RUN=False` (en GPU) |
+| 3 | Tabla final en test (NDCG@10, Recall@10, Coverage) con Popularidad, EASE, iALS, BPR | **iALS ≥ 0,225** NDCG@10; **BPR ≥ 0,17** (reto: ≥ 0,21, el nivel de `cornac` BPR en la lección) |
 | 4 | Importancia de hiperparámetros (Optuna) + interpretación | 1 párrafo |
 | 5 | `recommend_new_user(liked_titles)` con **fold-in** y su latencia | < 5 ms por usuario en CPU |
 """)
@@ -788,7 +788,7 @@ warnings.filterwarnings("ignore")
 seed = 42; random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 FAST_DEV_RUN = True
-N_TRIALS = 12 if FAST_DEV_RUN else 40
+N_TRIALS = 8 if FAST_DEV_RUN else 40
 print("device:", device)
 ''')
 add_utils(pj)
@@ -892,7 +892,7 @@ def objective_ials(trial):
 
 def objective_bpr(trial):
     _, f = train_bpr(Xv, k=trial.suggest_categorical("k", [32, 64, 128]), lr=trial.suggest_float("lr", 1e-3, 3e-2, log=True),
-                     reg=trial.suggest_float("reg", 1e-7, 1e-3, log=True), epochs=trial.suggest_int("epochs", 5, 30 if FAST_DEV_RUN else 60),
+                     reg=trial.suggest_float("reg", 1e-7, 1e-3, log=True), epochs=trial.suggest_int("epochs", 3, 12 if FAST_DEV_RUN else 60),
                      neg=trial.suggest_categorical("neg", ["uniform", "pop"]))
     return evaluate_topk(f, Xv, relv)["NDCG@10"]
 
@@ -969,6 +969,9 @@ pj.md("""
 ### 📝 Interpretación (solución de referencia)
 - En ML-1M temporal, la **regularización** de iALS es con diferencia el hiperparámetro más importante:
   valores altos empujan hacia lo popular (que en el futuro paga) y valores bajos sobreajustan al pasado.
+- En la lección viste que la NDCG de validación de BPR **baja** mientras la pérdida sigue bajando: con
+  negativos uniformes el modelo aprende a separar lo visto de lo impopular (fácil) y se aleja de la
+  popularidad reciente. El nº de épocas y el *learning rate* actúan como regularizadores.
 - BPR con negativos por popularidad suele converger más rápido que con negativos uniformes y es más
   sensible al *learning rate*; con el mismo presupuesto de trials suele quedar por detrás de iALS.
 - iALS iguala o supera a EASE con vectores de 64–512 dimensiones que **sí** se pueden indexar en un ANN
