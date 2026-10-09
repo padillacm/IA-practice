@@ -155,3 +155,16 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
 - ✅ Autoevaluación: +1 cálculo (|ΔNDCG| a mano) y +1 diagnóstico (sesgo de posición colado por *features*).
 - ✅ Proyecto: pistas graduadas para `MMoE.forward`/`CGCLayer.forward` (formas de tensores), y para LambdaMART
   (`group` contiguo, `label_gain`, `business_ndcg`).
+
+### 08 · Deep retrieval y ANN
+- Muy buena conexión con lo previo (MF → two-tower, RAG bi-encoder/cross-encoder ya presente) y una tabla de índices
+  FAISS con «cuándo» que es oro para la práctica.
+- ⚠️→✅ La corrección logQ (concepto central y contraintuitivo) solo tenía fórmula y gráfico. Se añade un **ejemplo
+  numérico** (Titanic 1 % vs película de culto 0,01 % en un batch de 1.024: 10 vs 0,1 apariciones como negativo).
+- ✅ Caja 🔁 con 4 preguntas (MF del 05, falsos negativos del 01, Recall@K del 02, InfoNCE del 03).
+- ✅ «👀 Qué observar» tras el entrenamiento de variantes (no comparar pérdidas con distinto nº de negativos), el
+  análisis cabeza/torso/cola, la temperatura y el t-SNE (comparado con el UMAP de sinopsis del 03: trama vs público).
+- ✅ Autoevaluación: +1 diagnóstico (logQ aplicado por error en serving) y +1 transferencia (mapear RAG → CineMatch y
+  sus diferencias).
+- ✅ Proyecto: el Paso 3 (bucle + MNS + evaluación por grupos) era un `# TODO` de una línea → dos pistas graduadas;
+  pista para FAISS (recall vs exacto con consultas reales, p50/p99 con un hilo).

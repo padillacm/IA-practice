@@ -202,6 +202,19 @@ def build_lesson():
 4. **Implementar** el estimador de frecuencias en streaming de Yi et al. (2019).
 5. **Construir y comparar** índices FAISS (Flat, IVF, IVF-PQ, HNSW) con curvas **recall vs latencia** y memoria.
 6. **Servir** top-K en milisegundos con filtrado de vistos y **elegir** entre FAISS, ScaNN, hnswlib y bases vectoriales (Milvus, Qdrant, Weaviate, pgvector, Vespa).
+
+### 🔁 Conexión con módulos anteriores
+1. En el módulo 05, ¿qué modelo era «el two-tower más simple posible» y qué le faltaba para usar *features*?
+2. En el módulo 01 mediste falsos negativos al muestrear por popularidad. ¿Por qué ese problema reaparece aquí con los *hard negatives*?
+3. ¿Qué métrica del módulo 02 corresponde a la etapa de retrieval, y por qué no NDCG@10?
+4. En el módulo 03, los bi-encoders de texto se entrenaban con InfoNCE e *in-batch negatives*. ¿Qué cambia cuando los «documentos» son películas y las «consultas» son usuarios?
+
+<details><summary>Respuestas</summary>
+1. La MF: una tabla de embeddings por lado y un producto escalar. Le faltaba poder usar <i>features</i> (historia, demografía, contenido): aquí cada torre es una red.
+2. Porque un negativo «difícil» (cerca del usuario en el espacio) a menudo es un ítem que le gustaría y que aún no ha visto: un positivo futuro.
+3. Recall@K con K grande (100–1.000): el retrieval solo tiene que <b>incluir</b> lo relevante entre los candidatos; el orden fino es trabajo del ranker.
+4. La distribución de los «documentos» en el batch ya no es uniforme: las películas populares aparecen muchísimo más, y eso sesga los negativos (sección 2.2, corrección logQ).
+</details>
 """)
     nb.md(r"""
 ## 💡 1. Intuición: ¿por qué un modelo especial para retrieval?
@@ -254,6 +267,8 @@ $$s^c(u,j) = s(u,j) - \log Q(j)$$
 El truco más barato: en un batch de $B$ pares (usuario, ítem positivo), usar los **positivos de los demás** como negativos → matriz $B\times B$, un solo *matmul*. Pero los ítems del batch se muestrean con probabilidad proporcional a su **frecuencia** $p_j$: los populares aparecen como negativos muchísimo más → el modelo aprende a **penalizar la popularidad** de más… o, visto al revés, el logit absorbe $\log p_j$. **Corrección logQ** (Yi et al., Google/YouTube, RecSys 2019):
 $$s^c(u,j) = \frac{\langle \mathbf q(u), \mathbf v(j)\rangle}{\tau} - \log(B\,p_j)$$
 (aplicada también al positivo). En serving se usa el score **sin** corregir.
+
+> ✍️ **Ejemplo numérico.** Batch de $B = 1.024$. *Titanic* tiene $p_j = 1\%$ de las interacciones y una película de culto, $p_j = 0{,}01\%$. En cada batch, *Titanic* aparece de media $B p_j \approx 10$ veces como negativo de otros usuarios; la de culto, $\approx 0{,}1$ (una vez cada diez batches). Sin corrección, el modelo recibe 100× más gradiente para **bajar** a *Titanic*. LogQ resta $\log(10) = 2{,}3$ al logit de *Titanic* y $\log(0{,}1) = -2{,}3$ al de la película de culto: deshace esa asimetría para que el modelo aprenda $P(i \mid u)$ y no «$P(i \mid u)$ dividido por la popularidad».
 
 **Estimación de $p_j$ en streaming** (Yi et al., 2019, Alg. 2): con dos arrays hasheados $A$ (último paso en que se vio $j$) y $D$ (intervalo medio estimado entre apariciones), en el paso $t$:
 $$D[h(j)] \leftarrow (1-\alpha)\,D[h(j)] + \alpha\,(t - A[h(j)]),\qquad A[h(j)]\leftarrow t,\qquad \hat p_j = 1/D[h(j)]\ \text{(por paso)}$$
@@ -345,6 +360,9 @@ axes[2].tick_params(axis="x", labelsize=7)
 plt.tight_layout(); plt.show()
 ''')
     nb.md(r"""
+> 👀 **Qué debes observar:** (izquierda) **no compares las pérdidas entre variantes**: con MNS o *hard negatives* la softmax tiene más negativos y la pérdida es mayor aunque el modelo sea mejor; solo vale para ver que cada variante converge. (centro) lo que decide es el Recall@100 de validación, y suele estabilizarse en pocas épocas. (derecha) fíjate en el **Recall@100**, la métrica de esta etapa; si una variante solo gana en Recall@10, mejora el orden fino, que es trabajo del ranker.
+""")
+    nb.md(r"""
 ### 🧪 4.1 ¿Qué hace logQ con la popularidad?
 Dividimos los ítems relevantes de test en **cabeza** (20 % más popular en train), **torso** y **cola**, y medimos el recall en cada grupo, además de la popularidad media de lo que recomienda cada modelo.
 """)
@@ -366,6 +384,9 @@ axes[1].set_title("Percentil de popularidad medio del top-10 (0 = más popular)"
 plt.tight_layout(); plt.show()
 pb.round(4)
 ''')
+    nb.md(r"""
+> 👀 **Qué debes observar:** sin logQ, el two-tower **sobre-penaliza lo popular** (los populares salen muchísimo como negativos *in-batch*) y su percentil de popularidad medio es alto (recomienda cosas menos populares); con logQ ese sesgo se corrige y suele subir el recall de la **cabeza**, que es donde está la mayoría de relevantes en un split temporal. MNS añade negativos uniformes y ayuda a que la **cola** no salga «gratis». No hay una variante que gane en los tres grupos a la vez: es otra vez un *trade-off* que se decide con la métrica de producto (y con el ranker detrás).
+""")
     nb.md(r"""
 ### 🧪 4.2 Estimador de frecuencia en streaming (Yi et al., 2019)
 En producción no hay "conteo total": el stream es infinito y el catálogo cambia. Implementamos el estimador con arrays hasheados y lo comparamos con la frecuencia real.
@@ -421,6 +442,9 @@ for gg in main:
     m = g == gg; plt.scatter(Z[m, 0], Z[m, 1], s=6, label=gg)
 plt.legend(markerscale=3, fontsize=8); plt.title(f"t-SNE de v(i) — {best_name} (1 500 ítems más populares)"); plt.axis("off"); plt.show()
 ''')
+    nb.md(r"""
+> 👀 **Qué debes observar:** (temperatura) τ demasiado alta suaviza la softmax y el modelo apenas distingue negativos difíciles; demasiado baja vuelve el entrenamiento inestable y sobreajusta a pocos negativos. Suele haber un valle ancho alrededor de 0,05–0,1 con embeddings normalizados: es un hiperparámetro que **siempre** hay que barrer. (t-SNE) los géneros forman regiones aunque la torre de ítem solo los ve como una *feature* más: el espacio aprendido es **colaborativo + contenido**. Compáralo con el UMAP de sinopsis del módulo 03: allí agrupaba la trama; aquí agrupa el **público**.
+""")
 
     # ------------------------------- ANN ---------------------------------
     nb.md(r"""
@@ -654,6 +678,12 @@ Frameworks de entrenamiento: **TorchRec** (ejemplo de two-tower en `torchrec/exa
 6. ¿Qué parámetro tocarías en producción si la latencia p99 sube y por qué no hace falta reconstruir el índice?
 <details><summary>Respuesta</summary>nprobe (IVF) o efSearch (HNSW): son parámetros de búsqueda, no de construcción, y mueven el punto en la curva recall-latencia en caliente.</details>
 
+7. **(Diagnóstico)** Tu two-tower tiene buen Recall@100 offline, pero tras desplegarlo el ranker recibe candidatos casi todos de la cola larga y el CTR cae. El entrenamiento usaba logQ. ¿Qué error de serving es el sospechoso nº 1?
+<details><summary>Respuesta</summary>Aplicar la corrección logQ también en serving (restar log(B·p<sub>j</sub>) al score o indexar vectores «corregidos»): en serving se usa el score <b>sin</b> corregir. Con la corrección, los ítems poco frecuentes reciben un bonus y dominan el top-K. Se comprueba comparando el percentil de popularidad de los candidatos servidos con el de la evaluación offline.</details>
+
+8. **(Transferencia)** En RAG usas un bi-encoder + base vectorial + cross-encoder. Mapea cada pieza a CineMatch e indica una diferencia que obligue a hacer algo que en RAG no harías.
+<details><summary>Respuesta</summary>Bi-encoder → two-tower (consulta = usuario con su historia; documento = película). Base vectorial → índice FAISS/HNSW de vectores de ítem. Cross-encoder → ranker del módulo 06/07. Diferencias: los «documentos» del batch tienen una frecuencia muy desigual (hay que corregir con logQ), hay que filtrar lo ya visto por usuario (pedir K' &gt; K), y las consultas (usuarios) tienen una distribución distinta de los documentos (ANN fuera de distribución: medir recall con consultas reales).</details>
+
 ## 📚 11. Referencias
 - Covington, P., Adams, J., Sargin, E. (2016). *Deep Neural Networks for YouTube Recommendations*. RecSys. https://dl.acm.org/doi/10.1145/2959100.2959190
 - Yi, X. et al. (2019). *Sampling-Bias-Corrected Neural Modeling for Large Corpus Item Recommendations*. RecSys. https://dl.acm.org/doi/10.1145/3298689.3346996
@@ -784,6 +814,9 @@ except NotImplementedError:
     nb.md(r"""
 ## Paso 3 — Entrenamiento, evaluación y ablación
 Entrena 3 variantes (sin logQ, con logQ, con logQ + 512 negativos uniformes) y compara Recall@100 total y por grupos de popularidad (cabeza 20 % / cola 40 %).
+
+<details><summary>🪜 Pista 1 (bucle)</summary>Cada época: baraja los ejemplos (historia, demografía, ítem siguiente), recorre lotes, calcula <code>u = model.user(hist, ucat)</code> y <code>v = model.item(pos)</code>, llama a <code>retrieval_loss</code> y da un paso de Adam. Al final de cada época evalúa Recall@100 en validación y guarda el mejor estado (<i>early stopping</i>).</details>
+<details><summary>🪜 Pista 2 (MNS y evaluación)</summary>Para MNS, muestrea 512 ids uniformes, calcula sus vectores con la torre de ítem y concatena sus logits a los <i>in-batch</i> restándoles <code>log(512 / N_ITEMS)</code>. Para evaluar: vectores de todos los ítems con la torre de ítem, <code>scores = U @ V.T</code>, pon <code>-inf</code> en lo ya visto y toma el top-100; para los grupos, filtra la verdad de cada usuario por el grupo de popularidad del ítem (como en la sección 4.1 de la lección).</details>
 """)
     nb.code(r'''
 # TODO: bucle de entrenamiento + retrieve() + evaluate() + tabla de ablación
@@ -791,6 +824,8 @@ Entrena 3 variantes (sin logQ, con logQ, con logQ + 512 negativos uniformes) y c
     nb.md(r"""
 ## Paso 4 — Índice FAISS y servicio
 Construye un índice sobre los vectores de ítem (y, para estresarlo, sobre un corpus aumentado de ≥ 200 k vectores), mide recall@100 vs exacto y latencia p50/p99 de `recommend()` con 1 hilo.
+
+<details><summary>🪜 Pista</summary><code>faiss.omp_set_num_threads(1)</code>; <code>IndexFlatIP</code> te da la verdad exacta y <code>IndexHNSWFlat(d, 32, faiss.METRIC_INNER_PRODUCT)</code> el aproximado. Recall@100 vs exacto = |top-100 HNSW ∩ top-100 exacto| / 100, promediado sobre <b>usuarios reales</b> como consultas. Sube <code>index.hnsw.efSearch</code> hasta pasar 0,95. En <code>recommend()</code>, pide K' = 100 + longitud de la historia y filtra lo visto; mide con <code>time.perf_counter()</code> sobre ≥ 1.000 peticiones y usa <code>np.percentile(lat, [50, 99])</code>.</details>
 """)
     nb.code(r'''
 import faiss
