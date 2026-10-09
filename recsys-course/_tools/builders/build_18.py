@@ -242,7 +242,7 @@ def lesson() -> None:
     5. **Planificar** tu lectura de ~40 papers canónicos por etapa y tu ruta de carrera en ML de recomendación.
 
     ## Índice
-    1. El mapa: CineMatch y los 18 módulos
+    1. El mapa: CineMatch y los módulos 00–17 (el 19 profundiza en lo que aquí se enumera)
     2. *Walking skeleton* end-to-end ejecutable (la columna vertebral del proyecto)
     3. 🧠 Lo que solo sabe la élite (compendio)
     4. Guía de entrevistas de *system design* (marco + 3 casos resueltos con diagramas)
@@ -492,6 +492,19 @@ def lesson() -> None:
 
     Lecciones concretas, cada una con su fuente. Agrupadas por etapa. Si en una entrevista o en un *design review* puedes
     citar y explicar diez de estas, estás en el percentil alto.
+
+    > 🔁 **Úsalo como repaso espaciado, no como lectura.** Antes de leer cada punto, tapa el texto y lee solo la frase en negrita: intenta explicar en voz alta, en un minuto, **qué dice, por qué funciona y de qué fuente sale**. Si no puedes, vuelve al módulo donde lo practicaste:
+    >
+    > | Secretos | Módulo donde lo viste con código | Secretos | Módulo |
+    > |---|---|---|---|
+    > | 1, 2, 9 (métricas muestreadas, baselines, GAUC) | 02 (y 04, 06) | 21–23 (calibrar para fusionar, MMoE, sesgo de posición) | 06, 07 |
+    > | 3–5 (dot product, iALS, EASE) | 04, 05, 08 | 24 (satisfacción a largo plazo) | 15, 19 |
+    > | 6 (split aleatorio) | 01 | 25–26 (DPP, calibración de Steck) | 13 |
+    > | 7–8 (pérdida de SASRec, gBCE) | 09 | 27–28 (propensiones, artwork) | 14 |
+    > | 10–11 (point-in-time, loguear features) | proyecto 06, 16 | 29–31 (interleaving, CUPED, offline ≠ online) | 15, 02 |
+    > | 12–13 (frescura, *example age*) | 00, 17 | 32 (feedback loops) | 01, 13, 17 |
+    > | 14–17 (siguiente consumo, ESMM, logQ, MNS) | 07, 08 | 33–34 (p99 del fan-out, tablas de embeddings) | 16, 19 |
+    > | 18–20 (recall del funnel, paseos aleatorios, sesiones) | 00, 04, 08, 10 | 35–38 (Monolith, scaling laws, semantic IDs, LLM-rankers) | 19, 11, 12 |
 
     ### Evaluación (lo que separa resultados reales de espejismos)
     1. **Las métricas muestreadas mienten.** Evaluar contra 100 negativos aleatorios puede **invertir** el orden de modelos frente al ranking completo; evalúa con *full ranking* o corrige el estimador. — Krichene & Rendle, *On Sampled Metrics for Item Recommendation*, KDD 2020.
@@ -880,6 +893,9 @@ def lesson() -> None:
     7. Tu modelo nuevo gana +4 % NDCG offline y pierde en el A/B. Da tres hipótesis.
     <details><summary>Respuesta</summary>(a) Métrica offline no alineada con el objetivo (clic vs satisfacción); (b) leakage o split no temporal que infló el offline; (c) training-serving skew o features no disponibles igual en serving; también: efectos de novedad, sesgo de exposición del log de evaluación.</details>
 
+    8. **(Integración)** Recorre una petición de la home de CineMatch de principio a fin y di, para cada etapa, **una** métrica que la vigila y **un** módulo donde la practicaste: retrieval, ranking, re-ranking, serving, monitoreo y experimento.
+    <details><summary>Respuesta</summary>Retrieval: recall@K de la unión de fuentes (00, 08, 18). Ranking: NDCG@10 / logloss calibrada por segmento (02, 06, 07). Re-ranking: ILD, KL de calibración y cobertura frente al NDCG (13). Serving: latencia p99 por etapa y paridad de features (16). Monitoreo: OOV, drift de features/embeddings y <i>play rate</i> con alertas estacionales (17). Experimento: north-star + guardrails con CUPED, SRM e interleaving como filtro previo (15).</details>
+
     ## 📚 Referencias
 
     Todas las referencias del compendio (§3) y del mapa de lectura (§5) son citas completas (autor, año, título, venue
@@ -1135,6 +1151,23 @@ def project() -> None:
     ''')
     C(CORE_CELL)
     C(FEAT_CELL)
+
+    M(r"""
+    ## 🧭 Plan de sprint y mapa de reutilización
+    Este proyecto es **práctica independiente**: casi todo lo que necesitas ya lo hiciste en un proyecto anterior. Si te atascas, antes de mirar el SPOILER abre el proyecto indicado:
+
+    | Etapa | Reutiliza | Orden sugerido (sprint de ~2 semanas) |
+    |---|---|---|
+    | E1 Datos | proyecto 01 (pipeline, validaciones) y 17 (Pandera) | día 1 |
+    | E2 Two-tower | proyecto 08 (torres, logQ, FAISS) | días 2–3 |
+    | E3 Ranking y ablación | proyectos 06 (PIT), 07 (LambdaMART) y 16 (candidatos) | días 4–5 |
+    | E4 Re-ranking | proyecto 13 (MMR, frontera NDCG–ILD) | día 6 |
+    | E5 Serving | proyecto 16 (FastAPI, caché, test de carga) | días 7–8 |
+    | E6–E7 MLOps e informe | proyecto 17 (MLflow, drift, decisión); para el *design doc*, la plantilla del módulo 19 §8.3 (puedes adelantarte a leerla: es independiente del resto del 19) | días 9–10 |
+    | Bonus agente | proyecto 12 (LangGraph + guardrails) | si sobra tiempo |
+
+    Regla de oro del *walking skeleton*: **primero que todo funcione de punta a punta con la versión simple** (la de `CORE_CELL`), y después mejora una etapa cada vez midiendo su métrica.
+    """)
 
     M(r"""
     ## Etapa 1 · Datos (E1)

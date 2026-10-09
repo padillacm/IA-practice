@@ -291,3 +291,17 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   MLflow, aliases).
 - El *feedback loop* aparece en 01, 13, 14 y 17: es **espiral deliberada** (cada vez con una lente distinta: datos,
   re-ranking, exploración, operación); las cajas 🔁 ahora lo hacen explícito.
+
+### 18 · Capstone
+- Buen cierre: *walking skeleton* ejecutable que mapea cada etapa a su módulo, marco de 10 pasos para *system design*
+  con *back-of-the-envelope*, mapa de lectura y ruta de carrera.
+- ⚠️ El compendio de 38 secretos es una **lista** larga (contenido de élite con riesgo de lectura pasiva). ✅ Se
+  convierte en **ejercicio de recuperación**: instrucción de «tapar y explicar en 1 minuto» + tabla secreto → módulo
+  donde se practicó (la tabla también es un índice de repaso para entrevistas).
+- ✅ Autoevaluación: +1 pregunta de **integración** (una petición de punta a punta: métrica y módulo por etapa).
+- ✅ Proyecto: «🧭 Plan de sprint y mapa de reutilización» (qué proyecto anterior reutilizar en cada etapa, orden en
+  ~2 semanas, regla del walking skeleton). Es el andamiaje adecuado para práctica independiente: pistas por
+  referencia en vez de huecos rellenables. Se señala la referencia adelantada al design doc del 19 como lectura
+  independiente.
+- 📌 Considerar que la rúbrica del capstone pida también 3–5 respuestas cortas del marco de entrevista sobre el propio
+  sistema (convertir el §4 en evaluación).
