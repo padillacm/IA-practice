@@ -32,7 +32,7 @@ seed = 42
 rng = np.random.default_rng(seed)
 plt.rcParams.update({"figure.dpi": 110, "axes.grid": True, "grid.alpha": 0.3,
                      "axes.spines.top": False, "axes.spines.right": False})
-C = {"ctrl": "#9e9e9e", "trt": "#0072b2", "cuped": "#009e73", "cupac": "#cc79a7", "il": "#d55e00",
+COL = {"ctrl": "#9e9e9e", "trt": "#0072b2", "cuped": "#009e73", "cupac": "#cc79a7", "il": "#d55e00",
      "naive": "#c53030", "delta": "#2b6cb0", "seq": "#e69f00"}
 
 FAST_DEV_RUN = True        # True: ~5-8 min en CPU; False: más repeticiones Monte Carlo (~20 min)
@@ -186,16 +186,17 @@ steps = [("Hipótesis\n+ métrica\nprincipal", "#eef6ee", "#2f855a"), ("Diseño:
 for i, (txt, fc, ec) in enumerate(steps):
     x = 0.1 + i * 2.0; box(ax, (x, 1.9), 1.7, 1.5, txt, fc=fc, ec=ec, fs=9)
     if i < len(steps) - 1: arrow(ax, (x + 1.7, 2.65), (x + 2.0, 2.65))
-arrow(ax, (11.0, 1.9), (1.0, 1.9), "aprendizaje → nueva hipótesis", rad=0.25)
+arrow(ax, (11.0, 1.85), (1.0, 1.85), rad=-0.3)
+ax.text(6.0, 0.35, "aprendizaje → nueva hipótesis", ha="center", fontsize=9, color="#444")
 ax.set_title("Ciclo de vida de un experimento online", fontsize=12)
 
 ax = axes[1]; ax.set_xlim(0, 10); ax.set_ylim(0, 10); ax.axis("off")
-levels = [("North-star / OEC\nretención, satisfacción a largo plazo", "#2b6cb0", 7.2),
+levels = [("North-star / OEC\nretención, satisfacción", "#2b6cb0", 7.2),
           ("Proxies y surrogates\nhoras vistas, plays cualificados, días activos", "#4299e1", 4.9),
           ("Guardrails\nlatencia, errores de playback, cancelaciones, SRM", "#c05621", 2.6),
           ("Métricas de diagnóstico\nCTR por fila, cobertura, diversidad", "#a0aec0", 0.3)]
 for i, (txt, col, y) in enumerate(levels):
-    half = 1.3 + i * 1.15
+    half = 1.9 + i * 1.0
     ax.add_patch(Polygon([[5 - half, y], [5 + half, y], [5 + half - 0.5, y + 2.1], [5 - half + 0.5, y + 2.1]], color=col, alpha=0.85))
     ax.text(5, y + 1.05, txt, ha="center", va="center", fontsize=8.5, color="white", weight="bold")
 ax.set_title("Jerarquía de métricas (más arriba = más lenta y más importante)", fontsize=11)
@@ -221,12 +222,16 @@ Las horas vistas por usuario en 2 semanas tienen muchos ceros (gente que no entr
 """)
 
     nb.code(r'''
+def p_inactive(eng):
+    """Probabilidad de no ver nada en el periodo: alta para usuarios poco enganchados."""
+    return 0.5 / (1 + np.exp(1.5 * (eng - 0.8)))
+
 def simulate_watch_hours(n, g, lift=0.0, engagement=None):
-    """Horas vistas por usuario en 2 semanas: 25 % ceros + lognormal con cola larga.
+    """Horas vistas por usuario en 2 semanas: ~15 % ceros + lognormal con cola larga.
     `lift` es un efecto multiplicativo del tratamiento sobre los usuarios activos."""
     if engagement is None:
         engagement = g.normal(1.6, 1.0, n)               # nivel latente de cada usuario (log-horas)
-    active = g.random(n) > 0.25
+    active = g.random(n) > p_inactive(engagement)
     hours = np.exp(engagement + g.normal(0, 0.5, n)) * (1 + lift)
     return np.where(active, hours, 0.0)
 
@@ -237,13 +242,13 @@ print(f"media control={y_c.mean():.2f} h, sd={y_c.std():.2f} h (CV={y_c.std()/y_
 print(f"efecto: {res['diff']:+.3f} h ({res['lift']:+.2%}), IC95 [{res['lo']:+.3f}, {res['hi']:+.3f}], p={res['p']:.3f}")
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 3.8))
-axes[0].hist(y_c, bins=np.linspace(0, 80, 80), color=C["ctrl"]); axes[0].set(title="Horas por usuario (control)", xlabel="horas en 2 semanas", ylabel="usuarios")
-srt = np.sort(y_c)[::-1]; axes[1].plot(np.arange(1, len(srt) + 1) / len(srt) * 100, np.cumsum(srt) / srt.sum() * 100, color=C["trt"], lw=2)
+axes[0].hist(y_c, bins=np.linspace(0, 80, 80), color=COL["ctrl"]); axes[0].set(title="Horas por usuario (control)", xlabel="horas en 2 semanas", ylabel="usuarios")
+srt = np.sort(y_c)[::-1]; axes[1].plot(np.arange(1, len(srt) + 1) / len(srt) * 100, np.cumsum(srt) / srt.sum() * 100, color=COL["trt"], lw=2)
 axes[1].set(title="Concentración: % de horas vs % de usuarios", xlabel="% de usuarios (más activos primero)", ylabel="% de horas acumuladas")
 diffs = [simulate_watch_hours(5000, g, 0.02).mean() - simulate_watch_hours(5000, g).mean() for _ in range(R_SIM)]
-axes[2].hist(diffs, bins=40, color=C["trt"], density=True, alpha=0.7, label="diferencias simuladas")
+axes[2].hist(diffs, bins=40, color=COL["trt"], density=True, alpha=0.7, label="diferencias simuladas")
 xs = np.linspace(min(diffs), max(diffs), 200); axes[2].plot(xs, stats.norm.pdf(xs, np.mean(diffs), np.std(diffs)), "k--", label="normal (TCL)")
-axes[2].axvline(0, color=C["naive"], ls=":"); axes[2].set(title="Distribución muestral de τ̂ (n=5000/grupo)", xlabel="diferencia de medias (h)")
+axes[2].axvline(0, color=COL["naive"], ls=":"); axes[2].set(title="Distribución muestral de τ̂ (n=5000/grupo)", xlabel="diferencia de medias (h)")
 axes[2].legend(fontsize=8); plt.tight_layout(); plt.show()
 ''')
 
@@ -297,10 +302,10 @@ for _ in range(R_SIM):
 fpr = {"Naive (impresión = unidad)": np.mean(np.array(pv_naive) < 0.05), "Método delta (usuario = unidad)": np.mean(np.array(pv_delta) < 0.05)}
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 3.8))
-axes[0].bar(fpr.keys(), fpr.values(), color=[C["naive"], C["delta"]]); axes[0].axhline(0.05, color="k", ls="--", label="α = 5 %")
+axes[0].bar(fpr.keys(), fpr.values(), color=[COL["naive"], COL["delta"]]); axes[0].axhline(0.05, color="k", ls="--", label="α = 5 %")
 axes[0].set(title=f"Tasa de falsos positivos en {R_SIM} A/A tests (CTR)", ylabel="P(p < 0,05)"); axes[0].legend()
-axes[1].hist(pv_naive, bins=20, alpha=0.6, color=C["naive"], label="naive", density=True)
-axes[1].hist(pv_delta, bins=20, alpha=0.6, color=C["delta"], label="delta", density=True)
+axes[1].hist(pv_naive, bins=20, alpha=0.6, color=COL["naive"], label="naive", density=True)
+axes[1].hist(pv_delta, bins=20, alpha=0.6, color=COL["delta"], label="delta", density=True)
 axes[1].set(title="p-valores en A/A: deberían ser uniformes", xlabel="p-valor"); axes[1].legend()
 plt.tight_layout(); plt.show(); print({k: round(v, 3) for k, v in fpr.items()})
 ''')
@@ -366,7 +371,7 @@ axes[0].axhline(0.8, ls="--", color="k"); axes[0].set(title="Potencia vs usuario
 daily = 40_000                                                    # usuarios elegibles nuevos por día y grupo
 days = np.arange(1, 43)
 mde_days = (stats.norm.ppf(0.975) + stats.norm.ppf(0.8)) * np.sqrt(2 * sigma**2 / (daily * days)) / mu
-axes[1].plot(days, mde_days * 100, lw=2, color=C["trt"])
+axes[1].plot(days, mde_days * 100, lw=2, color=COL["trt"])
 for wk in [7, 14, 21, 28]: axes[1].axvline(wk, color="#cbd5e0", ls=":")
 axes[1].set(title=f"MDE relativo vs duración ({daily:,} usuarios/día/grupo)", xlabel="días", ylabel="MDE (%)")
 plt.tight_layout(); plt.show()
@@ -404,14 +409,14 @@ Sustituye $X$ por la **predicción de un modelo de ML** de $Y$ a partir de mucha
 """)
 
     nb.code(r'''
-def simulate_pre_post(n, g, lift=0.0, noise_pre=0.6):
+def simulate_pre_post(n, g, lift=0.0, noise_pre=0.35):
     """Usuarios con engagement latente persistente: X (pre) e Y (durante) comparten el nivel latente."""
     eng = g.normal(1.6, 1.0, n)
     tenure = g.exponential(2.0, n); device_tv = g.random(n) < 0.4
     eng_eff = eng + 0.3 * device_tv
-    x_pre = np.exp(eng_eff + g.normal(0, noise_pre, n)) * (g.random(n) > 0.2)
-    days_active_pre = np.clip(np.round(2 * eng_eff + g.normal(0, 1.5, n)), 0, 14)
-    y = simulate_watch_hours(n, g, lift=lift, engagement=eng_eff + 0.05 * np.log1p(tenure))
+    x_pre = np.exp(eng_eff + g.normal(0, noise_pre, n)) * (g.random(n) > p_inactive(eng_eff))
+    days_active_pre = np.clip(np.round(2 * eng_eff + g.normal(0, 1.0, n)), 0, 14)
+    y = simulate_watch_hours(n, g, lift=lift, engagement=eng_eff + 0.3 * np.log1p(tenure))   # la antigüedad no está en x_pre
     feats = np.column_stack([x_pre, days_active_pre, tenure, device_tv])
     return x_pre, feats, y
 
@@ -441,7 +446,7 @@ for k, v in est.items():
 
     nb.code(r'''
 fig, axes = plt.subplots(1, 2, figsize=(14, 4.2))
-for (k, v), col in zip(est.items(), [C["ctrl"], C["cuped"], C["cupac"]]):
+for (k, v), col in zip(est.items(), [COL["ctrl"], COL["cuped"], COL["cupac"]]):
     axes[0].hist(v, bins=40, alpha=0.55, color=col, label=f"{k} (sd={v.std():.3f})", density=True)
 axes[0].axvline(0, color="k", ls=":"); axes[0].set(title=f"Estimaciones del efecto en {R_SIM} experimentos (n={n_exp}/grupo)", xlabel="τ̂ (horas)")
 axes[0].legend(fontsize=8)
@@ -452,7 +457,7 @@ for noise in [2.0, 1.4, 1.0, 0.7, 0.45, 0.3, 0.15]:
     rho = np.corrcoef(x, y)[0, 1]; y_adj, _ = cuped_adjust(y, x)
     rows.append((rho, 1 - y_adj.var() / y.var()))
 rows = np.array(rows); rr = np.linspace(0, 1, 100)
-axes[1].plot(rr, rr ** 2 * 100, "k--", label="teoría: ρ²"); axes[1].scatter(rows[:, 0], rows[:, 1] * 100, color=C["cuped"], s=50, zorder=3, label="empírica")
+axes[1].plot(rr, rr ** 2 * 100, "k--", label="teoría: ρ²"); axes[1].scatter(rows[:, 0], rows[:, 1] * 100, color=COL["cuped"], s=50, zorder=3, label="empírica")
 axes[1].set(title="CUPED: reducción de varianza vs correlación pre/post", xlabel="ρ(X_pre, Y)", ylabel="reducción de varianza (%)"); axes[1].legend()
 plt.tight_layout(); plt.show()
 ''')
@@ -502,8 +507,8 @@ def daily_effects(tau_inf, tau_0, kappa):
     return true, true + g.normal(0, se, len(days)), se
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 4.2))
-for ax, (name, ti, t0, k, col) in zip(axes, [("Novelty: +6 % inicial → +0,5 % estable", 0.005, 0.06, 5, C["il"]),
-                                             ("Primacy: −4 % inicial → +1,5 % estable", 0.015, -0.04, 7, C["cuped"])]):
+for ax, (name, ti, t0, k, col) in zip(axes, [("Novelty: +6 % inicial → +0,5 % estable", 0.005, 0.06, 5, COL["il"]),
+                                             ("Primacy: −4 % inicial → +1,5 % estable", 0.015, -0.04, 7, COL["cuped"])]):
     true, est_d, se = daily_effects(ti, t0, k)
     cum = np.cumsum(est_d) / np.arange(1, len(days) + 1)          # estimación acumulada (simplificada)
     ax.errorbar(days, est_d * 100, yerr=1.96 * se * 100, fmt="o", ms=3, color=col, alpha=0.6, label="efecto diario estimado ± IC95")
@@ -561,7 +566,7 @@ def user_batch(n, g):
     U = g.normal(0, 1.4, (n, D_IL)); sessions = g.poisson(np.exp(g.normal(1.0, 0.9, n))) + 1
     return U, sessions
 
-def rankers(U, g, noise_a=1.0, noise_b=0.85):
+def rankers(U, g, noise_a=1.0, noise_b=0.6):
     """Dos rankers que estiman la relevancia con distinto ruido (B es algo mejor). Devuelven top-K."""
     rel = U @ V_il.T + b_il
     top_a = np.argsort(-(rel + g.normal(0, noise_a, rel.shape)), 1)[:, :TOPK]
@@ -585,7 +590,7 @@ def simulate_pool(n, g):
         d_il[i] = pl[team == 1].sum() - pl[team == 0].sum()
     return ya, yb, d_il
 
-t0 = time.time(); N_POOL = 40_000 if FAST_DEV_RUN else 150_000
+t0 = time.time(); N_POOL = 60_000 if FAST_DEV_RUN else 150_000
 ya_pool, yb_pool, dil_pool = simulate_pool(N_POOL, np.random.default_rng(11))
 print(f"{time.time()-t0:.1f}s | plays/usuario A={ya_pool.mean():.3f} B={yb_pool.mean():.3f} (lift real {yb_pool.mean()/ya_pool.mean()-1:+.2%})"
       f" | Δ interleaving medio={dil_pool.mean():+.4f}, usuarios con preferencia ≠ 0: {(dil_pool != 0).mean():.0%}")
@@ -621,8 +626,8 @@ def n_at(pw, target=0.8):
     pw = np.array(pw); return n_grid[np.argmax(pw >= target)] if (pw >= target).any() else np.nan
 n80_ab, n80_il = n_at(pw_ab), n_at(pw_il)
 plt.figure(figsize=(9, 4.3))
-plt.semilogx(n_grid, pw_ab, "o-", color=C["trt"], lw=2, label="A/B test (plays por usuario)")
-plt.semilogx(n_grid, pw_il, "o-", color=C["il"], lw=2, label="Team Draft Interleaving")
+plt.semilogx(n_grid, pw_ab, "o-", color=COL["trt"], lw=2, label="A/B test (plays por usuario)")
+plt.semilogx(n_grid, pw_il, "o-", color=COL["il"], lw=2, label="Team Draft Interleaving")
 plt.axhline(0.8, ls="--", color="k")
 plt.title("Sensibilidad: potencia vs nº total de usuarios (bootstrap subsampling)"); plt.xlabel("usuarios en el experimento (log)"); plt.ylabel("potencia")
 plt.legend(); plt.show()
@@ -632,7 +637,7 @@ print(f"Usuarios para 80 % de potencia → interleaving ≈ {n80_il:,}, A/B ≈ 
 ''')
 
     nb.md("""
-> 🧠 La ganancia exacta depende de la heterogeneidad de usuarios y de cuánto difieren las listas; en nuestro mundo sale del orden de decenas de veces, en Netflix (2017) más de 100×. Dos sutilezas de élite: (1) si los rankers devuelven listas casi idénticas, la mayoría de usuarios tienen $\\Delta=0$ y la sensibilidad cae; (2) Team Draft puede tener sesgos cuando un ranker pone en lo alto ítems "atractivos" pero irrelevantes; existen variantes (*optimized interleaving*, Radlinski & Craswell 2013; *multileaving* para comparar N rankers a la vez, Schuth et al.).
+> 🧠 La ganancia exacta depende de la heterogeneidad de usuarios y de cuánto difieren las listas; en nuestro mundo sale del orden de 10×, en Netflix (2017) más de 100×. Dos sutilezas de élite: (1) si los rankers devuelven listas casi idénticas, la mayoría de usuarios tienen $\\Delta=0$ y la sensibilidad cae; (2) Team Draft puede tener sesgos cuando un ranker pone en lo alto ítems "atractivos" pero irrelevantes; existen variantes (*optimized interleaving*, Radlinski & Craswell 2013; *multileaving* para comparar N rankers a la vez, Schuth et al.).
 """)
 
     # --------------------------------------------------------------- 9
@@ -678,16 +683,16 @@ print(f"FPR mirando cada día con test fijo: {fpr_peek[-1]:.1%} | O'Brien–Flem
 
     nb.code(r'''
 fig, axes = plt.subplots(1, 2, figsize=(14, 4.2))
-axes[0].plot(looks_options, np.array(fpr_peek) * 100, "o-", color=C["naive"], lw=2, label="test fijo + peeking")
+axes[0].plot(looks_options, np.array(fpr_peek) * 100, "o-", color=COL["naive"], lw=2, label="test fijo + peeking")
 axes[0].axhline(5, ls="--", color="k", label="α nominal 5 %")
-axes[0].scatter([28], [fpr_obf * 100], color=C["seq"], s=80, zorder=3, label="O'Brien–Fleming (28 looks)")
-axes[0].scatter([28], [fpr_msprt * 100], color=C["cuped"], s=80, zorder=3, marker="s", label="mSPRT always-valid")
+axes[0].scatter([28], [fpr_obf * 100], color=COL["seq"], s=80, zorder=3, label="O'Brien–Fleming (28 looks)")
+axes[0].scatter([28], [fpr_msprt * 100], color=COL["cuped"], s=80, zorder=3, marker="s", label="mSPRT always-valid")
 axes[0].set(title=f"A/A tests: falsos positivos vs nº de miradas ({R_seq} sims)", xlabel="nº de análisis intermedios", ylabel="FPR (%)"); axes[0].legend(fontsize=8)
 for j in range(25): axes[1].plot(k, Z[j], color="#a0aec0", lw=0.8, alpha=0.7)
 bad = np.where((np.abs(Z) > 1.96).any(1))[0][:3]
-for j in bad: axes[1].plot(k, Z[j], color=C["naive"], lw=1.6)
+for j in bad: axes[1].plot(k, Z[j], color=COL["naive"], lw=1.6)
 axes[1].plot(k, np.full(n_days, 1.96), "k--", label="±1,96 (horizonte fijo)"); axes[1].plot(k, -np.full(n_days, 1.96), "k--")
-axes[1].plot(k, c_obf * np.sqrt(n_days / k), color=C["seq"], lw=2, label="frontera O'Brien–Fleming"); axes[1].plot(k, -c_obf * np.sqrt(n_days / k), color=C["seq"], lw=2)
+axes[1].plot(k, c_obf * np.sqrt(n_days / k), color=COL["seq"], lw=2, label="frontera O'Brien–Fleming"); axes[1].plot(k, -c_obf * np.sqrt(n_days / k), color=COL["seq"], lw=2)
 axes[1].set_ylim(-5, 5); axes[1].set(title="Trayectorias de z en A/A (rojo: cruzan 1,96 algún día)", xlabel="día", ylabel="z"); axes[1].legend(fontsize=8)
 plt.tight_layout(); plt.show()
 ''')
@@ -722,37 +727,44 @@ def market_bookings(intent, capacity, g):
     booked[order[ok]] = 1
     return booked
 
+def draw_markets(g):
+    """Mercados heterogéneos: oferta (capacidad) y propensión a reservar distintas en cada uno."""
+    caps = g.poisson(62 * np.exp(g.normal(0, 0.35, M)))       # oferta ≈ demanda de control, muy variable
+    mult = np.exp(g.normal(0, 0.25, M))                        # intensidad de demanda del mercado
+    return caps, mult
+
 def run_marketplace(design, g, p_c=0.30, p_t=0.36):
-    caps = g.poisson(62, M)                                   # oferta por mercado (≈ demanda de control)
+    caps, mult = draw_markets(g)
     y_t, y_c = [], []
     treated_markets = g.random(M) < 0.5
     for m in range(M):
         if design == "usuario":
             T = g.random(USERS_PER_M) < 0.5
-        else:                                                 # cluster: todo el mercado igual
+        else:                                                 # clúster: todo el mercado igual
             T = np.full(USERS_PER_M, treated_markets[m])
-        b = market_bookings(np.where(T, p_t, p_c), caps[m], g)
+        b = market_bookings(np.clip(np.where(T, p_t, p_c) * mult[m], 0, 1), caps[m], g)
         y_t.append(b[T]); y_c.append(b[~T])
     return np.concatenate(y_t).mean() - np.concatenate(y_c).mean()
 
-def global_effect(g, reps=200):
-    caps_eff = []
+def global_effect(g, reps=60, p_c=0.30, p_t=0.36):
+    """Efecto global real: todos tratados vs todos control (mismos mercados)."""
+    eff = []
     for _ in range(reps):
-        caps = g.poisson(62, M)
-        all_t = np.mean([market_bookings(np.full(USERS_PER_M, 0.36), c, g).mean() for c in caps])
-        all_c = np.mean([market_bookings(np.full(USERS_PER_M, 0.30), c, g).mean() for c in caps])
-        caps_eff.append(all_t - all_c)
-    return np.mean(caps_eff)
+        caps, mult = draw_markets(g)
+        eff.append(np.mean([market_bookings(np.full(USERS_PER_M, min(1, p_t * mu)), c, g).mean()
+                            - market_bookings(np.full(USERS_PER_M, min(1, p_c * mu)), c, g).mean()
+                            for c, mu in zip(caps, mult)]))
+    return np.mean(eff)
 
 g = np.random.default_rng(14); R_mk = R_SIM // 2
 gte = global_effect(g, reps=60)
 est_user = np.array([run_marketplace("usuario", g) for _ in range(R_mk)])
 est_cluster = np.array([run_marketplace("mercado", g) for _ in range(R_mk)])
 plt.figure(figsize=(9, 4))
-plt.hist(est_user, bins=30, alpha=0.6, color=C["naive"], label=f"A/B por usuario (media {est_user.mean():+.3f})", density=True)
-plt.hist(est_cluster, bins=30, alpha=0.6, color=C["delta"], label=f"A/B por mercado (media {est_cluster.mean():+.3f})", density=True)
+plt.hist(est_user, bins=30, alpha=0.6, color=COL["naive"], label=f"A/B por usuario (media {est_user.mean():+.3f})", density=True)
+plt.hist(est_cluster, bins=30, alpha=0.6, color=COL["delta"], label=f"A/B por mercado (media {est_cluster.mean():+.3f})", density=True)
 plt.axvline(gte, color="k", lw=2, ls="--", label=f"efecto global real {gte:+.3f}")
-plt.axvline(0.06, color="#718096", ls=":", label="efecto sin restricción de oferta (+0,06)")
+plt.axvline(0.06, color="#718096", ls=":", label="efecto sin restricción de oferta (≈+0,06)")
 plt.title("Interferencia en un marketplace con oferta limitada"); plt.xlabel("efecto estimado en reservas por usuario"); plt.legend(fontsize=8); plt.show()
 print(f"Sesgo A/B por usuario: {est_user.mean() - gte:+.3f} | sd usuario={est_user.std():.4f} vs mercado={est_cluster.std():.4f}")
 ''')
@@ -807,7 +819,7 @@ cases = {"Mejor ranker\n(efecto vía engagement)": analyze(0.05, 0.0),
          "Subida de precio\n(efecto directo en churn)": analyze(0.0, -0.08)}
 fig, ax = plt.subplots(figsize=(10, 4)); w = 0.25
 for j, (name, df_) in enumerate(cases.items()):
-    for k_, (col, c_) in enumerate(zip(["real", "indice", "proxy_horas"], ["#2d3748", C["cuped"], C["il"]])):
+    for k_, (col, c_) in enumerate(zip(["real", "indice", "proxy_horas"], ["#2d3748", COL["cuped"], COL["il"]])):
         ax.bar(j + (k_ - 1) * w, df_[col].mean() * 100, w, yerr=1.96 * df_[col].std() * 100, capsize=4, color=c_,
                label=["Efecto real en retención (3 meses)", "Surrogate index (2 semanas)", "Proxy único: horas"][k_] if j == 0 else None)
 ax.set_xticks(range(len(cases)), cases.keys()); ax.axhline(0, color="k", lw=0.6)
@@ -855,7 +867,7 @@ for tv, mk in [(0.0, "o"), (1.0, "s")]:
     axes[0].plot(xs, s_.real, mk + "--", color="k", alpha=0.6)
 axes[0].set_xticks(range(len(seg.bin.unique())), [str(b) for b in seg.bin.unique()], rotation=15)
 axes[0].axhline(0, color="k", lw=0.6); axes[0].set(title="Efecto por segmento (negro: real)", xlabel="antigüedad (años)", ylabel="efecto"); axes[0].legend(fontsize=8)
-axes[1].scatter(true_cate[:4000], cate_hat[:4000], s=4, alpha=0.4, color=C["trt"]); axes[1].plot([-0.3, 0.7], [-0.3, 0.7], "k--")
+axes[1].scatter(true_cate[:4000], cate_hat[:4000], s=4, alpha=0.4, color=COL["trt"]); axes[1].plot([-0.3, 0.7], [-0.3, 0.7], "k--")
 axes[1].set(title=f"T-learner: CATE estimado vs real (corr={np.corrcoef(true_cate, cate_hat)[0,1]:.2f})", xlabel="τ(x) real", ylabel="τ̂(x)")
 plt.tight_layout(); plt.show()
 print(f"Efecto medio (ATE) estimado: {y[T].mean() - y[~T].mean():+.3f} | real: {true_cate.mean():+.3f}  ← positivo, pero negativo para veteranos en móvil")
@@ -890,9 +902,9 @@ print(f"DiD: τ̂={fit.params['did']:.3f} (IC95 {fit.conf_int().loc['did'].round
 
 avg = panel.groupby(["treated", "week"]).y.mean().unstack(0)
 plt.figure(figsize=(9, 4))
-plt.plot(avg.index, avg[1], "o-", color=C["trt"], label="regiones con lanzamiento")
-plt.plot(avg.index, avg[0], "o-", color=C["ctrl"], label="regiones control")
-plt.plot(avg.index[launch:], avg[0][launch:] + (avg[1][:launch] - avg[0][:launch]).mean(), "--", color=C["trt"], alpha=0.6, label="contrafactual (tendencias paralelas)")
+plt.plot(avg.index, avg[1], "o-", color=COL["trt"], label="regiones con lanzamiento")
+plt.plot(avg.index, avg[0], "o-", color=COL["ctrl"], label="regiones control")
+plt.plot(avg.index[launch:], avg[0][launch:] + (avg[1][:launch] - avg[0][:launch]).mean(), "--", color=COL["trt"], alpha=0.6, label="contrafactual (tendencias paralelas)")
 plt.axvline(launch - 0.5, color="k", ls=":"); plt.title("Diff-in-diff: lanzamiento regional de una nueva home"); plt.xlabel("semana"); plt.ylabel("horas/usuario")
 plt.legend(fontsize=8); plt.show()
 ''')
