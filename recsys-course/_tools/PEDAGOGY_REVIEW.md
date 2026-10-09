@@ -113,3 +113,14 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
 - ✅ «👀 Qué observar» en el barrido de β de RP3β (primer frente de Pareto, puente al 13) y en el de λ de EASE.
 - ✅ Autoevaluación: +1 diagnóstico (coverage 2 % → α/shrinkage/β) y +1 transferencia (sesión en tiempo real).
 - ✅ Proyecto: pistas graduadas para `item_knn`/`ease` (de la fórmula a COO) y para el bootstrap pareado por usuario.
+
+### 05 · Factorización matricial
+- Narrativa muy buena (ejes latentes → juguete 5×6 → por qué no SVD → biased MF → SGD → SVD++ → iALS → BPR → iALS
+  revisitado) y la analogía «MF = two-tower más simple» está bien colocada.
+- ✅ Caja 🔁 (modelo de sesgos del 02, ridge de EASE del 04 → «ALS = alternar ridges», confianza del 01).
+- ✅ «👀 Qué observar» en el barrido λ/k (curva sesgo–varianza con ejes de recsys; regla «λ y k se tunean juntos») y
+  en la curva de BPR (la pérdida baja y el NDCG se estanca → early stopping por NDCG). Ambas figuras no tenían lectura.
+- ✅ Autoevaluación: +1 cálculo (parámetros MF vs EASE a escala CineMatch → cuándo elegir cada uno) y +1 diagnóstico
+  (BPR que recomienda lo mismo a todos).
+- ✅ Proyecto: los cuatro pasos eran `# TODO` sin andamiaje. Pistas graduadas para BPR (modelo y bucle), Optuna
+  (validación sin tocar test) y fold-in (ecuación de ALS con Q fijo y la convención de confianza de `implicit`).

@@ -114,6 +114,17 @@ nb.md("""
 5. **Implementar** BPR (Rendle et al., 2009) en PyTorch y entrenarlo en GPU.
 6. **Usar** `implicit` (GPU) y `cornac`, y **compararlos** con EASE del módulo 04.
 7. **Visualizar** e **interpretar** el espacio latente; **aplicar** *fold-in* para usuarios nuevos.
+
+### 🔁 Conexión con módulos anteriores
+1. El modelo de sesgos $\\mu + b_u + b_i$ del módulo 02 ganaba a la media global en RMSE pero perdía en top-10 contra la popularidad. ¿Por qué?
+2. EASE (módulo 04) resolvía una regresión ridge con solución cerrada. ¿Qué parte de iALS (sección 2.5) es *también* una ridge?
+3. En el módulo 01 viste que la confianza $c_{ui}=1+\\alpha\\log(1+r_{ui}/\\epsilon)$ separa preferencia de confianza. ¿Qué problema de los «no vistos» resuelve?
+
+<details><summary>Respuestas</summary>
+1. Ordenar por rating esperado sube películas excelentes pero minoritarias; la popularidad captura la probabilidad de verlas. Aquí verás que los sesgos se llevan casi toda la mejora de RMSE (sección 4) y que, para top-K, hace falta cambiar de pérdida (iALS, BPR).
+2. Cada medio paso: con $\\mathbf Q$ fijo, el vector de cada usuario es una ridge ponderada con solución cerrada (y viceversa). ALS = alternar ridges.
+3. Permite usar <b>todas</b> las celdas (los no vistos con preferencia 0 y confianza baja) sin tratarlos como negativos seguros.
+</details>
 """)
 nb.md("## ⚙️ Setup")
 nb.code("""
@@ -395,6 +406,10 @@ axes[1].set_xlabel("k (dimensión latente)"); axes[1].set_title("Más factores �
 plt.tight_layout(); plt.show()
 ''')
 
+nb.md(r"""
+> 👀 **Qué debes observar:** es la curva sesgo–varianza que ya conoces de ML, con los ejes de recsys. Con λ = 0 el RMSE de train es el más bajo y el de test de los peores (sobreajuste: los usuarios con 20 ratings «memorizan» sus factores). Subir $k$ sin subir λ abre más la brecha train–test. Regla práctica que verás repetida en iALS y two-tower: **la regularización se tunea junto con la dimensión**, nunca por separado.
+""")
+
 nb.md("""
 ## 🗺️ 5. Visualizar el espacio latente
 
@@ -541,6 +556,8 @@ fig, ax = plt.subplots(figsize=(8, 3.4)); ax.plot(h_bpr.epoch, h_bpr.loss, "o-",
 ax2 = ax.twinx(); hv = h_bpr.dropna(); ax2.plot(hv.epoch, hv["NDCG@10"], "s--", color="#c44e52", label="NDCG@10 val"); ax2.grid(False)
 ax.set_xlabel("época"); ax.set_ylabel("−log σ(x_uij)"); ax2.set_ylabel("NDCG@10", color="#c44e52")
 ax.set_title("BPR: la pérdida baja… ¿y el ranking?"); plt.show()
+print("👀 Observa: la pérdida BPR baja casi siempre, pero el NDCG@10 de validación se estanca (o cae) antes. "
+      "BPR con negativos uniformes optimiza un AUC suave: casi todos los negativos son fáciles. Haz early stopping con NDCG, no con la pérdida.")
 bpr_full, _ = train_bpr(X, k=64, lr=5e-3, reg=1e-5, epochs=EPOCHS, verbose=False)
 results["BPR desde cero (k=64)"] = evaluate_topk(bpr_score_fn(bpr_full), X, rel)
 ''')
@@ -712,6 +729,12 @@ nb.md(r"""
 
 7. Un paper afirma batir a iALS por un 20 %. ¿Qué preguntas harías?
 <details><summary>Respuesta</summary>¿Se tunearon los hiperparámetros de iALS (λ, α, dimensión, iteraciones) con el mismo presupuesto? ¿Mismo split y protocolo (full ranking vs sampled metrics)? ¿Se reportan IC? Ver Rendle et al. 2022 y Dacrema et al. 2019.</details>
+
+8. **(Cálculo)** CineMatch tiene 2 M de usuarios y 50.000 títulos. ¿Cuántos parámetros tiene una MF con $k=128$ frente a EASE? ¿Qué te dice eso sobre cuándo elegir cada uno?
+<details><summary>Respuesta</summary>MF: 128 × (2·10⁶ + 5·10⁴) ≈ 2,6·10⁸ parámetros (~1 GB en float32), lineal en usuarios e ítems. EASE: 50.000² = 2,5·10⁹ (10 GB, denso), cuadrático en ítems e independiente de usuarios. Con catálogos grandes MF/two-tower escala mejor; con catálogos de pocos miles, EASE es barato y muy fuerte.</details>
+
+9. **(Diagnóstico)** Tu BPR tiene una pérdida de entrenamiento excelente pero recomienda a todos casi lo mismo y su NDCG es menor que el de la popularidad. Da dos causas probables y cómo las comprobarías.
+<details><summary>Respuesta</summary>(1) El sesgo de ítem $b_i$ domina y aprende popularidad: mira la correlación entre $b_i$ y la popularidad, o entrena sin sesgo. (2) Negativos uniformes demasiado fáciles: el modelo separa enseguida positivos de ítems raros y deja de aprender el orden en la cabeza; prueba negativos por popularidad (o WARP). También revisa regularización y early stopping por NDCG de validación.</details>
 """)
 nb.md("""
 ## 📚 15. Referencias
@@ -805,6 +828,9 @@ pop = np.asarray(X.sum(0)).ravel().astype(np.float32)
 pj.code(IALS_LIB_CODE)
 pj.md("""
 ## Paso 1 · BPR en PyTorch  ✏️ TODO
+
+<details><summary>🪜 Pista 1 (modelo)</summary>Un <code>nn.Module</code> con <code>nn.Embedding</code> para P, Q y un sesgo de ítem de dimensión 1 (inicializa con <code>std=0.01</code>). El <code>forward(u, i, j)</code> devuelve directamente la diferencia <code>x_ui − x_uj = ⟨P_u, Q_i − Q_j⟩ + b_i − b_j</code>.</details>
+<details><summary>🪜 Pista 2 (bucle)</summary>Los positivos son <code>u, i = X.nonzero()</code>. En cada época baraja sus índices (<code>torch.randperm</code>), recorre lotes y muestrea <code>j</code> con <code>torch.randint</code> (uniforme) o <code>torch.multinomial(n_j**0.75, len(lote), replacement=True)</code>. Pérdida: <code>-F.logsigmoid(model(u, i, j)).mean()</code> + L2 de los embeddings del lote. La <code>score_fn(ub)</code> es <code>P[ub] @ Q.T + b.T</code> en numpy.</details>
 Implementa `train_bpr(X, k, lr, reg, epochs, neg="uniform"|"pop", pop_power=0.75)`:
 - Modelo: embeddings de usuario/ítem + sesgo de ítem; pérdida $-\\log\\sigma(\\hat x_{ui}-\\hat x_{uj})$ + L2.
 - `neg="pop"`: muestrea $j \\propto n_j^{0.75}$ (como word2vec) con `torch.multinomial`.
@@ -820,6 +846,8 @@ pj.md("""
 Define `objective_ials(trial)` (factors ∈ {32…512}, regularization log ∈ [0,1; 1 000], alpha log ∈ [0,1; 50],
 iterations ∈ [5, 30]) y `objective_bpr(trial)` (k, lr, reg, epochs, neg). Maximiza NDCG@10 en validación
 con `TPESampler(seed=42)`. Usa el mismo `N_TRIALS` para ambos (comparación justa).
+
+<details><summary>🪜 Pista</summary>Entrena siempre con <code>Xv</code> (train interno) y evalúa con <code>evaluate_topk(score_fn, Xv, relv)["NDCG@10"]</code>; el test no aparece en esta celda. Para iALS reutiliza <code>fit_ials</code> y <code>mf_score_fn(m.user_factors, m.item_factors)</code>. <code>optuna.importance.get_param_importances(study)</code> te da el entregable 4.</details>
 """)
 pj.code(r'''
 # TODO: estudios de Optuna
@@ -834,6 +862,8 @@ pj.code(r'''
 pj.md("""
 ## Paso 4 · Fold-in para usuarios nuevos  ✏️ TODO
 `recommend_new_user(liked_titles, k=10)` usando los factores de ítem del mejor iALS. Mide la latencia.
+
+<details><summary>🪜 Pista</summary>Es la ecuación de ALS de la sección 2.5 de la lección con $\\mathbf Q$ fijo: precalcula una vez <code>QᵀQ + λI</code>; para el usuario nuevo, con las filas <code>Q_u</code> de sus películas y confianza <code>c</code>, resuelve <code>np.linalg.solve(QᵀQ + λI + Q_uᵀ diag(c − 1) Q_u, Q_uᵀ c)</code>. Ojo: <code>implicit</code> usa confianza <code>α·r</code> en los observados (sin el +1). Puntúa con <code>Q @ u</code> y excluye las semillas.</details>
 """)
 pj.code(r'''
 # TODO: fold-in
