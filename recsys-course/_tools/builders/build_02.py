@@ -43,6 +43,17 @@ M(r"""
 5. **Cuantificar la incertidumbre** con intervalos bootstrap y **decidir** si una diferencia es significativa con un test pareado.
 6. **Demostrar** por qué las *sampled metrics* son inconsistentes (Krichene & Rendle, 2020).
 7. **Aplicar** una checklist de reproducibilidad (Ferrari Dacrema et al., 2019) y **razonar** sobre el *offline-online gap*.
+
+### 🔁 Conexión con módulos anteriores
+1. ¿Qué split del módulo 01 reproduce lo que pasa en producción, y por qué el *leave-one-out* tiene *leakage* entre usuarios?
+2. En el proyecto 00, ¿qué recomendador ganaba en HitRate@10, popularidad o «mejor nota media»? ¿Qué capturaba el ganador?
+3. ¿Por qué en el módulo 01 recomendamos contar los usuarios de test antes de mirar una métrica?
+
+<details><summary>Respuestas</summary>
+1. El temporal global (un único instante de corte). En LOO el corte es distinto por usuario: el train de unos contiene eventos posteriores al test de otros.
+2. La popularidad, por goleada: captura la probabilidad <i>a priori</i> de que alguien vea algo. Aquí verás que el RMSE no lo mide (sección 2).
+3. Porque con pocos usuarios la media es ruido (en ML-100K, ~50 usuarios de test). En la sección 6.3 le pondrás intervalos de confianza a ese ruido.
+</details>
 """)
 
 C(r'''
@@ -206,6 +217,25 @@ $$\text{DCG@}K = \sum_{p=1}^{K} \frac{g(\text{rel}_u(p))}{\log_2(p+1)}, \qquad g
 $$\text{IDCG@}K = \sum_{p=1}^{\min(K, |\mathcal{R}_u|)} \frac{g(\text{rel}^{\downarrow}_{(p)})}{\log_2(p+1)} \quad\Rightarrow\quad \text{NDCG@}K \in [0, 1]$$
 
 Con relevancia binaria, ambas ganancias coinciden.
+
+### ✍️ Ejemplo resuelto a mano (antes de programarlo)
+Ana tiene en test $\mathcal{R} = \{$*Matrix*, *Alien*, *Interstellar*$\}$ y comparamos **dos listas con los mismos 5 ítems** en distinto orden ($K = 5$):
+
+| | Lista A: [**Matrix**, Titanic, **Alien**, Toy Story, Notting Hill] | Lista B: [Titanic, **Matrix**, Toy Story, **Alien**, Notting Hill] |
+|---|---|---|
+| $\text{rel}(p)$ | 1, 0, 1, 0, 0 | 0, 1, 0, 1, 0 |
+| Precision@5 | 2/5 = 0,40 | 0,40 |
+| Recall@5 | 2/3 = 0,67 | 0,67 |
+| HitRate@5 | 1 | 1 |
+| MRR@5 | 1/1 = 1,00 | 1/2 = 0,50 |
+| AP@5 | (1/1 + 2/3) / 3 = 0,56 | (1/2 + 2/4) / 3 = 0,33 |
+| DCG@5 | 1/log₂2 + 1/log₂4 = 1,50 | 1/log₂3 + 1/log₂5 = 1,06 |
+| IDCG@5 (3 relevantes arriba) | 1 + 0,63 + 0,50 = 2,13 | 2,13 |
+| **NDCG@5** | **0,70** | **0,50** |
+
+Lo que enseña la tabla: Precision, Recall y HitRate **no distinguen** A de B (solo cuentan aciertos); MRR, AP y NDCG sí, porque premian poner los aciertos **arriba**. *Interstellar* no está en ninguna lista: por eso IDCG usa los 3 relevantes y ninguna lista llega a NDCG = 1.
+
+> 💡 **Si has evaluado un RAG o un buscador**, ya conoces estas métricas: Recall@K del *retriever*, MRR y NDCG@10 de BEIR/MTEB. La traducción es directa: la «consulta» es el usuario (con su historia) y los «documentos relevantes» son sus interacciones de test. La diferencia es que aquí el *ground truth* lo generó otro recomendador (sesgo de exposición, sección 8).
 
 ### AUC y GAUC
 La **AUC** de un usuario es la probabilidad de que un positivo puntúe más que un negativo: $\text{AUC}_u = \frac{1}{|\mathcal{R}_u||\mathcal{N}_u|}\sum_{i\in\mathcal{R}_u}\sum_{j\in\mathcal{N}_u}\mathbb{1}[s_{ui} > s_{uj}]$. Mide **todo** el orden por igual (la posición 1 y la 3.000 pesan lo mismo), por eso es poco útil para top-K. En ranking de anuncios/CTR se usa la **GAUC** (Zhou et al., 2018, DIN de Alibaba): la AUC por usuario ponderada por nº de impresiones, porque la AUC global mezcla usuarios con tasas de clic muy distintas.
@@ -467,6 +497,10 @@ print(compare(q, runs=runs, metrics=[f"ndcg@{K}", f"recall@{K}"], max_p=0.05, st
 ''')
 
 M(r"""
+> 👀 **Qué debes observar:** (izquierda) los IC de la popularidad y del item-kNN pueden solaparse y, aun así, el **test pareado** de las celdas anteriores da un p-valor pequeño: comparar las diferencias usuario a usuario elimina la variabilidad entre usuarios, que es enorme. (derecha) la anchura del IC cae aproximadamente como $1/\sqrt{n}$: **para reducirla a la mitad necesitas 4× usuarios**. Es la misma ley que usarás para calcular el tamaño de un A/B en el módulo 15.
+""")
+
+M(r"""
 > ⚠️ Si comparas **muchos** modelos o métricas, corrige por comparaciones múltiples (Bonferroni, Holm) o acabarás "descubriendo" mejoras que son ruido. Y recuerda: *significativo* ≠ *importante*; con millones de usuarios todo es significativo.
 
 ### 6.4 🧠 *Sampled metrics*: por qué no debes muestrear negativos al evaluar
@@ -659,6 +693,12 @@ M(r"""
 
 **8.** ¿Por qué una mejora offline puede no trasladarse online?
 <details><summary>Respuesta</summary>Sesgo de exposición (el test lo generó otra política), desalineación métrica-objetivo de negocio, efectos de página, novedad y feedback loops. Por eso offline filtra y el A/B (o interleaving) decide.</details>
+
+**9. (Diagnóstico)** Un paper reporta HR@10 = 0,70 en MovieLens-1M; tu reimplementación del mismo modelo da HR@10 = 0,09 con tu evaluador. Antes de sospechar de tu código, ¿qué tres diferencias de protocolo compruebas?
+<details><summary>Respuesta</summary>(1) Métricas muestreadas (1 positivo + 100 negativos) frente a <i>full ranking</i>; (2) split LOO o aleatorio frente a temporal global; (3) definición de positivo (cualquier rating vs ≥ 4), filtrado k-core y si se excluyen los ítems ya vistos. Cualquiera de ellas explica un factor 5–8×; la primera, por sí sola, casi siempre.</details>
+
+**10. (Cálculo)** Con 200 usuarios de test, el IC 95 % del NDCG@10 de tu modelo mide 0,030 de ancho. ¿Cuántos usuarios necesitas para que mida 0,010?
+<details><summary>Respuesta</summary>La anchura escala como 1/√n: para dividirla por 3 necesitas 3² = 9× usuarios, unos 1.800.</details>
 """)
 
 M(r"""
@@ -879,6 +919,11 @@ validar_contra_ranx(types.SimpleNamespace(**globals()))
 ''')
 
 M(r"""
+<details><summary>🪜 Pista 1 (<code>to_ranx</code>)</summary><code>Qrels</code> y <code>Run</code> se construyen con diccionarios <code>{query_id: {doc_id: valor}}</code> con claves <b>str</b>. Para la run, da a cada ítem un score que decrezca con su posición (p. ej. <code>len(rec) - p</code>) para que ranx reproduzca tu orden exacto.</details>
+<details><summary>🪜 Pista 2 (<code>validar_contra_ranx</code>)</summary><code>ranx.evaluate(qrels, run, ["precision@10", "recall@10", "hit_rate@10", "mrr@10", "map@10", "ndcg@10"])</code> devuelve un dict con las medias: compáralo clave a clave con tu <code>evaluate(recs, test, 10)</code> y quédate con la mayor diferencia absoluta. Para NDCG graduado construye otra pareja <code>to_ranx(..., rel_col="rating")</code> y usa <code>ndcg</code> y <code>ndcg_burges</code>. Si algo no cuadra, <code>return_mean=False</code> te da el valor por usuario para localizar el caso.</details>
+""")
+
+M(r"""
 ---
 ## Parte 2 · Más allá de la precisión, *scoring* y estadística
 
@@ -893,6 +938,10 @@ M(r"""
 
 ### TODO 6 — Estadística
 `bootstrap_ci(values, n_boot=2000, alpha=0.05, seed=42) -> (media, lo, hi)` y `paired_bootstrap_test(a, b, n_boot=10_000, seed=42) -> dict(diff, ci_low, ci_high, p_value)` (p-valor bilateral centrando la distribución bootstrap de la diferencia en 0).
+
+<details><summary>🪜 Pista 1 (AUC por rangos)</summary><code>scipy.stats.rankdata(scores)</code> asigna rangos promedio a los empates. AUC = (suma de rangos de los positivos − n₊(n₊+1)/2) / (n₊ · n₋).</details>
+<details><summary>🪜 Pista 2 (test pareado)</summary>Trabaja con <code>d = a − b</code> por usuario. Remuestrea índices de usuarios con reemplazo, calcula la media de <code>d</code> en cada réplica (<code>boot</code>), y para el p-valor resta <code>d.mean()</code> a <code>boot</code> (así simulas H0: diferencia 0) y cuenta qué fracción de réplicas centradas es, en valor absoluto, ≥ |<code>d.mean()</code>|.</details>
+<details><summary>🪜 Pista 3 (miscalibración)</summary>Construye p(g|u) repartiendo 1/|géneros| de cada película del historial entre sus géneros y normalizando; haz lo mismo con la lista para q(g|u). Suma solo sobre los géneros con p(g|u) &gt; 0. El módulo 13 explica la intuición a fondo; aquí basta con implementar la fórmula.</details>
 """)
 
 C(r'''

@@ -72,3 +72,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   fórmula y pistas; la derivación queda en el 02.
 - ✅ Proyecto: pistas graduadas en TODO 2 (k-core iterativo, cortes por cuantiles), TODO 3 (validaciones) y TODO 5
   (métricas y ventana de popularidad).
+
+### 02 · Evaluación offline rigurosa
+- Módulo de muy alto valor y bien argumentado (RMSE vs top-K con experimento, sampled metrics con el contraejemplo
+  «francotirador vs bueno en todo», checklist que se reutiliza en todo el curso).
+- ⚠️→✅ **Faltaba el ejemplo resuelto a mano** entre la tabla de fórmulas y el código: el alumno pasaba de seis
+  fórmulas a la implementación. Se añade una tabla con dos listas con los mismos ítems en distinto orden: muestra en
+  un vistazo qué métricas son sensibles a la posición (MRR/AP/NDCG) y cuáles no (P/R/HR).
+- ✅ Analogía con la evaluación de RAG/buscadores (Recall@K del retriever, MRR/NDCG@10 de BEIR/MTEB).
+- ✅ Caja 🔁 (split temporal y LOO del 01, popularidad del proyecto 00, «cuenta tus usuarios»).
+- ✅ «👀 Qué observar» en el gráfico de IC: solapamiento de IC vs test pareado, y la ley 1/√n que reaparece en el
+  tamaño muestral del A/B (módulo 15) → puente explícito.
+- ✅ Autoevaluación: +1 diagnóstico (HR@10 de paper 0,70 vs 0,09 propio → protocolo) y +1 cálculo (usuarios para un IC
+  3× más estrecho).
+- ✅ Proyecto: pistas graduadas en TODO 3 (ranx), TODO 5–6 (AUC por rangos, test pareado bootstrap) y miscalibración KL
+  (que el proyecto pide y la lección solo menciona: se aclara que la intuición llega en el 13).
