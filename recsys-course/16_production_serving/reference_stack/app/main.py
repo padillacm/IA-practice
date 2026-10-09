@@ -138,7 +138,7 @@ def recommend(user_id: int, k: int = 10, use_cache: bool = True):
         return {**json.loads(hit), "cache": True}
 
     with STAGE.labels("user_features").time():
-        hist = [int(x) for x in R.lrange(f"hist:{user_id}", -50, -1)]
+        hist = [int(x) for x in R.lrange(f"hist:{user_id}", 0, -1)]   # completo, para excluir lo visto
     if not hist or user_id not in S["prof"]:
         REQS.labels("popularity_fallback").inc()
         seen = set(hist)
@@ -146,7 +146,7 @@ def recommend(user_id: int, k: int = 10, use_cache: bool = True):
                 "strategy": "popularity_fallback", "cache": False}
 
     with STAGE.labels("retrieval").time():
-        v = S["emb"][hist].mean(0)
+        v = S["emb"][hist[-50:]].mean(0)                       # vector: últimos 50
         v = (v / (np.linalg.norm(v) + 1e-8)).astype("float32")
         sc, ids = S["index"].search(v[None], 100 + len(hist))
         seen = set(hist)
@@ -189,7 +189,7 @@ def event(e: Event):
     else:
         R = S["redis"]
         R.rpush(f"hist:{e.user_id}", e.item_id)
-        R.ltrim(f"hist:{e.user_id}", -50, -1)
+        R.ltrim(f"hist:{e.user_id}", -1000, -1)
         for k in R.scan_iter(f"recs:*:{e.user_id}:*"):
             R.delete(k)
     return {"ok": True}

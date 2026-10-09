@@ -1,7 +1,7 @@
 """Consumidor nearline de CineMatch: Kafka/Redpanda → Redis.
 
 - Lee `cinematch.events` en el consumer group GROUP_ID (varias réplicas se reparten las particiones).
-- Actualiza `hist:{user}` (lista acotada a 50) e invalida `recs:*:{user}:*`.
+- Actualiza `hist:{user}` (lista acotada a 1000; el servicio usa los 50 últimos para el vector) e invalida `recs:*:{user}:*`.
 - Commit manual del offset DESPUÉS de procesar ⇒ semántica at-least-once. Para que los duplicados
   no corrompan el estado, deduplicamos por (user, item, ts) con un SET con TTL (idempotencia).
 """
@@ -30,7 +30,7 @@ def handle(ev: dict) -> None:
         return
     pipe = R.pipeline()
     pipe.rpush(f"hist:{ev['user_id']}", ev["item_id"])
-    pipe.ltrim(f"hist:{ev['user_id']}", -50, -1)
+    pipe.ltrim(f"hist:{ev['user_id']}", -1000, -1)
     pipe.execute()
     for k in R.scan_iter(f"recs:*:{ev['user_id']}:*"):
         R.delete(k)

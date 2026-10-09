@@ -130,12 +130,30 @@ def build_frame(src, hist, users, t_cut, k=100, labels=None):
     return out
 
 
-def train_lambdamart(frame, n_estimators=400):
-    f = frame[frame.groupby("user_id").label.transform("max") > 0].sort_values("user_id")
-    m = lgb.LGBMRanker(objective="lambdarank", n_estimators=n_estimators, learning_rate=0.05, num_leaves=63,
-                       min_child_samples=20, subsample=0.8, subsample_freq=1, colsample_bytree=0.8, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
-    m.fit(f[RANK_FEATS], f.label, group=f.groupby("user_id").size().values)
+def train_lambdamart(frame, n_estimators=200):
+    """LambdaMART regularizado (pocas hojas, hojas grandes): con pocos miles de usuarios etiquetados sobreajusta enseguida.
+    Agrupa por `qid` (usuario × ventana) si existe; si no, por usuario."""
+    key = "qid" if "qid" in frame else "user_id"
+    f = frame[frame.groupby(key).label.transform("max") > 0].sort_values(key)
+    m = lgb.LGBMRanker(objective="lambdarank", n_estimators=n_estimators, learning_rate=0.05, num_leaves=15,
+                       min_child_samples=100, subsample=0.8, subsample_freq=1, colsample_bytree=0.8, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
+    m.fit(f[RANK_FEATS], f.label, group=f.groupby(key, sort=False).size().values)
     return m
+
+
+def multi_window_frames(make_src, quantiles=(0.5, 0.6, 0.7, 0.8), k=100):
+    """Más ejemplos para el ranker SIN romper el protocolo temporal: para cada ventana [q_i, q_{i+1}) las fuentes y
+    features se construyen solo con datos < q_i y las etiquetas son lo visto en la ventana. `make_src(df)` → fuentes."""
+    frames = []
+    for lo_q, hi_q in zip(quantiles[:-1], quantiles[1:]):
+        lo, hi = ratings.ts.quantile([lo_q, hi_q]).values
+        past, win = ratings[ratings.ts < lo], ratings[(ratings.ts >= lo) & (ratings.ts < hi)]
+        hist = past.groupby("user_id").item_id.apply(list).to_dict()
+        lab = win.groupby("user_id").item_id.apply(set).to_dict()
+        fr = build_frame(make_src(past), hist, [u for u in lab if u in hist], lo, k, labels=lab)
+        fr["qid"] = fr.user_id.astype(str) + f"@{lo_q}"
+        frames.append(fr)
+    return pd.concat(frames, ignore_index=True)
 
 
 def ndcg_at_k(ranked, relevant, k=10):
@@ -267,7 +285,7 @@ def lesson() -> None:
     |---|---|---|---|
     | Datos | split temporal global 70/10/20 | ídem + validación Pandera | 01, 17 |
     | Retrieval | PureSVD + FAISS HNSW · item-kNN co-ocurrencia · popularidad 30 días | **two-tower** PyTorch (logQ) + las mismas | 04, 05, 08 |
-    | Ranking | LambdaMART (LightGBM) con features *point-in-time* | ídem + ablación de features | 06, 07, 16 |
+    | Ranking | LambdaMART (LightGBM) con features *point-in-time*, entrenado en 3 ventanas temporales | ídem + ablación de features | 06, 07, 16 |
     | Re-ranking | MMR (diversidad) | MMR + cuota de novedad | 13 |
     | Serving | función en proceso con perfil de latencia | **FastAPI** + caché + fallback + test de carga | 16 |
     | MLOps | chequeo de drift train→test | **MLflow** champion/challenger + Evidently + decisión de reentreno | 17 |
@@ -305,8 +323,9 @@ def lesson() -> None:
     """)
 
     C(r'''
-    users_b = [u for u in lab_b if u in hist_a]
-    fr_tr = build_frame(SRC, hist_a, users_b, t_a, labels=lab_b)
+    # Ranker entrenado con 3 ventanas temporales [0,5–0,6), [0,6–0,7), [0,7–0,8): más usuarios etiquetados, sin leakage
+    fr_tr = multi_window_frames(Sources)
+    print("Ejemplos del ranker:", fr_tr.shape, "| grupos (usuario×ventana):", fr_tr.qid.nunique())
     RANKER = train_lambdamart(fr_tr)
     fr_te = build_frame(SRC_B, hist_b, users_eval, t_b)
     fr_te["score"] = RANKER.predict(fr_te[RANK_FEATS])
@@ -977,7 +996,7 @@ def recommend(user_id: int, k: int = 10, use_cache: bool = True):
         with LOCK:
             M["cache_hits_total"] += 1
         return {**json.loads(hit), "cache": True}
-    hist = [int(x) for x in R.lrange(f"hist:{user_id}", -50, -1)]
+    hist = [int(x) for x in R.lrange(f"hist:{user_id}", 0, -1)]   # completo: excluir vistos
     items, info = REC.recommend(user_id, hist, k)
     if info["strategy"] == "popularity_fallback":
         with LOCK:
@@ -991,7 +1010,7 @@ def recommend(user_id: int, k: int = 10, use_cache: bool = True):
 
 @app.post("/event")
 def event(e: Event):
-    R.rpush(f"hist:{e.user_id}", e.item_id); R.ltrim(f"hist:{e.user_id}", -50, -1)
+    R.rpush(f"hist:{e.user_id}", e.item_id); R.ltrim(f"hist:{e.user_id}", -1000, -1)
     for key in R.scan_iter(f"recs:{e.user_id}:*"):
         R.delete(key)
     return {"ok": True}
@@ -1058,6 +1077,7 @@ def project() -> None:
     C(r'''
     import torch, torch.nn as nn, torch.nn.functional as F
     torch.manual_seed(seed)
+    torch.set_num_threads(int(os.environ.get("TORCH_THREADS", os.cpu_count() or 2)))
     device = "cuda" if torch.cuda.is_available() else "cpu"
     FAST_DEV_RUN = True          # False para la entrega (más épocas y usuarios de evaluación)
     N_EVAL_USERS = 400 if FAST_DEV_RUN else 3000
@@ -1304,9 +1324,10 @@ def project() -> None:
     ''')
 
     C(r'''
-    users_b = [u for u in lab_b if u in hist_a]
-    fr_tr = build_frame(SRC_A, hist_a, users_b, t_a, labels=lab_b)
-    assert_no_leakage(fr_tr, t_a)
+    # 3 ventanas temporales; en cada una el two-tower y las fuentes se entrenan SOLO con datos anteriores a la ventana
+    fr_tr = multi_window_frames(lambda past: Sources2(past, *train_two_tower(past)[:2]))
+    assert_no_leakage(fr_tr[fr_tr.qid.str.endswith("@0.7")], t_a)
+    print("Ejemplos del ranker:", fr_tr.shape, "| grupos:", fr_tr.qid.nunique())
     fr_te = build_frame(SRC_B, hist_b, users_eval, t_b)
     groups = {"A · solo fuentes": SRC_FEATS + ["n_sources"],
               "B · + ítem": SRC_FEATS + ["n_sources", "pop_cum", "pop_30d", "rating_mean", "item_age_days"],
@@ -1368,7 +1389,7 @@ def project() -> None:
         prof, gen = user_stats_asof(t_b); prof.to_parquet(f"{art}/user_prof.parquet")
         gen.columns = [str(c) for c in gen.columns]; gen.to_parquet(f"{art}/user_genre.parquet")
         RANKER.booster_.save_model(f"{art}/ranker.txt")
-        json.dump({str(u): [int(x) for x in h[-50:]] for u, h in hist_b.items()}, open(f"{art}/user_hist.json", "w"))
+        json.dump({str(u): [int(x) for x in h] for u, h in hist_b.items()}, open(f"{art}/user_hist.json", "w"))
         json.dump({"rank_feats": RANK_FEATS, "src_default": SRC_DEFAULT, "lambda": LAMBDA, "model_version": "capstone-v1",
                    "popular": [int(i) for i in ratings[ratings.ts < t_b].item_id.value_counts().index[:200]]},
                   open(f"{art}/meta.json", "w"))

@@ -217,6 +217,9 @@ Es la misma idea que la factorización matricial del módulo 05 ($\hat r_{ui}=\m
 
 Analogía con lo que ya conoces de LLMs/agentes: es exactamente un **bi-encoder de RAG** (consulta y documento se codifican por separado y se busca en una base vectorial). El ranker es el **cross-encoder** que reordena.
 """)
+    nb.code(r'''
+!pip install -q faiss-cpu hnswlib   # GPU opcional: faiss-gpu-cu12 (ver sección 5)
+''')
     nb.code(SETUP_CODE)
     nb.code(DRAW_CODE)
     nb.code(r'''
@@ -296,6 +299,13 @@ EPOCHS = 3 if FAST_DEV_RUN else 8
 BATCH = 1024 if FAST_DEV_RUN else 4096         # más batch = más in-batch negatives (y mejor en GPU)
 ''')
     nb.code(DATA_CODE)
+    nb.md(r"""
+## 🛠️ 4. Two-tower desde cero
+- **Torre de ítem**: embedding de ID + proyección de géneros + embedding de quinquenio → MLP residual → L2.
+- **Torre de usuario**: media de los embeddings de ID de su historia (tabla **compartida** con la torre de ítem: ayuda mucho con pocos datos) + demografía → MLP → L2.
+- **Pérdida**: softmax sobre in-batch negatives con máscara de *accidental hits* (si el mismo ítem es positivo de dos filas, no puede ser negativo de sí mismo) + opciones logQ / MNS / hard negatives.
+""")
+    nb.code(MODEL_CODE)
     nb.code(r'''
 # Baseline de popularidad (módulo 01) para tener una referencia
 pop_rank = np.argsort(-item_count)
@@ -307,13 +317,6 @@ def popularity_topk(EV, k=100):
 results = {"Popularidad": evaluate(popularity_topk(EV_test), EV_test)}
 results["Popularidad"]
 ''')
-    nb.md(r"""
-## 🛠️ 4. Two-tower desde cero
-- **Torre de ítem**: embedding de ID + proyección de géneros + embedding de quinquenio → MLP residual → L2.
-- **Torre de usuario**: media de los embeddings de ID de su historia (tabla **compartida** con la torre de ítem: ayuda mucho con pocos datos) + demografía → MLP → L2.
-- **Pérdida**: softmax sobre in-batch negatives con máscara de *accidental hits* (si el mismo ítem es positivo de dos filas, no puede ser negativo de sí mismo) + opciones logQ / MNS / hard negatives.
-""")
-    nb.code(MODEL_CODE)
     nb.code(LOSS_CODE)
     nb.code(r'''
 VARIANTS = {

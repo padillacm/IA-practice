@@ -432,7 +432,8 @@ def lesson() -> None:
     from sklearn.metrics import roc_auc_score
 
     FEATS_PIT = ["pop_cum", "rating_mean_cum"]
-    params = dict(objective="binary", learning_rate=0.05, num_leaves=31, n_estimators=200, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
+    params = dict(objective="binary", learning_rate=0.05, num_leaves=15, min_child_samples=100, n_estimators=200,
+                  verbose=-1, random_state=seed, n_jobs=LGB_THREADS)   # regularizado: pocos usuarios con etiqueta
     res = {}
     for name, joiner in [("Join ingenuo (leakage)", naive_join), ("Point-in-time", pit_join)]:
         tr, va_off = joiner(ex_train), joiner(ex_val)          # 'offline': el val se construye igual que el train
@@ -773,7 +774,7 @@ def lesson() -> None:
     prof_b, gen_b = user_profile(ratings[ratings.ts < t_b])
     prof_b.to_parquet(f"{ART_DIR}/user_prof.parquet"); gen_b.columns = [str(c) for c in gen_b.columns]
     gen_b.to_parquet(f"{ART_DIR}/user_genre.parquet")
-    json.dump({str(u): h[-50:] for u, h in hist_b.items()}, open(f"{ART_DIR}/user_hist.json", "w"))
+    json.dump({str(u): h for u, h in hist_b.items()}, open(f"{ART_DIR}/user_hist.json", "w"))   # historial COMPLETO (excluir vistos)
     popular = ratings[ratings.ts < t_b].item_id.value_counts().index[:200].tolist()
     json.dump({"popular": popular, "rank_feats": RANK_FEATS, "model_version": "ranker-v1"}, open(f"{ART_DIR}/meta.json", "w"))
     print(sorted(os.listdir(ART_DIR)))
@@ -842,7 +843,7 @@ def lesson() -> None:
             METRICS["fallback_total"] += 1
             items = [i for i in META["popular"] if i not in set(hist)][:k]
             return {"user_id": user_id, "items": items, "strategy": "popularity_fallback", "cache": False}
-        v = EMB[hist].mean(0); v = (v / (np.linalg.norm(v) + 1e-8)).astype("float32")
+        v = EMB[hist[-50:]].mean(0); v = (v / (np.linalg.norm(v) + 1e-8)).astype("float32")   # vector: últimos 50
         sc, ids = INDEX.search(v[None], 100 + len(hist)); tm["retrieval"] = time.perf_counter()
         seen = set(hist); mask = [(i not in seen) and i > 0 for i in ids[0]]
         ids, sc = ids[0][mask][:100], sc[0][mask][:100]
@@ -866,7 +867,7 @@ def lesson() -> None:
     @app.post("/event")
     def event(e: Event):
         """Ingesta nearline simplificada: actualiza historial e invalida la caché del usuario."""
-        R.rpush(f"hist:{e.user_id}", e.item_id); R.ltrim(f"hist:{e.user_id}", -50, -1)
+        R.rpush(f"hist:{e.user_id}", e.item_id); R.ltrim(f"hist:{e.user_id}", -1000, -1)
         for key in R.scan_iter(f"recs:{e.user_id}:*"):
             R.delete(key)
         return {"ok": True}
@@ -1692,8 +1693,8 @@ def project() -> None:
 
     def train_ranker(cands):
         c = cands[cands.groupby("user_id").label.transform("max") > 0].sort_values("user_id")
-        rk = lgb.LGBMRanker(objective="lambdarank", n_estimators=300, learning_rate=0.05, num_leaves=31,
-                            min_child_samples=20, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
+        rk = lgb.LGBMRanker(objective="lambdarank", n_estimators=200, learning_rate=0.05, num_leaves=15,
+                            min_child_samples=100, verbose=-1, random_state=seed, n_jobs=LGB_THREADS)
         rk.fit(c[RANK_FEATS], c.label, group=c.groupby("user_id").size().values)
         return rk
 
@@ -1713,7 +1714,7 @@ def project() -> None:
     RANKER.booster_.save_model(f"{ART_DIR}/ranker.txt")
     itf_b.to_parquet(f"{ART_DIR}/item_feats.parquet"); prof_b.to_parquet(f"{ART_DIR}/user_prof.parquet")
     gen_b.columns = [str(c) for c in gen_b.columns]; gen_b.to_parquet(f"{ART_DIR}/user_genre.parquet")
-    json.dump({str(u): h[-50:] for u, h in hist_b.items()}, open(f"{ART_DIR}/user_hist.json", "w"))
+    json.dump({str(u): h for u, h in hist_b.items()}, open(f"{ART_DIR}/user_hist.json", "w"))   # historial COMPLETO (excluir vistos)
     json.dump({"popular": ratings[ratings.ts < t_b].item_id.value_counts().index[:200].tolist(),
                "rank_feats": RANK_FEATS, "model_version": "ranker-lambdamart-v1"}, open(f"{ART_DIR}/meta.json", "w"))
     ''')
@@ -1816,7 +1817,7 @@ def project() -> None:
 
     @app.post("/event")
     def event(e: Event):
-        R.rpush(f"hist:{e.user_id}", e.item_id); R.ltrim(f"hist:{e.user_id}", -50, -1)
+        R.rpush(f"hist:{e.user_id}", e.item_id); R.ltrim(f"hist:{e.user_id}", -1000, -1)
         for key in R.scan_iter(f"recs:{e.user_id}:*"):
             R.delete(key)
         return {"ok": True}

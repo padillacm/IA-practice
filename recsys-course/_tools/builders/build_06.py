@@ -16,7 +16,7 @@ os.makedirs(f"recsys-course/{MOD}", exist_ok=True)
 # Código compartido entre lección y proyecto ---------------------------------
 CRITEO_LOADER = r'''
 # === Carga de Criteo (streaming de una muestra) con fallback sintético =======
-import gzip, requests
+import os, gzip, requests
 
 INT_COLS = [f"I{i}" for i in range(1, 14)]
 CAT_COLS = [f"C{i}" for i in range(1, 27)]
@@ -41,6 +41,7 @@ def synthetic_criteo(n: int = 400_000, seed: int = 42) -> pd.DataFrame:
     verdad conocida: efectos de primer orden + interacciones de pares de campos."""
     rng = np.random.default_rng(seed)
     card = rng.integers(4, 3000, 26)
+    card[[0, 1, 4, 5, 7, 9, 12, 16, 18, 21]] = rng.integers(6, 60, 10)    # campos "útiles" de cardinalidad baja
     card[[2, 3, 11, 15, 20, 23]] = [60000, 40000, 25000, 50000, 30000, 15000]
     idx = np.stack([(rng.zipf(1.15, n) - 1) % card[f] for f in range(26)], 1)
     logit = np.full(n, -1.6)
@@ -308,6 +309,9 @@ Ya sabes entrenar clasificadores binarios. Lo que cambia en recsys/ads:
 
 ¿Por qué una **probabilidad** y no solo un orden? Porque el score se **combina** con otras cosas: en anuncios `puja × pCTR` (subasta), en Netflix/YouTube `w₁·p(clic) + w₂·E[tiempo] + …` (módulo 07). Si $\hat p$ está mal calibrada, la mezcla se rompe aunque el AUC sea perfecto.
 """)
+    nb.code(r'''
+!pip install -q lightgbm requests scikit-learn
+''')
     nb.code(SETUP_CODE)
     nb.code(DRAW_CODE)
     nb.code(r'''

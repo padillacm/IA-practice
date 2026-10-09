@@ -19,35 +19,38 @@ import tarfile, glob
 KUAI_URL = "https://zenodo.org/records/10439422/files/KuaiRand-Pure.tar.gz"   # ~200 MB (md5 0820331067a3784d9691136f772b35a7)
 TASKS = ["is_click", "long_view", "is_like"]
 
-def synthetic_kuairand(n_users=3000, n_videos=4000, n_rows=400_000, seed=42):
-    """Mismo esquema que KuaiRand-Pure. Tres tareas correlacionadas pero NO idénticas."""
+def synthetic_kuairand(n_users=1500, n_videos=2000, n_rows=400_000, seed=42):
+    """Mismo esquema que KuaiRand-Pure. Tres tareas correlacionadas pero NO idénticas,
+    que dependen de IDs (afinidad latente) y de features observables (actividad, tipo, música, duración, tab)."""
     rng = np.random.default_rng(seed)
     d = 8
     U, V = rng.normal(size=(n_users, d)), rng.normal(size=(n_videos, d))
-    a_click, a_lv, a_like = rng.normal(size=d), rng.normal(size=d), rng.normal(size=d)
+    a_lv, a_like = rng.normal(size=d), rng.normal(size=d)
+    act = rng.integers(0, 4, n_users); music = rng.integers(0, 10, n_videos); upl = rng.integers(0, 4, n_videos)
+    author = rng.integers(0, 400, n_videos); author_q = rng.normal(0, 0.6, 400)
     vid_pop = rng.zipf(1.3, n_videos).clip(max=200).astype(float); vid_pop /= vid_pop.sum()
     u = rng.integers(0, n_users, n_rows); v = rng.choice(n_videos, n_rows, p=vid_pop)
     dur = rng.lognormal(10.5, 0.8, n_videos)                  # ms
     tab = rng.integers(0, 4, n_rows)
     aff = (U[u] * V[v]).sum(1) / np.sqrt(d)
-    z_click = -0.8 + 1.0 * aff + 0.4 * (U[u] @ a_click) / 3 - 0.3 * (tab == 2)
+    z_click = -0.9 + 0.9 * aff + np.array([0.6, 0.3, 0.0, -0.5])[act[u]] + author_q[author[v]] - 0.6 * (tab == 2) + 0.4 * (tab == 0)
     click = rng.random(n_rows) < 1 / (1 + np.exp(-z_click))
-    z_lv = -0.5 + 0.8 * aff + 0.8 * ((V[v] @ a_lv) / 3) - 0.5 * (np.log(dur[v]) - 10.5)
+    z_lv = -0.3 + 0.7 * aff + 0.8 * (V[v] @ a_lv) / 3 - 0.9 * (np.log(dur[v]) - 10.5) + np.array([0.5, 0.0, -0.3, 0.2])[upl[v]]
     long_view = click & (rng.random(n_rows) < 1 / (1 + np.exp(-z_lv)))
-    z_like = -3.2 + 0.6 * aff + 1.2 * ((U[u] * V[v]) @ a_like) / 3
+    z_like = -3.0 + 0.5 * aff + 1.0 * ((U[u] * V[v]) @ a_like) / 3 + 0.25 * (music[v] - 4.5) / 2.9 + np.array([0.8, 0.4, 0.0, -0.4])[act[u]]
     like = click & (rng.random(n_rows) < 1 / (1 + np.exp(-z_like)))
     t = np.sort(rng.integers(1_649_376_000_000, 1_649_376_000_000 + 30 * 86_400_000, n_rows))
     logs = pd.DataFrame({"user_id": u, "video_id": v, "time_ms": t, "tab": tab,
                          "hourmin": (t // 3_600_000 % 24) * 100,
                          "is_click": click.astype(int), "long_view": long_view.astype(int), "is_like": like.astype(int)})
     users = pd.DataFrame({"user_id": np.arange(n_users),
-                          "user_active_degree": rng.choice(["full_active", "high_active", "middle_active", "low_active"], n_users),
+                          "user_active_degree": np.array(["full_active", "high_active", "middle_active", "low_active"])[act],
                           "follow_user_num_range": rng.choice(["0", "(0,10]", "(10,50]", "(50,100]"], n_users),
                           "register_days_range": rng.choice(["15-30", "31-60", "61-90", "91-180", "181-365", "366-730", "730+"], n_users)})
-    videos = pd.DataFrame({"video_id": np.arange(n_videos), "author_id": rng.integers(0, 800, n_videos),
+    videos = pd.DataFrame({"video_id": np.arange(n_videos), "author_id": author,
                            "video_type": rng.choice(["NORMAL", "AD"], n_videos, p=[0.97, 0.03]),
-                           "upload_type": rng.choice(["ShortImport", "Web", "Kmovie", "FollowShoot"], n_videos),
-                           "music_type": rng.integers(0, 10, n_videos), "video_duration": dur})
+                           "upload_type": np.array(["ShortImport", "Web", "Kmovie", "FollowShoot"])[upl],
+                           "music_type": music, "video_duration": dur})
     return logs, users, videos
 
 def load_kuairand(data_dir="data", max_rows=None):
@@ -254,6 +257,9 @@ Analogía con lo que conoces: pointwise = regresión/clasificación; pairwise = 
 ### 1.2 Muchos objetivos a la vez
 La home de Netflix/YouTube/TikTok no optimiza "clic": optimiza **clic, tiempo de visionado, completar, like, compartir, no-dislike, satisfacción a largo plazo…** Entrenar un modelo por objetivo es caro (N modelos en serving) y desperdicia datos (los likes son escasos, los clics abundantes). **Multi-task learning (MTL)** comparte representación entre tareas… con el riesgo de que unas tareas perjudiquen a otras (*negative transfer*, *seesaw*).
 """)
+    nb.code(r'''
+!pip install -q lightgbm
+''')
     nb.code(SETUP_CODE)
     nb.code(DRAW_CODE)
     nb.code(r'''
@@ -553,15 +559,17 @@ plt.tight_layout(); plt.show()
 **Lectura típica**: las pérdidas pairwise/listwise suelen superar a la pointwise en NDCG, y **LambdaMART sigue siendo durísimo** con features densas: Qin et al. (ICLR 2021, *Are Neural Rankers still Outperformed by GBDT?*) mostraron que los rankers neuronales necesitan trucos específicos (transformación log1p de features, *self-attention* entre documentos, data augmentation) para empatarle en benchmarks como MSLR-WEB30K. Los modelos profundos ganan cuando hay IDs, texto o secuencias (módulos 06, 09, 11).
 
 ## 🎯 6. Sesgo de posición: simulación, IPS y PAL
-Simulamos el mundo real: un **sistema anterior** (logging policy) ordenó los candidatos de train por popularidad + ruido; el usuario examina la posición $k$ con probabilidad $\theta_k = k^{-1}$ y hace clic si examina y le parece relevante: $\gamma(y) = 0{,}05 + 0{,}95\cdot\frac{2^y-1}{7}$. El 10 % del tráfico se **aleatoriza** (como hacen los equipos serios para estimar $\theta$).
+Simulamos el mundo real: un **sistema anterior** (logging policy) ordenó los candidatos de train por popularidad + ruido; el usuario examina la posición $k$ con probabilidad $\theta_k = k^{-1}$ y hace clic si examina y le parece relevante: $\gamma(y) = 0{,}05 + 0{,}95\cdot\frac{2^y-1}{7}$. Cada consulta se muestra en varias **sesiones** (con ruido distinto en la política) y el 10 % del tráfico se **aleatoriza** (como hacen los equipos serios para estimar $\theta$).
 """)
     nb.code(r'''
 rng_ = np.random.default_rng(seed)
 ETA = 1.0
-Lmax = Xq_tr.shape[1]
+N_SESSIONS = 10 if FAST_DEV_RUN else 30            # cada consulta se "muestra" varias veces (sesiones)
+Lmax = Xq_tr.shape[1]; Q_tr = len(Xq_tr)
 theta_true = 1 / np.arange(1, Lmax + 1) ** ETA
-Y_np, M_np = Yq_tr.numpy(), Mq_tr.numpy()
-logging_score = Xq_tr[..., 0].numpy() + rng_.normal(0, 1.0, Y_np.shape)       # popularidad + ruido
+qidx = np.tile(np.arange(Q_tr), N_SESSIONS)                              # sesión → consulta
+Y_np, M_np = Yq_tr.numpy()[qidx], Mq_tr.numpy()[qidx]
+logging_score = Xq_tr[..., 0].numpy()[qidx] + rng_.normal(0, 1.0, Y_np.shape)   # popularidad + ruido
 randomized = rng_.random(len(Y_np)) < 0.10
 logging_score[randomized] = rng_.random((randomized.sum(), Lmax))
 logging_score[~M_np] = -1e9
@@ -592,14 +600,14 @@ class PALModel(nn.Module):
             return s
         return F.logsigmoid(s) + F.logsigmoid(self.pos(pos).squeeze(-1))     # log p(clic)
 
-def train_click_model(mode, epochs=30 if FAST_DEV_RUN else 60, bs=64):
+def train_click_model(mode, epochs=6 if FAST_DEV_RUN else 15, bs=256):
     torch.manual_seed(seed)
     model = (PALModel(len(FEATS), Lmax) if mode == "PAL" else Scorer(len(FEATS))).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=2e-3)
-    X, C, M = Xq_tr.to(device), torch.tensor(clicks, dtype=torch.float32, device=device), Mq_tr.to(device)
+    X, C, M = Xq_tr[qidx].to(device), torch.tensor(clicks, dtype=torch.float32, device=device), torch.as_tensor(M_np, device=device)
     P = torch.as_tensor(position, device=device)
     W = torch.as_tensor(np.clip(theta_hat, 0.05, 1)[position], dtype=torch.float32, device=device)
-    Yrel = Yq_tr.to(device)
+    Yrel = torch.as_tensor(Y_np, device=device)
     for ep in range(epochs):
         p = np.random.permutation(len(X))
         for s0 in range(0, len(p), bs):
