@@ -57,3 +57,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   re-ranking).
 - ✅ Autoevaluación: +2 preguntas (cálculo del presupuesto de candidatos; transferencia sobre split aleatorio).
 - ✅ Proyecto: pistas graduadas en TODO 2 (Lorenz, semanas), TODO 4 (home sin repetidos) y TODO 5 (split + HitRate).
+
+### 01 · Datos de interacción y baselines
+- Muy buena secuencia «log → matriz → sesgos simulados → señales → splits → baselines»; las tres simulaciones de
+  sesgos son ejemplos resueltos excelentes. El experimento «el mismo baseline, cuatro verdades» es memorable.
+- ✅ Caja 🔁 (exposición ≠ negativo, elección del positivo, «respetar el tiempo» del 00).
+- ✅ «👀 Qué observar» tras la long tail (ley de potencias; anticipa el Gini de recomendaciones del 02), MNAR (por qué
+  el RMSE no lo detecta) y sesgo de posición (anticipa IPS/PAL del 07 y propensiones del 14). Antes, las dos
+  simulaciones de sesgo pasaban a la siguiente sin interpretación.
+- ✅ Analogía con *walk-forward validation* / `TimeSeriesSplit` y *target leakage* de ML tabular.
+- ✅ Autoevaluación: +1 cálculo (memoria denso vs CSR a escala CineMatch) y +1 diagnóstico (feature con leakage que
+  sube offline y no online).
+- ⚠️→✅ Prerrequisito: el proyecto pedía implementar NDCG antes del módulo 02. Se añade una nota con la intuición de la
+  fórmula y pistas; la derivación queda en el 02.
+- ✅ Proyecto: pistas graduadas en TODO 2 (k-core iterativo, cortes por cuantiles), TODO 3 (validaciones) y TODO 5
+  (métricas y ventana de popularidad).

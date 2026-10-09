@@ -44,6 +44,19 @@ M(r"""
 6. **Implementar** splits aleatorio, *leave-one-out* y temporal global, y **demostrar** con números el *data leakage* temporal.
 7. **Construir y ajustar** baselines fuertes: popularidad global, por segmento y reciente.
 8. **Elegir** un dataset público adecuado para cada problema (streaming, e-commerce, noticias, música, CTR, bandits).
+
+### 🔁 Conexión con módulos anteriores
+Antes de seguir, intenta responder de memoria (es práctica de recuperación: cuesta un poco y por eso funciona):
+
+1. En el módulo 00, ¿por qué una película no vista **no** es un ejemplo negativo?
+2. ¿Qué escalón del embudo de señales (impresión → clic → play → visto ≥ 70 % → like) elegirías como «positivo» para CineMatch, y qué pierdes con esa elección?
+3. ¿Qué fila de la tabla «ML clásico vs recomendación» del módulo 00 anticipaba el tema central de este módulo?
+
+<details><summary>Respuestas</summary>
+1. Porque mezcla «no le gusta» con «nunca se lo enseñaste / no lo conoce» (sesgo de exposición). Aquí lo medirás: parte de los «negativos» muestreados son positivos futuros (sección 10).
+2. No hay respuesta única: «visto ≥ 70 %» es fiable pero escaso y favorece contenido corto; el clic es abundante pero ruidoso. Aquí construirás varias de esas señales (sección 5).
+3. «Hay que respetar el tiempo: entrenar con el pasado y evaluar en el futuro». La sección 7 lo convierte en números.
+</details>
 """)
 
 C(r'''
@@ -224,6 +237,10 @@ axes[1].set(title="Curva de Lorenz de la popularidad", xlabel="fracción de íte
 axes[1].legend(); plt.tight_layout(); plt.show()
 ''')
 
+M(r"""
+> 👀 **Qué debes observar:** en el panel izquierdo, los puntos caen aproximadamente en una **recta en escala log-log** (ley de potencias): el ítem del rango 10 tiene muchas más interacciones que el del rango 1.000. La línea roja marca qué pocos ítems acumulan la mitad de los eventos. En el derecho, cuanto más se separa la curva de la diagonal, mayor el Gini. Guarda este número: en el módulo 02 medirás el Gini **de las recomendaciones** (no del dataset) y verás que casi todos los modelos lo **aumentan**.
+""")
+
 # ---------------------------------------------------------------------------
 M(r"""
 ---
@@ -258,6 +275,10 @@ ax.legend(); plt.tight_layout(); plt.show()
 ''')
 
 M(r"""
+> 👀 **Qué debes observar:** la distribución observada está desplazada hacia 4–5★ y la media observada es mayor que la real. Un modelo entrenado solo con lo observado «cree» que las películas son mejores de lo que son; y su RMSE en test (también observado) **no lo detecta**, porque test tiene el mismo sesgo.
+""")
+
+M(r"""
 ### 🧪 Simulación 2 — Sesgo de posición
 Ordenamos ítems **al azar** (la relevancia no depende de la posición) y simulamos clics con un modelo de examen: el usuario mira la posición $k$ con probabilidad $P(E=1\mid k) = 1/k^{\eta}$ y clica si la mira y le interesa — el *position-based model* de los trabajos de LTR insesgado (Joachims et al., 2017).
 """)
@@ -273,6 +294,10 @@ ax.plot(range(1, K + 1), relevante.mean(0), "k--", label="relevancia real (const
 ax.set(xlabel="posición en la lista", ylabel="tasa", title="Sesgo de posición: mismo contenido, CTR muy distinto")
 ax.legend(); plt.tight_layout(); plt.show()
 ''')
+
+M(r"""
+> 👀 **Qué debes observar:** la línea discontinua es plana (todas las posiciones son igual de relevantes) pero las barras caen como $1/k$. Si entrenas un modelo de clic con estos logs **sin** decirle la posición, aprenderá que «lo que estaba arriba es mejor» y reforzará el orden antiguo. El módulo 07 corrige esto (IPS, PAL) y el 14 lo generaliza (propensiones).
+""")
 
 M(r"""
 ### 🧪 Simulación 3 — El *feedback loop* de la popularidad
@@ -419,6 +444,8 @@ Esta es la sección más importante del módulo. Hay tres familias de split:
 | **Aleatorio** | cada interacción va a test con prob. $p$ | muchos papers antiguos | mezcla futuro y pasado: entrenas con lo que pasó **después** de lo que predices |
 | **Leave-one-out (LOO)** | la **última** interacción de cada usuario a test | NCF, SASRec, BERT4Rec… | el corte es distinto para cada usuario: el train de Ana incluye eventos posteriores al test de Bruno (**leakage entre usuarios**) |
 | **Temporal global** | un instante $T$: train $= \{t < T\}$, test $= \{t \geq T\}$ | la industria; papers rigurosos | test con usuarios/ítems nuevos (cold start) → hay que decidir qué hacer con ellos |
+
+> 💡 **Si vienes de series temporales o *forecasting***: el split temporal global es tu *walk-forward validation* (`TimeSeriesSplit`); hacer un split aleatorio en recomendación es como barajar un dataset de ventas antes de predecir el mes que viene. Y el *leakage* de la sección siguiente es el mismo *target leakage* que ya conoces de ML tabular, solo que más fácil de cometer: basta con un `value_counts()` antes del split.
 
 El split temporal global es lo único que **reproduce lo que pasa en producción**: entrenas el lunes con todo lo anterior y sirves el martes. Ji, Sun, Zhang & Li (2023, *A Critical Study on Data Leakage in Recommender System Offline Evaluation*) mostraron que el leakage del LOO/aleatorio puede **cambiar qué modelo gana**.
 """)
@@ -691,6 +718,12 @@ M(r"""
 
 **7.** ¿Qué *trade-off* hay entre muestrear negativos uniformemente o por popularidad?
 <details><summary>Respuesta</summary>Los negativos populares son más difíciles e informativos (el modelo aprende a no recomendar solo lo popular), pero tienen más probabilidad de ser falsos negativos y sesgan las puntuaciones (requieren corrección, p. ej. logQ).</details>
+
+**8. (Cálculo)** CineMatch tiene 2 M de usuarios, 50.000 títulos y 300 M de interacciones. ¿Cuánto ocupa la matriz en denso (float32) y en CSR (float32 + índices int32)?
+<details><summary>Respuesta</summary>Denso: 2·10⁶ × 5·10⁴ × 4 B = 4·10¹¹ B = 400 GB. CSR ≈ 8 × 3·10⁸ + 4 × (2·10⁶ + 1) ≈ 2,4 GB. Densidad = 3·10⁸ / 10¹¹ = 0,3 %. Por eso todo el curso trabaja con <code>scipy.sparse</code>.</details>
+
+**9. (Diagnóstico)** Un compañero añade la *feature* «nº total de vistas del ítem» al modelo y el Recall@10 offline salta de 0,08 a 0,15. En el A/B no mejora nada. ¿Cuál es tu primera hipótesis y cómo la compruebas?
+<details><summary>Respuesta</summary>Leakage temporal: la <i>feature</i> se calculó sobre la tabla completa (incluido el periodo de test), así que codifica qué se verá en el futuro. Se comprueba recalculándola solo con eventos anteriores al corte (o <i>point-in-time</i> por ejemplo, módulo 16) y viendo si la ganancia offline desaparece.</details>
 """)
 
 M(r"""
@@ -818,6 +851,9 @@ Implementa (sin mirar `cinematch_data.py`):
 - `k_core(df, min_user, min_item)`: iterativo hasta converger.
 - `temporal_split(df, val_frac, test_frac)`: cortes globales por cuantiles de `timestamp`; devuelve `(train, val, test)` con `train < t_val <= val < t_test <= test`.
 - `drop_cold(train, other)`: elimina de `other` usuarios o ítems que no estén en `train`.
+
+<details><summary>🪜 Pista 1 (k-core)</summary>Un bucle <code>while True</code>: cuenta interacciones por usuario y por ítem, filtra los que no llegan al mínimo y para cuando una pasada no elimina ninguna fila (compara <code>len(df)</code> antes y después).</details>
+<details><summary>🪜 Pista 2 (split temporal)</summary><code>t_val, t_test = df.timestamp.quantile([1 - val_frac - test_frac, 1 - test_frac])</code>; train = <code>timestamp &lt; t_val</code>, val = <code>t_val ≤ timestamp &lt; t_test</code>, test = <code>timestamp ≥ t_test</code>. <code>drop_cold</code> es un doble <code>isin</code> sobre <code>user_id</code> e <code>item_id</code>.</details>
 """)
 
 C(r'''
@@ -848,6 +884,8 @@ M(r"""
 3. Todo usuario e ítem de val/test existe en train.
 4. En train todo usuario tiene ≥ `min_user` e ítem ≥ `min_item` interacciones.
 5. Columnas `user_id, item_id, rating, timestamp` con tipos enteros/float.
+
+<details><summary>🪜 Pista</summary>Para el punto 2 entre splits, concatena las parejas <code>(user_id, item_id)</code> de los tres splits y comprueba <code>duplicated().any()</code>. Escribe cada <code>assert</code> con un mensaje que diga qué split falla: cuando lo rompas a propósito (reto 2) lo agradecerás.</details>
 """)
 
 C(r'''
@@ -889,6 +927,11 @@ Implementa `recall_at_k` y `ndcg_at_k` (binario; $\text{DCG}=\sum_{p=1}^{K} \fra
 - `rec_aleatorio`, `rec_popular(train, users, k, window_days=None)`, `rec_segmento(train, users, segmento_de, k)`.
 
 Protocolo: ajusta `window_days ∈ {7, 14, 30, 60, 90, None}` maximizando Recall@10 en **val** entrenando con train; después **reentrena con train+val** y evalúa todos en **test**. Excluye siempre lo ya visto.
+
+> 📐 NDCG se deriva con calma en el módulo 02; aquí basta con la fórmula: un acierto en la posición $p$ vale $1/\log_2(p+1)$ (1 en la primera, 0,63 en la segunda…) y se divide por el mejor DCG posible con los relevantes de ese usuario.
+
+<details><summary>🪜 Pista 1 (métricas)</summary>Agrupa el test en un <code>dict</code> <code>usuario → set(relevantes)</code>. Para cada usuario: Recall = |top-K ∩ relevantes| / |relevantes|; IDCG = Σ_{p=1}^{min(K, |rel|)} 1/log2(p+1).</details>
+<details><summary>🪜 Pista 2 (popularidad con ventana)</summary>Filtra <code>train.timestamp ≥ train.timestamp.max() − window_days·86400</code> antes del <code>value_counts()</code>. Para excluir lo visto, pide más candidatos de los necesarios (p. ej. K + longitud máxima del historial) y filtra con el <code>set</code> del usuario.</details>
 """)
 
 C(r'''
