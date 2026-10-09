@@ -164,6 +164,8 @@ def seq_loss(model, h, tgt, loss="ce", n_neg=1, gbce_t=0.75):
         return F.cross_entropy(logits, torch.zeros(len(pos_l), dtype=torch.long, device=h.device))
     alpha = n_neg / (n - 1)                                           # tasa de muestreo de negativos
     beta = 1.0 if loss == "bce" else alpha * (gbce_t * (1 - 1 / alpha) + 1 / alpha)
+    b0 = math.log(beta / n_neg)        # offset fijo = logit de la tasa base q*=β/(β+k): no cambia el ranking,
+    pos_l, neg_l = pos_l + b0, neg_l + b0   # pero evita que los embeddings colapsen a «todo negativo»
     return (-beta * F.logsigmoid(pos_l) - F.logsigmoid(-neg_l).sum(-1)).mean()
 """
 
@@ -538,6 +540,12 @@ plt.tight_layout(); plt.show()
 nb.md(r"""
 ### 3.3 Las cuatro pérdidas en código
 Fíjate en cómo **la misma red** se entrena con cuatro objetivos distintos cambiando una sola línea.
+
+🧠 **Truco que no viene en los papers (y que nos costó descubrir):** con BCE/gBCE y muchos negativos, al principio casi toda la señal dice «baja todas las puntuaciones»
+(hay $k$ negativos por cada positivo). Con *weight tying*, la red lo consigue añadiendo una componente común a **todos** los embeddings, se queda atascada en la solución
+«puntuación constante» ($q = \beta/(\beta+k)$ para todo ítem) y el NDCG no despega. La solución es sumar a los logits un **offset fijo** $b_0 = \log(\beta/k)$ (el logit de esa tasa base):
+el ranking no cambia (es la misma constante para todos los ítems) y la red ya no necesita deformar los embeddings para aprender la tasa base.
+Es la misma idea que la inicialización del sesgo con la *prior* de clase en RetinaNet (Lin et al., 2017).
 Para no disparar la memoria con 256 negativos, compartimos los negativos entre todas las posiciones de una secuencia (tensor `[B, L, k]` en vez de `[B, L, k, d]`).
 """)
 nb.code(LOSSES)
