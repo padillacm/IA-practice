@@ -98,5 +98,18 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   contenido en el embudo con 200 estrenos/semana).
 - ✅ Proyecto: el Paso 5 (cold start) era un `# TODO` vacío que obligaba a reconstruir el protocolo de memoria → dos
   pistas graduadas con la estructura y la puntuación; pista para la penalización por año del Paso 4.
-- 📌 La lección usa su propio protocolo del Bloque II (80/20, train con todos los ratings) distinto de
-  `prepare_cinematch`; está bien avisado en el proyecto, pero convendría repetir el aviso en la lección (sección 3).
+- El cambio de protocolo del Bloque II (80/20, train con todos los ratings) frente a `prepare_cinematch` está bien
+  avisado en la celda de utilidades de lección y proyecto (03–05): buen ejemplo de la regla «compara solo dentro del
+  mismo protocolo» del 02.
+
+### 04 · Vecindad y modelos lineales
+- Buen arco «intuición (co-consumo) → ejemplo 5×6 → similitudes → shrinkage → EASE derivado → implementación →
+  librerías → comparativa con coverage». Las lecturas de los barridos (shrinkage/α) son ejemplares.
+- ⚠️→✅ La derivación de EASE (Lagrangiano) llegaba sin intuición previa para un alumno de ML. Se añade el puente:
+  **EASE = |I| regresiones ridge**, una por película; `diag(B)=0` = prohibir *target leakage*; solución ridge sin
+  restricción como referencia.
+- ✅ Caja 🔁 (shrinkage como respuesta a la fragilidad del ejemplo del 00, NDCG+coverage del 02, contenido vs
+  co-consumo del 03).
+- ✅ «👀 Qué observar» en el barrido de β de RP3β (primer frente de Pareto, puente al 13) y en el de λ de EASE.
+- ✅ Autoevaluación: +1 diagnóstico (coverage 2 % → α/shrinkage/β) y +1 transferencia (sesión en tiempo real).
+- ✅ Proyecto: pistas graduadas para `item_knn`/`ease` (de la fórmula a COO) y para el bootstrap pareado por usuario.

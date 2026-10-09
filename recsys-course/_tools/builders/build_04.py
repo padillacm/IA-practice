@@ -136,6 +136,17 @@ nb.md("""
 5. **Comparar** con las implementaciones de `implicit` y `Surprise`.
 6. **Medir** el efecto de los hiperparámetros (k, shrinkage, α, β, λ) en NDCG y en **coverage/popularidad**.
 7. **Argumentar** con evidencia (Dacrema 2019, Anelli 2022) por qué un baseline lineal bien tuneado es obligatorio.
+
+### 🔁 Conexión con módulos anteriores
+1. En el módulo 00 calculaste a mano un user-kNN para Ana. ¿Por qué una similitud de 0,98 con David, calculada sobre 2 películas en común, era sospechosa?
+2. ¿Qué dos métricas del módulo 02 vas a mirar a la vez en cada barrido de hiperparámetros de esta lección, y por qué no basta con una?
+3. ¿Qué diferencia hay entre el perfil de contenido del módulo 03 y lo que hará un item-kNN con la misma película *Alien*?
+
+<details><summary>Respuestas</summary>
+1. Porque con tan poco soporte la similitud es ruido: hoy lo corriges con <b>shrinkage</b> (sección 2.2).
+2. NDCG@10 (precisión del orden) y <b>coverage</b> (qué parte del catálogo se recomienda): casi todo lo que sube el NDCG en un split temporal empuja hacia lo popular y baja la coverage.
+3. El 03 busca películas que se <b>parecen</b> a <i>Alien</i> (sinopsis, póster); item-kNN busca las que <b>se ven junto a</b> <i>Alien</i>, sin mirar su contenido: puede proponer <i>Terminator 2</i> o una comedia que comparte público.
+</details>
 """)
 nb.md("## ⚙️ Setup")
 nb.code("""
@@ -270,6 +281,8 @@ $$\min_{\mathbf C}\ \tfrac12\|\mathbf X-\mathbf X\mathbf C\|_F^2+\tfrac{\lambda_
 La restricción $\operatorname{diag}=0$ evita la solución trivial $\mathbf C=\mathbf I$ («predice cada ítem con él mismo»).
 
 ### 2.6 EASE (Steck, 2019): SLIM sin L1 ni no-negatividad → **solución cerrada**
+
+> 💡 **Intuición antes de la derivación.** EASE son $|I|$ **regresiones ridge**, una por película: «predice si el usuario vio *Alien* a partir de qué **otras** películas vio». Las *features* son las columnas de $\mathbf X$ y los coeficientes de la regresión de *Alien* forman la columna $\mathbf B_{:,\text{Alien}}$. La restricción $\operatorname{diag}(\mathbf B)=0$ prohíbe la trampa de usar *Alien* para predecir *Alien* (sería *target leakage*). Sin esa restricción, la solución sería la de ridge que ya conoces, $(\mathbf X^\top\mathbf X+\lambda\mathbf I)^{-1}\mathbf X^\top\mathbf X$; con ella aparece el multiplicador de Lagrange de la derivación.
 $$\min_{\mathbf B}\ \|\mathbf X-\mathbf X\mathbf B\|_F^2+\lambda\|\mathbf B\|_F^2\quad\text{s.a. }\operatorname{diag}(\mathbf B)=0$$
 
 **Derivación** (Lagrangiano con multiplicadores $\boldsymbol\gamma\in\mathbb R^{|I|}$):
@@ -438,6 +451,9 @@ ax.set_title("RP3β: el trade-off precisión ↔ cobertura en un solo parámetro
 beta_b = max(rp_val, key=lambda b: rp_val[b]["NDCG@10"])
 results[f"RP3β (β={beta_b})"] = evaluate_topk(sparse_score_fn(X, rp3beta(X, 1.0, beta_b, 100)), X, rel)
 ''')
+nb.md(r"""
+> 👀 **Qué debes observar:** las dos curvas se mueven en sentidos opuestos: al subir β la coverage crece de forma casi monótona y el NDCG primero aguanta y luego cae. El punto «bueno» para el producto no tiene por qué ser el máximo de NDCG: si la caída de NDCG entre dos valores de β está dentro del ruido (±1 %, secreto 7) y la coverage sube mucho, el β mayor suele ser mejor elección. Es tu primer frente de Pareto; el módulo 13 lo formaliza.
+""")
 
 nb.md("""
 ### 4.5 EASE en 6 líneas
@@ -457,6 +473,7 @@ ax.semilogx(lams, [ease_val[l]["NDCG@10"] for l in lams], "o-")
 ax2 = ax.twinx(); ax2.semilogx(lams, [ease_val[l]["Coverage"] for l in lams], "s--", color="#dd8452"); ax2.grid(False)
 ax.axvline(lam_b, color="k", ls=":"); ax.set_xlabel("λ"); ax.set_ylabel("NDCG@10 (val)"); ax2.set_ylabel("Coverage", color="#dd8452")
 ax.set_title(f"EASE: efecto de la regularización (mejor λ = {lam_b})"); plt.show()
+print("👀 Observa: λ pequeño sobreajusta (NDCG bajo; suele dar más coverage); λ muy grande converge a co-ocurrencias crudas → lo popular (coverage baja). El óptimo es una U invertida en escala log.")
 t0 = time.time(); B_ease = ease(X, lam_b)
 print(f"EASE con λ={lam_b}: {time.time() - t0:.2f}s en {device}")
 results[f"EASE (λ={lam_b})"] = evaluate_topk(dense_score_fn(X, B_ease), X, rel)
@@ -652,6 +669,12 @@ nb.md(r"""
 
 7. ¿Por qué el λ óptimo de EASE suele ser mayor en un split temporal?
 <details><summary>Respuesta</summary>Porque λ grande sesga hacia la popularidad (co-ocurrencias crudas), y en el futuro la popularidad reciente es muy predictiva; además el desplazamiento temporal pide más regularización.</details>
+
+8. **(Diagnóstico)** Tu item-kNN recomienda los mismos 15 *blockbusters* a casi todo el mundo (coverage 2 %). Nombra dos hiperparámetros que revisarías y en qué dirección los moverías.
+<details><summary>Respuesta</summary><b>α</b> del coseno asimétrico hacia 1 (penaliza destinos populares) y el <b>shrinkage</b> hacia abajo (castiga menos los pares raros). Alternativas: RP3β con β &gt; 0, o el pesado BM25 de la matriz. Mide NDCG y coverage a la vez y elige con IC.</details>
+
+9. **(Transferencia)** Necesitas recomendaciones de **sesión** que cambien en cuanto el usuario termina un capítulo, sin reentrenar. ¿item-kNN, EASE o user-kNN? Justifica en términos de qué se precalcula y qué se hace en la petición.
+<details><summary>Respuesta</summary>item-kNN (o EASE podado): la tabla ítem→vecinos se precalcula offline y en la petición basta con sumar los vecinos de los últimos ítems vistos: el historial nuevo se refleja al instante. user-kNN obligaría a recalcular vecinos de usuario con cada evento.</details>
 """)
 nb.md("""
 ## 📚 11. Referencias
@@ -739,6 +762,9 @@ pj.md("""
 Implementa `item_knn(X, k, shrink, alpha)` que devuelva una matriz dispersa `S` (ítems × ítems) con
 `S[j, i]` = similitud coseno asimétrica con shrinkage, diagonal 0 y solo los `k` mayores valores de
 cada **columna**. 💡 Pistas: `X.T @ X` disperso → `.tocoo()`; `np.argpartition` por columnas.
+
+<details><summary>🪜 Pista 1 (similitud)</summary>Con <code>Co = (X.T @ X).tocoo()</code> tienes <code>row = j</code>, <code>col = i</code> y <code>data = c_ji</code>. La popularidad es <code>n = X.sum(0)</code>. Aplica la fórmula de la sección 2.1–2.2 elemento a elemento sobre esos tres arrays: <code>c / (n[i]**alpha * n[j]**(1-alpha) + shrink)</code>, reconstruye con <code>sp.csr_matrix((valores, (j, i)))</code> y <code>setdiag(0)</code>.</details>
+<details><summary>🪜 Pista 2 (poda y EASE)</summary>La poda top-k por columna está en la lección (<code>prune_topk</code>): con 3.700 ítems puedes densificar, hacer <code>np.argpartition(-S, k, axis=0)[:k]</code> y reconstruir la dispersa. Para EASE: <code>G = (X.T @ X).toarray()</code>, <code>P = inv(G + λI)</code>, <code>B = -P / diag(P)</code> (divide cada columna por su elemento diagonal) y <code>fill_diagonal(B, 0)</code>.</details>
 """)
 pj.code(r'''
 from sklearn.preprocessing import normalize
@@ -781,6 +807,8 @@ pj.md("""
 Re-entrena con `X` (todo train) usando los mejores hiperparámetros y evalúa **una vez** en test.
 Para el bootstrap necesitas NDCG **por usuario**: usa `topk_from_scores` + `ndcg_recall_at_k`.
 Remuestrea usuarios con reemplazo (B = 2 000) y calcula el percentil 2,5–97,5 de la diferencia.
+
+<details><summary>🪜 Pista</summary>Escribe <code>per_user_ndcg(score_fn, X, rel)</code>: recorre los usuarios de <code>sorted(rel)</code> por lotes, <code>topk_from_scores(score_fn(lote), X[lote], 10)</code>, apila y pásalo a <code>ndcg_recall_at_k</code>. Con los vectores por usuario de dos modelos (mismo orden de usuarios), <code>d = a − b</code> y remuestrea <b>índices</b> de <code>d</code>: es el test pareado del módulo 02. Si el IC de Δ contiene 0, la conclusión honesta es «no hay evidencia de mejora».</details>
 """)
 pj.code(r'''
 # TODO: evaluación final, bootstrap pareado y tabla
