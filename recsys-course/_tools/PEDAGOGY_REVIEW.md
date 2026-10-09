@@ -238,3 +238,15 @@ Leyenda: ✅ arreglado en el builder · 📌 recomendación pendiente (cambio gr
   re-ranking del 00). Es el módulo que más reutiliza conceptos previos: el repaso aquí es especialmente rentable.
 - ✅ Proyecto: pistas para la KL vectorizada del re-ranker greedy y para el orden filtros → deduplicación → cuotas.
 - (La autoevaluación ya tenía preguntas de razonamiento de calidad; no se amplía.)
+
+### 14 · Bandits, RL y OPE
+- Uno de los módulos mejor construidos pedagógicamente: muchas lecturas («Lectura.», «Lectura honesta.»), estudio
+  Monte Carlo de sesgo/varianza en vez de una sola estimación, caso Netflix bien explicado y una autoevaluación con
+  derivaciones (Hoeffding → UCB) y transferencia.
+- ✅ Caja 🔁 (IPS del 07 → propensiones; huecos de exploración del 13 → soporte común; «offline premia imitar» del 02;
+  media bayesiana del proyecto 00 → prior Beta de Thompson).
+- ✅ «👀 Qué observar» en cuatro figuras sin lectura: α de LinUCB, MSE vs n (pendiente −1 vs sesgo de DM), SlateQ vs
+  miope y varianza de trayectoria vs horizonte (por qué la industria usa horizontes cortos).
+- ✅ Autoevaluación: +1 cálculo (peso IPS 16× de una acción rara) y +1 diagnóstico (IPS +40 % con ESS 3 % vs DR +4 %).
+- ✅ Proyecto: pistas para los cinco estimadores (fórmulas vectorizadas), LinUCB/TS con Sherman–Morrison y
+  cross-fitting de q̂.

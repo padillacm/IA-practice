@@ -155,6 +155,19 @@ Al terminar este módulo serás capaz de:
 5. **Usar Open Bandit Pipeline (obp)** sobre el **Open Bandit Dataset** de ZOZOTOWN para evaluar una política real contra su valor *on-policy*.
 6. **Implementar** REINFORCE con la corrección *top-K off-policy* de YouTube (Chen et al., 2019) y **explicar** la descomposición de SlateQ (Ie et al., 2019).
 7. **Argumentar** por qué el RL en recomendación es difícil (varianza de importance weights, simuladores, recompensas retardadas) y cuándo NO usarlo.
+
+### 🔁 Conexión con módulos anteriores
+1. En el módulo 07 corregiste el sesgo de posición ponderando cada clic por 1/θ_k (IPS). ¿Qué era θ_k y por qué hacía falta aleatorizar un poco de tráfico para estimarlo?
+2. En el módulo 13, la política «CF + exploración» (2 de 10 huecos aleatorios) mantenía la cobertura en el *feedback loop*. ¿Qué otra ventaja tenían esos huecos aleatorios para el **siguiente** modelo?
+3. En el módulo 02 dijimos que la evaluación offline «premia imitar al sistema anterior». ¿Por qué?
+4. En el proyecto 00 usaste una media bayesiana con m «votos virtuales» para no fiarte de películas con pocos ratings. ¿Qué distribución formaliza esa idea para una tasa de clic, y dónde la usarás en este módulo?
+
+<details><summary>Respuestas</summary>
+1. La probabilidad de que el usuario <b>examine</b> la posición k. Sin aleatorizar, posición y relevancia van juntas (lo bueno siempre estuvo arriba) y no se pueden separar. Aquí generalizas: la «propensión» es la probabilidad con que la política de logging eligió cada acción.
+2. Generan <b>datos con propensión conocida</b> sobre ítems que el modelo nunca habría mostrado: justo lo que necesita la OPE de este módulo (soporte común).
+3. Porque el test solo contiene feedback de lo que el sistema antiguo mostró: un modelo que recomienda otras cosas no recibe crédito aunque fueran mejores (sesgo de exposición). IPS/DR corrigen eso con propensiones.
+4. Una media «amortiguada» hacia la media global con m votos virtuales: es exactamente la idea de un <i>prior</i> Beta. Thompson Sampling (§2) usa la posterior Beta(1 + clics, 1 + no-clics) de cada brazo.
+</details>
 """)
 
     nb.md("""
@@ -555,6 +568,10 @@ plt.title(f"LinUCB: regret tras {T_CTX//2} impresiones vs α"); plt.xlabel("α (
 plt.show()
 ''')
 
+    nb.md("""
+> 👀 **Qué debes observar:** α = 0 es LinUCB **sin exploración** (greedy con contexto): puede quedarse atascado con un θ̂ inicial malo y su regret varía mucho entre semillas (barras de error largas). α muy grande explora de más y el regret vuelve a subir. Entre medias hay un valle ancho: no hace falta afinar α al decimal, pero **nunca** lo pongas a 0 en producción.
+""")
+
     # ------------------------------------------------------------------ 4
     nb.md(r"""
 ---
@@ -816,6 +833,10 @@ for e, c in zip(ests, cols): plt.loglog(ns, mse_n[e], marker="o", label=e, color
 plt.title("MSE vs tamaño de los logs: el sesgo de DM no desaparece con más datos")
 plt.xlabel("n logs (log)"); plt.ylabel("MSE (log)"); plt.legend(); plt.show()
 ''')
+
+    nb.md("""
+> 👀 **Qué debes observar:** en escala log-log, IPS, SNIPS y DR caen con pendiente ≈ −1 (MSE ∝ 1/n: son insesgados y solo pagan varianza). DM se **aplana**: su error es sesgo del modelo q̂ y no desaparece con más datos. Es la regla práctica del módulo: con pocos logs DM puede ganar (poca varianza); con muchos, los estimadores con pesos ganan. DR suele estar cerca del mejor de los dos en todo el rango.
+""")
 
     nb.md("""
 🧪 **El gran enemigo: la divergencia entre políticas.** Cuanto más distinta es $\\pi_e$ de $\\pi_0$ (aquí: temperatura más baja → política más determinista), mayores los *importance weights*, menor el ESS y mayor la varianza de IPS. Y el **umbral τ** de Switch-DR permite movernos en la frontera sesgo–varianza.
@@ -1172,6 +1193,10 @@ plt.show(); print(sq.mean().round(3).to_dict())
 ''')
 
     nb.md("""
+> 👀 **Qué debes observar:** la barra miope (ordenar por recompensa inmediata) queda claramente por debajo del óptimo exhaustivo; las dos variantes de SlateQ, que ordenan por el valor a largo plazo Q̄ de cada ítem, se acercan mucho. La descomposición de SlateQ convierte un problema combinatorio (todas las slates posibles) en uno por ítem, con muy poca pérdida: por eso es desplegable.
+""")
+
+    nb.md("""
 ### Simuladores: el gimnasio del RL en recomendación
 
 Como no puedes explorar libremente con usuarios reales, la investigación se apoya en simuladores:
@@ -1217,6 +1242,10 @@ axes[0].semilogy(Hs, var_w, marker="o", color="#c53030", lw=2); axes[0].set(titl
 axes[1].plot(Hs, np.array(ess_frac) * 100, marker="o", color="#2b6cb0", lw=2); axes[1].set(title="ESS como % de las trayectorias", xlabel="horizonte H", ylabel="ESS %")
 plt.tight_layout(); plt.show()
 ''')
+
+    nb.md("""
+> 👀 **Qué debes observar:** el eje izquierdo es logarítmico: la varianza del peso de trayectoria crece **exponencialmente** con el horizonte (es un producto de H cocientes), y el ESS se desploma en pocos pasos. Con H = 10 casi todas tus trayectorias de log «no cuentan». Es la razón cuantitativa de que en la industria se use RL de horizonte corto (bandits, REINFORCE de un paso con recompensas proxy) y no OPE de trayectorias largas.
+""")
 
     # ------------------------------------------------------------------ 8
     nb.md("""
@@ -1285,6 +1314,12 @@ plt.tight_layout(); plt.show()
 
 **8.** Tu equipo quiere optimizar retención a 90 días con RL entrenado en un simulador. Da tres riesgos.
 <details><summary>Respuesta</summary>Sim-to-real gap (la política explota defectos del simulador); varianza enorme de la OPE de largo horizonte para validar; recompensa retardada/confundida (estacionalidad, marketing) y riesgo de atajos indeseados que las métricas de corto plazo no ven. Mitigación: bandits/REINFORCE de un paso con proxies validados (surrogate index, módulo 15) y A/B final.</details>
+
+**9. (Cálculo)** La política de logging eligió la imagen A con probabilidad 0,5 y la B con 0,05. La nueva política elige B con probabilidad 0,8. Una impresión con B tuvo clic. ¿Cuánto pesa en IPS? ¿Qué te dice sobre la varianza si B era rara en los logs?
+<details><summary>Respuesta</summary>w = 0,8 / 0,05 = 16: ese clic cuenta como 16 clics. Si B apenas aparece en los logs, unas pocas impresiones con pesos ~16 dominan la estimación (ESS bajo, varianza alta). Remedios: SNIPS, clipping/Switch-DR o más exploración en la política de logging.</details>
+
+**10. (Diagnóstico)** Tu IPS dice que la nueva política de artwork mejora un 40 % el CTR; el ESS es 3 % de los logs y DR dice +4 %. ¿Qué haces?
+<details><summary>Respuesta</summary>Desconfiar de IPS: con ESS del 3 % la estimación descansa en un puñado de impresiones con pesos enormes. Mirar la distribución de pesos, comprobar el soporte común (¿hay acciones de la nueva política que la de logging casi nunca eligió?), reportar DR/SNIPS con IC bootstrap y, si la decisión importa, lanzar un A/B (o aumentar la exploración para recoger mejores logs).</details>
 """)
 
     nb.md("""
@@ -1454,6 +1489,8 @@ Implementa `estimate_policy_value` siguiendo las fórmulas de la lección, **por
 - ESS $= (\\sum w)^2/\\sum w^2$.
 
 Pista: indexa con `idx = np.arange(n)` y `action_dist[idx, :, position]` → `(n, K)`.
+
+<details><summary>🪜 Pista 2</summary>Con <code>pe = action_dist[idx, :, position]</code> (n × K) y <code>w = pe[idx, action] / pscore</code>: DM = media de <code>(pe * q_hat).sum(1)</code>; IPS = media de <code>w * reward</code>; SNIPS = <code>(w * reward).sum() / w.sum()</code>; DR = DM por fila + <code>w * (reward − q_hat[idx, action])</code>, promediado; Switch-DR = igual que DR pero el término de corrección se multiplica por <code>(w &lt;= tau)</code>. <code>per_round_dr</code> devuelve el vector antes de promediar.</details>
 """)
 
     nb.code(r'''
@@ -1557,6 +1594,8 @@ print(f"Propensión mínima registrada: {logs_train['pscore'].min():.3f}  (⇒ w
 
 ### TODO 3 · Bandits lineales online
 Implementa `LinearBandit` (LinUCB y Thompson lineal con Sherman–Morrison) y `simulate_online(policy_name, T)` que devuelva el **regret instantáneo** de cada impresión. Usa `world.features(x, t)` como $x_{t,a}$ (dimensión 28). Políticas: `"production"` (muestrea de $\\pi_0$), `"linucb"`, `"lints"`.
+
+<details><summary>🪜 Pista</summary>Guarda <code>Ainv</code> (empieza en I/λ) y <code>b</code>. θ̂ = <code>Ainv @ b</code>. LinUCB: <code>Xa @ θ̂ + α·sqrt(einsum("kd,de,ke-&gt;k", Xa, Ainv, Xa))</code>. TS lineal: muestrea θ̃ de una normal con media θ̂ y covarianza v²·Ainv. Sherman–Morrison tras observar (x, r): <code>Ax = Ainv @ x</code>; <code>Ainv −= outer(Ax, Ax) / (1 + x @ Ax)</code>; <code>b += r·x</code>. Coste O(d²) por actualización, sin invertir matrices.</details>
 """)
 
     nb.code(r'''
@@ -1613,6 +1652,8 @@ policies = todo_guard(make_policies, logs_train, logs_test)
 - Modelo $\\hat q$ con **cross-fitting** (2 folds) sobre `logs_test`.
 - Para cada política (incluida producción como *sanity check*): DM, IPS, SNIPS, DR, Switch-DR(τ=20), ESS, IC 95 % de DR (bootstrap) y el **valor real** (oráculo) para calificar.
 - Comprueba E4 y E5 y dibuja un gráfico de estimaciones con IC vs valor real.
+
+<details><summary>🪜 Pista (cross-fitting)</summary>Parte las filas en 2 folds; para cada fold entrena el modelo de recompensa con el <b>otro</b> fold y predice q̂(x, a) para <b>todas</b> las acciones de las filas de este fold (construye las K matrices de <i>features</i> con <code>world.features</code>). Así ninguna fila se evalúa con un q̂ que la vio al entrenar: es el mismo motivo por el que no se ajustan hiperparámetros en test.</details>
 """)
 
     nb.code(r'''
