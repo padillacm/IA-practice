@@ -32,7 +32,10 @@ def code_ok(src: str) -> bool:
 
 def main() -> int:
     problems: list[str] = []
-    for mod in sorted(p for p in ROOT.iterdir() if p.is_dir() and p.name[:2].isdigit()):
+    modules = sorted(p for p in ROOT.iterdir() if p.is_dir() and p.name[:2].isdigit())
+    if not modules:
+        problems.append(f"no hay módulos NN_slug/ en {ROOT}")
+    for mod in modules:
         nbs = sorted(mod.glob("*.ipynb"))
         lesson = [p for p in nbs if "proyecto" not in p.name]
         project = [p for p in nbs if "proyecto" in p.name]
@@ -54,6 +57,8 @@ def main() -> int:
                 problems.append(f"{nb_path.name}: faltan secciones {missing}")
             if "colab.research.google.com" not in text:
                 problems.append(f"{nb_path.name}: falta badge de Colab")
+            elif "<owner>/<repo>" in text:
+                problems.append(f"{nb_path.name}: badge sin configurar (ajusta REPO en nbbuild.py)")
             n_code = sum(c.cell_type == "code" for c in nb.cells)
             print(f"{nb_path.relative_to(ROOT)}: {len(nb.cells)} celdas ({n_code} código)")
     print()

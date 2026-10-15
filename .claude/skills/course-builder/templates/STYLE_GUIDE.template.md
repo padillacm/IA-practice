@@ -36,36 +36,36 @@ Ejecuta el script; `save()` valida JSON y sintaxis Python de cada celda.
 
 ## Plantilla del PROYECTO
 1. Cabecera (badge, nivel, duración, GPU).
-2. **Contexto de negocio** realista (ej.: "Eres ML engineer en una plataforma de streaming…").
+2. **Contexto de negocio** realista (ej.: "Eres {ROL} en {EMPRESA FICTICIA DEL HILO CONDUCTOR}…").
 3. **Dataset** (real, descargable desde Colab) + descripción.
-4. **Entregables y criterios de evaluación** (rúbrica con métricas objetivo, p. ej. "NDCG@10 ≥ 0,30 en el split temporal").
+4. **Entregables y criterios de evaluación** (rúbrica con métricas objetivo y umbrales numéricos, p. ej. "{MÉTRICA} ≥ {VALOR MEDIDO POR LA SOLUCIÓN} en {SPLIT}").
 5. **Plantilla con TODOs** paso a paso (celdas con `# TODO` y `raise NotImplementedError` envueltas para que «ejecutar todo» no se rompa), con **pistas graduadas plegadas** (🪜 Pista 1 orienta la idea; 🪜 Pista 2 casi da la API) en los TODOs difíciles. No pidas nada que la lección (o una anterior) no haya enseñado.
 6. **Solución de referencia** al final, precedida de una celda markdown de aviso «⛔ SPOILER — intenta resolverlo primero». La solución debe ser completa y ejecutable.
 7. **Retos extra** (stretch goals) para nivel experto.
-8. Reflexión: preguntas que conectan con producción/MLOps.
+8. Reflexión: preguntas que conectan con producción y con el hilo conductor.
 
 Los proyectos van encadenados cuando tenga sentido: el alumno va construyendo **{HILO CONDUCTOR}**, que en el capstone se integra entero. Se pueden usar otros dominios cuando la técnica lo pida, pero menciona cómo se conecta con el hilo conductor.
 
 ## Código
 - **Ejecutable en Colab tal cual**, de arriba a abajo. Primera celda de código: `!pip install -q ...` con versiones razonables (no fijes versiones exactas salvo que sea necesario por compatibilidad conocida; si fijas, explica por qué).
 - Fija semillas (`seed = 42`). Detecta GPU: `device = "cuda" if torch.cuda.is_available() else "cpu"`.
-- Descarga de datos robusta: URL oficial (GroupLens, HuggingFace Datasets, Kaggle API con instrucciones, RecBole, Zenodo…). Si un dataset requiere credenciales (Kaggle), explica cómo configurarlas y ofrece un **fallback** (subconjunto público o datos sintéticos) para que el notebook nunca se quede bloqueado.
+- Descarga de datos robusta: URL oficial del dataset (repositorio del autor, Hugging Face Datasets, Kaggle API con instrucciones, Zenodo…). Si un dataset requiere credenciales (Kaggle), explica cómo configurarlas y ofrece un **fallback** (subconjunto público o datos sintéticos) para que el notebook nunca se quede bloqueado.
 - Escala: incluye un flag `FAST_DEV_RUN = True/False` o `SCALE = "small" | "full"` para iterar rápido y luego correr a escala completa en GPU.
 - Código limpio, con funciones reutilizables, comentarios en español donde aporten, type hints ligeros.
 - Celdas de código cortas–medias (≤ ~60 líneas). Mucho texto explicativo entre celdas.
 - Nada de pseudo-código en celdas de código: todo debe ser Python válido.
 
 ## Gráficos (obligatorios)
-- Cada lección tiene **al menos 6 visualizaciones**: diagramas conceptuales + gráficos de datos/resultados.
-- Diagramas conceptuales (arquitecturas, flujos, matrices) dibujados **en celdas de código** con `matplotlib` (patches, flechas, `annotate`) o `graphviz` (preinstalado en Colab), para que se rendericen en Colab sin imágenes externas. Ejemplo: matriz usuario×ítem dispersa, pipeline retrieval→ranking→re-ranking, arquitectura two-tower, atención causal de SASRec.
+- Cada lección tiene **al menos {MÍNIMO DE GRÁFICOS} visualizaciones** (6 es un buen default): diagramas conceptuales + gráficos de datos/resultados.
+- Diagramas conceptuales (arquitecturas, flujos, matrices) dibujados **en celdas de código** con `matplotlib` (patches, flechas, `annotate`) o `graphviz` (preinstalado en Colab), para que se rendericen en Colab sin imágenes externas. Ejemplos: {DIAGRAMAS CLAVE DEL TEMA: arquitecturas, pipelines, estructuras de datos}.
 - Gráficos de datos con `matplotlib`/`seaborn`/`plotly`. Títulos, ejes y leyendas en el idioma del curso.
 - Tras cada gráfico clave, una caja **👀 Qué debes observar** que diga qué patrón buscar y qué concluir.
 - Además se permiten diagramas ASCII sencillos dentro del markdown.
 
 ## Tono pedagógico
-- Ir de lo concreto a lo abstracto: ejemplo con 5 usuarios × 6 películas en papel → fórmula → código → escala real.
+- Ir de lo concreto a lo abstracto: ejemplo diminuto resuelto a mano ({EJEMPLO DE JUGUETE DEL TEMA}) → fórmula → código → escala real.
 - Explicar el "por qué" y el "cuándo NO usar esto".
-- Conectar siempre con lo que el alumno ya sabe de ML, MLOps y agentes.
+- Conectar siempre con lo que el alumno ya sabe ({ANALOGÍAS DE COURSE_SPEC}).
 - Cajas destacadas con emojis consistentes: 💡 Intuición · 📐 Matemáticas · 🏭 En producción · 🧠 Secretos de la élite · ⚠️ Cuidado · 🧪 Experimento · 📚 Para profundizar.
 
 ## Módulos largos
@@ -77,5 +77,5 @@ Los proyectos van encadenados cuando tenga sentido: el alumno va construyendo **
 
 ## Calidad
 - Exactitud técnica por encima de todo. Si una cifra o afirmación de industria no la puedes respaldar, no la pongas.
-- Investiga (WebSearch/WebFetch) papers y blogs recientes (2023–2026) para que el contenido de estado del arte sea actual.
+- Investiga (WebSearch/WebFetch) papers y blogs de los últimos 2–3 años para que el contenido de estado del arte sea actual.
 - Ejecuta el builder y corrige hasta que `save()` dé OK. Si puedes, prueba localmente los fragmentos críticos (NumPy/pandas/sklearn/matplotlib están instalados en el entorno) — no hay GPU ni hace falta descargar datasets enormes.

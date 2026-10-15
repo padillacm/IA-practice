@@ -28,7 +28,8 @@ haber GPU y el proxy puede bloquear descargas: usa la cadena oficial → espejo 
 notebooks con nbclient en FAST_DEV_RUN.
 
 CHECKPOINTS: tras CADA módulo terminado actualiza tu progreso y haz commit + push SOLO de tus archivos según
-PROTOCOL.md (tienes permiso para commitear y pushear a {RAMA}). Si te reanudan, lee tu progreso y sigue desde la
+PROTOCOL.md (tienes permiso para commitear y pushear a {RAMA}; usa como atribución las líneas que indica
+PROTOCOL.md). Si te reanudan, lee tu progreso y sigue desde la
 primera casilla sin marcar.
 
 Al terminar responde (≤ 300 palabras): archivos creados, nº de celdas por notebook, datasets usados y si se probaron

@@ -2,12 +2,14 @@
 
 Uso (desde un script build_XX.py):
 
-    import sys; sys.path.insert(0, "recsys-course/_tools")
+    # ejecutar desde la raíz del repo: python <curso>/_tools/builders/build_05.py
+    import sys; sys.path.insert(0, "<curso>/_tools")
     from nbbuild import Notebook
-    nb = Notebook("Módulo 05 · Factorización Matricial", colab_path="recsys-course/05_matrix_factorization/05_matrix_factorization.ipynb")
-    nb.md("# Título ...")
+    path = "<curso>/05_slug/05_slug.ipynb"
+    nb = Notebook("Módulo 05 · Título", colab_path=path)
+    nb.md(nb.badge() + "\n# Módulo 05 · Título ...")
     nb.code("import numpy as np")
-    nb.save("recsys-course/05_matrix_factorization/05_matrix_factorization.ipynb")
+    nb.save(path)
 
 `save` valida el notebook con nbformat y comprueba que cada celda de código
 sea Python sintácticamente válido (las líneas que empiezan por `!` o `%`
@@ -22,7 +24,7 @@ import nbformat
 from nbformat.v4 import new_code_cell, new_markdown_cell, new_notebook
 
 REPO = "<owner>/<repo>"  # ajustar al crear el curso
-BRANCH = "master"  # rama por defecto: el badge funciona tras el merge
+BRANCH = "main"  # rama POR DEFECTO del remoto (main/master): el badge funciona tras el merge
 
 
 def colab_badge(path: str) -> str:
