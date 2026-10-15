@@ -5,7 +5,7 @@ groups:
   - orgId: 1
     name: supportops-sintomas
     folder: Curso observabilidad de agentes
-    interval: 15s
+    interval: 10s            # múltiplo de 10 s: es el «tick» del planificador de Grafana (15s hace que Grafana NO arranque)
     rules:
       - uid: sp-error-ratio-high
         title: "SupportOps · tasa de error alta"

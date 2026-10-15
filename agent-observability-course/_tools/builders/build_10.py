@@ -217,7 +217,7 @@ groups:
   - orgId: 1
     name: supportops-sintomas
     folder: {FOLDER}
-    interval: 15s
+    interval: 10s            # múltiplo de 10 s: es el «tick» del planificador de Grafana (15s hace que Grafana NO arranque)
     rules:
 """
     r1 = _rule("sp-error-ratio-high", "SupportOps · tasa de error alta", err_expr, ("gt", 0.10),
@@ -531,7 +531,7 @@ if LIVE:
         rows.append({"$__interval (ms)": ims, "ventana que resolvió Grafana": (re.findall(r"\\[(\\w+)\\]", ex) or ["?"])[0], "calculada a mano": f"{rate_interval(ims / 1000):.0f}s"})
     display(pd.DataFrame(rows))
     tiers = dk.grafana("GET", "/api/datasources/proxy/uid/prometheus/api/v1/label/supportops_customer_tier/values")
-    print("valores de la variable $tier (label_values):", tiers.get("data"))
+    print("valores de la variable $tier (label_values):", tiers.get("data") or "(aún sin datos: se llenará con el tráfico de la sección 5)")
 else:
     print("Sin Grafana: la ventana la resuelve Grafana al ejecutar la consulta (aquí la calculamos a mano).")
 ''')
@@ -617,7 +617,7 @@ if LIVE:
         t = (pd.to_datetime(pv.index, unit="ms").astype("int64") / 1e9) - T0
         bottom = np.zeros(len(pv)); colr = {"info": viz.PALETTE["logs"], "warn": viz.PALETTE["warn"], "error": viz.PALETTE["error"]}
         for c in pv.columns:
-            axes[1].bar(t, pv[c].values, bottom=bottom, width=(t.diff().median() or 5) * .9, color=colr.get(c.split("=")[-1], "#999"), label=c.split("=")[-1]); bottom += pv[c].values
+            axes[1].bar(t, pv[c].values, bottom=bottom, width=(float(np.median(np.diff(t.values))) if len(t) > 1 else 5) * .9, color=colr.get(c.split("=")[-1], "#999"), label=c.split("=")[-1]); bottom += pv[c].values
         axes[1].legend(fontsize=8)
     axes[1].set_title("LOG · logs por nivel (LogQL de métrica)"); axes[1].set_xlabel("s desde el inicio")
     if len(TR):
@@ -842,7 +842,7 @@ print((ALERT_DIR / "10-alert-rules.yaml").read_text()[:3300])
 if LIVE:
     rules = dk.grafana("GET", "/api/v1/provisioning/alert-rules")
     display(pd.DataFrame([{"regla": r["title"], "uid": r["uid"], "for": r["for"], "noData": r["noDataState"], "pausada": r["isPaused"], "severity": r["labels"].get("severity"),
-                           "dashboard": r.get("dashboardUID"), "panel": r.get("panelID"), "procedencia": r.get("provenance")} for r in rules]))
+                           "dashboard": r["annotations"].get("__dashboardUid__"), "panel": r["annotations"].get("__panelId__"), "procedencia": r.get("provenance")} for r in rules]))
     cps = dk.grafana("GET", "/api/v1/provisioning/contact-points"); pol = dk.grafana("GET", "/api/v1/provisioning/policies")
     print("contact points:", [(c["name"], c["type"]) for c in cps], "· política raíz → receptor:", pol["receiver"], "· agrupa por:", pol.get("group_by"), "· rutas:", [(r["receiver"], r.get("object_matchers")) for r in pol.get("routes", [])])
 else:
@@ -870,7 +870,7 @@ if LIVE:
     print({u: {"→Pending (s)": None if np.isnan(a) else round(a), "→Firing (s)": None if np.isnan(b) else round(b)} for u, (a, b) in first.items()})
 ''')
     md(observe("""
-    - Las reglas **no saltan al instante**: primero *Pending* (la condición se cumple, pero aún no durante `for`) y solo después *Firing*. El retardo total desde que empiezan los errores incluye: exportación del SDK (5 s) + *scrape* (15 s) + ventana `[2m]` del `rate` (hay que acumular errores suficientes para pasar del 10 %) + evaluación (15 s) + `for` (30 s).
+    - Las reglas **no saltan al instante**: primero *Pending* (la condición se cumple, pero aún no durante `for`) y solo después *Firing*. El retardo total desde que empiezan los errores incluye: exportación del SDK (5 s) + *scrape* (15 s) + ventana `[2m]` del `rate` (hay que acumular errores suficientes para pasar del 10 %) + evaluación (10 s) + `for` (30 s).
     - Tras terminar la ráfaga la alerta **no se resuelve de golpe**: el `rate(...[2m])` sigue «recordando» los errores hasta 2 min después. Elegir la ventana es elegir entre **reaccionar rápido** (ventana corta, más ruido) y **estabilidad**.
     - La regla pausada (`sp-agent-idle`) y las que no se cumplen se quedan en *Normal*.
     """))
@@ -907,7 +907,7 @@ if LIVE:
     4. **El `uid` es una API.** Cambiarlo rompe enlaces (`/d/<uid>`), *dashboard links* por tag y las alertas con `dashboardUid`. Generarlo en cada build es el error más caro de «dashboards como código».
     5. **Una alerta no puede usar un panel como fuente de ventana:** `$__rate_interval` no tiene panel que lo resuelva en una regla; fija la ventana (`[2m]`) y que sea **≥ 4 × scrape**. Y recuerda la cadena de retardos: exportación + *scrape* + ventana + evaluación + `for`.
     6. **`noDataState` es una decisión de negocio, no un detalle.** «Sin datos» puede significar *sin tráfico* (normal en horas valle) o *telemetría caída* (grave). Por eso `sp-error-ratio-high` usa `OK` (sin tráfico = sin errores) y la regla de ausencia (`sp-agent-idle`) usa `Alerting`: las dos preguntas son distintas y **necesitan reglas distintas**. `execErrState: Error` además separa «la consulta falló» de «el sistema falló».
-    7. **Provisioning de alertas es de solo lectura en la UI y reemplaza la política raíz.** La documentación lo avisa: los recursos provisionados no se editan desde Grafana, y importar uno existente da conflicto. Y `policies:` **sustituye** el árbol de notificación entero: revisa que tu política por defecto siga teniendo un receptor.
+    7. **Un YAML de alertas inválido tumba Grafana entero.** Lo vivimos construyendo esta lección: con `interval: 15s` Grafana **no arranca** («interval (15s) should be non-zero and divided exactly by scheduler interval: 10»): el intervalo de evaluación debe ser **múltiplo de 10 s**. Valida el provisioning en un Grafana efímero en CI antes de desplegar. **Provisioning de alertas es de solo lectura en la UI y reemplaza la política raíz.** La documentación lo avisa: los recursos provisionados no se editan desde Grafana, y importar uno existente da conflicto. Y `policies:` **sustituye** el árbol de notificación entero: revisa que tu política por defecto siga teniendo un receptor.
     8. **Variables «All» + `=` = consultas rotas.** «All» (y multi-valor) se expande a una regex: usa `=~`, no `=`. Define `allValue: ".*"` para que «All» no genere una regex gigante con cientos de valores (más rápido y estable).
     9. **Los exemplars solo se dibujan en paneles y consultas que los soportan.** Series temporales y mapas de calor con una consulta de **rango** sobre `_bucket` y `exemplar: true`. Un `histogram_quantile(...)` no tiene exemplars (ya no es un bucket). Por eso la fila 1 incluye un mapa de calor además de las líneas de percentiles.
     10. **La documentación del dashboard es parte del dashboard.** Cada panel lleva `description` (qué mide, cómo leerlo, umbral); `lint` lo exige. A las 3 de la mañana, el icono «i» ahorra más tiempo que un panel extra.
@@ -938,8 +938,8 @@ if LIVE:
     """)
     md(details("1 · **(Cálculo)** El datasource tiene `timeInterval: 15s` y el panel resuelve `$__interval` = 30 s. ¿Cuánto vale `$__rate_interval`? ¿Y si el scrape real y configurado fuera de 60 s con el mismo `$__interval`?",
                "Con scrape 15 s: máx(30 + 15, 4·15) = máx(45, 60) = **60 s**. Con scrape 60 s: máx(30 + 60, 4·60) = máx(90, 240) = **240 s**."))
-    md(details("2 · **(Cálculo)** Una regla se evalúa cada 15 s con `for: 30s`. El *scrape* es de 15 s, el SDK exporta cada 5 s y la ventana de la consulta es `[2m]`. ¿Cuál es el **mejor caso** de retardo entre que el primer error ocurre y la alerta pasa a *Firing*, sin contar que la tasa debe superar el umbral?",
-               "Exportación ≤ 5 s + *scrape* ≤ 15 s + una evaluación hasta ver el dato (≤ 15 s) + `for` 30 s (dos evaluaciones más): del orden de **1 minuto** en el mejor caso razonable (5 + 15 + 15 + 30 = 65 s), y más si la tasa tarda en superar el 10 % dentro de la ventana de 2 minutos."))
+    md(details("2 · **(Cálculo)** Una regla se evalúa cada 10 s con `for: 30s`. El *scrape* es de 15 s, el SDK exporta cada 5 s y la ventana de la consulta es `[2m]`. ¿Cuál es el **mejor caso** de retardo entre que el primer error ocurre y la alerta pasa a *Firing*, sin contar que la tasa debe superar el umbral?",
+               "Exportación ≤ 5 s + *scrape* ≤ 15 s + una evaluación hasta ver el dato (≤ 10 s) + `for` 30 s (tres evaluaciones más): del orden de **1 minuto** en el mejor caso razonable (5 + 15 + 10 + 30 = 60 s), y más si la tasa tarda en superar el 10 % dentro de la ventana de 2 minutos."))
     md(details("3 · **(Cálculo)** Un dashboard tiene 4 *stats* de ancho 4 y uno de ancho 8 en una fila, y debajo 3 series de ancho 8. ¿Cuántas filas de rejilla ocupa y cuántas columnas quedan libres en la primera fila?",
                "Primera fila: 4·4 + 8 = 24 columnas → **0 libres**, ocupa la altura del panel más alto. La segunda: 3·8 = 24 → 0 libres. (Si la suma superara 24, `Dashboard.add` salta de fila.)"))
     md(details("4 · **(Diagnóstico)** Un panel de tasa de peticiones queda en blanco al ampliar el zoom a 1 minuto, pero con rangos largos funciona. Su consulta es `rate(x_total[30s])`. ¿Por qué y cómo se arregla?",
@@ -1187,7 +1187,7 @@ print(len(panels(D)), "paneles ·", len(D["templating"]["list"]), "variables ·"
     md("""
     ## Paso 7 · Una alerta de síntoma (TODO 7)
 
-    Escribe `ALERT_YAML` (cadena YAML en el formato de *provisioning*) con **una regla** de tasa de error en un grupo evaluado cada `15s`:
+    Escribe `ALERT_YAML` (cadena YAML en el formato de *provisioning*) con **una regla** de tasa de error en un grupo evaluado cada `10s` (el intervalo de evaluación debe ser **múltiplo de 10 s**):
     - consulta **A** a Prometheus (`datasourceUid: prometheus`, `instant: true`) con la **tasa de error** de `service_name="supportops-agent"` y ventana **explícita** `[2m]` (sin `$__rate_interval`);
     - **B**: `reduce` (`reducer: last`) de A; **C**: `threshold` de B con `gt` y un umbral entre 0,05 y 0,20 (usa **0.10**); `condition: C`;
     - `for` ≥ `30s`; `noDataState`; `execErrState: Error`;
@@ -1271,7 +1271,7 @@ def run_rubric():
         A, B, C = data["A"], data["B"], data["C"]
         thr = C["model"]["conditions"][0]["evaluator"]; win = re.findall(r"\[(\d+)([smh])\]", A["model"]["expr"]); secs = lambda s: int(re.match(r"\d+", str(s)).group()) * {"s": 1, "m": 60, "h": 3600}[re.search(r"[smh]", str(s)).group()]
         pid = titled(D, "error")[0]["id"]
-        checks = {"apiVersion": y["apiVersion"] == 1, "grupo 15s": str(y["groups"][0]["interval"]) in ("15s", "30s", "1m"), "A prometheus instant": A["datasourceUid"] == "prometheus" and A["model"].get("instant") is True,
+        checks = {"apiVersion": y["apiVersion"] == 1, "grupo múltiplo de 10s": str(y["groups"][0]["interval"]) in ("10s", "20s", "30s", "1m"), "A prometheus instant": A["datasourceUid"] == "prometheus" and A["model"].get("instant") is True,
                   "A: tasa de error": "supportops_agent_requests_total" in A["model"]["expr"] and "error" in A["model"]["expr"] and "/" in A["model"]["expr"],
                   "ventana ≥ 1m explícita": bool(win) and all(int(n) * {"s": 1, "m": 60, "h": 3600}[u] >= 60 for n, u in win) and "__rate_interval" not in A["model"]["expr"],
                   "B reduce last": B["model"]["type"] == "reduce" and B["model"]["reducer"] == "last" and B["model"]["expression"] == "A",
@@ -1402,7 +1402,7 @@ groups:
   - orgId: 1
     name: proj10-sintomas
     folder: Curso observabilidad de agentes
-    interval: 15s
+    interval: 10s
     rules:
       - uid: proj10-error-ratio
         title: "PROJ10 · tasa de error alta"

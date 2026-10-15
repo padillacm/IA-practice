@@ -34,7 +34,7 @@ from . import backends
 from .instrument import Instrumentor, LLMCallInfo, RunContext, ToolCallInfo
 from .stack import services
 
-__all__ = ["LokiPusher", "JsonLogInstrumentor", "AccessLogInstrumentor", "wait_for_logs", "logfmt", "LEVELS"]
+__all__ = ["run_logs_batch", "loki_range", "loki_stats", "LokiPusher", "JsonLogInstrumentor", "AccessLogInstrumentor", "wait_for_logs", "logfmt", "LEVELS"]
 
 LEVELS = {10: "debug", 20: "info", 30: "warn", 40: "error", 50: "critical"}
 
@@ -59,6 +59,7 @@ class LokiPusher:
         self.url = (url or services()["loki"]["ui"]).rstrip("/") + "/loki/api/v1/push"
         self.max_batch, self.timeout = max_batch, timeout
         self._buf: dict[tuple, list[list[Any]]] = defaultdict(list)
+        self._all: dict[tuple, list[list[Any]]] = defaultdict(list)       # copia permanente (flush no la borra)
         self._n = 0
         self.sent = 0
         self.requests = 0
@@ -69,12 +70,17 @@ class LokiPusher:
         if metadata:
             entry.append({k: str(v) for k, v in metadata.items()})
         self._buf[key].append(entry)
+        self._all[key].append(entry)
         self._n += 1
         if self._n >= self.max_batch:
             self.flush()
 
     def payload(self) -> dict[str, Any]:
         return {"streams": [{"stream": dict(k), "values": sorted(v, key=lambda e: int(e[0]))} for k, v in self._buf.items()]}
+
+    def full_payload(self) -> dict[str, Any]:
+        """Todo lo añadido desde el principio (aunque ya se haya enviado): para analizar con ``logql_mini`` y comparar con Loki."""
+        return {"streams": [{"stream": dict(k), "values": sorted(v, key=lambda e: int(e[0]))} for k, v in self._all.items()]}
 
     def flush(self) -> int:
         if not self._n:
@@ -179,3 +185,43 @@ def wait_for_logs(logql: str, min_count: int = 1, timeout_s: float = 60.0, every
     if verbose:
         print(f"{n} líneas visibles en Loki tras {time.time() - t0:.0f} s (esperadas ≥ {min_count})")
     return n
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+def run_logs_batch(n: int = 120, seed: int = 42, *, live: bool = True, export: bool | None = None, duration_s: float = 600.0):
+    """Lote de SupportOps con trazas (OTLP) **y** logs por las tres rutas. Devuelve ``(Batch, LokiPusher)``.
+
+    Si ``export`` no es ``False`` y Loki responde, se envían a Loki los logs JSON y de acceso (``pusher.flush()``); los logs OTLP
+    viajan por el Collector con ``OTelInstrumentor``. Con ``export=False`` todo queda en memoria (``pusher.payload()``).
+    """
+    from .tempo_lab import run_batch
+    push = LokiPusher()
+    b = run_batch(n, seed, live=live, export=export, duration_s=duration_s, extra=[JsonLogInstrumentor(push), AccessLogInstrumentor(push)])
+    if export is not False:
+        try:
+            push.flush()
+        except Exception as e:  # noqa: BLE001  (sin Loki: dejamos el payload en memoria)
+            print(f"(no se pudo enviar a Loki: {str(e)[:100]})")
+    return b, push
+
+
+def loki_range(logql: str, minutes: int = 15, step_s: int = 15) -> dict[str, list[tuple[float, float]]]:
+    """Consulta de MÉTRICAS (``rate(...)``, ``sum by``, ``quantile_over_time``) -> ``{etiquetas: [(t_seg, valor), ...]}``."""
+    now = time.time_ns()
+    d = backends._get(backends._base("loki") + "/loki/api/v1/query_range",
+                      {"query": logql, "start": now - minutes * 60 * 10**9, "end": now, "step": step_s}, timeout=30.0)
+    out: dict[str, list[tuple[float, float]]] = {}
+    for r in d.get("data", {}).get("result", []):
+        key = ",".join(f"{k}={v}" for k, v in sorted(r["metric"].items())) or "total"
+        out[key] = [(float(t), float(v)) for t, v in r["values"] if v not in ("NaN", "+Inf", "-Inf")]
+    return out
+
+
+def loki_stats(logql: str, minutes: int = 30) -> dict[str, Any]:
+    """Estadísticas de ejecución de una consulta de logs (``data.stats.summary``: bytes procesados, líneas, tiempo)."""
+    now = time.time_ns()
+    d = backends._get(backends._base("loki") + "/loki/api/v1/query_range",
+                      {"query": logql, "start": now - minutes * 60 * 10**9, "end": now + 60 * 10**9, "limit": 5000}, timeout=30.0)
+    s = d.get("data", {}).get("stats", {}).get("summary", {})
+    return {"bytes_processed": s.get("totalBytesProcessed"), "lines_processed": s.get("totalLinesProcessed"), "exec_time_s": s.get("execTime"),
+            "lines_returned": sum(len(r["values"]) for r in d.get("data", {}).get("result", []))}
