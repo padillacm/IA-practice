@@ -389,7 +389,7 @@ ax.set_ylabel("spans servidor unidos a la traza del agente (de 6)"); ax.set_titl
     md(observe("""
     - **0/6 frente a 6/6**: la corrección es una línea (`executor.submit(contextvars.copy_context().run, fn, *args)`). Sin ella cada llamada produce una traza de servidor que **nadie sabe a qué ticket pertenece**.
     - La causa **no** es el puente: dentro de él `asyncio.run_coroutine_threadsafe` sí copia las `contextvars` del hilo que llama (lo hemos verificado con la llamada directa de la sección 4). El fallo está en **quién llama al puente**.
-    - Detector estructural: spans servidor `tools/call` con `parent_span_id` presente pero con `trace_id` que **no** contiene ningún `invoke_agent` (o, si no hay ni padre, `nestedSetParent < 0` en TraceQL). La sección 11 lo convierte en un panel.
+    - Detector estructural: spans cliente `MCP send tools/call` que son **raíz** de su traza (`nestedSetParent < 0` en TraceQL): el SDK abrió su span sin ningún `execute_tool` del agente encima. La sección 11 lo convierte en un panel.
     """))
 
     # ------------------------------------------------------------------------------------------------------------- 7
@@ -602,7 +602,7 @@ print("nombre del span SERVIDOR:", repr(srv_sdk["name"]), "· kind:", srv_sdk["k
     |---|---|
     | p95 de la herramienta **cliente vs servidor** (la diferencia = overhead) | `histogram_quantile(0.95, sum by (le, gen_ai_tool_name) (rate(mcp_client_operation_duration_seconds_bucket[$__rate_interval])))` y la equivalente `mcp_server_...` |
     | Tasa de errores por herramienta y tipo | `sum by (gen_ai_tool_name, error_type) (rate(mcp_client_operation_duration_seconds_count{error_type!=""}[$__rate_interval]))` |
-    | **Trazas partidas** (servidor MCP sin padre) | TraceQL `{ resource.service.name = "supportops-orders-mcp" && span.mcp.method.name = "tools/call" && nestedSetParent < 0 }` |
+    | **Trazas partidas** (llamada MCP cuyo span cliente no cuelga del agente) | TraceQL `{ name =~ "MCP send tools/call.*" && nestedSetParent < 0 }` |
     | Trazas que cruzan agente → servidor | TraceQL `{ resource.service.name = "supportops-agent" } >> { resource.service.name = "supportops-orders-mcp" }` |
     | Llamadas MCP con error | TraceQL `{ resource.service.name = "supportops-orders-mcp" && status = error }` |
     """)
@@ -628,7 +628,7 @@ else:
     code('''
 if LIVE:
     qs = {"cruzan agente→servidor": '{ resource.service.name = "supportops-agent" } >> { resource.service.name = "supportops-orders-mcp" }',
-          "trazas partidas (servidor sin padre)": '{ resource.service.name = "supportops-orders-mcp" && span.mcp.method.name = "tools/call" && nestedSetParent < 0 }',
+          "trazas partidas (cliente MCP sin padre)": '{ name =~ "MCP send tools/call.*" && nestedSetParent < 0 }',
           "llamadas MCP con error": '{ resource.service.name = "supportops-orders-mcp" && status = error }'}
     t_end = time.time() + 70; got = {}
     while time.time() < t_end:
@@ -697,7 +697,7 @@ TEL.force_flush()
     md(details("3 · (Diagnóstico) El panel «llamadas MCP con error» está a cero, pero los agentes devuelven respuestas degradadas («no puedo consultar el transportista»). ¿Qué ocurre y qué miras?",
                "Los fallos son `isError` (503 del transportista): el span cliente del SDK no marca error y, si el panel solo cuenta spans CLIENT, no los ve. Mira el span **servidor** (`error.type=tool_error`, `status=ERROR`), el span `execute_tool` del agente (`error.type`) y la métrica `mcp.server.operation.duration{error_type!=\"\"}`."))
     md(details("4 · (Diagnóstico) En Tempo hay trazas del agente sin spans de servidor y, aparte, trazas de 3 spans (`tools/call`, `SELECT`…) sin padre cuyo número coincide con las llamadas fallidas del agente. ¿Causa y arreglo?",
-               "Contexto perdido entre el agente y el cliente MCP (llamadas desde hilos de un *executor* sin copiar `contextvars`, o un cliente no instrumentado): cada lado abre su traza. Arreglo: `executor.submit(contextvars.copy_context().run, ...)` o instrumentar/inyectar `traceparent` en `_meta` (parámetro `meta=` del cliente). Detector: TraceQL de servidor `tools/call` con `nestedSetParent < 0`."))
+               "Contexto perdido entre el agente y el cliente MCP (llamadas desde hilos de un *executor* sin copiar `contextvars`, o un cliente no instrumentado): cada lado abre su traza. Arreglo: `executor.submit(contextvars.copy_context().run, ...)` o instrumentar/inyectar `traceparent` en `_meta` (parámetro `meta=` del cliente). Detector: TraceQL de cliente MCP raíz `{ name =~ \"MCP send tools/call.*\" && nestedSetParent < 0 }`."))
     md(details("5 · (Transferencia) Diseñas un servidor MCP de «tickets de Jira» para un agente de ingeniería. ¿Qué herramientas auditarías, qué argumentos permitirías en la telemetría y qué política de contexto pondrías si lo expones a clientes de terceros?",
                "Auditar `create_issue`, `transition_issue`, `delete_comment` (destructivas/escritura) con evento de auditoría + clave de idempotencia; lista blanca de argumentos: `project_key`, `issue_type`, id del issue (nunca título/descripción: texto libre con PII y secretos); política de contexto `link` para terceros (no confiar en su `traceparent`) y `trust` solo para clientes internos autenticados; huella de herramientas y alerta ante cambio."))
     md(details("6 · (Recuerdo) ¿Por qué la spec recomienda propagar el contexto en `params._meta` y no solo con cabeceras HTTP?",
@@ -1210,8 +1210,8 @@ def build_dashboard() -> None:
     )
     d.row("Trazas")
     d.add(
-        traces_table("🚨 Trazas partidas (servidor MCP sin padre)", '{ resource.service.name = "supportops-orders-mcp" && span.mcp.method.name = "tools/call" && nestedSetParent < 0 }', w=12,
-                     description="Spans `tools/call` sin padre: el llamador no propagó el contexto. En un sistema sano esta tabla está vacía."),
+        traces_table("🚨 Trazas partidas (cliente MCP sin padre)", '{ name =~ "MCP send tools/call.*" && nestedSetParent < 0 }', w=12,
+                     description="Spans cliente `MCP send tools/call` raíz (sin span del agente como padre): el llamador perdió el contexto antes de llegar al cliente MCP; su traza arrastra al servidor. En un sistema sano esta tabla está vacía."),
         traces_table("Trazas que cruzan agente → servidor MCP", '{ resource.service.name = "supportops-agent" } >> { resource.service.name = "supportops-orders-mcp" }', w=12,
                      description="Una fila por traza que contiene spans de los dos servicios: la unión funciona."),
         traces_table("Llamadas MCP con error (servidor)", '{ resource.service.name = "supportops-orders-mcp" && status = error }', w=12,

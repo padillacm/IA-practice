@@ -502,7 +502,7 @@ print("¿alguna serie lleva customer.id como etiqueta?", any("supportops.custome
     | Coste por modelo / *feature* / tier | `sum by (gen_ai_request_model) (rate(supportops_llm_cost_USD_total[$__rate_interval]))` |
     | **Hit ratio de la caché** | `sum(rate(supportops_llm_tokens_total{gen_ai_token_type="cache_read"}[...])) / sum(rate(supportops_llm_tokens_total{gen_ai_token_type=~"input\\|cache_read\\|cache_write"}[...]))` |
     | Gasto desperdiciado | `sum(rate(supportops_ticket_cost_wasted_USD_total[...])) / sum(rate(supportops_llm_cost_USD_total[...]))` |
-    | Presupuesto y *burn rate* | `supportops_budget_burn_rate`, `supportops_budget_spent_USD` / `supportops_budget_limit_USD` |
+    | Presupuesto y *burn rate* | `supportops_budget_burn_rate_ratio`, `supportops_budget_spent_USD` / `supportops_budget_limit_USD` |
     | **Desvío** (la alerta) | coste por ticket (10 min) / el de hace 1 h, con umbral 1,6 |
     | Top clientes (Loki) | `topk(10, sum by (supportops_customer_id) (sum_over_time({service_name="supportops-agent"} \\|= "ticket costed" \\| unwrap supportops_finops_cost_usd [$__range])))` |
     | Tickets caros / bucles (Tempo) | `{ name =~ "invoke_agent.*" && span.supportops.finops.cost_usd > 0.002 }` · `{ span.gen_ai.operation.name = "execute_tool" } \\| count() >= 4` |
@@ -533,7 +533,11 @@ if LIVE:
     display(pd.DataFrame([{**x["metric"], "USD": float(x["value"][1])} for x in por_modelo]))
     cpt = prom("sum(rate(supportops_ticket_cost_USD_sum[10m])) / sum(rate(supportops_ticket_cost_USD_count[10m]))")
     print("coste por ticket (10 min):", [float(x["value"][1]) for x in cpt][:1])
-    top = backends.loki_query('topk(10, sum by (supportops_customer_id) (sum_over_time({service_name="supportops-agent"} |= "ticket costed" | unwrap supportops_finops_cost_usd [30m])))', minutes=30, limit=10) if False else []
+    try:
+        top = backends._get(backends._base("loki") + "/loki/api/v1/query", {"query": 'topk(5, sum by (supportops_customer_id) (sum_over_time({service_name="supportops-agent"} |= "ticket costed" | unwrap supportops_finops_cost_usd [30m])))'})
+        display(pd.DataFrame([{**x["metric"], "USD": float(x["value"][1])} for x in top["data"]["result"]]))
+    except Exception as e:
+        print("Loki no disponible:", type(e).__name__)
     t_ = backends.tempo_search('{ name =~ "invoke_agent.*" && span.supportops.finops.cost_usd > 0.002 }', minutes=30, limit=20).get("traces", [])
     print("trazas de tickets caros (> $0,002):", len(t_))
 ''')
@@ -679,7 +683,7 @@ def build_project() -> None:
 
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_13.replace("STACK = check_stack(\"core+metrics\")", "STACK = check_stack([])").replace("LIVE = not STACK.degraded", "LIVE = False") + '''
-from supportops.dashkit import Dashboard, lint, prom, loki, tempo, timeseries, stat, bargauge, traces_table, logs, thresholds
+from supportops.dashkit import Dashboard, lint, prom, loki, tempo, timeseries, stat, bargauge, traces_table, logs, table, thresholds
 from supportops.pricing import cost_usd
 ''')
 
@@ -843,12 +847,12 @@ except NotImplementedError as e:
     2. **Coste por modelo**: `sum by (gen_ai_request_model) (rate(supportops_llm_cost_USD_total[…]))`.
     3. **Hit ratio de la caché**: una expresión con `supportops_llm_tokens_total` y `cache_read`.
     4. **Gasto desperdiciado**: una expresión con `supportops_ticket_cost_wasted_USD_total`.
-    5. **Burn rate del presupuesto**: `supportops_budget_burn_rate`.
+    5. **Burn rate del presupuesto**: `supportops_budget_burn_rate_ratio`.
     6. **Desvío**: coste por ticket actual / el de **hace 1 h** (`offset 1h`).
     7. **Top clientes** (Loki): una consulta que contenga `ticket costed` y `supportops_finops_cost_usd`.
     8. **Tickets caros** (Tempo, TraceQL): una consulta que contenga `span.supportops.finops.cost_usd`.
     """)
-    md(hint(1, "Estructura (módulo 10): `d = Dashboard('finops', '13 · FinOps (proyecto)', tags=['curso', 'finops'])`; `d.add(stat('…', 'promql', description='…'), timeseries('…', [prom('promql', '{{leyenda}}')], description='…'))`; `d.add(traces_table('…', '{ … }', description='…'))`; `logs(...)` o `table([loki('…')], …)` para Loki; `return d.to_dict()`."))
+    md(hint(1, "Estructura (módulo 10): `d = Dashboard('finops', '13 · FinOps (proyecto)', tags=['curso', 'finops'])`; `d.add(stat('…', 'promql', description='…'), timeseries('…', [prom('promql', '{{leyenda}}')], description='…'))`; `d.add(traces_table('…', '{ … }', description='…'))`; `table('…', [loki('…', query_type='instant')], description='…')` para Loki; `return d.to_dict()`."))
     code('''
 def build_finops_dashboard() -> dict:
     # TODO 6
@@ -939,7 +943,7 @@ def run_rubric():
         has = lambda *pats: any(all(_re.search(p, e) for p in pats) for e in exprs)
         checks = {"lint limpio y uid": not lint(D) and D["uid"] == "finops" and len(D["panels"]) >= 8,
                   "p95 coste por ticket": has(r"histogram_quantile\\(0\\.95", r"supportops_ticket_cost_USD_bucket"), "coste por modelo": has(r"sum by \\(gen_ai_request_model\\)", r"supportops_llm_cost_USD_total"),
-                  "hit ratio": has(r"supportops_llm_tokens_total", r"cache_read"), "desperdicio": has(r"supportops_ticket_cost_wasted_USD_total"), "burn rate": has(r"supportops_budget_burn_rate"),
+                  "hit ratio": has(r"supportops_llm_tokens_total", r"cache_read"), "desperdicio": has(r"supportops_ticket_cost_wasted_USD_total"), "burn rate": has(r"supportops_budget_burn_rate_ratio"),
                   "desvío (offset 1h)": has(r"offset 1h", r"supportops_ticket_cost_USD"), "Loki por cliente": has(r"ticket costed", r"supportops_finops_cost_usd"),
                   "Tempo tickets caros": has(r"span\\.supportops\\.finops\\.cost_usd")}
         add("R6", "build_finops_dashboard: lint + 8 consultas", all(checks.values()), str({k: v for k, v in checks.items() if not v} or "todas OK"))
@@ -1053,9 +1057,9 @@ def build_finops_dashboard():
         timeseries("Coste por modelo", [prom("sum by (gen_ai_request_model) (rate(supportops_llm_cost_USD_total[$__rate_interval]))", "{{gen_ai_request_model}}")], unit="currencyUSD", stack=True, w=12, description="Dinero por segundo y modelo: un cambio de modelo se ve aquí primero."),
         stat("Hit ratio de la caché", 'sum(rate(supportops_llm_tokens_total{gen_ai_token_type="cache_read"}[10m])) / sum(rate(supportops_llm_tokens_total{gen_ai_token_type=~"input|cache_read|cache_write"}[10m]))', unit="percentunit", w=6, description="Fracción de la entrada servida desde caché. Una caída brusca = caché rota."),
         stat("Gasto desperdiciado", "sum(rate(supportops_ticket_cost_wasted_USD_total[10m])) / sum(rate(supportops_llm_cost_USD_total[10m]))", unit="percentunit", w=6, description="Fracción del gasto en tickets no resueltos, alucinados o en bucle."),
-        stat("Burn rate del presupuesto", "max(supportops_budget_burn_rate)", w=6, thr=thresholds((None, "green"), (1, "orange"), (2, "red")), description="1 = justo en presupuesto; 2 = agota el presupuesto a mitad de periodo."),
+        stat("Burn rate del presupuesto", "max(supportops_budget_burn_rate_ratio)", w=6, thr=thresholds((None, "green"), (1, "orange"), (2, "red")), description="1 = justo en presupuesto; 2 = agota el presupuesto a mitad de periodo."),
         timeseries("Desvío del coste por ticket (actual / hace 1 h)", [prom(f"({cur}) / ({off})", "ratio")], w=6, thr=thresholds((None, "green"), (1.6, "red")), description="Cruzar 1,6 durante 5 min dispara la alerta de desvío."),
-        logs("Top clientes por coste (Loki)", 'topk(10, sum by (supportops_customer_id) (sum_over_time({service_name="supportops-agent"} |= "ticket costed" | unwrap supportops_finops_cost_usd [$__range])))', w=12, description="Atribución por cliente desde los logs (alta cardinalidad fuera de Prometheus)."),
+        table("Top clientes por coste (Loki)", [loki('topk(10, sum by (supportops_customer_id) (sum_over_time({service_name="supportops-agent"} |= "ticket costed" | unwrap supportops_finops_cost_usd [$__range])))', "{{supportops_customer_id}}", query_type="instant")], w=12, description="Atribución por cliente desde los logs (alta cardinalidad fuera de Prometheus)."),
         traces_table("Tickets caros (Tempo)", '{ name =~ "invoke_agent.*" && span.supportops.finops.cost_usd > 0.002 }', w=12, description="Trazas de tickets con coste superior a 0,002 USD: abre la cascada para ver qué llamadas lo causaron."),
     )
     return d.to_dict()
@@ -1086,7 +1090,7 @@ def build_dashboard() -> None:
              unit="percentunit", w=4, h=4, thr=thresholds((None, "red"), (0.5, "orange"), (0.8, "green")), description="Fracción de la entrada servida desde la caché del proveedor. Una caída brusca tras un despliegue = caché rota."),
         stat("Gasto desperdiciado", f"sum(rate(supportops_ticket_cost_wasted_USD_total[10m])) / sum(rate({cost}[10m]))", unit="percentunit", w=4, h=4, thr=thresholds((None, "green"), (0.05, "orange"), (0.15, "red")),
              description="Fracción del gasto en tickets no resueltos, alucinados o en bucle."),
-        stat("Burn rate del presupuesto", "max(supportops_budget_burn_rate)", w=4, h=4, thr=thresholds((None, "green"), (1, "orange"), (2, "red")), decimals=2,
+        stat("Burn rate del presupuesto", "max(supportops_budget_burn_rate_ratio)", w=4, h=4, thr=thresholds((None, "green"), (1, "orange"), (2, "red")), decimals=2,
              description="Ritmo de gasto relativo al lineal permitido: 1 = justo en presupuesto; 2 = agota el presupuesto a mitad de periodo."),
         gauge("Presupuesto gastado", "max(supportops_budget_spent_USD) / max(supportops_budget_limit_USD)", w=4, h=4, description="Fracción del presupuesto del periodo ya gastada."),
     )
@@ -1109,8 +1113,8 @@ def build_dashboard() -> None:
     )
     d.row("Por cliente, tickets caros y bucles")
     d.add(
-        logs("Top clientes por coste (Loki)", 'topk(10, sum by (supportops_customer_id) (sum_over_time({service_name="supportops-agent"} |= "ticket costed" | unwrap supportops_finops_cost_usd [$__range])))', w=12, h=9,
-             description="Atribución por cliente desde los logs `ticket costed` (el `customer_id` es *structured metadata*, no etiqueta de métrica)."),
+        table("Top clientes por coste (Loki)", [loki('topk(10, sum by (supportops_customer_id) (sum_over_time({service_name="supportops-agent"} |= "ticket costed" | unwrap supportops_finops_cost_usd [$__range])))', "{{supportops_customer_id}}", query_type="instant")], w=12, h=9,
+              description="Atribución por cliente desde los logs `ticket costed` (el `customer_id` es *structured metadata*, no etiqueta de métrica). Consulta de métrica de Loki, instantánea."),
         traces_table("Tickets caros (> 0,002 USD)", '{ name =~ "invoke_agent.*" && span.supportops.finops.cost_usd > 0.002 }', w=12, h=9, description="Trazas de tickets caros: abre la cascada para ver qué llamadas (y qué modelo) lo causaron."),
         traces_table("Posibles bucles (≥ 4 herramientas en la traza)", '{ span.gen_ai.operation.name = "execute_tool" } | count() >= 4', w=24, h=7, description="Trazas con 4 o más ejecuciones de herramienta: candidatas a bucle (sin capturar argumentos solo se ve el recuento)."),
     )

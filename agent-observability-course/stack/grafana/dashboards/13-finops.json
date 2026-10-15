@@ -358,7 +358,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "max(supportops_budget_burn_rate)",
+          "expr": "max(supportops_budget_burn_rate_ratio)",
           "legendFormat": "__auto",
           "range": true,
           "instant": false,
@@ -1046,9 +1046,9 @@
       }
     },
     {
-      "type": "logs",
+      "type": "table",
       "title": "Top clientes por coste (Loki)",
-      "description": "Atribución por cliente desde los logs `ticket costed` (el `customer_id` es *structured metadata*, no etiqueta de métrica).",
+      "description": "Atribución por cliente desde los logs `ticket costed` (el `customer_id` es *structured metadata*, no etiqueta de métrica). Consulta de métrica de Loki, instantánea.",
       "gridPos": {
         "x": 0,
         "y": 35,
@@ -1063,25 +1063,30 @@
           },
           "editorMode": "code",
           "expr": "topk(10, sum by (supportops_customer_id) (sum_over_time({service_name=\"supportops-agent\"} |= \"ticket costed\" | unwrap supportops_finops_cost_usd [$__range])))",
-          "legendFormat": "",
-          "queryType": "range",
+          "legendFormat": "{{supportops_customer_id}}",
+          "queryType": "instant",
           "maxLines": 200,
           "refId": "A"
         }
       ],
       "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending",
-        "enableInfiniteScrolling": false
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
       },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
         "overrides": []
       },
       "datasource": {
