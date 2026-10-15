@@ -1,0 +1,39 @@
+# Tempo 3.x en modo monolítico (-target=all, por defecto). Sin Kafka, sin object storage: disco local.
+# Basado en el ejemplo oficial grafana/intro-to-mltp (Tempo 3.0) y verificado con `tempo -config.verify`.
+# Tempo 3.0 eliminó los bloques `ingester` y `compactor`: ahora son `live_store` y `backend_scheduler`.
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200            # API HTTP (consultas, /ready)
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317    # solo dentro de la red de Compose (el host usa el puerto del Collector)
+
+live_store:
+  max_trace_idle: 10s               # un trace sin spans nuevos durante 10 s se considera completo
+  max_block_duration: 5m
+  max_block_bytes: 1_000_000
+
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        compaction_window: 1h
+        max_block_bytes: 100_000_000
+        block_retention: 24h        # laboratorio: 24 h de retención
+        compacted_block_retention: 10m
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+usage_report:
+  reporting_enabled: false

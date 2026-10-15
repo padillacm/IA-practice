@@ -1,0 +1,127 @@
+# Stack de observabilidad del curso. Ejecuta SIEMPRE desde esta carpeta (stack/):
+#   docker compose --profile core up -d                      # Collector + Tempo + Loki + Grafana  (~1,2 GB RAM)
+#   docker compose --profile core --profile metrics up -d    # + Prometheus                        (~+0,3 GB)
+#   docker compose --profile profiling up -d                 # + Pyroscope (módulo 17)             (~+0,3 GB)
+#   docker compose --profile all up -d                       # todo
+#   docker compose down            # para (conserva datos)      |  docker compose down -v   # borra volúmenes
+# Cada servicio pertenece a un perfil: sin --profile no arranca nada (a propósito).
+name: agentobs
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:${OTELCOL_VERSION:-0.162.0}
+    profiles: ["core", "all"]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"     # OTLP gRPC  (SDK de las apps -> localhost:4317)
+      - "4318:4318"     # OTLP HTTP  (SDK de las apps -> http://localhost:4318)
+      - "13133:13133"   # health_check
+      - "8888:8888"     # métricas internas del Collector
+      - "8889:8889"     # métricas de las apps (exporter prometheus)
+    depends_on:
+      - tempo
+      - loki
+    restart: unless-stopped
+    logging: *default-logging
+
+  tempo:
+    image: grafana/tempo:${TEMPO_VERSION:-3.1.0}
+    profiles: ["core", "all"]
+    command: ["-config.file=/etc/tempo/${TEMPO_CONFIG:-tempo.yaml}"]
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - ./tempo/tempo-metrics.yaml:/etc/tempo/tempo-metrics.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"     # API HTTP de Tempo (/ready, /api/search, /api/traces/<id>)
+    restart: unless-stopped
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:${LOKI_VERSION:-3.7.8}
+    profiles: ["core", "all"]
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"     # API HTTP de Loki (/ready, /loki/api/v1/query_range, /otlp)
+    restart: unless-stopped
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-13.2.4}
+    profiles: ["core", "all"]
+    environment:
+      # Laboratorio local: usuario admin / contraseña admin (NUNCA así en producción).
+      # Las notebooks usan basic auth admin:admin para la API HTTP de Grafana.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/00-stack-overview.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"     # UI de Grafana -> http://localhost:3000
+    depends_on:
+      - tempo
+      - loki
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v3.15.0}
+    profiles: ["metrics", "all"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=2d
+      - --web.enable-remote-write-receiver     # Tempo (span metrics) escribe aquí
+      - --web.enable-otlp-receiver             # opcional: apps que envían OTLP directo a Prometheus
+      - --enable-feature=exemplar-storage      # guarda exemplars (salto métrica -> traza)
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"     # UI/API de Prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    logging: *default-logging
+
+  pyroscope:
+    image: grafana/pyroscope:${PYROSCOPE_VERSION:-2.1.2}
+    profiles: ["profiling", "all"]
+    ports:
+      - "4040:4040"     # UI/API de Pyroscope (el módulo 17 envía perfiles aquí)
+    volumes:
+      - pyroscope-data:/data
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  tempo-data:
+  loki-data:
+  grafana-data:
+  prometheus-data:
+  pyroscope-data:

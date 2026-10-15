@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supportops"
+version = "0.1.0"
+description = "SupportOps: agente de soporte simulado, simulador de tráfico e inyector de fallos para el curso de observabilidad de agentes."
+readme = "supportops/README.md"
+requires-python = ">=3.10"
+dependencies = []            # el núcleo usa solo la librería estándar
+
+[project.optional-dependencies]
+viz = ["matplotlib>=3.7", "numpy>=1.24", "pandas>=2.0"]
+nb = ["matplotlib>=3.7", "numpy>=1.24", "pandas>=2.0", "ipykernel", "nbformat", "nbclient"]
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.50"]
+otel = ["opentelemetry-sdk>=1.30", "opentelemetry-exporter-otlp-proto-http>=1.30"]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["supportops", "supportops.llm"]
+
+[tool.setuptools.package-data]
+supportops = ["data/*.jsonl", "data/*.json", "README.md"]
