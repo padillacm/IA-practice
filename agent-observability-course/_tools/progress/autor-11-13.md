@@ -2,7 +2,7 @@
 Agente: Autor A5 · Módulos: 11–13
 - [x] 11_multiagente (lección 30 código/60 md, proyecto 12 código/20 md, README, supportops/multiagent.py, tests 25, build_11.py, dashboard 11-multiagente.json generado) — FALTA prueba con stack vivo (lock /tmp/obs-stack.lock ocupado por otro agente): dashcheck de 11 y 12
 - [x] 12_mcp_tools (lección 25 código/50 md, proyecto 13 código/18 md, README, supportops/mcp_orders.py, tests 14, build_12.py, dashboard 12-mcp-tools.json) — FALTA prueba con stack vivo (sección 11 de la lección y dashcheck)
-- [ ] 13_costes_finops
+- [x] 13_costes_finops (lección 24 código/41 md, proyecto 12 código/18 md, README, supportops/finops.py, tests 9, build_13.py, dashboard 13-finops.json) — FALTA prueba con stack vivo (§9 lección: nombres de métricas Prometheus `supportops_*_USD_*`, LogQL unwrap, TraceQL count(), alerta de Grafana) y dashcheck de 11/12/13
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar

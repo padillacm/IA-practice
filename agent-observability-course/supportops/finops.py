@@ -334,6 +334,7 @@ class FinOpsInstrumentor(Instrumentor):
                     rc.cost[k] += v
             rc.models[r.model] = rc.models.get(r.model, 0) + 1
             ctx.state["finops_last_cost"] = c.total
+            ctx.state["finops_calls"] = rc.steps
             span = otel_trace.get_current_span()
             if span.is_recording():
                 span.set_attributes({"gen_ai.usage.cache_read.input_tokens": read, "gen_ai.usage.cache_write.input_tokens": write,
@@ -410,13 +411,26 @@ class BudgetPool:
     def remaining_usd(self) -> float:
         return self.limit_usd - self.spent_usd
 
+    def register_metrics(self, meter: Any, elapsed_fn: Callable[[], float], name: str = "monthly") -> None:
+        """Publica el presupuesto como gauges asíncronos: ``supportops.budget.spent``, ``.limit`` (USD) y ``.burn_rate`` (adimensional)."""
+        from opentelemetry.metrics import Observation
+        attrs = {"supportops.budget.name": name}
+        meter.create_observable_gauge("supportops.budget.spent", callbacks=[lambda o: [Observation(self.spent_usd, attrs)]], unit="USD",
+                                      description="Gasto acumulado del presupuesto")
+        meter.create_observable_gauge("supportops.budget.limit", callbacks=[lambda o: [Observation(self.limit_usd, attrs)]], unit="USD",
+                                      description="Límite del presupuesto del periodo")
+        meter.create_observable_gauge("supportops.budget.burn_rate", callbacks=[lambda o: [Observation(self.burn_rate(elapsed_fn()), attrs)]], unit="1",
+                                      description="Ritmo de gasto relativo al ritmo lineal permitido (1 = justo en presupuesto)")
+
 
 class BudgetGuard(Instrumentor):
     """Tope de gasto por ticket (y, opcional, por cliente y día). Rechaza la SIGUIENTE llamada a LLM cuando se ha alcanzado el tope.
 
     Lanza ``LLMError(error_type="budget_exceeded", status=429, retryable=False)`` antes de la llamada: el agente la trata como un fallo del
     proveedor (``status="error"``), el span ``chat`` queda ``ERROR`` con ``error.type=budget_exceeded`` y no se gasta nada más.
-    Compónlo DESPUÉS de ``FinOpsInstrumentor`` (usa su coste acumulado) y del OTel. Los premium pueden tener más tope: ``tier_multiplier``.
+    Orden en el Composite: ``CompositeInstrumentor(OTelInstrumentor(...), BudgetGuard(...), FinOpsInstrumentor(...))``: el guard rechaza ANTES de la llamada
+    (con el span OTel ya abierto, para que quede registrado) y, al terminar la llamada, FinOps (más interno) ya ha calculado su coste real (con caché).
+    Si FinOps no está o va fuera, usa una cota superior sin caché. Los premium pueden tener más tope: ``tier_multiplier``.
     El tope se evalúa ENTRE llamadas: una llamada ya iniciada no se interrumpe (puede pasarse del tope por una llamada).
     """
 
@@ -457,9 +471,11 @@ class BudgetGuard(Instrumentor):
             yield
             r = info.response
             if r is not None:
-                rc = ctx.state.get("finops")
-                usd = ctx.state.get("finops_last_cost")
-                if usd is None:                                           # sin FinOpsInstrumentor: cota superior sin caché
+                n_done = ctx.state.get("budget_calls", 0) + 1
+                ctx.state["budget_calls"] = n_done
+                # coste real de ESTA llamada si FinOpsInstrumentor ya la contó (debe ir DENTRO del guard en el Composite); si no, cota superior sin caché
+                usd = ctx.state.get("finops_last_cost") if ctx.state.get("finops_calls") == n_done else None
+                if usd is None:
                     usd = self.prices.cost(r.model, Usage4(r.usage.input_tokens, r.usage.output_tokens)).total
                 self._run_spend[t.ticket_id] = spent + usd
                 self.customer_spend[(t.customer_id, day)] += usd
@@ -489,8 +505,13 @@ class DowngradeLLM:
 
 
 class LoopGuard(Instrumentor):
-    """Corta los bucles de herramientas: la llamada idéntica (mismo nombre y argumentos) nº ``max_repeats + 1`` se rechaza con
-    ``ToolError(error_type="loop_detected")`` ANTES de ejecutarse. El agente lo ve como error de herramienta y (con el mock) termina."""
+    """Corta los bucles de herramientas.
+
+    La llamada idéntica (mismo nombre y argumentos) nº ``max_repeats + 1`` se rechaza ANTES de ejecutarse con
+    ``ToolError(error_type="loop_detected")`` y se marca la ejecución; la SIGUIENTE llamada a LLM se rechaza con
+    ``LLMError(error_type="loop_detected")`` (no retryable). Sin esto último, un modelo «obsesionado» seguiría pidiendo la misma herramienta y
+    gastando tokens hasta ``max_steps``: cortar solo la herramienta ahorra latencia de herramienta, no tokens.
+    """
 
     def __init__(self, max_repeats: int = 2):
         self.max_repeats = max_repeats
@@ -506,7 +527,18 @@ class LoopGuard(Instrumentor):
             seen[key] = seen.get(key, 0) + 1
             if seen[key] > self.max_repeats:
                 self.tripped.append(ctx.ticket.ticket_id)
+                ctx.state["loop_tripped"] = True
                 raise ToolError(f"llamada repetida {seen[key]} veces: posible bucle", "loop_detected", latency_s=0.0)
+            yield
+        return cm()
+
+    def llm_call(self, ctx: RunContext, info: LLMCallInfo):                  # type: ignore[override]
+        from contextlib import contextmanager
+
+        @contextmanager
+        def cm() -> Iterator[None]:
+            if ctx.state.get("loop_tripped"):
+                raise LLMError("bucle de herramientas detectado: ejecución abortada", status=499, error_type="loop_detected", retryable=False, latency_s=0.0)
             yield
         return cm()
 
