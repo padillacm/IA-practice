@@ -889,7 +889,245 @@ def build_dashboard(check: bool = True) -> None:
 
 
 def build_project() -> None:
-    pass
+    nb, out = nb_for(MOD, "07_proyecto_tempo_traceql.ipynb", "Proyecto 07 · Preguntas de diagnóstico con TraceQL")
+    md, code = nb.md, nb.code
+    H = {"Q1": [16, "72189d8ad8"], "Q2": [3, "af27feed05"], "Q3": [4, "8320d750b3"], "Q4": [8, "1703f40404"], "Q5": [2, "0a1b65e94c"], "Q6": [20, "39a83d88f9"],
+         "Q7": [3, "af27feed05"], "Q8": [9, "fc2e3c5db5"], "P1": [13, "4a75247585"], "P2": [53, "b618fe8df7"], "P3": [120, "2caa8746a4"]}
+    md("""
+    BADGE_PLACEHOLDER
+
+    # Proyecto 07 · Diez preguntas de diagnóstico: escribe la TraceQL que las responde
+
+    | | |
+    |---|---|
+    | **Nivel** | 🟡 Intermedio |
+    | **Duración estimada** | ≈ 1 h 45 min |
+    | **Servicios de Compose** | Opcionales (`core` + `metrics`, con `TEMPO_CONFIG=tempo-metrics.yaml`) para la verificación contra Tempo; la corrección usa el mini motor y funciona **sin Docker** (Colab) |
+    | **RAM aproximada** | < 500 MB (+ ≈ 0,5 GB si usas el stack) |
+    | **Prerrequisitos** | Lección `07_tempo_traceql` y proyecto 06 (qué atributos lleva cada span) |
+    | **Conexión** | Aplica el manual de diagnóstico de la lección a un lote nuevo de la misma historia; las consultas que escribas son las que usarás como runbook en el módulo 16 y como paneles en el 10 |
+
+    ## Contexto de negocio
+
+    Eres ingeniero/a de plataforma en **SupportOps**. Soporte te escala ocho preguntas sobre las últimas horas del agente («¿qué clientes premium se quedaron sin respuesta por el gateway?», «¿qué tickets entraron en bucle?»...). Tienes el lote de trazas (120 tickets, 4 servicios) y debes **responder cada pregunta con una consulta TraceQL** (no con pandas). Además, para el *dashboard*, escribes dos consultas de **TraceQL metrics** y una de **span metrics**.
+
+    ## Datos
+
+    El lote pregrabado `recorded/batch_seed42.json.gz` (1 077 spans, `supportops-agent`, `llm-gateway`, `orders-api`, `kb-search`; semilla 42) y su verdad de campo en `RES`. Los atributos relevantes: `span.gen_ai.operation.name` (`invoke_agent|chat|execute_tool`), `span.gen_ai.tool.name`, `span.supportops.{ticket.id,status,attempt,customer.tier}`, `span.http.response.status_code`, `span.db.system`, `resource.service.name`. Los spans correctos están en `UNSET` (no `OK`).
+    La corrección usa `traceql_mini` (el mini motor validado contra Tempo 3.1 en la lección: 18/18 consultas idénticas). Si tienes el stack, una celda final **verifica tus consultas contra Tempo real**.
+
+    ## Entregables y criterios de evaluación (rúbrica)
+
+    | # | Entregable | Criterio medido | Umbral (calibrado con la solución, lote pregrabado) |
+    |---|---|---|---|
+    | R1 | `QUERIES` Q1-Q8 | El conjunto de tickets que devuelve cada consulta coincide con el de la solución (nº y huella) | ≥ 7 de 8 exactas |
+    | R2 | Buenas prácticas | Ninguna consulta usa atributos sin ámbito (`.attr`), `||` donde basta un selector, ni `status = ok` | 0 infracciones |
+    | R3 | `FIXES` | Corrige 3 consultas con trampa (P1 `&&` dentro de llaves, P2 `status = ok`, P3 regex anclada): cada una devuelve lo que pide el enunciado | 3/3 |
+    | R4 | `incident_timeline` | Recuento de trazas por intervalo de 60 s de Q1: `[0, 0, 3, 10, 2, 0, 0, 1, 0, 0]` y Q3 | exacto |
+    | R5 | `METRICS` | 2 consultas TraceQL metrics (tasa de error por servicio con aritmética; p95 de `execute_tool` por herramienta) y 1 PromQL de span metrics (p95 por servicio) con la sintaxis esperada | 3/3 |
+    | R6 | Verificación en vivo (opcional) | Con Tempo: tus Q1-Q8 devuelven los mismos tickets que en el mini motor | 8/8 (se omite sin stack) |
+
+    > 📏 Calibración: los umbrales son lo que mide la solución sobre el lote pregrabado (semilla 42, tiempo simulado, sin dependencia de tu máquina). La huella de cada conjunto de tickets es `sha1(",".join(tickets ordenados))[:10]`.
+    """.replace("BADGE_PLACEHOLDER", nb.badge()))
+    code(boot("viz,otel"))
+    code(IMPORTS + SETUP)
+    code(LOAD.replace('CAP_FILE = REC / "capture_live.json.gz"\nCAP = json.load(gzip.open(CAP_FILE, "rt", encoding="utf-8")) if CAP_FILE.exists() else {}   # salidas de Tempo/Prometheus capturadas en vivo\nCAPTURED = {}\n', "").split("def cached")[0] + 'print(f"lote: {len(SPANS)} spans, {len({s[\'trace_id\'] for s in SPANS})} trazas, {RES.shape[0]} tickets")\n')
+    md("""
+    ## Paso 0 · Cómo se corrige y atributos disponibles
+    `answer(query)` devuelve los tickets de las trazas que cumplen la consulta (con el mini motor); `fingerprint(tickets)` la huella de la rúbrica. Explora el lote antes de escribir nada.
+    """)
+    code('''
+import hashlib
+def answer(query, spans=SPANS):
+    return tq.ticket_ids(spans, tq.search(spans, query))
+def fingerprint(tickets):
+    return [len(tickets), hashlib.sha1(",".join(sorted(tickets)).encode()).hexdigest()[:10]]
+print("atributos de span más frecuentes:", collections.Counter(k for s in SPANS for k in s["attributes"]).most_common(14))
+print("servicios:", collections.Counter(s["resource"]["service.name"] for s in SPANS))
+answer('{ status = error }')[:5]
+''')
+    md("""
+    ## Paso 1 · Las ocho preguntas
+    **TODO 1.** Rellena `QUERIES` (cada valor es una consulta TraceQL **completa**; se evalúa por traza y se compara el conjunto de tickets):
+
+    | # | Pregunta |
+    |---|---|
+    | Q1 | ¿Qué tickets tuvieron una llamada al **gateway LLM** con HTTP **5xx**? (span del servicio `llm-gateway`) |
+    | Q2 | ¿Qué tickets recibieron un **429** y se **recuperaron con el reintento** (un `chat` con `attempt = 1` que no falló)? |
+    | Q3 | ¿Qué tickets entraron en un **bucle de herramientas** (más de 3 spans `execute_tool`)? |
+    | Q4 | ¿En qué tickets falló **`orders-api`** (span en error) y el agente terminó **`degraded`** (`supportops.status`)? |
+    | Q5 | ¿Qué trazas **de más de 4 s** (raíz del agente) contienen una herramienta que tardó **más de 500 ms**? |
+    | Q6 | ¿Qué tickets tienen una herramienta con una **consulta SQL de más de 100 ms** (PostgreSQL) como **descendiente**? |
+    | Q7 | ¿En qué tickets un `chat` **falló** y tiene como **hermano** un `execute_tool` (mismo padre)? |
+    | Q8 | ¿Qué tickets de clientes **premium** (`supportops.customer.tier`) tuvieron un span **en error** del servicio `llm-gateway`? |
+    """)
+    md(hint(1, "Q1: ámbito de recurso + atributo del span en el **mismo** selector (`&&` dentro de las llaves). Q2/Q4/Q5/Q8: son condiciones sobre **spans distintos** de la misma traza → dos selectores unidos con `&&` entre spansets."))
+    md(hint(2, "Q3: agregado `| count() > 3` sobre `{ span.gen_ai.operation.name = \"execute_tool\" }`. Q6: `{ A } >> { B }` (descendiente: devuelve la derecha). Q7: `{ A } ~ { B }` (hermano). `status != error` incluye `UNSET`."))
+    code('''
+QUERIES: dict[str, str] = {
+    # "Q1": '{ ... }',
+}
+def check_queries():
+    for k, q in QUERIES.items():
+        try:
+            t = answer(q); print(f"{k}: {len(t)} tickets · {fingerprint(t)} · {q}")
+        except Exception as e:
+            print(f"{k}: ERROR {type(e).__name__}: {e}")
+check_queries()
+''')
+    md("""
+    ## Paso 2 · Tres trampas a corregir
+    Cada consulta de `BROKEN` no responde a su enunciado. **TODO 2.** Escribe en `FIXES` la versión correcta de cada una.
+    - **P1** «tickets con una SELECT de PostgreSQL **y** algún error en la traza» (devuelve 0).
+    - **P2** «tickets con spans de `orders-api` que **no fallaron**» (casi no devuelve nada).
+    - **P3** «todos los tickets con algún `chat`» (no devuelve nada).
+    """)
+    code('''
+BROKEN = {"P1": '{ span.db.system = "postgresql" && status = error }',
+          "P2": '{ status = ok && resource.service.name = "orders-api" }',
+          "P3": '{ name =~ "chat" }'}
+FIXES: dict[str, str] = {
+    # "P1": '{ ... }',
+}
+for k, q in BROKEN.items():
+    print(f"{k} (rota): {len(answer(q))} tickets · {q}")
+for k, q in FIXES.items():
+    print(f"{k} (arreglada): {len(answer(q))} tickets · {q}")
+''')
+    md("""
+    ## Paso 3 · La forma temporal de un incidente
+    La lección superpuso consultas y ventanas de incidente. **TODO 3.** Implementa `incident_timeline(spans, query, bin_s=60, n_bins=10)`: lista de **n_bins** enteros con el nº de **trazas** que cumplen `query`, agrupadas por el instante de inicio de la traza (`TraceHit.start_ns`) en intervalos de `bin_s` segundos desde `t0` = inicio del span más antiguo del lote. Una traza que empiece después del último intervalo se cuenta en el último.
+    """)
+    md(hint(1, "`hits = tq.search(spans, query)`; `t0 = min(s['start_unix_nano'] for s in spans)`; el índice es `int((h.start_ns - t0) / (bin_s * 1e9))` limitado a `n_bins - 1`."))
+    code('''
+def incident_timeline(spans, query, bin_s=60, n_bins=10):
+    # TODO 3
+    raise NotImplementedError("TODO 3")
+
+try:
+    q1 = QUERIES.get("Q1", '{ resource.service.name = "llm-gateway" && span.http.response.status_code >= 500 }')
+    TL = incident_timeline(SPANS, q1); print(TL)
+    fig, ax = plt.subplots(figsize=(8, 3)); ax.bar(range(len(TL)), TL, color=viz.PALETTE["traces"]); ax.set_xlabel("minuto"); ax.set_ylabel("trazas"); ax.set_title("Q1 en el tiempo"); plt.show()
+except NotImplementedError as e:
+    TL = None; print("Pendiente:", e)
+''')
+    md("""
+    ## Paso 4 · Consultas para el dashboard
+    **TODO 4.** Escribe en `METRICS`:
+    - `"error_rate"`: TraceQL metrics, **tasa de spans con error por servicio** como razón de dos `rate()` agrupados `by (resource.service.name)` (aritmética, Tempo 3.1).
+    - `"tool_p95"`: TraceQL metrics, **p95 de la duración de los spans `execute_tool`** por herramienta (`span.gen_ai.tool.name`) con `quantile_over_time`.
+    - `"promql_p95"`: PromQL de **span metrics**: p95 de latencia por `service` con `histogram_quantile` sobre `traces_spanmetrics_latency_bucket`.
+    """)
+    code('''
+METRICS: dict[str, str] = {
+    # "error_rate": '...',
+}
+for k, q in METRICS.items(): print(k, "→", q)
+''')
+    md("""
+    ## Autocomprobación (rúbrica)
+    """)
+    code(f'''
+EXPECTED = {H!r}
+BAD_STYLE = [re.compile(r"[{{&|(]\\s*\\.[a-zA-Z]"), re.compile(r"status\\s*=\\s*ok"), re.compile(r"\\}}\\s*\\|\\|\\s*\\{{")]
+def check(name, fn):
+    try:
+        ok, detail = fn()
+    except NotImplementedError:
+        ok, detail = False, "pendiente"
+    except Exception as e:
+        ok, detail = False, f"{{type(e).__name__}}: {{e}}"
+    print(("✅" if ok else "❌"), name, "·", detail); return ok
+def r1():
+    good = [k for k in [f"Q{{i}}" for i in range(1, 9)] if k in QUERIES and fingerprint(answer(QUERIES[k])) == EXPECTED[k]]
+    return len(good) >= 7, f"{{len(good)}}/8 exactas: {{good}}"
+def r2():
+    bad = [(k, p.pattern) for k, q in QUERIES.items() for p in BAD_STYLE if p.search(q)]
+    return bool(QUERIES) and not bad, f"{{len(bad)}} infracciones {{bad[:2]}}"
+def r3():
+    good = [k for k in ("P1", "P2", "P3") if k in FIXES and fingerprint(answer(FIXES[k])) == EXPECTED[k]]
+    return len(good) == 3, f"{{len(good)}}/3 corregidas: {{good}}"
+def r4():
+    ok1 = incident_timeline(SPANS, '{{ resource.service.name = "llm-gateway" && span.http.response.status_code >= 500 }}') == [0, 0, 3, 10, 2, 0, 0, 1, 0, 0]
+    ok2 = sum(incident_timeline(SPANS, '{{ span.gen_ai.operation.name = "execute_tool" }} | count() > 3')) == 4
+    return ok1 and ok2, f"Q1 {{ok1}} · Q3 {{ok2}}"
+def r5():
+    m = METRICS; a = m.get("error_rate", ""); b = m.get("tool_p95", ""); c = m.get("promql_p95", "")
+    ok_a = a.count("rate()") >= 2 and "by (resource.service.name)" in a and "status = error" in a and "/" in a
+    ok_b = "quantile_over_time" in b and "execute_tool" in b and ".95" in b and "span.gen_ai.tool.name" in b
+    ok_c = "histogram_quantile(0.95" in c and "traces_spanmetrics_latency_bucket" in c and "by (le, service)" in c
+    return ok_a and ok_b and ok_c, f"error_rate {{ok_a}} · tool_p95 {{ok_b}} · promql_p95 {{ok_c}}"
+def r6():
+    if not HAVE_TEMPO:
+        return True, "omitido (sin Tempo)"
+    return live_check()
+def live_check():
+    b = run_batch(120, 42, live=True); inv = {{v: k for k, v in b.trace_ids.items()}}; time.sleep(25)
+    same = 0
+    for k, q in QUERIES.items():
+        r = backends.tempo_search(q, minutes=30, limit=5000)
+        tk = sorted(inv[t["traceID"].zfill(32)] for t in r.get("traces", []) if t["traceID"].zfill(32) in inv)
+        same += tk == answer(q, b.spans)
+    return same == len(QUERIES) == 8, f"{{same}}/8 consultas devuelven los mismos tickets en Tempo y en el mini motor"
+results = [check("R1 Q1-Q8", r1), check("R2 buenas prácticas", r2), check("R3 FIXES", r3), check("R4 incident_timeline", r4), check("R5 METRICS", r5), check("R6 verificación en vivo", r6)]
+print(f"\\n{{sum(results)}}/6 entregables correctos")
+''')
+    md("""
+    ---
+    # ⛔ SPOILER — intenta resolverlo primero
+
+    Solución de referencia completa (con ella se calibró la rúbrica). Si te atascas, abre antes las pistas 🪜.
+    """)
+    code('''
+QUERIES = {
+    "Q1": '{ resource.service.name = "llm-gateway" && span.http.response.status_code >= 500 }',
+    "Q2": '{ span.http.response.status_code = 429 } && { span.supportops.attempt = 1 && status != error }',
+    "Q3": '{ span.gen_ai.operation.name = "execute_tool" } | count() > 3',
+    "Q4": '{ resource.service.name = "orders-api" && status = error } && { span.supportops.status = "degraded" }',
+    "Q5": '{ trace:rootService = "supportops-agent" && trace:duration > 4s } && { span.gen_ai.operation.name = "execute_tool" && duration > 500ms }',
+    "Q6": '{ name =~ "execute_tool.*" } >> { span.db.system = "postgresql" && duration > 100ms }',
+    "Q7": '{ status = error && span.gen_ai.operation.name = "chat" } ~ { span.gen_ai.operation.name = "execute_tool" }',
+    "Q8": '{ span.supportops.customer.tier = "premium" } && { resource.service.name = "llm-gateway" && status = error }',
+}
+FIXES = {
+    "P1": '{ span.db.system = "postgresql" } && { status = error }',     # dos spansets de la misma traza, no un solo span con ambas cosas
+    "P2": '{ status != error && resource.service.name = "orders-api" }',  # los spans correctos son UNSET, no OK
+    "P3": '{ name =~ "chat.*" }',                                          # las regex están ancladas
+}
+def incident_timeline(spans, query, bin_s=60, n_bins=10):
+    t0 = min(s["start_unix_nano"] for s in spans); out = [0] * n_bins
+    for h in tq.search(spans, query):
+        out[min(n_bins - 1, int((h.start_ns - t0) / (bin_s * 1e9)))] += 1
+    return out
+METRICS = {
+    "error_rate": '({ status = error } | rate() by (resource.service.name)) / ({ } | rate() by (resource.service.name))',
+    "tool_p95": '{ span.gen_ai.operation.name = "execute_tool" } | quantile_over_time(duration, .95) by (span.gen_ai.tool.name)',
+    "promql_p95": 'histogram_quantile(0.95, sum by (le, service) (rate(traces_spanmetrics_latency_bucket[5m])))',
+}
+check_queries(); print(incident_timeline(SPANS, QUERIES["Q1"]))
+''')
+    code('''
+results = [check("R1 Q1-Q8", r1), check("R2 buenas prácticas", r2), check("R3 FIXES", r3), check("R4 incident_timeline", r4), check("R5 METRICS", r5), check("R6 verificación en vivo", r6)]
+print(f"\\n{sum(results)}/6 entregables correctos")
+''')
+    md("""
+    ## Retos extra (nivel experto)
+
+    1. **Estructurales avanzados (Tempo real):** reescribe Q6 con el operador de unión `&>>` para obtener herramienta **y** SELECT en un solo resultado y compara los dos resultados con `select(span.gen_ai.tool.name, duration)`.
+    2. **Más barato:** para Q5 mide `inspectedBytes` de tres formulaciones equivalentes (con `trace:duration`, con `duration`, con agregado) usando la sección 4.2 de la lección y razona cuál usarías en un dashboard.
+    3. **Cardinalidad:** estima con el generador de tráfico cuántas series crearía añadir `gen_ai.tool.name` como `dimension` del span-metrics y cuántas con `supportops.ticket.id`. ¿A partir de qué volumen de tickets/día te limitaría el `max_active_series`?
+    4. **Extrapolación:** simula un muestreo de cabeza del 10 % (descarta el 90 % de las trazas del lote) y calcula cuánto subestima `rate()` frente al lote completo; relaciónalo con `with(extrapolate=true)` (Tempo 3.1, experimental).
+    5. **Ampliar el mini motor:** añade el operador `!>>` (no descendiente) y valida contra Tempo en la batería de la lección; documenta los falsos positivos que la documentación advierte.
+    """)
+    md("""
+    ## Reflexión
+
+    - De tus ocho consultas, ¿cuáles migrarías a **span metrics + alertas** (módulo 16) y cuáles dejarías como **TraceQL de investigación**? ¿Por qué (coste por refresco, retención, cardinalidad)?
+    - El punto ciego de la «hora del span»: ¿qué pasaría con tus consultas si el Collector reenviara spans con 10 minutos de retraso tras una caída? ¿Cómo lo detectarías?
+    - ¿Qué atributos faltan en SupportOps para responder preguntas de **costes por cliente** (módulo 13) con TraceQL, sin tocar el generador de métricas?
+    - Conexión con SupportOps: estas consultas son el *runbook* del incidente «proveedor LLM degradado» que escribirás en el módulo 16.
+    """)
+    nb.save(out)
 
 
 if __name__ == "__main__":
