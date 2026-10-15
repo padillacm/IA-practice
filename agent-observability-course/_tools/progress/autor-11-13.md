@@ -1,9 +1,14 @@
 # Progreso: autor-11-13
 Agente: Autor A5 · Módulos: 11–13
-- [ ] 11_multiagente
+- [x] 11_multiagente (lección 30 código/60 md, proyecto 12 código/20 md, README, supportops/multiagent.py, tests 25, build_11.py) — falta: dashboard 11-multiagente.json + prueba con stack vivo (lock /tmp/obs-stack.lock)
 - [ ] 12_mcp_tools
 - [ ] 13_costes_finops
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar
-- (qué archivo/celda, decisiones tomadas, comandos largos lanzados y su resultado)
+- Entorno: el scratchpad es COMPARTIDO con otros agentes: usar `.../scratchpad/a5/` (runnb.py y dump.py propios, kernel python3). Para ejecutar notebooks SIN stack: `STACK_HOST=127.0.0.9` (si no, check_stack ve el stack de otro agente y LIVE=True).
+- Módulo 11 construido encima de supportops.telemetry (A2): un TelemetryHandle por agente. Decisiones: wall-clock NO (tiempo simulado). Dashboards con supportops.dashkit (A4).
+- Hallazgos MCP (para módulo 12): mcp 2.2.0 instalado (PyPI tiene 2.3.0; `pip install "mcp>=2,<3"`); API: `from mcp.server.mcpserver import MCPServer` (README: `from mcp.server import MCPServer`), `@srv.tool()`, `mcp.Client(srv | StdioServerParameters | url)`, `client.call_tool(name, args, read_timeout_seconds=)`. El SDK ya trae OTel: span cliente `MCP send tools/call <tool>` (SpanKind.CLIENT, atributos solo mcp.method.name + jsonrpc.request.id) y span servidor `tools/call <tool>` (SERVER; mcp.method.name, mcp.protocol.version, jsonrpc.request.id, gen_ai.operation.name=execute_tool, gen_ai.tool.name, error.type=tool_error cuando isError); propaga `traceparent` en params._meta (SEP-414) también por stdio. Excepción de herramienta -> CallToolResult(is_error=True, 'Error executing tool X'). Client.call_tool hace además un `tools/list` implícito y `server/discover` al conectar. `MCPServer(middleware=[...])` admite ServerMiddleware propio. Semconv MCP (opentelemetry.io/docs/specs/semconv/gen-ai/mcp, Development): span `{mcp.method.name} {target}`, atributos mcp.method.name, mcp.protocol.version, mcp.session.id, network.transport(pipe=stdio), rpc.response.status_code, gen_ai.tool.call.arguments/result opt-in; métricas mcp.client/server.operation.duration, mcp.client/server.session.duration. El SDK NO emite métricas ni mcp.session.id ni network.* ni gen_ai.tool.name en el span cliente.
+- Módulo 12: tiempo de pared (los spans del SDK de MCP usan reloj real): subclase de OTelInstrumentor con `_span` sin start_time o instrumentor propio; SUPPORTOPS_REAL_SLEEP_SCALE para comprimir latencias.
+- Módulo 13: precios ILUSTRATIVOS configurables; caché: Anthropic usage = input_tokens (sin caché) + cache_creation_input_tokens + cache_read_input_tokens; multiplicadores varían por modelo (docs prompt-caching: write 5m 1,25x, 1h 2x, read 0,1x salvo excepciones); semconv: gen_ai.usage.cache_read.input_tokens / cache_write.input_tokens (subconjuntos de input_tokens); mínimos cacheables por modelo 512–4096.
+- Guards como Instrumentor: raising LLMError/ToolError en `llm_call/tool_call` ANTES del yield lo captura el agente (sirve para BudgetGuard/LoopGuard/DeadlineGuard); componer `CompositeInstrumentor(otel, guard)`.

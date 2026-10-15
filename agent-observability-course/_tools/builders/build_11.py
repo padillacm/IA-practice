@@ -242,6 +242,9 @@ print(f"\\nextraído -> trace_id={format(remote.trace_id, '032x')}  parent_id={f
 print("¿coincide con el span que llamó?", format(remote.span_id, "016x") == format(caller.get_span_context().span_id, "016x"))
 ''')
     md("""
+    > 💡 Si ves `-03` al final en lugar de `-01`: el SDK reciente activa también el bit 1 de las *flags* («trace-id aleatorio», añadido en W3C Trace Context nivel 2) además del bit 0 de muestreo. Nuestra versión manual conserva el **byte de flags completo** (`format_traceparent(..., sampled=int(flags))`): reescribirlo siempre como `01` sería una pérdida silenciosa de información.
+    """)
+    md("""
     ## 3.1 Dónde se pierde el contexto sin que te enteres
 
     El «contexto actual» de OpenTelemetry vive en `contextvars`. Se hereda en *tareas* de `asyncio`, pero **no** al saltar a un hilo nuevo, a un *executor* ni, por supuesto, a otro proceso o a una cola. Es la causa nº 1 de trazas huérfanas:
@@ -304,8 +307,8 @@ waterfall_services(rows, ax=ax, title=f"Cascada de la petición de reembolso {re
 plt.show()
 ''')
     md(observe("""
-    - **Una sola traza** cruza cinco servicios (cinco colores). Sin la propagación del contexto serían cinco trazas sueltas y nadie sabría que pertenecen a la misma petición.
-    - Los dos pre-chequeos (naranja claro y verde) **empiezan a la vez**; `billing-agent` no arranca hasta que termina el más lento. Fíjate en que cada delegación aparece **dos veces** con el mismo nombre: el CLIENT del orquestador (lo que el llamador ve, incluidos timeouts) y el INTERNAL del servicio (lo que hizo por dentro). Si difieren en duración, la diferencia es red, cola o abandono.
+    - **Una sola traza** cruza cuatro servicios (cuatro colores; un quinto, `escalation-agent`, aparece si hay *fallback*). Sin la propagación del contexto serían cuatro trazas sueltas y nadie sabría que pertenecen a la misma petición.
+    - Los dos pre-chequeos (verde y morado) **empiezan a la vez**; `billing-agent` no arranca hasta que termina el más lento. Fíjate en que cada delegación aparece **dos veces** con el mismo nombre: el CLIENT del orquestador (lo que el llamador ve, incluidos timeouts) y el INTERNAL del servicio (lo que hizo por dentro). Si difieren en duración, la diferencia es red, cola o abandono.
     - El último `chat` (síntesis, modelo grande) es secuencial y está en el camino crítico: es un candidato a optimizar *si* no se necesita (handoff).
     """))
     md("""
@@ -348,11 +351,11 @@ items = sorted(orch_chats + agents, key=lambda r: r["start_unix_nano"])
 cp_ids = {r["span_id"] for r in cp}
 for i, r in enumerate(items):
     st, du = (r["start_unix_nano"] - t0) / 1e9, dur(r)
-    col = viz.PALETTE["metrics"] if r["kind"] == "CLIENT" else viz.PALETTE["traces"]
+    col = viz.PALETTE["traces"] if r["attributes"].get("gen_ai.operation.name") == "chat" else viz.PALETTE["metrics"]
     ax.barh(i, du, left=st, color=col, alpha=0.9, height=0.6)
     lab = ("chat · " + r["attributes"]["gen_ai.request.model"]) if r["kind"] == "CLIENT" and r["resource"]["service.name"] == ORCH and "gen_ai.request.model" in r["attributes"] else r["name"].replace("invoke_agent ", "→ ")
     ax.text(st + du + 0.05, i, f"{lab}  {du:.2f}s", va="center", fontsize=8)
-ax.set_yticks([]); ax.invert_yaxis(); ax.set_xlabel("tiempo desde el inicio (s)"); ax.set_title("Línea de tiempo del orquestador: pre-chequeos en paralelo, luego facturación, luego síntesis")
+ax.set_yticks([]); ax.invert_yaxis(); ax.set_xlabel("tiempo desde el inicio (s)"); ax.set_title("Línea de tiempo del orquestador (azul = su LLM, naranja = delegaciones)")
 ax.axvline(res.latency_s, color=viz.PALETTE["neutral"], ls=":"); plt.show()
 ''')
     md(observe("""
@@ -454,7 +457,7 @@ print(f"coste medio por reembolso: con = ${np.mean([r.cost_usd for r in with_ctx
     ---
     # 7 · Cuando la propagación falla: trazas huérfanas
 
-    Repetimos 20 reembolsos con tres configuraciones de propagación: `sdk` (propagador W3C del SDK), `manual` (nuestras funciones) y `none` (**nadie inyecta la cabecera**: el bug de «se me olvidó configurar el propagador» o «el cliente HTTP no está instrumentado»).
+    Repetimos los reembolsos del lote (hasta 20) con tres configuraciones de propagación: `sdk` (propagador W3C del SDK), `manual` (nuestras funciones) y `none` (**nadie inyecta la cabecera**: el bug de «se me olvidó configurar el propagador» o «el cliente HTTP no está instrumentado»).
     """)
     code('''
 rf20 = [t for t in tickets if t.intent_true == "refund" and t.order_id][:20]
@@ -478,7 +481,8 @@ axes[0].set_title("Trazas por petición (ideal = 1)"); axes[0].set_xlabel("")
 one = meshes["none"].span_records(res_none_tid := [r for r in meshes["none"].span_records() if r["name"] == "invoke_workflow support_ticket"][0]["trace_id"])
 waterfall_services(one, ax=axes[1], title="Con propagación=none solo queda el orquestador en la traza del ticket"); axes[1].figure.subplots_adjust(left=0.2)
 plt.tight_layout(); plt.show()
-print("\\nSi buscaras el reembolso por trace_id verías esto (", len(one), "spans ) y los subagentes aparecerían como", len(r_) and int(r_.loc['none', 'raíces huérfanas (invoke_agent sin padre)']), "trazas sueltas, sin forma de unirlas salvo por el ticket id.")
+n_orph = int(r_.loc["none", "raíces huérfanas (invoke_agent sin padre)"]); n_req = int(r_.loc["none", "peticiones"])
+print(f"\\nSi buscaras UN reembolso por trace_id verías solo {len(one)} spans (la parte del orquestador); en total hay {n_orph} raíces huérfanas para {n_req} peticiones (≈ {n_orph / n_req:.1f} por petición), sin unir salvo por el ticket id.")
 ''')
     md(observe("""
     - Con `sdk` y `manual` hay **exactamente 1 traza por petición**: las dos implementaciones son equivalentes.
@@ -505,7 +509,7 @@ print("\\nSi buscaras el reembolso por trace_id verías esto (", len(one), "span
     code('''
 import os
 prod_tracer = mesh.handle(ORCH).tracer()
-rt = refund
+rt = dataclasses.replace(refund, text=f"Estado del pedido {refund.order_id}", faults=[])      # tarea para orders-agent
 modes = {}
 try:
     with RemoteAgentProcess("orders-agent") as worker:
@@ -581,50 +585,55 @@ print("SupportOps (orquestador -> especialista -> herramienta): d = 2 niveles; c
     md("""
     ## 9.1 El incidente
 
-    Simulamos un fallo **persistente** en `issue_refund` (el proveedor de pagos tarda 9 s en vencer), solo para el 50 % de los reembolsos, en `billing-agent`. El sub-agente tarda unos 14 s en total: **más** que el timeout del orquestador (12 s). Es el desajuste de plazos clásico: el llamador se rinde antes de que el llamado acabe su propio timeout.
+    Simulamos un fallo **persistente** en `issue_refund` (el proveedor de pagos tarda 9 s en vencer), durante una **ventana contigua** de reembolsos (la mitad central del lote), en `billing-agent`. El sub-agente tarda unos 14 s en total: **más** que el timeout del orquestador (12 s). Es el desajuste de plazos clásico: el llamador se rinde antes de que el llamado acabe su propio timeout.
 
     Comparamos cuatro políticas (`DelegationPolicy`):
 
-    | Política | timeout | reintentos | disyuntor | propagar *deadline* |
+    | Política | timeout | reintentos | disyuntor | *deadline* propagado y cancelación en vuelo |
     |---|---|---|---|---|
     | **A · sin límites** | 40 s | 0 | no | no |
     | **B · producción actual** | 12 s | 2 | no | no |
     | **C · plazos coherentes** | 6 s | 1 | no | **sí** |
-    | **D · C + disyuntor** | 6 s | 1 | tras 3 fallos | **sí** |
+    | **D · C + disyuntor** | 6 s | 1 | tras 3 fallos seguidos | **sí** |
     """)
     code('''
-rf_inc = [t for t in tickets if t.intent_true == "refund" and t.order_id and "issue_refund" in SupportAgent().run(dataclasses.replace(t, faults=[])).tools_used]
-rf_inc = (rf_inc * 4)[: (16 if FAST_DEV_RUN else 40)]
-rf_inc = [dataclasses.replace(t, ticket_id=f"{t.ticket_id}-i{i}", created_at=t.created_at + i * 20, faults=(
-    [FaultSpec("tool_timeout", {"tool": "issue_refund", "timeout_s": 9.0, "agent": "billing-agent", "sticky": True})] if i % 2 == 0 else [])) for i, t in enumerate(rf_inc)]
+sa = SupportAgent()
+rf_ok = [t for t in tickets if t.intent_true == "refund" and t.order_id and "issue_refund" in sa.run(dataclasses.replace(t, faults=[])).tools_used]
+N_INC = 30 if FAST_DEV_RUN else 60
+WINDOW = range(N_INC // 4, N_INC * 3 // 4)                    # el proveedor de pagos falla durante una ventana contigua (un incidente real)
+BAD = [FaultSpec("tool_timeout", {"tool": "issue_refund", "timeout_s": 9.0, "agent": "billing-agent", "sticky": True})]
+rf_inc = [dataclasses.replace(t, ticket_id=f"{t.ticket_id}-i{i}", created_at=SIM_EPOCH_S + i * 20, faults=BAD if i in WINDOW else [])
+          for i, t in enumerate((rf_ok * N_INC)[:N_INC])]
 POLICIES = {"A · sin límites": DelegationPolicy(timeout_s=40, max_retries=0),
             "B · producción": DelegationPolicy(timeout_s=12, max_retries=2),
-            "C · plazos coherentes": DelegationPolicy(timeout_s=6, max_retries=1, propagate_deadline=True),
-            "D · C + disyuntor": DelegationPolicy(timeout_s=6, max_retries=1, propagate_deadline=True, breaker_threshold=3)}
+            "C · plazos coherentes": DelegationPolicy(timeout_s=6, max_retries=1, propagate_deadline=True, cancel_in_flight=True),
+            "D · C + disyuntor": DelegationPolicy(timeout_s=6, max_retries=1, propagate_deadline=True, cancel_in_flight=True, breaker_threshold=3)}
 CASC, CASC_MESH = {}, {}
 for name, pol in POLICIES.items():
     m = build_mesh(mode="memory"); CASC_MESH[name] = m
     CASC[name] = pd.DataFrame([r.to_row() for r in MultiAgentSupportOps(m, policy=pol).run_many(rf_inc)])
 inc_mask = np.array([bool(t.faults) for t in rf_inc])
-tab = pd.DataFrame({n: {"p95 latencia (s)": np.quantile(d.latency_s[inc_mask], .95), "intentos/ticket (afectados)": d.attempts[inc_mask].mean(),
+tab = pd.DataFrame({n: {"p95 latencia (s) · afectados": np.quantile(d.latency_s[inc_mask], .95), "intentos/ticket · afectados": d.attempts[inc_mask].mean(),
                         "coste medio (milésimas USD)": d.cost_usd.mean() * 1000, "trabajo zombi (s/ticket)": d.zombie_s.mean(),
-                        "% escalados": (d.status == "escalated").mean() * 100, "% error": (d.status == "error").mean() * 100}
+                        "% degradados (sin resolver ni escalar)": (d.status == "degraded")[inc_mask].mean() * 100,
+                        "% escalados a persona · afectados": (d.status == "escalated")[inc_mask].mean() * 100,
+                        "tickets SANOS escalados (daño colateral)": int(((d.status == "escalated") & ~inc_mask).sum())}
                     for n, d in CASC.items()}).T
 display(tab.round(2))
 ''')
     code('''
 fig, axes = plt.subplots(1, 4, figsize=(15, 3.8))
 cols = [viz.PALETTE["neutral"], viz.PALETTE["error"], viz.PALETTE["logs"], viz.PALETTE["traces"]]
-for ax, (c, t) in zip(axes, [("p95 latencia (s)", "p95 de latencia (tickets afectados)"), ("intentos/ticket (afectados)", "Intentos por ticket afectado"),
+for ax, (c, t) in zip(axes, [("p95 latencia (s) · afectados", "p95 de latencia (tickets afectados)"), ("intentos/ticket · afectados", "Intentos por ticket afectado"),
                              ("coste medio (milésimas USD)", "Coste medio por ticket"), ("trabajo zombi (s/ticket)", "Trabajo zombi (s por ticket)")]):
     ax.bar([n[:1] for n in tab.index], tab[c], color=cols); ax.set_title(t, fontsize=10)
 plt.tight_layout(); plt.show()
 ''')
     md(observe("""
-    - **B (producción)** es la peor en intentos, coste y zombi: timeout (12 s) < tiempo real del llamado (≈ 14 s) ⇒ *toda* delegación a `billing-agent` vence, se reintenta dos veces y cada intento abandonado **sigue gastando**. Además la latencia sube a ≈ 30 s antes de escalar a un humano.
-    - **A** parece «mejor» (no hay reintentos ni zombi) pero deja al cliente esperando ≈ 18 s con una respuesta **degradada** sin escalar: lo barato aquí es lo peor para el usuario. Una política no se juzga solo por coste.
-    - **C** acorta plazos y **propaga el deadline**: los subagentes dejan de iniciar llamadas nuevas al vencer (se ven como spans `deadline_exceeded` de duración ≈ 0) y el zombi baja.
-    - **D** añade el disyuntor: tras 3 fallos seguidos deja de intentar facturación y escala directamente (**fallo rápido**). Es la mejor en latencia y coste para el incidente, a cambio de no probar un servicio que quizá ya se recuperó (mitigado por el *cooldown*).
+    - **B (producción)** es la peor en latencia (p95 ≈ 44 s), intentos (6 por ticket afectado: 3 a facturación + 1 de cada pre-chequeo + el escalado) y coste, y es la única con trabajo zombi: timeout (12 s) < tiempo real del llamado (≈ 14 s) ⇒ *toda* delegación a `billing-agent` vence, se reintenta dos veces y cada intento abandonado **sigue gastando** hasta terminar.
+    - **A** parece razonable (sin reintentos, sin zombi, coste bajo) pero deja al cliente esperando ≈ 20 s y termina **degradada** (ni resuelta ni escalada): un coste bajo no es una buena política si el ticket no se atiende. Fíjate en la columna «% degradados».
+    - **C** acorta plazos y **cancela en vuelo** al vencer: no hay zombi y el ticket se **escala a una persona** (resuelto), con una latencia similar a A y menos coste que B. Pero reintenta un fallo **persistente**: un reintento es trabajo inútil.
+    - **D** añade el disyuntor: tras 3 fallos seguidos deja de llamar a facturación y escala directamente (**fallo rápido**): la mejor latencia y el menor coste. Su precio está en la última columna: mientras el disyuntor sigue abierto (*cooldown*) escala también tickets **sanos** (daño colateral). Es el trade-off clásico: fallo rápido a cambio de falsos positivos.
     """))
     md("""
     ## 9.2 Causa raíz: recorrer la cadena de errores
@@ -764,21 +773,28 @@ ALLOW = {"supportops.customer.tier"}                 # lista blanca: el baggage 
 class BaggageToAttributes(SpanProcessor):
     def on_start(self, span, parent_context=None):
         for k, v in baggage.get_all(parent_context).items():
-            if k in ALLOW: span.set_attribute(k, v)
+            if k in ALLOW and k not in (span.attributes or {}):       # nunca pisar un atributo que el servicio ya fijó
+                span.set_attribute(k, v)
 
 mb = build_mesh(mode="memory")
 for h in mb.handles.values(): h.tracer_provider.add_span_processor(BaggageToAttributes())
-ctx = baggage.set_baggage("supportops.customer.tier", "premium", otel_context.get_current())
-ctx = baggage.set_baggage("customer.email", "ana@example.com", ctx)             # NO permitido: no debe llegar a los spans
+ctx = baggage.set_baggage("supportops.customer.tier", refund.tier, otel_context.get_current())
+ctx = baggage.set_baggage("customer.email", "ana@example.com", ctx)             # NO permitido: no llegará a los spans... pero SÍ viaja en la cabecera
 tok = otel_context.attach(ctx)
-mb_res = MultiAgentSupportOps(mb).run(dataclasses.replace(refund, tier="standard"))
+print("cabecera baggage que verían TODOS los servicios:", inject_sdk().get("baggage"))
+mb_res = MultiAgentSupportOps(mb).run(refund)
 otel_context.detach(tok)
-tiers = pd.Series([r["attributes"].get("supportops.customer.tier") for r in mb.span_records()]).value_counts(dropna=False)
-print("valores de supportops.customer.tier en los spans:\\n", tiers.to_string())
-print("¿filtró el email?", any("customer.email" in r["attributes"] for r in mb.span_records()))
+sp = pd.DataFrame([{"servicio": r["resource"]["service.name"].replace("supportops-", ""), "op": r["attributes"].get("gen_ai.operation.name"),
+                    "tier": r["attributes"].get("supportops.customer.tier")} for r in mb.span_records()])
+display(sp.groupby("servicio").tier.agg(spans="size", con_tier=lambda s: s.notna().sum()))
+print("¿llegó el email a algún span?", any("customer.email" in r["attributes"] for r in mb.span_records()))
 ''')
+    md(observe("""
+    - **Todos los servicios** (los 4 que participan) tienen ahora el atributo `supportops.customer.tier` también en los spans `chat` y `execute_tool` que no lo traían: podrías filtrar latencia **por tier en cualquier servicio** sin tocar su código.
+    - El email **no** está en ningún span (lista blanca) pero **sí** viajó en la cabecera `baggage` a todos los saltos: el filtro de atributos no protege la cabecera. Quien reciba la petición (incluido un tercero) lo lee.
+    """))
     md(box("warn", "Cuidado", """
-    El baggage de este ejemplo solo vive dentro del proceso; en una frontera real se serializa en la cabecera `baggage` y la reciben **todos** los servicios aguas abajo, incluidos terceros (un LLM proveedor, un CDN). Nunca metas PII ni secretos. Y observa que el `tier` del ticket («standard») y el del baggage («premium») pueden discrepar: el baggage es **dato propagado, no verificado**.
+    El baggage es **dato propagado, no verificado**: un cliente hostil puede enviar la cabecera con el valor que quiera (por ejemplo `tier=premium`). Úsalo para analítica de baja cardinalidad, nunca para decisiones de seguridad ni de facturación, y **nunca** con PII ni secretos. El procesador de arriba además respeta el atributo que el servicio ya fijó (no pisa la fuente de verdad).
     """))
 
     # ------------------------------------------------------------------------------------------------------------- prod
@@ -850,3 +866,521 @@ print("¿filtró el email?", any("customer.email" in r["attributes"] for r in mb
     """)
 
     nb.save(out)
+
+
+# =====================================================================================================================
+def build_project() -> None:
+    nb, out = nb_for(MOD, "11_proyecto_multiagente.ipynb", "Proyecto 11 · SupportOps multi-agente: trazar de extremo a extremo y contener una cascada")
+    md, code = nb.md, nb.code
+
+    md(f"""
+    {nb.badge()}
+
+    # Proyecto 11 · SupportOps multi-agente: trazar un reembolso de extremo a extremo y contener una cascada
+
+    | | |
+    |---|---|
+    | **Nivel** | 🟠 Avanzado |
+    | **Duración estimada** | ≈ 1 h 45 min |
+    | **Servicios de Compose** | Ninguno obligatorio (todo se evalúa en memoria). Opcional: `--profile core` para mirar tus trazas en Grafana (paso final) |
+    | **RAM aproximada** | < 600 MB (sin stack) |
+    | **Prerrequisitos** | Lección `11_multiagente` (propagación W3C, orquestador, cascadas) |
+    | **Conexión** | Reutiliza `supportops.multiagent` (sobre el `OTelInstrumentor` del módulo 03) y deja listo el sistema que el módulo 12 (MCP) y el 13 (costes) siguen ampliando |
+
+    ## Contexto de negocio
+
+    Eres ingeniero/a de plataforma en **SupportOps**. El equipo migró a multi-agente hace una semana y el on-call reporta tres cosas:
+
+    1. **Reembolsos que tardan más de 40 s** y acaban escalados a una persona, justo cuando el proveedor de pagos tuvo una caída.
+    2. **Subagentes que aparecen como trazas sueltas** en Tempo desde que `orders-agent` empezó a consumir de una cola.
+    3. **El coste por ticket se ha multiplicado** y nadie sabe si es el modelo grande, los reintentos o el contexto.
+
+    Tu trabajo: **(a)** propagar el contexto por la cola, **(b)** detectar trazas huérfanas, **(c)** atribuir el coste sin contar dos veces, **(d)** encontrar la causa raíz y el **trabajo zombi** del incidente, **(e)** cuantificar el desperdicio y **(f)** elegir una política de delegación que contenga la cascada.
+
+    ## Datos
+
+    Todo es sintético y determinista (semilla 42, modo `mock`, tiempo simulado): el **Paso 0** te entrega tres lotes ya ejecutados con `MultiAgentSupportOps` y la telemetría de **todos** los servicios en memoria (`mesh.span_records()`, esquema `SPAN_SCHEMA` + `links`):
+
+    | Lote | Qué es |
+    |---|---|
+    | `ROWS_OK`, `RES_OK` | 20 reembolsos sin fallos, propagación correcta |
+    | `ROWS_NONE` | los mismos 20 reembolsos con la propagación **rota** (`propagation="none"`) |
+    | `ROWS_B`, `RES_B`, `WL` | el **incidente**: 30 reembolsos, ventana de fallos en `issue_refund`, política de **producción** (timeout 12 s, 2 reintentos) |
+
+    Cadena de datos: stack local (opcional) → memoria. No hace falta Docker para obtener la nota.
+
+    ## Entregables y criterios de evaluación (rúbrica)
+
+    | # | Entregable | Criterio medido | Umbral (calibrado con la solución; `mock`, semilla 42) |
+    |---|---|---|---|
+    | R1 | `publish` / `consume` | En 10 mensajes y los modos `parent` y `link`: trazas, padres, enlaces, tipo de span y **espera en cola** como la spec | 10/10 en ambos modos |
+    | R2 | `find_orphans`, `fragmentation` | En `ROWS_NONE`: nº de raíces huérfanas y trazas por petición; en `ROWS_OK`: 0 y 1,0 | coincidencia exacta |
+    | R3 | `leaf_totals`, `naive_totals` | Tokens por servicio = los de `RES_OK` (0 de error) y el total ingenuo ≈ 2× (doble contabilidad) | exacto / ratio 2,00 ± 0,02 |
+    | R4 | `root_cause`, `zombie_seconds` | La causa raíz y el síntoma de **todas** las trazas con timeout; segundos zombi = los medidos por el sistema | 100 % / ± 0,05 s |
+    | R5 | `amplification` | Intentos a facturación por ticket afectado (esperado: los de la política de producción) y fracción del gasto desperdiciada en intentos abandonados | exacto / ± 0,01 |
+    | R6 | `MY_POLICY` | Con **tu** política, sobre el mismo incidente: p95 de afectados ≤ 20 s, coste ≤ 7,5 milésimas USD/ticket (la de producción gasta ≈ 10,5), 0 degradados/error, 0 zombi, ≤ 5 tickets sanos escalados | todas a la vez |
+
+    > 📏 Los umbrales salen de la solución de referencia (y de las políticas B/C/D de la lección), medida con las semillas 42, 7 y 99: no dependen de tu máquina (el tiempo es simulado).
+    """)
+
+    code(boot("viz,otel"))
+    code(IMPORTS + IMPORTS_11 + '''
+from opentelemetry.context import Context
+from opentelemetry.trace import Link
+from supportops.multiagent import span_rows
+from supportops.telemetry import setup_telemetry
+''')
+
+    md("""
+    ## Paso 0 · Los tres lotes (te lo damos hecho)
+
+    El incidente: durante una **ventana contigua** el proveedor de pagos hace que `issue_refund` tarde 9 s en vencer (fallo **persistente** en `billing-agent`). Ejecutamos el mismo lote con la política de producción.
+    """)
+    code('''
+sa = SupportAgent()
+pool = generate_tickets(120, seed=SEED, fault_rates=None)
+rf_ok = [t for t in pool if t.intent_true == "refund" and t.order_id and "issue_refund" in sa.run(t).tools_used]
+def lote(n, t0=SIM_EPOCH_S, window=None):
+    bad = [FaultSpec("tool_timeout", {"tool": "issue_refund", "timeout_s": 9.0, "agent": "billing-agent", "sticky": True})]
+    return [dataclasses.replace(t, ticket_id=f"{t.ticket_id}-p{i}", created_at=t0 + i * 20, faults=bad if (window and i in window) else [])
+            for i, t in enumerate((rf_ok * n)[:n])]
+
+def ejecuta(tickets, policy=None, propagation="sdk"):
+    mesh = build_mesh(mode="memory")
+    res = MultiAgentSupportOps(mesh, policy=policy, propagation=propagation).run_many(tickets)
+    return res, mesh.span_records()
+
+OK_TK = lote(20)
+RES_OK, ROWS_OK = ejecuta(OK_TK)
+_, ROWS_NONE = ejecuta(OK_TK, propagation="none")
+WL = lote(30, window=range(7, 22))
+AFFECTED = np.array([bool(t.faults) for t in WL])
+POLICY_B = DelegationPolicy(timeout_s=12, max_retries=2)
+RES_B, ROWS_B = ejecuta(WL, POLICY_B)
+print(f"OK: {len(RES_OK)} tickets · {len(ROWS_OK)} spans | NONE: {len(ROWS_NONE)} spans | INCIDENTE: {len(RES_B)} tickets ({AFFECTED.sum()} afectados) · {len(ROWS_B)} spans")
+dfB = pd.DataFrame([r.to_row() for r in RES_B]); display(dfB[AFFECTED].head(3)[["ticket_id", "status", "latency_s", "attempts", "timeouts", "cost_usd", "zombie_s"]].round(3))
+''')
+
+    # ---------------------------------------------------------------------------------- paso 1
+    md("""
+    ## Paso 1 · Propagar el contexto por una cola (productor y consumidor)
+
+    `orders-agent` consume tareas de una cola. Escribe las dos mitades. Reglas (spec de mensajería de OpenTelemetry, estudiadas en la sección 8 de la lección):
+
+    - **`publish(tracer, queue, payload, t_s)`**: abre un span **PRODUCER** de nombre `publish {queue}` (atributos `messaging.system="supportops-queue"`, `messaging.destination.name=queue`, `messaging.operation.type="send"`) que **empieza** en `t_s` y **termina** en `t_s + 0.01`; **inyecta** `traceparent` (`inject_manual`) con ese span activo, y devuelve el mensaje `{"payload", "headers", "queue", "published_at_s": t_s + 0.01, "message_id"}`.
+    - **`consume(tracer, msg, mode, start_s, duration_s)`**: abre un span **CONSUMER** `process {queue}` (atributos `messaging.system`, `messaging.destination.name`, `messaging.operation.type="process"`, `messaging.message.id`) entre `start_s` y `start_s + duration_s`. En `mode="parent"` es **hijo** del productor; en `mode="link"` abre una **traza nueva** (raíz) con un **span link** al productor. Si `mode` no es válido, lanza `ValueError`.
+    """)
+    md(hint(1, "El contexto remoto se obtiene con `extract_manual(msg['headers'])`. Para «traza nueva» usa `context=Context()` (contexto vacío) al crear el span; para el link necesitas el `SpanContext` del productor: `otel_trace.get_current_span(contexto_extraído).get_span_context()`."))
+    md(hint(2, "`tracer.start_span(nombre, context=..., kind=SpanKind.CONSUMER, links=[Link(span_context)], start_time=int(t*1e9), attributes={...})`; cierra con `span.end(end_time=int(t_fin*1e9))`. Para inyectar con el productor activo: `with otel_trace.use_span(span, end_on_exit=False): headers = inject_manual()`."))
+    code('''
+def publish(tracer, queue: str, payload: dict, t_s: float) -> dict:
+    # TODO 1a
+    raise NotImplementedError("TODO 1a")
+
+def consume(tracer, msg: dict, mode: str, start_s: float, duration_s: float):
+    # TODO 1b
+    raise NotImplementedError("TODO 1b")
+
+try:
+    prod, cons = setup_telemetry("supportops-orchestrator", mode="memory", set_global=False), setup_telemetry("supportops-orders-agent", mode="memory", set_global=False)
+    m = publish(prod.tracer(), "supportops.tasks", {"order": "ORD-00001"}, 100.0)
+    consume(cons.tracer(), m, "parent", 101.5, 1.0)
+    print(m["headers"]); display(pd.DataFrame(span_rows(prod) + span_rows(cons))[["name", "kind", "trace_id", "parent_span_id"]])
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ---------------------------------------------------------------------------------- paso 2
+    md("""
+    ## Paso 2 · Detectar trazas huérfanas
+
+    **TODO 2.** Escribe:
+
+    - `find_orphans(rows)`: la lista de **spans raíz `invoke_agent`** (sin `parent_span_id`, `gen_ai.operation.name == "invoke_agent"`) cuyo servicio **no** es `supportops-orchestrator`.
+    - `fragmentation(rows, n_requests)`: **trazas por petición** (nº de `trace_id` distintos / peticiones). Ideal: 1,0.
+    """)
+    md(hint(1, "El servicio está en `row['resource']['service.name']` y la operación en `row['attributes']['gen_ai.operation.name']`. Una traza = un `trace_id`."))
+    code('''
+def find_orphans(rows: list[dict]) -> list[dict]:
+    # TODO 2a
+    raise NotImplementedError("TODO 2a")
+
+def fragmentation(rows: list[dict], n_requests: int) -> float:
+    # TODO 2b
+    raise NotImplementedError("TODO 2b")
+
+try:
+    for nombre, rws in (("ROWS_OK", ROWS_OK), ("ROWS_NONE", ROWS_NONE)):
+        print(f"{nombre}: huérfanos={len(find_orphans(rws))} · trazas/petición={fragmentation(rws, 20):.2f}")
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ---------------------------------------------------------------------------------- paso 3
+    md("""
+    ## Paso 3 · Atribuir el coste sin contar dos veces
+
+    **TODO 3.** Escribe:
+
+    - `leaf_totals(rows)`: por **servicio** (`service.name`), `{"calls", "input_tokens", "output_tokens"}` contando **solo** los spans `chat` (hojas).
+    - `naive_totals(rows)`: el total **ingenuo** de tokens de entrada: suma de `gen_ai.usage.input_tokens` de **todos** los spans que lo traen.
+    """)
+    md(hint(1, "Filtra por `attributes['gen_ai.operation.name'] == 'chat'`. Los atributos de uso pueden faltar (un `chat` que falló no los tiene): usa `.get(..., 0) or 0`."))
+    code('''
+def leaf_totals(rows: list[dict]) -> dict[str, dict[str, int]]:
+    # TODO 3a
+    raise NotImplementedError("TODO 3a")
+
+def naive_totals(rows: list[dict]) -> int:
+    # TODO 3b
+    raise NotImplementedError("TODO 3b")
+
+try:
+    LT = leaf_totals(ROWS_OK); print({k.replace("supportops-", ""): v for k, v in LT.items()})
+    print("ingenuo / hojas =", round(naive_totals(ROWS_OK) / sum(v["input_tokens"] for v in LT.values()), 2))
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ---------------------------------------------------------------------------------- paso 4
+    md("""
+    ## Paso 4 · Causa raíz y trabajo zombi del incidente
+
+    **TODO 4.** Escribe, sobre las filas de **una** traza del incidente:
+
+    - `error_chain(rows)`: lista de tuplas `(profundidad, nombre, servicio_corto, error.type)` de los spans con `status == "ERROR"`, ordenada por profundidad (el servicio corto es el nombre sin el prefijo `supportops-`).
+    - `root_cause(rows)`: devuelve `(sintoma, causa)`; cada uno es `(nombre, servicio_corto, error.type)`. **Síntoma** = el error **más alto** del árbol; **causa** = el **más profundo**. Si no hay errores, `(None, None)`.
+
+    Y sobre las filas de **todo el lote**:
+
+    - `zombie_seconds(rows)`: suma de segundos que los subagentes siguieron trabajando **después** de que su llamador (span CLIENT con `error.type == "timeout"`) abandonara: para cada uno de esos CLIENT, `max(fin_del_hijo − fin_del_CLIENT, 0)` (el hijo es el span cuyo `parent_span_id` es el del CLIENT).
+    """)
+    md(hint(1, "Profundidad: sube por `parent_span_id` hasta llegar a la raíz (`by_id = {r['span_id']: r for r in rows}`). Las trazas de una lista de filas se separan con `trace_id`."))
+    md(hint(2, "Estructura: `errs = sorted([r for r in rows if r['status']=='ERROR'], key=depth)`; síntoma = `errs[0]`, causa = `errs[-1]`. Para el zombi: indexa los hijos por padre y recorre los CLIENT en error `timeout`."))
+    code('''
+def error_chain(rows: list[dict]) -> list[tuple]:
+    # TODO 4a
+    raise NotImplementedError("TODO 4a")
+
+def root_cause(rows: list[dict]):
+    # TODO 4b
+    raise NotImplementedError("TODO 4b")
+
+def zombie_seconds(rows: list[dict]) -> float:
+    # TODO 4c
+    raise NotImplementedError("TODO 4c")
+
+try:
+    tid = next(r["trace_id"] for r in ROWS_B if r["attributes"].get("error.type") == "timeout")
+    print(root_cause([r for r in ROWS_B if r["trace_id"] == tid]))
+    print(f"zombi total: {zombie_seconds(ROWS_B):.2f} s (el sistema midió {sum(r.zombie_s for r in RES_B):.2f} s)")
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ---------------------------------------------------------------------------------- paso 5
+    md("""
+    ## Paso 5 · Cuantificar el desperdicio
+
+    **TODO 5.** `amplification(rows, n_affected)` devuelve un `dict` con:
+
+    - `attempts_per_ticket`: nº de spans CLIENT `invoke_agent billing-agent` **de las trazas que contienen algún `timeout`**, dividido por `n_affected` (los tickets afectados por la ventana).
+    - `wasted_cost_share`: fracción del coste total de los `chat` que se gastó **dentro de intentos abandonados**, es decir, en el subárbol de un CLIENT con `error.type == "timeout"`. Precio: `supportops.pricing.cost_usd(modelo, tokens_in, tokens_out)` con el modelo de `gen_ai.response.model`.
+    - `theoretical`: `(r+1)^d` con `r = 2` reintentos y `d = 1` nivel que reintenta (los intentos que *debería* recibir facturación según la política).
+    """)
+    md(hint(1, "Un `chat` pertenece a un subárbol abandonado si alguno de sus **ancestros** es un CLIENT con `error.type == 'timeout'`. Calcula el conjunto de `span_id` de esos CLIENT y sube por los padres de cada `chat`."))
+    code('''
+from supportops.pricing import cost_usd
+
+def amplification(rows: list[dict], n_affected: int) -> dict:
+    # TODO 5
+    raise NotImplementedError("TODO 5")
+
+try:
+    print(amplification(ROWS_B, int(AFFECTED.sum())))
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ---------------------------------------------------------------------------------- paso 6
+    md("""
+    ## Paso 6 · Contener la cascada: tu política
+
+    **TODO 6.** Diseña `MY_POLICY = DelegationPolicy(...)` para el **mismo incidente**. Parámetros: `timeout_s`, `max_retries`, `backoff_s`, `breaker_threshold`, `breaker_cooldown_s`, `propagate_deadline`, `cancel_in_flight`, `fallback_to_human`.
+    Objetivos (los comprueba la rúbrica): bajar el **p95 de los tickets afectados**, bajar el **coste**, **no dejar tickets degradados ni en error**, **cero trabajo zombi** y **limitar el daño colateral** (tickets sanos escalados por error).
+    Piensa: ¿qué plazo es coherente con un especialista cuyo peor caso son 14 s? ¿Tiene sentido reintentar un fallo **persistente**? ¿Qué cuesta un disyuntor que tarda en cerrarse?
+    """)
+    md(hint(1, "El plazo del llamador debe poder **cortar** al llamado (no esperar su timeout interno de 9 s): pon un `timeout_s` claramente por debajo de 14 s y activa `propagate_deadline` y `cancel_in_flight` para no dejar trabajo zombi."))
+    md(hint(2, "Los reintentos no ayudan en un fallo persistente: `max_retries=0` o 1. Para que el ticket no se quede degradado, deja `fallback_to_human=True`. El disyuntor (`breaker_threshold` ≥ 2) convierte los fallos repetidos en *fallo rápido*; un `breaker_cooldown_s` largo escala tickets sanos."))
+    code('''
+MY_POLICY = None
+# TODO 6: MY_POLICY = DelegationPolicy(...)
+
+if MY_POLICY is None:
+    print("Pendiente: define MY_POLICY")
+else:
+    res_m, _ = ejecuta(WL, MY_POLICY)
+    d = pd.DataFrame([r.to_row() for r in res_m])
+    print(f"p95 afectados={np.quantile(d.latency_s[AFFECTED], .95):.1f}s · coste medio={d.cost_usd.mean() * 1000:.2f} milésimas USD · estados={d.status.value_counts().to_dict()}")
+''')
+
+    # ---------------------------------------------------------------------------------- rúbrica
+    md("""
+    ## Paso 7 · Rúbrica
+    """)
+    code('''
+REF = {"orphans_none": 60, "frag_none": 4.0, "n_timeout_traces": 15, "attempts_per_ticket": 3.0, "wasted_share": 0.6719,
+       "max_p95": 20.0, "max_cost": 7.5, "max_collateral": 5}     # calibrado con la solución (semillas 42, 7, 99)
+
+def run_rubric():
+    rows = []
+    def add(r, d, ok, det=""): rows.append({"criterio": r, "descripción": d, "resultado": "✅ OK" if ok else "❌ FALLA", "detalle": det})
+    # R1
+    try:
+        ok = {"parent": 0, "link": 0}
+        for mode in ("parent", "link"):
+            for i in range(10):
+                p = setup_telemetry("supportops-orchestrator", mode="memory", set_global=False); c = setup_telemetry("supportops-orders-agent", mode="memory", set_global=False)
+                t0 = 1000.0 + 10 * i
+                m = publish(p.tracer(), "supportops.tasks", {"i": i}, t0)
+                consume(c.tracer(), m, mode, t0 + 0.01 + 2.5, 1.0)
+                ps, cs = span_rows(p)[0], span_rows(c)[0]
+                good = (ps["kind"] == "PRODUCER" and ps["name"] == "publish supportops.tasks" and cs["kind"] == "CONSUMER" and cs["name"] == "process supportops.tasks"
+                        and ps["attributes"].get("messaging.operation.type") == "send" and cs["attributes"].get("messaging.operation.type") == "process"
+                        and abs((cs["start_unix_nano"] - ps["end_unix_nano"]) / 1e9 - 2.5) < 1e-3 and abs((cs["end_unix_nano"] - cs["start_unix_nano"]) / 1e9 - 1.0) < 1e-3
+                        and "traceparent" in m["headers"] and abs(m["published_at_s"] - (t0 + 0.01)) < 1e-9)
+                if mode == "parent":
+                    good = good and cs["trace_id"] == ps["trace_id"] and cs["parent_span_id"] == ps["span_id"] and not cs["links"]
+                else:
+                    good = good and cs["trace_id"] != ps["trace_id"] and cs["parent_span_id"] is None and len(cs["links"]) == 1 and cs["links"][0]["span_id"] == ps["span_id"]
+                ok[mode] += bool(good)
+        try: consume(setup_telemetry("x", mode="memory", set_global=False).tracer(), m, "otro", 0, 1); bad_mode = False
+        except ValueError: bad_mode = True
+        add("R1", "publish/consume: parent y link correctos en 10/10 y ValueError con modo inválido", ok == {"parent": 10, "link": 10} and bad_mode, f"{ok} · ValueError={bad_mode}")
+    except Exception as e: add("R1", "publish/consume", False, f"{type(e).__name__}: {e}")
+    # R2
+    try:
+        o_none, o_ok = find_orphans(ROWS_NONE), find_orphans(ROWS_OK)
+        f_none, f_ok = fragmentation(ROWS_NONE, 20), fragmentation(ROWS_OK, 20)
+        ok = len(o_none) == REF["orphans_none"] and len(o_ok) == 0 and abs(f_none - REF["frag_none"]) < 1e-6 and abs(f_ok - 1.0) < 1e-6
+        add("R2", "huérfanos y trazas por petición (NONE vs OK)", ok, f"huérfanos NONE={len(o_none)} (ref {REF['orphans_none']}) · trazas/pet NONE={f_none:.2f} (ref {REF['frag_none']:.2f}) · OK={len(o_ok)}/{f_ok:.2f}")
+    except Exception as e: add("R2", "huérfanos", False, f"{type(e).__name__}: {e}")
+    # R3
+    try:
+        lt = leaf_totals(ROWS_OK)
+        tin, tout = sum(v["input_tokens"] for v in lt.values()), sum(v["output_tokens"] for v in lt.values())
+        ratio = naive_totals(ROWS_OK) / tin
+        ok = tin == sum(r.input_tokens for r in RES_OK) and tout == sum(r.output_tokens for r in RES_OK) and abs(ratio - 2.0) < 0.02 and sum(v["calls"] for v in lt.values()) == sum(r.n_llm_calls for r in RES_OK)
+        add("R3", "totales por hojas = totales del sistema; ingenuo ≈ 2×", ok, f"hojas={tin}+{tout} (sistema {sum(r.input_tokens for r in RES_OK)}+{sum(r.output_tokens for r in RES_OK)}) · ratio={ratio:.2f}")
+    except Exception as e: add("R3", "totales", False, f"{type(e).__name__}: {e}")
+    # R4
+    try:
+        tids = sorted({r["trace_id"] for r in ROWS_B if r["attributes"].get("error.type") == "timeout"})
+        good = 0
+        for t in tids:
+            sym, cause = root_cause([r for r in ROWS_B if r["trace_id"] == t])
+            good += sym == ("invoke_agent billing-agent", "orchestrator", "timeout") and cause == ("execute_tool issue_refund", "billing-agent", "timeout")
+        z, zr = zombie_seconds(ROWS_B), sum(r.zombie_s for r in RES_B)
+        add("R4", "causa raíz y síntoma en el 100 % de las trazas con timeout; zombi ± 0,05 s", len(tids) == REF["n_timeout_traces"] and good == len(tids) and abs(z - zr) <= 0.05 and zr > 0, f"{good}/{len(tids)} trazas · zombi={z:.2f}s vs {zr:.2f}s")
+    except Exception as e: add("R4", "causa raíz y zombi", False, f"{type(e).__name__}: {e}")
+    # R5
+    try:
+        a = amplification(ROWS_B, int(AFFECTED.sum()))
+        ok = abs(a["attempts_per_ticket"] - REF["attempts_per_ticket"]) < 1e-9 and abs(a["wasted_cost_share"] - REF["wasted_share"]) <= 0.01 and a["theoretical"] == 3
+        add("R5", "amplificación: intentos por ticket, desperdicio y (r+1)^d", ok, f"{a} · ref intentos={REF['attempts_per_ticket']} desperdicio≈{REF['wasted_share']:.3f}")
+    except Exception as e: add("R5", "amplificación", False, f"{type(e).__name__}: {e}")
+    # R6
+    try:
+        assert MY_POLICY is not None, "define MY_POLICY"
+        res_m, _ = ejecuta(WL, MY_POLICY); d = pd.DataFrame([r.to_row() for r in res_m])
+        m = {"p95": np.quantile(d.latency_s[AFFECTED], .95), "coste": d.cost_usd.mean() * 1000, "malos": int(d.status.isin(["degraded", "error"]).sum()),
+             "zombi": d.zombie_s.sum(), "colateral": int(((d.status == "escalated") & ~AFFECTED).sum())}
+        checks = {f"p95 afectados ≤ {REF['max_p95']} s": m["p95"] <= REF["max_p95"], f"coste ≤ {REF['max_cost']:.2f} milésimas": m["coste"] <= REF["max_cost"],
+                  "0 degradados/error": m["malos"] == 0, "zombi = 0": m["zombi"] == 0, f"colateral ≤ {REF['max_collateral']}": m["colateral"] <= REF["max_collateral"]}
+        add("R6", "tu política contiene la cascada", all(checks.values()), f"{ {k: bool(v) for k, v in checks.items()} } · medido: p95={m['p95']:.1f}s coste={m['coste']:.2f} malos={m['malos']} zombi={m['zombi']:.1f} colateral={m['colateral']}")
+    except Exception as e: add("R6", "política", False, f"{type(e).__name__}: {e}")
+    return pd.DataFrame(rows).set_index("criterio")
+''')
+    code('''
+# Ejecuta esta celda cuando hayas terminado los TODO
+display(run_rubric())
+''')
+
+    md("""
+    ---
+    ## Paso final (opcional) · Míralo en Grafana
+
+    Con el stack arriba (`docker compose --profile core --profile metrics up -d`), repite el lote del incidente con `build_mesh(mode="otlp")` y `generate_tickets(..., start_s="live")` (los tiempos de `lote()` usan el origen simulado de 2026: Tempo rechazaría esos datos tan antiguos; cambia `t0=` a `time.time() - 600`). Abre el dashboard **«11 · Multi-agente»** y comprueba:
+
+    1. El panel de **huérfanos** está a cero con `propagation="sdk"` y se llena con `"none"`.
+    2. `supportops_outcome="timeout"` solo en `billing-agent`.
+    3. Pulsa un `trace_id` de la tabla de errores y localiza **a ojo** el síntoma y la causa que tu `root_cause` devolvió.
+
+    ---
+    ## Retos extra (nivel experto)
+
+    1. **Handoff:** repite el incidente con `mode="handoff"`. ¿Cambia la causa raíz? ¿Qué span usarías ahora como «latencia de la petición» y por qué?
+    2. **Presupuesto de reintentos:** implementa un limitador (cubo de fichas) que permita reintentar como mucho el 10 % de las delegaciones en los últimos 60 s simulados y compáralo con el disyuntor.
+    3. **Consulta TraceQL de la cascada:** escribe (y prueba en Tempo) la consulta que devuelve las trazas con ≥ 3 CLIENT `invoke_agent billing-agent` (pista: `count()` sobre un selector con `kind = client`).
+    4. **Servicio de grafo:** calcula el *service graph* del incidente (llamadas y errores por arista) y compáralo con el de `ROWS_OK`.
+    5. **Detección temprana:** diseña una alerta sobre `supportops.delegation.attempts` por ticket (¿qué umbral y ventana detectan el incidente en < 2 min con ≤ 1 falso positivo en el lote sano?).
+
+    ## Reflexión (producción e hilo conductor)
+
+    - En tu política, ¿qué parte del ahorro viene de **no reintentar** y cuál de **cancelar en vuelo**? ¿Qué dato de la traza te lo demuestra?
+    - ¿Cómo cambia el diseño si `billing-agent` **no** soporta cancelación (la operación de pago es no idempotente)? ¿Qué riesgos de duplicar un reembolso aparecen al reintentar y cómo los vigilarías con telemetría?
+    - El módulo 12 sustituye las herramientas locales por **servidores MCP remotos**: ¿qué fronteras nuevas de propagación y de timeout se añaden al árbol que acabas de analizar?
+    - El módulo 13 atribuirá coste por cliente, feature y modelo: ¿qué atributos faltan hoy en los spans para hacerlo sin cardinalidad explosiva?
+    """)
+
+    md("""
+    ---
+    # ⛔ SPOILER — intenta resolverlo primero
+
+    A continuación, la **solución de referencia** completa y ejecutable (redefine las funciones y vuelve a lanzar la rúbrica).
+    """)
+    code('''
+# ===================== SOLUCIÓN DE REFERENCIA =====================
+def publish(tracer, queue, payload, t_s):
+    span = tracer.start_span(f"publish {queue}", kind=SpanKind.PRODUCER, start_time=int(t_s * 1e9), attributes={
+        "messaging.system": "supportops-queue", "messaging.destination.name": queue, "messaging.operation.type": "send", "messaging.operation.name": "publish"})
+    with otel_trace.use_span(span, end_on_exit=False):
+        headers = inject_manual()
+    span.end(end_time=int((t_s + 0.01) * 1e9))
+    return {"payload": payload, "headers": headers, "queue": queue, "published_at_s": t_s + 0.01,
+            "message_id": "msg-" + format(span.get_span_context().span_id, "016x")[:8]}
+
+def consume(tracer, msg, mode, start_s, duration_s):
+    if mode not in ("parent", "link"):
+        raise ValueError("mode debe ser 'parent' o 'link'")
+    remote = extract_manual(msg["headers"])
+    if mode == "parent":
+        ctx, links = remote, []
+    else:
+        ctx, links = Context(), [Link(otel_trace.get_current_span(remote).get_span_context())]
+    span = tracer.start_span(f"process {msg['queue']}", context=ctx, kind=SpanKind.CONSUMER, links=links, start_time=int(start_s * 1e9), attributes={
+        "messaging.system": "supportops-queue", "messaging.destination.name": msg["queue"], "messaging.operation.type": "process",
+        "messaging.message.id": msg["message_id"]})
+    span.end(end_time=int((start_s + duration_s) * 1e9))
+    return span
+
+def _svc(r): return r["resource"].get("service.name", "?")
+def _op(r): return r["attributes"].get("gen_ai.operation.name")
+
+def find_orphans(rows):
+    return [r for r in rows if r["parent_span_id"] is None and _op(r) == "invoke_agent" and _svc(r) != "supportops-orchestrator"]
+
+def fragmentation(rows, n_requests):
+    return len({r["trace_id"] for r in rows}) / n_requests
+
+def leaf_totals(rows):
+    out = {}
+    for r in rows:
+        if _op(r) != "chat": continue
+        d = out.setdefault(_svc(r), {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+        d["calls"] += 1
+        d["input_tokens"] += r["attributes"].get("gen_ai.usage.input_tokens", 0) or 0
+        d["output_tokens"] += r["attributes"].get("gen_ai.usage.output_tokens", 0) or 0
+    return out
+
+def naive_totals(rows):
+    return sum(r["attributes"].get("gen_ai.usage.input_tokens", 0) or 0 for r in rows)
+
+def error_chain(rows):
+    by_id = {r["span_id"]: r for r in rows}
+    def depth(r):
+        d = 0
+        while r["parent_span_id"] in by_id:
+            r, d = by_id[r["parent_span_id"]], d + 1
+        return d
+    errs = sorted([r for r in rows if r["status"] == "ERROR"], key=depth)
+    return [(depth(r), r["name"], _svc(r).replace("supportops-", ""), r["attributes"].get("error.type")) for r in errs]
+
+def root_cause(rows):
+    ch = error_chain(rows)
+    if not ch: return None, None
+    return ch[0][1:], ch[-1][1:]
+
+def zombie_seconds(rows):
+    kids = {}
+    for r in rows: kids.setdefault(r["parent_span_id"], []).append(r)
+    total = 0.0
+    for r in rows:
+        if r["kind"] == "CLIENT" and r["attributes"].get("error.type") == "timeout":
+            for k in kids.get(r["span_id"], []):
+                total += max(k["end_unix_nano"] - r["end_unix_nano"], 0) / 1e9
+    return total
+
+def amplification(rows, n_affected):
+    by_id = {r["span_id"]: r for r in rows}
+    dead = {r["span_id"] for r in rows if r["kind"] == "CLIENT" and r["attributes"].get("error.type") == "timeout"}
+    def abandoned(r):
+        while r["parent_span_id"] in by_id:
+            r = by_id[r["parent_span_id"]]
+            if r["span_id"] in dead: return True
+        return False
+    total = wasted = 0.0
+    for r in rows:
+        if _op(r) != "chat": continue
+        a = r["attributes"]
+        c = cost_usd(a.get("gen_ai.response.model") or a.get("gen_ai.request.model", ""), a.get("gen_ai.usage.input_tokens", 0) or 0, a.get("gen_ai.usage.output_tokens", 0) or 0)
+        total += c; wasted += c if abandoned(r) else 0.0
+    bad_traces = {r["trace_id"] for r in rows if r["attributes"].get("error.type") == "timeout"}
+    n_bill = sum(1 for r in rows if r["kind"] == "CLIENT" and r["name"] == "invoke_agent billing-agent" and r["trace_id"] in bad_traces)
+    return {"attempts_per_ticket": n_bill / n_affected, "wasted_cost_share": wasted / total, "theoretical": (2 + 1) ** 1}
+
+MY_POLICY = DelegationPolicy(timeout_s=6, max_retries=0, propagate_deadline=True, cancel_in_flight=True, breaker_threshold=2, breaker_cooldown_s=40)
+display(run_rubric())
+''')
+
+    nb.save(out)
+
+
+# =====================================================================================================================
+def build_readme() -> None:
+    readme = '''# Módulo 11 · Observabilidad de sistemas multi-agente
+
+🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+
+SupportOps pasa de **un agente** a un **orquestador + 4 especialistas** (`orders`, `billing`, `knowledge`, `escalation`).
+Cada agente es un *servicio* con su propio `service.name` y `TelemetryHandle`; el reto es ver **una petición de extremo a
+extremo**, atribuir coste sin contar dos veces y contener fallos en cascada.
+
+## Objetivos
+1. Modelar un sistema multi-agente como árbol de spans (`invoke_workflow` → `invoke_agent` → `chat`/`execute_tool`) y distinguir **delegación** de **handoff**.
+2. Implementar **a mano** la propagación W3C `traceparent` (validación estricta, inyección, extracción) y compararla con el SDK; entender el **baggage**.
+3. Demostrar la pérdida de contexto (hilos, colas, procesos) y detectar **trazas huérfanas**.
+4. Propagar contexto por una cola entre **dos procesos reales** y elegir entre padre-hijo y *span link*.
+5. Calcular el **camino crítico**, el ahorro del *fan-out* y el coste por agente (**solo hojas**, sin doble contabilidad).
+6. Cuantificar la **amplificación de reintentos** y el **trabajo zombi**; comparar políticas (timeout, reintentos, disyuntor, *deadline*).
+7. Diagnosticar la **causa raíz** recorriendo la cadena de errores.
+
+## Contenido
+| Archivo | Qué es |
+|---|---|
+| `11_multiagente.ipynb` | Lección (12 secciones, 12 gráficos, TraceQL/PromQL probados, 🧠 de élite, autoevaluación) |
+| `11_proyecto_multiagente.ipynb` | Proyecto: propagar por una cola, detectar huérfanos, atribuir coste, causa raíz + zombi, elegir política (rúbrica calibrada, pistas 🪜, solución tras ⛔ SPOILER) |
+| `../supportops/multiagent.py` | Código del módulo: `build_mesh`, `MultiAgentSupportOps`, `DelegationPolicy`, `RemoteAgentProcess`, W3C a mano, análisis de trazas |
+| `../stack/grafana/dashboards/11-multiagente.json` | Dashboard «11 · Multi-agente» como código (uid `multiagent`) |
+
+## Servicios necesarios
+- **Sin Docker** (modo degradado, telemetría en memoria): todo salvo la sección 10 de la lección y el paso final del proyecto. Funciona en Colab.
+- **Con stack** (opcional): `cd stack && docker compose --profile core --profile metrics up -d` (≈ 1,2 GB de RAM). Grafana: http://localhost:3000 (`admin`/`admin`).
+
+## Lecturas
+- W3C *Trace Context* y *Baggage* · OpenTelemetry *GenAI semantic conventions* (agentes, estado Development) y *messaging spans*.
+- Anthropic Engineering, *How we built our multi-agent research system* · Kim et al., *Towards a Science of Scaling Agent Systems* (arXiv:2512.08296).
+- Google SRE Book, cap. 22 *Addressing Cascading Failures* · Amazon Builders' Library, *Timeouts, retries and backoff with jitter*.
+
+## Cómo se conecta
+Antes: módulos 03 (SDK, `OTelInstrumentor`), 04 (GenAI semconv), 07-10 (TraceQL, LogQL, métricas, Grafana). Después: el módulo 12 sustituye herramientas locales
+por **servidores MCP remotos** (nuevas fronteras de propagación y timeout) y el 13 usa el desglose por agente/modelo para el **FinOps**.
+'''
+    (COURSE / MOD / "README.md").write_text(readme, encoding="utf-8")
+    print("OK README", MOD)
+
+
+if __name__ == "__main__":
+    build_lesson()
+    build_project()
+    build_readme()

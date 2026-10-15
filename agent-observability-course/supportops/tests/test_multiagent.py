@@ -186,3 +186,32 @@ def test_real_process_propagation(refund_ticket):
         out2 = w.call(refund_ticket, hdr, refund_ticket.created_at, link_mode="link")
         cons2 = next(s for s in out2["spans"] if s["kind"] == "CONSUMER")
         assert cons2["trace_id"] != tid and cons2["parent_span_id"] is None and cons2["links"][0]["trace_id"] == tid
+
+
+def test_hard_cancel_leaves_no_zombie(refund_ticket):
+    t = _slow_billing(refund_ticket)
+    soft = MultiAgentSupportOps(build_mesh(mode="memory"), policy=DelegationPolicy(timeout_s=6, max_retries=0, propagate_deadline=True, fallback_to_human=False)).run(t)
+    hard = MultiAgentSupportOps(build_mesh(mode="memory"), policy=DelegationPolicy(timeout_s=6, max_retries=0, propagate_deadline=True,
+                                                                                    cancel_in_flight=True, fallback_to_human=False)).run(t)
+    assert soft.zombie_s > 0 and hard.zombie_s == 0 and hard.timeouts == 1 and hard.cost_usd <= soft.cost_usd
+
+
+def test_escalation_fallback_uses_the_right_tool(refund_ticket):
+    mesh = build_mesh(mode="memory")
+    res = MultiAgentSupportOps(mesh, policy=DelegationPolicy(timeout_s=12, max_retries=0)).run(_slow_billing(refund_ticket))
+    assert res.status == "escalated"
+    assert not any(r["attributes"].get("error.type") == "unknown_tool" for r in mesh.span_records())
+
+
+def test_baggage_travels_with_sdk_propagation():
+    from opentelemetry import baggage
+    mesh = build_mesh(mode="memory")
+    ctx = baggage.set_baggage("supportops.customer.tier", "premium")
+    from opentelemetry import context as c
+    tok = c.attach(ctx)
+    try:
+        hdr = inject_sdk()
+    finally:
+        c.detach(tok)
+    assert "premium" in hdr.get("baggage", "") and "traceparent" not in hdr      # sin span activo no hay traceparent
+    assert "baggage" not in inject_manual()                                       # a mano solo viaja traceparent

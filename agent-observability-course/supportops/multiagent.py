@@ -40,6 +40,8 @@ from opentelemetry import context as otel_context
 from opentelemetry import trace as otel_trace
 from opentelemetry.context import Context
 from opentelemetry.trace import Link, NonRecordingSpan, SpanContext, SpanKind, Status, StatusCode, TraceFlags, TraceState
+from opentelemetry.baggage.propagation import W3CBaggagePropagator
+from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from .agent import SupportAgent
@@ -87,11 +89,15 @@ class TraceParent:
         return bool(int(self.flags, 16) & 0x01)
 
 
-def format_traceparent(trace_id: int | str, span_id: int | str, sampled: bool = True, version: str = "00") -> str:
-    """``version-trace_id-parent_id-trace_flags`` en minúsculas hexadecimales (55 caracteres en la versión 00)."""
+def format_traceparent(trace_id: int | str, span_id: int | str, sampled: bool | int = True, version: str = "00") -> str:
+    """``version-trace_id-parent_id-trace_flags`` en minúsculas hexadecimales (55 caracteres en la versión 00).
+
+    ``sampled``: ``bool`` (01/00) o el byte de flags completo (p. ej. ``3``: el SDK reciente añade el bit 1 «random trace id»).
+    """
     t = trace_id if isinstance(trace_id, str) else format(trace_id, "032x")
     s = span_id if isinstance(span_id, str) else format(span_id, "016x")
-    return f"{version}-{t}-{s}-{'01' if sampled else '00'}"
+    flags = sampled if isinstance(sampled, int) and not isinstance(sampled, bool) else (1 if sampled else 0)
+    return f"{version}-{t}-{s}-{flags & 0xFF:02x}"
 
 
 def parse_traceparent(header: str | None) -> TraceParent | None:
@@ -125,7 +131,7 @@ def inject_manual(carrier: dict[str, str] | None = None, span: Any = None) -> di
     carrier = {} if carrier is None else carrier
     sc = (span or otel_trace.get_current_span()).get_span_context()
     if sc.is_valid:
-        carrier["traceparent"] = format_traceparent(sc.trace_id, sc.span_id, bool(sc.trace_flags & TraceFlags.SAMPLED))
+        carrier["traceparent"] = format_traceparent(sc.trace_id, sc.span_id, int(sc.trace_flags))
         if sc.trace_state:
             carrier["tracestate"] = sc.trace_state.to_header()
     return carrier
@@ -143,7 +149,7 @@ def extract_manual(carrier: dict[str, str] | None) -> Context | None:
     return otel_trace.set_span_in_context(NonRecordingSpan(sc), Context())
 
 
-_PROP = TraceContextTextMapPropagator()
+_PROP = CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()])   # traceparent/tracestate + baggage
 
 
 def inject_sdk(carrier: dict[str, str] | None = None) -> dict[str, str]:
@@ -153,6 +159,7 @@ def inject_sdk(carrier: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def extract_sdk(carrier: dict[str, str] | None) -> Context | None:
+    """Contexto remoto (traza + baggage) o ``None`` si no hay ``traceparent`` válido."""
     ctx = _PROP.extract(carrier or {}, context=Context())
     return ctx if otel_trace.get_current_span(ctx).get_span_context().is_valid else None
 
@@ -332,7 +339,8 @@ class DelegationPolicy:
     backoff_s: float = 0.5                 # espera antes de cada reintento (se duplica en cada uno)
     breaker_threshold: int = 0             # 0 = sin disyuntor; N = abrir tras N fallos consecutivos del mismo agente
     breaker_cooldown_s: float = 60.0
-    propagate_deadline: bool = False       # el subagente deja de trabajar al vencer el plazo (no queda «trabajo zombi»)
+    propagate_deadline: bool = False       # el subagente no INICIA llamadas nuevas tras vencer el plazo
+    cancel_in_flight: bool = False         # además cancela lo que está en vuelo al vencer (requiere propagate_deadline): sin zombi
     fallback_to_human: bool = True         # si el principal falla del todo, derivar a escalation-agent
     best_effort_prechecks: bool = True     # un fallo en los pre-chequeos paralelos no aborta el reembolso
 
@@ -363,24 +371,46 @@ class CircuitBreaker:
 class DeadlineGuard(Instrumentor):
     """Propagación de *deadline*: antes de CADA llamada a LLM/herramienta comprueba el plazo absoluto y, si venció, no la hace.
 
-    Se compone DESPUÉS del instrumentor OTel (``CompositeInstrumentor(otel, guard)``) para que el intento rechazado quede
-    registrado como un span con ``error.type=deadline_exceeded``. Una llamada ya iniciada no se interrumpe.
+    ``hard=True`` además **cancela lo que está en vuelo**: si una llamada termina después del plazo, rebobina el reloj
+    simulado hasta el plazo y la convierte en un error ``deadline_exceeded`` (equivale a cancelar la petición HTTP/MCP en
+    cuanto vence el plazo: no hay trabajo zombi). Se compone DESPUÉS del instrumentor OTel
+    (``CompositeInstrumentor(otel, guard)``) para que el intento rechazado quede como un span con ``error.type=deadline_exceeded``.
     """
 
-    def __init__(self, deadline_s: float):
-        self.deadline_s = deadline_s
+    def __init__(self, deadline_s: float, hard: bool = False):
+        self.deadline_s, self.hard = deadline_s, hard
+
+    def _late(self, ctx: RunContext) -> bool:
+        if self.hard and ctx.clock.now_s() > self.deadline_s:
+            ctx.clock._t = self.deadline_s            # rebobinar: SimClock no tiene API pública para ello (truco de laboratorio)
+            return True
+        return False
 
     @contextmanager
     def llm_call(self, ctx: RunContext, info: LLMCallInfo) -> Iterator[None]:
         if ctx.clock.now_s() >= self.deadline_s:
             raise LLMError("deadline exceeded", status=504, error_type="deadline_exceeded", retryable=False, latency_s=0.0)
-        yield
+        try:
+            yield
+        except BaseException as e:
+            if self._late(ctx):
+                raise LLMError("cancelled at deadline", status=504, error_type="deadline_exceeded", retryable=False, latency_s=0.0) from e
+            raise
+        if self._late(ctx):
+            raise LLMError("cancelled at deadline", status=504, error_type="deadline_exceeded", retryable=False, latency_s=0.0)
 
     @contextmanager
     def tool_call(self, ctx: RunContext, info: ToolCallInfo) -> Iterator[None]:
         if ctx.clock.now_s() >= self.deadline_s:
             raise ToolError("deadline exceeded", "deadline_exceeded", latency_s=0.0)
-        yield
+        try:
+            yield
+        except BaseException as e:
+            if self._late(ctx):
+                raise ToolError("cancelled at deadline", "deadline_exceeded", latency_s=0.0) from e
+            raise
+        if self._late(ctx):
+            raise ToolError("cancelled at deadline", "deadline_exceeded", latency_s=0.0)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -503,16 +533,16 @@ class MultiAgentSupportOps:
             sub_ticket = _tp(st.ticket, created_at=t0_s, text=task_text, faults=self._faults_for(agent, st.ticket, attempt, primary))
             instr: Instrumentor = self.mesh.instr(agent)
             if pol.propagate_deadline and deadline_abs_s is not None:
-                instr = CompositeInstrumentor(instr, DeadlineGuard(deadline_abs_s))
+                instr = CompositeInstrumentor(instr, DeadlineGuard(deadline_abs_s, hard=pol.cancel_in_flight))
             sub = make_specialist(agent, instr)
             with attached(self._remote_context(carrier)):          # <- el «otro proceso» extrae el contexto de la cabecera
                 res = sub.run(sub_ticket)
         self.mesh.record_invocation(agent, res.latency_s, res.error_type if res.status in FAIL_STATUS else None)
         elapsed = res.latency_s
         err: str | None = None
-        if elapsed > pol.timeout_s:
-            err, end_s = "timeout", t0_s + pol.timeout_s
-            st.zombie_s += elapsed - pol.timeout_s                 # el subagente siguió trabajando (y gastando) tras el abandono
+        if res.error_type == "deadline_exceeded" or elapsed > pol.timeout_s:
+            err, end_s = "timeout", t0_s + min(elapsed, pol.timeout_s)
+            st.zombie_s += max(elapsed - pol.timeout_s, 0.0)       # el subagente siguió trabajando (y gastando) tras el abandono
             st.timeouts += 1
         else:
             end_s = t0_s + elapsed
@@ -702,7 +732,7 @@ class MultiAgentSupportOps:
         instr.log(octx, logging.WARNING, "subagente principal falló", {"error_type": why})
         if self.policy.fallback_to_human:
             st.fallback_used = True
-            res, end_s, err = self._call_with_retries(st, "escalation-agent", "Escalar a una persona: " + st.ticket.text,
+            res, end_s, err = self._call_with_retries(st, "escalation-agent", "Quiero hablar con un humano (derivar a una persona real). " + st.ticket.text,
                                                       clock.now_s(), primary=False, allow_retry=False)
             clock.advance(max(end_s - clock.now_s(), 0.0))
             if res is not None and err is None:
@@ -729,7 +759,7 @@ class MultiAgentSupportOps:
     def _failure_handoff(self, st: "_State", clock: SimClock, why: str) -> tuple[str, str]:
         if self.policy.fallback_to_human and st.agents_called[-1] != "escalation-agent":
             st.fallback_used = True
-            res, end_s, err = self._call_with_retries(st, "escalation-agent", "Escalar a una persona: " + st.ticket.text,
+            res, end_s, err = self._call_with_retries(st, "escalation-agent", "Quiero hablar con un humano (derivar a una persona real). " + st.ticket.text,
                                                       clock.now_s(), primary=False, allow_retry=False)
             clock.advance(max(end_s - clock.now_s(), 0.0))
             if res is not None and err is None:
@@ -948,23 +978,21 @@ def waterfall_services(rows: Sequence[dict[str, Any]], ax: Any = None, title: st
     pal = service_palette(rows)
     t0 = min(r["start_unix_nano"] for r in rows)
     if ax is None:
-        fig, ax = plt.subplots(figsize=(11, 0.34 * len(ordered) + 1.4))
-        fig.subplots_adjust(left=0.36)
+        fig, ax = plt.subplots(figsize=(11, 0.34 * len(ordered) + 1.8))
+        fig.subplots_adjust(left=0.30)
     for i, (d, r) in enumerate(ordered):
         st = (r["start_unix_nano"] - t0) / 1e9
         du = ((r["end_unix_nano"] or r["start_unix_nano"]) - r["start_unix_nano"]) / 1e9
         err = r["status"] == "ERROR"
         ax.barh(i, max(du, 0.02), left=st, color=pal[r["resource"].get("service.name", "?")], alpha=0.9, height=0.62,
                 edgecolor="#d64545" if err else "none", linewidth=2 if err else 0)
-        ax.annotate(r["name"], xy=(0, i), xycoords=("axes fraction", "data"), xytext=(-330 + 10 * d, 0), textcoords="offset points",
-                    ha="left", va="center", fontsize=7.5)
         ax.text(st + du, i, f" {du:.2f}s", va="center", fontsize=7, color="#6b7280")
-    ax.set_yticks([])
+    ax.set_yticks(range(len(ordered)), ["\u2003" * d + r["name"] for d, r in ordered], fontsize=7.5)
     ax.invert_yaxis()
     ax.set_xlabel("tiempo simulado desde el inicio (s)")
     ax.grid(axis="y", visible=False)
-    ax.legend(handles=[Patch(color=c, label=s.replace("supportops-", "")) for s, c in pal.items()], loc="lower right", fontsize=7.5,
-              ncol=2)
+    ax.legend(handles=[Patch(color=c, label=s.replace("supportops-", "")) for s, c in pal.items()], loc="upper center",
+              bbox_to_anchor=(0.5, -0.14), fontsize=7.5, ncol=min(len(pal), 5))
     if title:
         ax.set_title(title)
     return ax

@@ -135,3 +135,26 @@ Implementa `agent_run/llm_call/tool_call/log` de `Instrumentor` (tiempos = reloj
 - **Prometheus** (vía Collector `:8889`): `gen_ai_client_inference_duration_seconds_{bucket,count,sum}`, `gen_ai_client_inference_usage_input_tokens_total`, `gen_ai_client_inference_usage_output_tokens_total` (la unidad `{token}` no aparece en el nombre).
 - Nota de versiones: las constantes de `opentelemetry.semconv._incubating.attributes.gen_ai_attributes` (paquete Python) **van por detrás de la spec** (p. ej. aún exponen `gen_ai.system` y `gen_ai.usage.cache_creation.input_tokens`; la spec actual usa `gen_ai.provider.name` y `gen_ai.usage.cache_write.input_tokens`): en SupportOps los nombres se escriben como cadenas verificadas contra el registro.
 - Qué se probó: `supportops/tests/test_telemetry.py` (16 pruebas: árbol de spans, atributos, logs correlacionados al 100 %, métricas vs `AgentResult`, errores, captura opt-in, ids deterministas, degradación, recarga de globales, ida y vuelta OTLP/HTTP contra un colector falso local con protobuf real) y un ciclo completo contra Collector+Tempo+Loki+Prometheus reales (30 tickets). **No** probado: OTLP/gRPC, TLS/autenticación, `deterministic_ids` con hilos.
+
+## A5 · Módulos 11–13 (multi-agente, MCP, FinOps) · `supportops.multiagent`, `supportops.mcp_orders`, `supportops.finops`
+
+Compatibles hacia atrás: **no** tocan `agent.py`/`telemetry.py`; se construyen encima de `OTelInstrumentor` (A2). Requieren el extra `[otel]`.
+
+### Módulo 11 · `supportops.multiagent`
+```python
+from supportops.multiagent import build_mesh, MultiAgentSupportOps, DelegationPolicy, RemoteAgentProcess
+mesh = build_mesh(mode="auto")                       # un TelemetryHandle por agente (set_global=False); mode "memory" = sin red
+system = MultiAgentSupportOps(mesh, mode="delegate") # "delegate" (orquestador sintetiza) | "handoff" (transfiere al especialista)
+res = system.run(ticket)                             # MultiResult: status, trace_id, latency_s, cost_usd (ÁRBOL), tokens, per_agent, retries, timeouts, zombie_s…
+rows = mesh.span_records(res.trace_id)               # spans de TODOS los servicios, esquema SPAN_SCHEMA + `links`
+```
+- **Servicios** (`service.name`, `service.version=0.1.0-m11`): `supportops-orchestrator`, `supportops-orders-agent`, `-billing-agent`, `-knowledge-agent`, `-escalation-agent`. Agentes: `orders-agent` (get_order, mock-small), `billing-agent` (get_order+issue_refund, **mock-large**), `knowledge-agent` (search_kb), `escalation-agent` (escalate_to_human). El orquestador enruta con `mock-small` y sintetiza con `mock-large` (`ScriptedLLM`).
+- **Forma de la traza**: raíz `invoke_workflow support_ticket` (INTERNAL, `gen_ai.workflow.name`) → `invoke_agent supportops-orchestrator` → `chat` (enrutar) → por delegación un CLIENT `invoke_agent <agente>` (atributos `supportops.delegation.role=primary|precheck`, `.attempt`, `error.type=timeout|circuit_open|…`) con el `invoke_agent` INTERNAL del servicio como hijo → … → `chat` (síntesis). En *handoff*: `execute_tool transfer_to_<agente>` y el especialista cuelga del workflow (hermano). Atributos de árbol en el workflow: `supportops.tree.cost_usd|input_tokens|output_tokens|agent_calls|retries|timeouts`. **Cuenta tokens/coste solo en las hojas `chat`** (los `invoke_agent` repiten el total de sus hijos).
+- **Métricas** (servicio orquestador): `supportops.delegation.attempts` (`gen_ai.agent.name`, `supportops.outcome=ok|error|timeout|circuit_open`, `supportops.mode`), `supportops.handoffs` (`supportops.target_agent`); en cada agente `gen_ai.invoke_agent.duration` (histograma, `s`); las de `OTelInstrumentor` (`gen_ai.client.inference.*`) con `service_name` por agente.
+- **Fallos dirigidos**: `FaultSpec(kind, {..., "agent": "billing-agent", "sticky": True})`: sin `agent` afectan al especialista principal; sin `sticky` solo se activan en el primer intento (transitorios).
+- **Resiliencia**: `DelegationPolicy(timeout_s, max_retries, backoff_s, breaker_threshold, breaker_cooldown_s, propagate_deadline, cancel_in_flight, fallback_to_human, best_effort_prechecks)`; `DeadlineGuard` (instrumentor que rechaza/cancela llamadas al vencer el plazo; rebobina `SimClock._t`, truco de laboratorio).
+- **Propagación**: `format_traceparent`, `parse_traceparent` (estricto), `inject_manual/extract_manual` (solo `traceparent`/`tracestate`; conservan el byte de flags completo: el SDK reciente emite `-03`) y `inject_sdk/extract_sdk` (traceparent + baggage). `propagation="none"` rompe la cadena a propósito.
+- **Proceso real**: `RemoteAgentProcess(agent)` (`multiprocessing` *spawn*, cola con cabeceras; `link_mode=parent|link|both|none`; span CONSUMER `process supportops.tasks`).
+- **Análisis**: `span_frame`, `agent_tree_text`, `critical_path`, `cost_rollup` (solo hojas), `service_palette`, `waterfall_services`.
+- **Dashboard** `stack/grafana/dashboards/11-multiagente.json` (uid `multiagent`).
+- Pruebas: `supportops/tests/test_multiagent.py` (25). Nota para otros: el propagador del SDK emite flags `03`; si comparas cabeceras con `-01` fallará.
