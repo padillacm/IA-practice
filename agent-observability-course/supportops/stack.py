@@ -116,10 +116,10 @@ def check_stack(require: str | list[str] | tuple[str, ...] = "core", timeout: fl
         if st.degraded:
             print(f"\nFaltan servicios requeridos: {', '.join(st.missing)}")
             if st.starting:
-                print(f"  (....) = arrancando: {', '.join(st.starting)}. Loki tarda ~20 s y Pyroscope ~30 s en estar listos: reintenta.")
+                print(f"  (....) = arrancando: {', '.join(st.starting)}. Loki tarda ~20 s y Pyroscope ~60 s en estar listos: reintenta.")
             if shutil.which("docker") is None:
                 print("No encuentro `docker` en el PATH: instálalo (ver módulo 00) o trabaja en MODO DEGRADADO.")
-            print("Para levantarlos (aprox. 1,2 GB de RAM el perfil core):\n  " + st.command)
+            print("Para levantarlos (el perfil core ocupa ~0,4 GB de RAM en reposo y ~1 GB con carga):\n  " + st.command)
             print("\nMODO DEGRADADO: el notebook sigue funcionando con datos pregrabados "
                   "(supportops.sample_data, mismo esquema), pero NO verás nada en Grafana.")
         else:

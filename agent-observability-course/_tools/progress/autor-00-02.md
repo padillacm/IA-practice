@@ -1,7 +1,7 @@
 # Progreso: autor-00-02
 Agente: Autor A1 · Módulos: 00–02
 - [x] Infraestructura compartida: stack/ (Compose + configs verificados con Docker real), supportops/ (agente, mock, tools, tráfico, fallos, check_stack, backends, viz, datos pregrabados, 20 tests), pyproject.toml, _tools/INTERFACES.md
-- [ ] 00_entorno (build_00.py → README + lección + proyecto)
+- [x] 00_entorno (build_00.py → README + lección 44md+22code, 10 gráficos; proyecto 19md+10code; ejecutado con nbclient online y degradado: 0 errores)
 - [ ] 01_agente_base
 - [ ] 02_tres_pilares
 - [ ] check_course.py OK + informe final

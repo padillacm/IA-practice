@@ -6,7 +6,6 @@ API pública (ver agent-observability-course/_tools/INTERFACES.md):
 """
 from __future__ import annotations
 
-from . import backends, sample_data, schema
 from .agent import SYSTEM_PROMPT, SupportAgent
 from .clock import SIM_EPOCH_S, SimClock, stable_hex, stable_rng
 from .config import Settings, get_settings
@@ -28,3 +27,10 @@ __all__ = [
     "Instrumentor", "CompositeInstrumentor", "RunContext", "LLMCallInfo", "ToolCallInfo", "RecordingInstrumentor",
     "SimClock", "SIM_EPOCH_S", "stable_rng", "stable_hex", "check_stack", "StackStatus", "Settings", "get_settings",
 ]
+
+
+def __getattr__(name: str):  # importación perezosa de submódulos (evita avisos con `python -m supportops.sample_data`)
+    if name in ("backends", "sample_data", "schema", "viz", "catalog", "pricing", "recording"):
+        import importlib
+        return importlib.import_module(f".{name}", __name__)
+    raise AttributeError(name)

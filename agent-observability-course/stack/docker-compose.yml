@@ -1,7 +1,7 @@
 # Stack de observabilidad del curso. Ejecuta SIEMPRE desde esta carpeta (stack/):
-#   docker compose --profile core up -d                      # Collector + Tempo + Loki + Grafana  (~1,2 GB RAM)
-#   docker compose --profile core --profile metrics up -d    # + Prometheus                        (~+0,3 GB)
-#   docker compose --profile profiling up -d                 # + Pyroscope (módulo 17)             (~+0,3 GB)
+#   docker compose --profile core up -d                      # Collector + Tempo + Loki + Grafana  (~0,4 GB RAM en reposo)
+#   docker compose --profile core --profile metrics up -d    # + Prometheus                        (+~0,05 GB)
+#   docker compose --profile profiling up -d                 # + Pyroscope (módulo 17)             (+~0,06 GB)
 #   docker compose --profile all up -d                       # todo
 #   docker compose down            # para (conserva datos)      |  docker compose down -v   # borra volúmenes
 # Cada servicio pertenece a un perfil: sin --profile no arranca nada (a propósito).

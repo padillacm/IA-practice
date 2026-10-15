@@ -9,10 +9,10 @@ Ejecuta siempre desde `stack/` (o usa `-f`). Sin `--profile` no arranca nada.
 
 | Perfil | Servicios | RAM aprox. | Comando |
 |---|---|---|---|
-| `core` | `otel-collector`, `tempo`, `loki`, `grafana` | ~1,2 GB | `docker compose --profile core up -d` |
-| `metrics` | `prometheus` | +0,3 GB | `docker compose --profile core --profile metrics up -d` |
-| `profiling` | `pyroscope` (vacío; lo usa el módulo 17) | +0,3 GB | `docker compose --profile profiling up -d` |
-| `all` | todos | ~2 GB | `docker compose --profile all up -d` |
+| `core` | `otel-collector`, `tempo`, `loki`, `grafana` | ~0,4 GB en reposo (medido), ≤ ~1 GB con carga | `docker compose --profile core up -d` |
+| `metrics` | `prometheus` | +~0,05 GB | `docker compose --profile core --profile metrics up -d` |
+| `profiling` | `pyroscope` (vacío; lo usa el módulo 17) | +~0,06 GB | `docker compose --profile profiling up -d` |
+| `all` | todos | ~0,5 GB en reposo; disco de imágenes ≈ 3,5 GB | `docker compose --profile all up -d` |
 
 Parar: `docker compose --profile all down` (conserva datos) · borrar datos: `down -v`.
 
@@ -22,10 +22,10 @@ Parar: `docker compose --profile all down` (conserva datos) · borrar datos: `do
 |---|---|---|---|
 | `otel-collector` | `otel/opentelemetry-collector-contrib:0.162.0` | 4317 (OTLP gRPC), 4318 (OTLP HTTP), 13133 (health), 8888 (métricas internas), 8889 (métricas de apps) | `GET :13133/` → 200 |
 | `tempo` | `grafana/tempo:3.1.0` | 3200 (API HTTP). OTLP gRPC 4317 **solo dentro de la red** | `GET :3200/ready` |
-| `loki` | `grafana/loki:3.7.8` | 3100 (API HTTP, OTLP en `/otlp`) | `GET :3100/ready` (503 los primeros ~15–20 s) |
+| `loki` | `grafana/loki:3.7.8` | 3100 (API HTTP, OTLP en `/otlp`) | `GET :3100/ready` (503 los primeros ~17 s medidos) |
 | `grafana` | `grafana/grafana:13.2.4` | 3000 | `GET :3000/api/health` |
 | `prometheus` | `prom/prometheus:v3.15.0` | 9090 | `GET :9090/-/ready` |
-| `pyroscope` | `grafana/pyroscope:2.1.2` | 4040 | `GET :4040/ready` (503 los primeros ~30 s) |
+| `pyroscope` | `grafana/pyroscope:2.1.2` | 4040 | `GET :4040/ready` (503 el primer minuto: ~60 s medidos) |
 
 - Las versiones se sobrescriben con variables: `OTELCOL_VERSION`, `TEMPO_VERSION`, `LOKI_VERSION`, `GRAFANA_VERSION`, `PROMETHEUS_VERSION`, `PYROSCOPE_VERSION`. `TEMPO_CONFIG=tempo-metrics.yaml` activa el metrics-generator (span metrics + service graphs, módulo 07; requiere `metrics`).
 - Por qué estas versiones: son las últimas estables al construir el curso (Docker Hub, oct-2026): **Tempo 3.x** cambia la arquitectura (sin ingester/compactor: `live_store` + `backend_scheduler`; monolítico sin Kafka); **Grafana 13**: el acceso anónimo solo puede ser *Viewer*, por eso el laboratorio usa login `admin`/`admin`. El nombre de exporters del Collector contrib **0.162** es `otlp_grpc` / `otlp_http` (ya no `otlp` / `otlphttp`).
