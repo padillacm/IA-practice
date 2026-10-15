@@ -102,7 +102,8 @@ def _panel(kind: str, title: str, targets: Sequence[dict[str, Any]], *, w: int, 
 def timeseries(title: str, targets: Sequence[dict[str, Any]], *, unit: str = "short", w: int = 12, h: int = 8, description: str = "",
                stack: bool = False, fill: int = 12, min: float | None = None, max: float | None = None, legend: str = "list",
                thr: dict[str, Any] | None = None, thr_style: str = "line", links: Sequence[dict[str, Any]] = (),
-               overrides: Sequence[dict[str, Any]] = (), decimals: int | None = None, log_scale: int | None = None) -> dict[str, Any]:
+               overrides: Sequence[dict[str, Any]] = (), decimals: int | None = None, log_scale: int | None = None,
+               data_links: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
     custom: dict[str, Any] = {"drawStyle": "line", "lineWidth": 2, "fillOpacity": fill, "showPoints": "never", "spanNulls": True,
                               "stacking": {"mode": "normal" if stack else "none", "group": "A"},
                               "thresholdsStyle": {"mode": thr_style if thr else "off"}}
@@ -116,6 +117,8 @@ def timeseries(title: str, targets: Sequence[dict[str, Any]], *, unit: str = "sh
     if decimals is not None:
         d["decimals"] = decimals
     d["thresholds"] = thr or thresholds((None, GREEN))
+    if data_links:
+        d["links"] = list(data_links)
     opts = {"legend": {"displayMode": legend, "placement": "bottom", "showLegend": legend != "hidden"},
             "tooltip": {"mode": "multi", "sort": "desc"}}
     return _panel("timeseries", title, targets, w=w, h=h, description=description, options=opts, defaults=d, links=links, overrides=overrides)
@@ -124,7 +127,7 @@ def timeseries(title: str, targets: Sequence[dict[str, Any]], *, unit: str = "sh
 def stat(title: str, expr_or_target: str | dict[str, Any], *, unit: str = "short", w: int = 4, h: int = 4, description: str = "",
          thr: dict[str, Any] | None = None, color_mode: str = "background", graph: str = "area", decimals: int | None = None,
          links: Sequence[dict[str, Any]] = (), reduce: str = "lastNotNull", no_value: str = "sin datos", mappings: Sequence[dict] = (),
-         datasource: dict[str, Any] | None = None) -> dict[str, Any]:
+         datasource: dict[str, Any] | None = None, data_links: Sequence[dict[str, Any]] = ()) -> dict[str, Any]:
     t = prom(expr_or_target, "") if isinstance(expr_or_target, str) else expr_or_target
     if datasource:
         t = {**t, "datasource": datasource}
@@ -132,6 +135,8 @@ def stat(title: str, expr_or_target: str | dict[str, Any], *, unit: str = "short
                          "mappings": list(mappings)}
     if decimals is not None:
         d["decimals"] = decimals
+    if data_links:
+        d["links"] = list(data_links)
     opts = {"colorMode": color_mode, "graphMode": graph, "justifyMode": "auto", "textMode": "auto", "orientation": "auto",
             "reduceOptions": {"calcs": [reduce], "fields": "", "values": False}}
     return _panel("stat", title, [t], w=w, h=h, description=description, options=opts, defaults=d, links=links)
@@ -193,6 +198,20 @@ def traces_table(title: str, traceql: str, *, w: int = 24, h: int = 9, descripti
                   defaults={"custom": {"align": "auto", "cellOptions": {"type": "auto"}}})
 
 
+def field_link(field: str, *links: dict[str, Any]) -> dict[str, Any]:
+    """Override de campo: añade *data links* a la columna/campo ``field`` (p. ej. el ``traceID`` de una tabla de trazas)."""
+    return {"matcher": {"id": "byName", "options": field}, "properties": [{"id": "links", "value": list(links)}]}
+
+
+def alertlist(title: str, *, w: int = 8, h: int = 6, description: str = "", states: Sequence[str] = ("firing", "pending", "error")) -> dict[str, Any]:
+    """Panel con las alertas de Grafana (estado actual). ``states``: subconjunto de firing, pending, noData, normal, error."""
+    return {"type": "alertlist", "title": title, "description": description, "gridPos": {"x": 0, "y": 0, "w": w, "h": h},
+            "options": {"viewMode": "list", "groupMode": "default", "groupBy": [], "maxItems": 10, "sortOrder": 1, "dashboardAlerts": False,
+                        "alertName": "", "alertInstanceLabelFilter": "", "showInstances": False, "folder": None,
+                        "stateFilter": {"firing": "firing" in states, "pending": "pending" in states, "noData": "noData" in states,
+                                        "normal": "normal" in states, "error": "error" in states}}}
+
+
 def text(title: str, markdown: str, *, w: int = 24, h: int = 3) -> dict[str, Any]:
     return {"type": "text", "title": title, "gridPos": {"x": 0, "y": 0, "w": w, "h": h}, "transparent": False,
             "options": {"mode": "markdown", "content": markdown}}
@@ -213,6 +232,11 @@ def var_query(name: str, query: str, *, label: str | None = None, multi: bool = 
     if current:
         v["current"] = {"text": current, "value": current}
     return v
+
+
+def var_textbox(name: str, *, label: str | None = None, default: str = "") -> dict[str, Any]:
+    return {"name": name, "label": label or name, "type": "textbox", "query": default, "current": {"text": default, "value": default},
+            "options": [{"selected": True, "text": default, "value": default}], "hide": 0}
 
 
 def var_custom(name: str, values: Sequence[str], *, label: str | None = None, default: str | None = None, multi: bool = False) -> dict[str, Any]:
@@ -401,3 +425,33 @@ def query_check(d: Mapping[str, Any], *, base: str = "http://localhost:3000", au
                 rec.update(ok=True, frames=len(fr), rows=sum(len((f.get("data", {}).get("values") or [[]])[0]) for f in fr))
             out.append(rec)
     return out
+
+
+def grafana(method: str, path: str, payload: Any = None, *, base: str = "http://localhost:3000", auth: tuple[str, str] = ("admin", "admin"),
+            timeout: float = 30.0) -> Any:
+    """Llamada a la API HTTP de Grafana (basic auth del laboratorio). Devuelve el JSON decodificado (o ``{}``); lanza ``RuntimeError``
+    con el cuerpo de la respuesta si el estado no es 2xx. Ejemplo: ``grafana("GET", "/api/health")``."""
+    import base64
+    import urllib.error
+    import urllib.request
+    tok = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(base + path, data=data, method=method.upper(),
+                                 headers={"Authorization": f"Basic {tok}", "Content-Type": "application/json", "Accept": "application/json"})
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=timeout) as r:
+            body = r.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"{e.code} {method} {path}: {e.read()[:400].decode(errors='replace')}") from e
+    return json.loads(body) if body else {}
+
+
+def upload(d: "Dashboard | Mapping[str, Any]", *, folder: str = "Curso observabilidad de agentes", **kw: Any) -> dict[str, Any]:
+    """Sube (crea o sobrescribe) un dashboard por la API, en la carpeta indicada (la crea si no existe). Útil en el proyecto del módulo 10:
+    los dashboards «de verdad» van por provisioning (archivo), este atajo es para iterar."""
+    body = d.to_dict() if hasattr(d, "to_dict") else dict(d)
+    folders = grafana("GET", "/api/folders", **kw)
+    uid = next((f["uid"] for f in folders if f["title"] == folder), None)
+    if uid is None:
+        uid = grafana("POST", "/api/folders", {"title": folder}, **kw)["uid"]
+    return grafana("POST", "/api/dashboards/db", {"dashboard": {**body, "id": None}, "folderUid": uid, "overwrite": True}, **kw)
