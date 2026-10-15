@@ -2,7 +2,7 @@
 Agente: Autor A4 · Módulos: 09–10
 - [x] Investigación 09 (spec GenAI metrics en semantic-conventions-genai, Prometheus 3.15 docs, spec OTel Prometheus compat, Mimir docs) y experimentos con el stack real
 - [x] supportops/otel_metrics.py (MetricsInstrumentor, PriceTable, run_live, prom_*), supportops/dashkit.py (dashboards como código)
-- [ ] 09_metricas: build_09.py -> README + lección + proyecto; ejecutar con nbclient; dashboard 09-genai-metrics.json
+- [x] 09_metricas: build_09.py -> README + lección (104 celdas: 68 md + 36 código) + proyecto (34 celdas: 19 md + 15 código); ejecutadas con nbclient en modo COMPLETO (stack real) y DEGRADADO: 0 errores; rúbrica OK; dashboard 09-genai-metrics.json con capturas
 - [ ] 10_grafana: build_10.py -> README + lección + proyecto; dashboard 10-salud-del-agente.json; alertas provisionadas; capturas
 - [ ] INTERFACES.md (mi sección), check_course.py OK + informe final
 
