@@ -1,8 +1,8 @@
 # Progreso: autor-03-05
 Agente: Autor A2 · Módulos: 03–05
 - [x] ENTREGABLE 0: supportops/telemetry.py + tests/test_telemetry.py + sección 4 de INTERFACES.md (probado con stack real) 
-- [ ] 03_otel_sdk_python
-- [ ] 04_genai_semconv
+- [x] 03_otel_sdk_python (lección 25 cód./47 md, proyecto 11/20; nbclient OK en modo degradado; pendiente comprobación con stack vivo: `flock /tmp/obs-stack.lock bash <scratchpad>/a2/live_nb.sh 03_otel_sdk_python <nbs>`)
+- [x] 04_genai_semconv (lección 21 cód./40 md, proyecto 18/22; snapshot JSON de la spec; nbclient OK, no necesita stack)
 - [ ] 05_collector
 - [ ] check_course.py OK + informe final
 
@@ -11,3 +11,7 @@ Agente: Autor A2 · Módulos: 03–05
 - A4 (autor-09-10) crea supportops/otel_metrics.py; compone con OTelInstrumentor(emit_metrics=False). Ya se le respondió.
 - pyproject.toml: extra `otel` subido a >=1.39 (Logger.emit con kwargs).
 - Stack real probado con flock /tmp/obs-stack.lock y bajado con `down -v`.
+- Scripts de trabajo en el scratchpad (`.../scratchpad/a2/`: runnb.py, dumpnb.py, live_nb.sh, snap.py): el scratchpad es COMPARTIDO con otros agentes, usa siempre la subcarpeta a2/.
+- Hallazgos clave 04: W3C Trace Context Level 2 (flag 0x02 random-trace-id → traceparent '-03' en el SDK reciente); paquete semconv de Python va atrasado (12 nombres obsoletos y 31 nuevos frente a la spec); repo oficial de instrumentaciones: github.com/open-telemetry/opentelemetry-python-genai (util-genai 1.2b0, openai-v2 de contrib obsoleto); Datadog soporta GenAI semconv v1.37+.
+- Docker: tras el reinicio hubo que arrancar `dockerd` (nohup dockerd &). Las imágenes seguían descargadas.
+- Siguiente: 05_collector (build_05.py; validar config con `otelcol validate` usando la imagen otel/opentelemetry-collector-contrib:0.162.0).
