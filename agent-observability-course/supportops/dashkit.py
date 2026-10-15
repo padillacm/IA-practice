@@ -347,3 +347,57 @@ def lint(d: Mapping[str, Any]) -> list[str]:
                         if m.group(1) not in ("$__rate_interval", "$agg") and not m.group(1).endswith("m") and not m.group(1).endswith("h"):
                             problems.append(f"«{t}»: ventana de rate rara «{m.group(1)}»")
     return problems
+
+
+def _subst(expr: str, variables: Mapping[str, str], minutes: int) -> str:
+    """Sustituye variables de Grafana por valores concretos para ejecutar la consulta fuera de la UI."""
+    import re
+    builtin = {"__rate_interval": "1m", "__interval": "30s", "__range": f"{minutes}m", "__range_s": str(minutes * 60), "__interval_ms": "30000"}
+    allv = {**builtin, **variables}
+    def sub(m):
+        k = m.group(1) or m.group(2)
+        return allv.get(k, m.group(0))
+    return re.sub(r"\$\{(\w+)(?::\w+)?\}|\$(\w+)", sub, expr)
+
+
+def query_check(d: Mapping[str, Any], *, base: str = "http://localhost:3000", auth: tuple[str, str] = ("admin", "admin"),
+                minutes: int = 15, overrides: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
+    """Ejecuta contra Grafana (``POST /api/ds/query``) **cada consulta de cada panel** de un dashboard y devuelve, por consulta,
+    ``{panel, refId, datasource, ok, frames, rows, error}``. Las variables se sustituyen por «todo» (``.*``) salvo que se indique en
+    ``overrides``. Es la prueba mínima de que un dashboard «como código» no tiene consultas rotas."""
+    import base64
+    import urllib.request
+    values = {v["name"]: (v.get("allValue") or ".*") if v.get("includeAll") else (v.get("current", {}).get("value") or ".*")
+              for v in d.get("templating", {}).get("list", [])}
+    values.update(overrides or {})
+    tok = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    out = []
+    for p in walk_panels(d):
+        if p["type"] in ("row", "text"):
+            continue
+        for t in p.get("targets", []):
+            ds = t.get("datasource") or p.get("datasource") or {}
+            q = {k: v for k, v in t.items() if k not in ("hide",)}
+            for key in ("expr", "query"):
+                if isinstance(q.get(key), str):
+                    q[key] = _subst(q[key], values, minutes)
+            q.update({"intervalMs": 30000, "maxDataPoints": 300, "datasource": ds})
+            body = json.dumps({"queries": [q], "from": f"now-{minutes}m", "to": "now"}).encode()
+            req = urllib.request.Request(f"{base}/api/ds/query", data=body, method="POST",
+                                         headers={"Authorization": f"Basic {tok}", "Content-Type": "application/json"})
+            rec = {"panel": p.get("title"), "refId": t.get("refId"), "datasource": ds.get("uid"), "ok": False, "frames": 0, "rows": 0, "error": ""}
+            try:
+                with opener.open(req, timeout=30) as r:
+                    res = json.loads(r.read())["results"].get(t.get("refId", "A"), {})
+            except urllib.error.HTTPError as e:           # type: ignore[attr-defined]
+                res = {"error": e.read()[:300].decode(errors="replace")}
+            except Exception as e:  # noqa: BLE001
+                res = {"error": str(e)[:300]}
+            if res.get("error"):
+                rec["error"] = res["error"]
+            else:
+                fr = res.get("frames", [])
+                rec.update(ok=True, frames=len(fr), rows=sum(len((f.get("data", {}).get("values") or [[]])[0]) for f in fr))
+            out.append(rec)
+    return out

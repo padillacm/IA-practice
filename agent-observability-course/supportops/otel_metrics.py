@@ -55,7 +55,7 @@ from .instrument import Instrumentor, LLMCallInfo, RunContext, ToolCallInfo
 
 __all__ = [
     "PriceTable", "ILLUSTRATIVE_PRICES", "MetricsInstrumentor", "make_meter_provider", "run_live", "metric_rows",
-    "prom_api", "prom_instant", "prom_raw", "prom_range", "prom_exemplars", "prom_series_count", "MODEL_CONTEXT_WINDOW",
+    "tempo_spans", "PROM_URL", "prom_api", "prom_instant", "prom_raw", "prom_range", "prom_exemplars", "prom_series_count", "MODEL_CONTEXT_WINDOW",
     "SPEC_DURATION_BOUNDARIES", "SPEC_AGENT_DURATION_BOUNDARIES", "SPEC_TOKEN_BOUNDARIES", "SPEC_CALL_COUNT_BOUNDARIES",
     "TUNED_AGENT_DURATION_BOUNDARIES", "TUNED_CHAT_DURATION_BOUNDARIES", "TUNED_TOOL_DURATION_BOUNDARIES",
     "TUNED_INPUT_TOKEN_BOUNDARIES", "TUNED_OUTPUT_TOKEN_BOUNDARIES", "TUNED_COST_BOUNDARIES",
@@ -395,6 +395,35 @@ def prom_series_count(match: str | None = None) -> int:
     end = time.time()
     d = _prom("/api/v1/series", {"match[]": match, "start": end - 3600, "end": end})
     return len(d.get("data", []))
+
+
+def tempo_spans(trace_json: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Convierte la respuesta de ``backends.tempo_trace`` (OTLP/JSON con ids en base64) a dicts con el esquema de
+    ``SPAN_SCHEMA`` (ids en hex, tiempos en ns enteros) para ``viz.waterfall``."""
+    import base64
+
+    def hx(v: str | None) -> str | None:
+        return base64.b64decode(v).hex() if v else None
+
+    def val(v: Mapping[str, Any]) -> Any:
+        for k, x in v.items():
+            if k in ("intValue",):
+                return int(x)
+            if k == "arrayValue":
+                return [val(i) for i in x.get("values", [])]
+            return x
+    out = []
+    for b in trace_json.get("batches", []):
+        res = {a["key"]: val(a["value"]) for a in b.get("resource", {}).get("attributes", [])}
+        for ss in b.get("scopeSpans", []):
+            for sp in ss.get("spans", []):
+                out.append({"trace_id": hx(sp.get("traceId")), "span_id": hx(sp.get("spanId")), "parent_span_id": hx(sp.get("parentSpanId")),
+                            "name": sp["name"], "kind": sp.get("kind", "").replace("SPAN_KIND_", ""),
+                            "start_unix_nano": int(sp["startTimeUnixNano"]), "end_unix_nano": int(sp["endTimeUnixNano"]),
+                            "status": sp.get("status", {}).get("code", "STATUS_CODE_UNSET").replace("STATUS_CODE_", ""),
+                            "attributes": {a["key"]: val(a["value"]) for a in sp.get("attributes", [])}, "events": sp.get("events", []),
+                            "resource": res, "scope": ss.get("scope", {}).get("name", "")})
+    return out
 
 
 # ---------------------------------------------------------------------------------------------------------------------
