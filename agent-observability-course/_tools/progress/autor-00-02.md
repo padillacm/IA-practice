@@ -3,8 +3,8 @@ Agente: Autor A1 · Módulos: 00–02
 - [x] Infraestructura compartida: stack/ (Compose + configs verificados con Docker real), supportops/ (agente, mock, tools, tráfico, fallos, check_stack, backends, viz, datos pregrabados, 20 tests), pyproject.toml, _tools/INTERFACES.md
 - [x] 00_entorno (build_00.py → README + lección 44md+22code, 10 gráficos; proyecto 19md+10code; ejecutado con nbclient online y degradado: 0 errores)
 - [x] 01_agente_base (lección 48md+27code, 12 gráficos; proyecto 19md+10code; ejecutados con nbclient 0 errores; solución calibrada: R3 8/8, R4 150/150, R5 3/3, R6 prec/recall 1.00)
-- [ ] 02_tres_pilares
-- [ ] check_course.py OK + informe final
+- [x] 02_tres_pilares (lección 46md+18code, 11 gráficos; proyecto 18md+13code: 10 incidentes, rúbrica con verdad en base64, estable en 6 semillas)
+- [x] check_course.py OK (Todo OK) · pendiente solo: informe final (SubagentHandback)
 
 ## Notas para retomar
 - Docker: `dockerd` no corre por defecto en el sandbox; se arranca con `nohup dockerd &` (funciona, pulls OK; Docker Hub puede dar 429: reintentar).

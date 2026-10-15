@@ -88,6 +88,10 @@ tickets = generate_tickets(40 if FAST_DEV_RUN else 400, seed=42, fault_rates=DEF
 ```
 Con el stack caído usa `sample_data.load_runs()/load_spans()/load_logs()` (mismo esquema que lo que genera el agente con `RecordingInstrumentor`).
 
+### Utilidades de builders (opcionales)
+`_tools/builders/_a1_common.py` (del autor A1) ofrece `boot(extras)` (celda que instala `supportops` en editable también en Colab), `IMPORTS` (imports + `FAST_DEV_RUN`/`SEED`), `box(kind, title, body)`, `observe(text)`, `details(summary, body)`, `hint(n, body)` y `nb_for(dir, file, title)`.
+Puedes importarlas (`sys.path.insert(0, <builders>)`; `from _a1_common import ...`) o ignorarlas. Los notebooks de los módulos 00-02 son ejemplos de la plantilla.
+
 ## 3. Qué se probó y qué no (autor A1)
 - Probado con Docker real (daemon 29.8, imágenes descargadas del registro): `docker compose config`; `otelcol validate`, `promtool check config`, `loki -verify-config`; arranque de los 6 servicios; telemetría OTLP/HTTP real (trazas+logs+métricas) → Tempo (`/api/search` TraceQL), Loki (`query_range`, `trace_id` como structured metadata), Prometheus (`smoke_requests_total` vía `:8889`), salud de los 4 datasources en Grafana, dashboard `stack-overview` aprovisionado, `tempo-metrics.yaml` (aparecen `traces_spanmetrics_calls_total`, `_latency_bucket`…), `check_stack()` y `backends.*` contra el stack vivo.
 - **No** probado: adaptadores `anthropic|openai|ollama` contra servidores reales (solo clientes falsos); `tempo-metrics.yaml` en ejecución prolongada (sí se comprobó que genera `traces_spanmetrics_*` en Prometheus); arm64; Windows/WSL; renderizado visual del dashboard en un navegador (se validaron sus consultas contra Prometheus).
