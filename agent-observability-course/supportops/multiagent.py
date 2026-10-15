@@ -961,7 +961,7 @@ def service_palette(rows: Sequence[dict[str, Any]]) -> dict[str, str]:
     return {s: colors[i % len(colors)] for i, s in enumerate(svcs)}
 
 
-def waterfall_services(rows: Sequence[dict[str, Any]], ax: Any = None, title: str = "", hide_chat: bool = False) -> Any:
+def waterfall_services(rows: Sequence[dict[str, Any]], ax: Any = None, title: str = "", hide_chat: bool = False, unit: str = "s") -> Any:
     """Cascada de una traza multi-servicio: color por ``service.name``, contorno rojo = ERROR, ▸ = span de otro servicio que enlaza."""
     import matplotlib.pyplot as plt
     from matplotlib.patches import Patch
@@ -981,15 +981,16 @@ def waterfall_services(rows: Sequence[dict[str, Any]], ax: Any = None, title: st
         fig, ax = plt.subplots(figsize=(11, 0.34 * len(ordered) + 1.8))
         fig.subplots_adjust(left=0.30)
     for i, (d, r) in enumerate(ordered):
-        st = (r["start_unix_nano"] - t0) / 1e9
-        du = ((r["end_unix_nano"] or r["start_unix_nano"]) - r["start_unix_nano"]) / 1e9
+        k = 1e6 if unit == "ms" else 1e9
+        st = (r["start_unix_nano"] - t0) / k
+        du = ((r["end_unix_nano"] or r["start_unix_nano"]) - r["start_unix_nano"]) / k
         err = r["status"] == "ERROR"
-        ax.barh(i, max(du, 0.02), left=st, color=pal[r["resource"].get("service.name", "?")], alpha=0.9, height=0.62,
+        ax.barh(i, max(du, 0.02 if unit == "s" else 0.4), left=st, color=pal[r["resource"].get("service.name", "?")], alpha=0.9, height=0.62,
                 edgecolor="#d64545" if err else "none", linewidth=2 if err else 0)
-        ax.text(st + du, i, f" {du:.2f}s", va="center", fontsize=7, color="#6b7280")
+        ax.text(st + du, i, f" {du:.2f}{unit}" if unit == "s" else f" {du:.1f}{unit}", va="center", fontsize=7, color="#6b7280")
     ax.set_yticks(range(len(ordered)), ["\u2003" * d + r["name"] for d, r in ordered], fontsize=7.5)
     ax.invert_yaxis()
-    ax.set_xlabel("tiempo simulado desde el inicio (s)")
+    ax.set_xlabel("tiempo simulado desde el inicio (s)" if unit == "s" else "tiempo de pared desde el inicio (ms)")
     ax.grid(axis="y", visible=False)
     ax.legend(handles=[Patch(color=c, label=s.replace("supportops-", "")) for s, c in pal.items()], loc="upper center",
               bbox_to_anchor=(0.5, -0.14), fontsize=7.5, ncol=min(len(pal), 5))

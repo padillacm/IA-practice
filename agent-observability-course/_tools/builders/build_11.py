@@ -1380,7 +1380,69 @@ por **servidores MCP remotos** (nuevas fronteras de propagación y timeout) y el
     print("OK README", MOD)
 
 
+def build_dashboard() -> None:
+    """Dashboard «11 · Multi-agente» como código (usa supportops.dashkit, del autor A4)."""
+    sys.path.insert(0, str(COURSE))
+    from supportops.dashkit import Dashboard, bargauge, heatmap, lint, logs, prom, stat, text, thresholds, timeseries, traces_table
+    d = Dashboard("multiagent", "11 · Multi-agente", tags=["curso", "multiagente"], time_from="now-30m",
+                  description="Orquestador + especialistas de SupportOps: delegaciones, errores por agente, latencia, tokens y trazas problemáticas.")
+    d.add(text("Cómo leer este dashboard", "**Delegaciones** = llamadas del orquestador a un especialista (métrica `supportops_delegation_attempts_total`). "
+               "Una subida de `timeout` en **un** agente apunta a ese servicio; mira después la tabla de trazas con error y abre la cascada. "
+               "La tabla de **huérfanos** debe estar vacía: si no, falla la propagación de contexto (módulo 11).", h=3))
+    d.row("Tráfico entre agentes")
+    att = 'supportops_delegation_attempts_total'
+    d.add(
+        stat("Delegaciones por minuto", f"sum(rate({att}[$__rate_interval])) * 60", unit="short", w=5, h=4, color_mode="value",
+             description="Intentos de delegación (incluye reintentos) del orquestador a los especialistas, por minuto."),
+        stat("% delegaciones fallidas", f'sum(rate({att}{{supportops_outcome!="ok"}}[$__rate_interval])) / sum(rate({att}[$__rate_interval]))',
+             unit="percentunit", w=5, h=4, thr=thresholds((None, "green"), (0.05, "orange"), (0.2, "red")),
+             description="Fracción de intentos con resultado distinto de `ok` (timeout, error, circuit_open)."),
+        stat("Handoffs por minuto", "sum(rate(supportops_handoffs_total[$__rate_interval])) * 60", unit="short", w=5, h=4, color_mode="value",
+             description="Transferencias de control a un especialista (modo handoff)."),
+        stat("Intentos de reintento", f'sum(increase({att}{{supportops_outcome=~"timeout|error"}}[$__range]))', unit="short", w=5, h=4,
+             thr=thresholds((None, "green"), (5, "orange"), (20, "red")),
+             description="Intentos fallidos en el rango: cada uno suele provocar un reintento (amplificación (r+1)^d)."),
+    )
+    d.add(
+        timeseries("Delegaciones por agente y resultado", [prom(f"sum by (gen_ai_agent_name, supportops_outcome) (rate({att}[$__rate_interval]))",
+                                                                "{{gen_ai_agent_name}} · {{supportops_outcome}}")], unit="reqps", stack=True, w=12,
+                   description="Tasa de intentos por especialista y resultado. Un color nuevo (timeout) en un solo agente señala al culpable."),
+        bargauge("Ratio de fallo por agente", [prom(f'sum by (gen_ai_agent_name) (increase({att}{{supportops_outcome!="ok"}}[$__range])) / sum by (gen_ai_agent_name) (increase({att}[$__range]))',
+                                                    "{{gen_ai_agent_name}}", instant=True)], unit="percentunit", w=12, max=1,
+                 thr=thresholds((None, "green"), (0.05, "orange"), (0.2, "red")),
+                 description="Qué fracción de las delegaciones a cada agente falla en el rango seleccionado."),
+    )
+    d.row("Latencia y tokens")
+    dur = "gen_ai_invoke_agent_duration_seconds_bucket"
+    d.add(
+        timeseries("p95 de invoke_agent por agente", [prom(f"histogram_quantile(0.95, sum by (le, gen_ai_agent_name) (rate({dur}[$__rate_interval])))", "{{gen_ai_agent_name}}")],
+                   unit="s", w=12, description="p95 de la duración de la invocación de cada especialista (métrica `gen_ai.invoke_agent.duration`, spec GenAI en estado Development)."),
+        heatmap("Distribución de duraciones de agentes", f"sum by (le) (increase({dur}[$__rate_interval]))", w=12,
+                description="Histograma de duraciones de todas las invocaciones de agente: dos «montículos» indican dos poblaciones (sanas y en cascada)."),
+        timeseries("Tokens de entrada por servicio", [prom("sum by (service_name) (rate(gen_ai_client_inference_usage_input_tokens_total[$__rate_interval]))", "{{service_name}}")],
+                   unit="short", stack=True, w=12, description="Tokens de entrada por segundo de cada servicio (agente): qué eslabón engorda el contexto."),
+        timeseries("Tokens de salida por servicio", [prom("sum by (service_name) (rate(gen_ai_client_inference_usage_output_tokens_total[$__rate_interval]))", "{{service_name}}")],
+                   unit="short", stack=True, w=12, description="Tokens de salida por segundo de cada servicio."),
+    )
+    d.row("Trazas y logs")
+    d.add(
+        traces_table("Trazas con error en invoke_agent", '{ resource.service.name =~ "supportops-.*" && status = error && span.gen_ai.operation.name = "invoke_agent" }', w=12,
+                     description="Una fila por traza con algún `invoke_agent` en error. Abre el `traceID` para ver la cascada completa (síntoma arriba, causa abajo)."),
+        traces_table("🚨 Raíces huérfanas (fallo de propagación)", '{ span.gen_ai.operation.name = "invoke_agent" && nestedSetParent < 0 && resource.service.name != "supportops-orchestrator" }',
+                     w=12, description="`invoke_agent` sin padre fuera del orquestador: el contexto no cruzó una frontera. En un sistema sano esta tabla está vacía."),
+        traces_table("Peticiones lentas (workflow > 15 s)", '{ name = "invoke_workflow support_ticket" && duration > 15s }', w=12,
+                     description="Workflows de ticket que tardan más de 15 s: candidatos a cascada de timeouts o reintentos."),
+        logs("Logs de agentes (warn/error)", '{service_name=~"supportops-orchestrator|supportops-.*-agent"} | detected_level=~"warn|error"', w=12, h=9,
+             description="Logs con `trace_id`: haz clic en un registro para saltar a su traza."),
+    )
+    problems = lint(d.to_dict())
+    assert not problems, problems
+    path = d.save(COURSE / "stack" / "grafana" / "dashboards" / "11-multiagente.json")
+    print("OK dashboard", path.name)
+
+
 if __name__ == "__main__":
     build_lesson()
     build_project()
     build_readme()
+    build_dashboard()
