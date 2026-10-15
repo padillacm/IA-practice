@@ -340,8 +340,8 @@ ax.set_xlabel("segundos desde que el notebook terminó de enviar"); ax.set_ylabe
 print(DELAY)
 ''')
     md(observe("""
-    - Las trazas **no aparecen al instante**: el Collector agrupa (`batch`, 1 s), el distributor las entrega al live-store y este espera `max_trace_idle` (10 s) sin spans nuevos para considerarlas completas. El orden de magnitud es **decenas de segundos como mucho**, no milisegundos.
-    - Consecuencia operativa: en un incidente, la traza del último minuto puede no estar aún; y en un notebook o un test hay que hacer **polling con plazo** (`wait_for_traces`), no un `sleep` fijo.
+    - **Por identificador, la traza está casi al instante** (décimas de segundo en la medición): el live-store la tiene en memoria desde que llega. **En una búsqueda TraceQL tarda bastante más** (≈ 15-20 s en la medición, ver las mediciones impresas): el live-store espera `max_trace_idle` (10 s) sin spans nuevos antes de considerar la traza completa y buscable; además el Collector agrupa (`batch`, 1 s).
+    - Consecuencia operativa: «tengo el `trace_id` en un log» funciona de inmediato, pero «búscame las trazas con error del último minuto» puede no incluir las más recientes; y en un notebook o un test hay que hacer **polling con plazo** (`wait_for_traces` / reintentos), no un `sleep` fijo.
     - Tempo no tiene noción de «fin de traza»: puede llegar un span más tarde; por eso la traza completa siempre se *reconstruye* al consultar.
     """))
 
@@ -417,8 +417,9 @@ rows = [
     ("no fallaron", "{ status != error }"),
     ("regex anclada: «chat» sin comodín", '{ name =~ "chat" && resource.service.name = "supportops-agent" }'),
     ("regex anclada: con comodín", '{ name =~ "chat.*" && resource.service.name = "supportops-agent" }'),
-    ("atributo ausente cumple '= nil'", '{ resource.service.name = "orders-api" && span.db.system = nil }'),
-    ("atributo ausente NO cumple '!='", '{ resource.service.name = "orders-api" && span.db.system != "mysql" }'),
+    ("atributo ausente cumple '= nil' (kb-search no tiene db.system)", '{ resource.service.name = "kb-search" && span.db.system = nil }'),
+    ("atributo ausente NO cumple '!= \"mysql\"'", '{ resource.service.name = "kb-search" && span.db.system != "mysql" }'),
+    ("el que sí lo tiene cumple '!= \"mysql\"'", '{ resource.service.name = "orders-api" && span.db.system != "mysql" }'),
 ]
 pd.DataFrame([{"qué compruebo": a, "consulta": q, "trazas": n(q)} for a, q in rows]).set_index("qué compruebo")
 ''')
@@ -457,7 +458,7 @@ def show(query, k=2):
         print("      ", ", ".join(f"{s['resource']['service.name']}:{short(s)}" for ss in h.spansets for s in ss[:3]), "…" if h.matched_spans > 3 else "")
 show('{ name =~ "execute_tool.*" } >> { span.db.system = "postgresql" && duration > 100ms }')
 show('{ name =~ "execute_tool.*" } > { span:kind = client }')
-show('{ name =~ "execute_tool.*" } < { span:kind = client }')   # (sintaxis válida; el padre directo de un CLIENT es la herramienta)
+show('{ span:kind = client && resource.service.name = "supportops-agent" } < { name =~ "execute_tool.*" }')   # padre directo (B) de una llamada CLIENT (A)
 show('{ status = error && span.gen_ai.operation.name = "chat" } ~ { span.gen_ai.operation.name = "execute_tool" }')
 show('{ name = "invoke_agent supportops-agent" } >> { status = error && resource.service.name = "orders-api" }')
 ''')
@@ -469,7 +470,7 @@ show('{ name = "invoke_agent supportops-agent" } >> { status = error && resource
     code('''
 show('{ span.gen_ai.operation.name = "execute_tool" } | count() > 3')                       # bucle de herramientas
 show('{ resource.service.name = "kb-search" } | avg(duration) > 200ms')                     # servicio lento de media
-show('{ status = error } | by(resource.service.name) | count() > 4')                        # servicios con >4 errores en la misma traza
+show('{ status = error } | by(resource.service.name) | count() > 1')                        # un servicio con más de un span en error en la misma traza
 show('{ trace:rootService = "supportops-agent" && trace:duration > 4s }')                   # intrínseco de traza: el más barato
 show('{ resource.service.name = "llm-gateway" } | count() > 3 | select(span.http.response.status_code)')
 ''')
@@ -488,11 +489,11 @@ STORY = [("429 (limitación de tasa)", '{ span.http.response.status_code = 429 }
          ("bucle de herramientas", '{ span.gen_ai.operation.name = "execute_tool" } | count() > 3')]
 fig, ax = plt.subplots(figsize=(13, 4.4))
 for lo, hi, name in [(30, 120, "rate_limited"), (180, 270, "llm_provider_degraded"), (330, 450, "orders_api_broken + tools_slow"), (480, 560, "search_loop")]:
-    ax.axvspan(lo / 60, hi / 60, color="#e5e7eb", alpha=.8); ax.text((lo + hi) / 120, len(STORY) - 0.35, name, ha="center", fontsize=8, color="#374151")
+    ax.axvspan(lo / 60, hi / 60, color="#e5e7eb", alpha=.8); ax.text((lo + hi) / 120, -0.62, name, ha="center", fontsize=8, color="#374151")
 for i, (lab_, qq) in enumerate(STORY):
     xs = [(h.start_ns - t0) / 6e10 for h in run(qq)]
     ax.scatter(xs, [i] * len(xs), s=48, color=viz.PALETTE["traces"], alpha=.75, edgecolor="white", zorder=3)
-ax.set_yticks(range(len(STORY))); ax.set_yticklabels([f"{l}\\n({n(q)} trazas)" for l, q in STORY], fontsize=8.5); ax.invert_yaxis()
+ax.set_yticks(range(len(STORY))); ax.set_yticklabels([f"{l}\\n({n(q)} trazas)" for l, q in STORY], fontsize=8.5); ax.set_ylim(len(STORY) - 0.4, -0.95)
 ax.set_xlabel("minuto del lote en que empezó la traza"); ax.set_title("Cada fila es una consulta TraceQL; cada punto, una traza que cumple (sombreado = ventana real del incidente)"); ax.set_xlim(-0.3, 10.2)
 plt.tight_layout(); plt.show()
 ''')

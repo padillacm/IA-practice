@@ -588,7 +588,7 @@ print("nombre del span SERVIDOR:", repr(srv_sdk["name"]), "· kind:", srv_sdk["k
     - Conclusión práctica: **fija la versión del SDK**, escribe una prueba que compruebe los atributos que tus dashboards usan (como esta celda) y completa lo que falta en tu código (`McpToolSpanEnricher`, middleware, métricas).
     """))
     md(box("warn", "Experimental", """
-    Las convenciones MCP de OpenTelemetry están en estado **Development** y el registro de atributos `mcp.*` se ha movido al repositorio de convenciones GenAI. El SDK de Python v2 **cambia rápido** (la 2.3 salió semanas después de la 2.2): no hardcodees nombres de span en alertas sin una prueba de contrato como la de arriba.
+    Las convenciones MCP de OpenTelemetry están en estado **Development** y el registro de atributos `mcp.*` se ha movido al repositorio de convenciones GenAI. El SDK de Python v2 **evoluciona rápido** (al escribir este módulo había ya versiones 2.2 y 2.3 publicadas, y la API de middleware está marcada como provisional): no hardcodees nombres de span en alertas sin una prueba de contrato como la de arriba.
     """))
 
     # ------------------------------------------------------------------------------------------------------------- 11
@@ -672,7 +672,7 @@ TEL.force_flush()
     5. **La spec no cuenta como error lo que causó el llamador** (`-32602`, herramienta inexistente…), pero el SDK marca ERROR en el span servidor para todo `isError`. Si quieres una SLI de disponibilidad del servidor honesta, **clasifica** (tool_error del dominio frente a petición inválida) en tu middleware.
     6. **`traceparent` en `_meta` es entrada no confiable.** Un cliente hostil puede forzar el bit `sampled` (coste de ingesta) o reutilizar `trace_id`s. Para servidores expuestos usa la política `link` (traza propia + enlace). Además `baggage` en `_meta` viaja a todos los servicios: lista blanca de claves.
     7. **La descripción de una herramienta es un prompt.** Fija y vigila su huella: un servidor puede cambiarla entre conexiones (*rug pull*) e inyectar instrucciones; el cambio de huella es **una señal observable y barata** (atributo en el span de conexión + alerta).
-    8. **La spec aún se mueve y el SDK va por delante o por detrás.** Los nombres `mcp.*` están en *Development*; el SDK usa `MCP send …` como nombre de cliente; la 2.3 salió poco después de la 2.2. Una prueba de contrato (atributos que tus paneles necesitan) es la única defensa fiable.
+    8. **La spec aún se mueve y el SDK va por delante o por detrás.** Los nombres `mcp.*` están en *Development*; el SDK usa `MCP send …` como nombre de cliente; hay versiones 2.x frecuentes y el middleware es API provisional. Una prueba de contrato (atributos que tus paneles necesitan) es la única defensa fiable.
     """))
 
     md(box("warn", "⚠️ Errores comunes", """

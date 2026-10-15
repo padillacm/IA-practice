@@ -500,7 +500,7 @@ print(f"\\nSi buscaras UN reembolso por trace_id verías solo {len(one)} spans (
 
     | Opción | Qué es | Cuándo |
     |---|---|---|
-    | **Span link** | El consumidor abre su **propia traza** y enlaza al contexto del productor | **Por defecto en la spec**: obligatorio en lotes (un consumidor procesa N mensajes de N trazas) |
+    | **Span link** | El consumidor abre su **propia traza** y enlaza al contexto del productor | **Por defecto en la spec**: inevitable en lotes (un consumidor procesa N mensajes de N trazas) |
     | **Padre-hijo** | El span `process` cuelga del contexto de creación del mensaje | La spec lo permite **solo para un mensaje por consumidor**; desaconseja usar el contexto de creación como padre del `process` en general |
     | Nada | Se ignoran las cabeceras | El bug de la sección 7 |
 
