@@ -41,7 +41,7 @@ def _base(name: str) -> str:
 
 
 def tempo_search(traceql: str, minutes: int = 60, limit: int = 20) -> dict[str, Any]:
-    """GET /api/search con una consulta TraceQL. Tras enviar trazas espera ~15-30 s (live-store) antes de verlas."""
+    """GET /api/search con una consulta TraceQL. Tras enviar trazas espera de unos segundos a ~30 s (live-store) antes de verlas."""
     now = int(time.time())
     return _get(_base("tempo") + "/api/search", {"q": traceql, "start": now - minutes * 60, "end": now + 60, "limit": limit})
 

@@ -122,6 +122,8 @@ def check_stack(require: str | list[str] | tuple[str, ...] = "core", timeout: fl
             print("Para levantarlos (el perfil core ocupa ~0,4 GB de RAM en reposo y ~1 GB con carga):\n  " + st.command)
             print("\nMODO DEGRADADO: el notebook sigue funcionando con datos pregrabados "
                   "(supportops.sample_data, mismo esquema), pero NO verás nada en Grafana.")
+        elif not required:
+            print("\nEste notebook no requiere servicios del stack (los de arriba son solo informativos).")
         else:
             print("\nTodo lo requerido está arriba: modo completo.")
     return st

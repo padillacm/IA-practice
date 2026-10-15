@@ -104,3 +104,21 @@ def percentile(xs: Iterable[float], q: float) -> float:
     f = int(k)
     c = min(f + 1, len(xs) - 1)
     return xs[f] + (xs[c] - xs[f]) * (k - f)
+
+
+def timeline(steps: Sequence[Any], ax=None, title: str = ""):
+    """Línea de tiempo (Gantt) de los pasos de un ``AgentResult.steps``: azul = LLM, verde = herramienta, rojo = error."""
+    own = ax is None
+    if own:
+        _, ax = plt.subplots(figsize=(10, 0.5 * len(steps) + 1.3))
+    t0 = steps[0].start_s
+    for i, s in enumerate(steps):
+        color = PALETTE["error"] if s.status == "error" else (PALETTE["traces"] if s.kind == "llm" else PALETTE["logs"])
+        ax.barh(i, s.end_s - s.start_s, left=s.start_s - t0, color=color, alpha=0.9, height=0.6)
+        label = f"{'LLM' if s.kind == 'llm' else 'tool'} · {s.name}" + (f"  [{s.error_type}]" if s.error_type else "")
+        ax.text(s.end_s - t0, i, f"  {s.end_s - s.start_s:.2f}s", va="center", fontsize=8, color=PALETTE["neutral"])
+        ax.text(0, i, label + "  ", va="center", ha="right", fontsize=8)
+    ax.set_yticks([]); ax.invert_yaxis(); ax.set_xlabel("tiempo simulado desde el inicio (s)"); ax.grid(axis="y", visible=False)
+    if title:
+        ax.set_title(title)
+    return ax

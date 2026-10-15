@@ -28,6 +28,7 @@ FAULT_KINDS: dict[str, str] = {
 FABRICATED = {
     "order": "Su pedido {oid} salió esta mañana y llegará mañana antes de las 10:00 con GLS (seguimiento TRK00000000).",
     "refund": "Reembolso aprobado de 1299,00 € (ref. RF-99999). Lo verá en su cuenta en menos de una hora.",
+    "stock": "Tenemos más de 500 unidades disponibles y las enviamos hoy mismo.",
     "kb": "Todos nuestros productos tienen 10 años de garantía y aceptamos devoluciones hasta 90 días después de la compra.",
 }
 
@@ -39,6 +40,8 @@ def _fabricate(text: str) -> str:
         return FABRICATED["refund"]
     if m:
         return FABRICATED["order"].format(oid=m.group(0))
+    if any(k in low for k in ("stock", "disponib", "quedan", "unidades")):
+        return FABRICATED["stock"]
     return FABRICATED["kb"]
 
 
