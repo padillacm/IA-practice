@@ -102,6 +102,9 @@ class _Ids(IdGenerator):
         self._current: str | None = None
         self._n = 0
 
+    def is_trace_id_random(self) -> bool:
+        return True                       # random (os) o derivado de SHA-256 (uniforme): activa el flag random-trace-id de W3C Level 2
+
     def begin_trace(self, trace_hex: str) -> None:
         self._pending = trace_hex
 
