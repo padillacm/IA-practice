@@ -1,6 +1,6 @@
 # Progreso: autor-06-08
 Agente: Autor A3 · Módulos: 06–08
-- [ ] 06_autoinstrumentacion  (infra lista; falta build_06.py -> README + lección + proyecto)
+- [x] 06_autoinstrumentacion (README + lección 72 celdas + proyecto 33 celdas; ejecutados con nbclient OK; rúbrica 6/6 con la solución)
 - [ ] 07_tempo_traceql
 - [ ] 08_loki_logql
 - [ ] check_course.py OK + informe final
@@ -20,3 +20,6 @@ Agente: Autor A3 · Módulos: 06–08
   pii_exposure, TicketContextProcessor (on_start), matriz+sensibilidad.
 ## Notas para retomar
 - Tras 06: pull, 07 (Tempo; usar stack vivo con candado /tmp/obs-stack.lock), 08 (Loki). telemetry.py de A2 disponible (setup_telemetry/OTelInstrumentor).
+- 06 TERMINADO (commit). Comandos: `python agent-observability-course/_tools/builders/build_06.py`; ejecución con kernel `v06` (venv con libs): lección 24 s, proyecto 5 s, 0 errores.
+  Regenerar dataset si cambian versiones: `from supportops.autoinstr_lab import build_dataset; build_dataset("06_autoinstrumentacion/recorded/lab_seed42.json.gz")` (~4 min) y revisar cifras de texto (66 trazas, 132/66 spans, 86/59 peticiones, 5 spans con PII).
+- Siguiente: 07_tempo_traceql. Plan: stack vivo con candado; Tempo 3.1 con `TEMPO_CONFIG=tempo-metrics.yaml`; lote con fallos inyectados con `generate_tickets(start_s="live")` + `setup_telemetry` + `OTelInstrumentor`.
