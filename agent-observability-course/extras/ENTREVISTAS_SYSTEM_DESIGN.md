@@ -69,7 +69,7 @@ Multiplica por ≈ 2,5 los bytes por traza (1,8 → 4,7 KB/ticket en el laborato
 Disponibilidad (ok|escalated), latencia (percentil o fracción ≤ umbral, **medida sobre la línea base**), calidad (groundedness, muestra uniforme con IC), coste (USD por ticket resuelto). Presupuesto de error, política de congelación pactada de antemano.
 
 **18. ¿Qué es el burn rate multiventana y por qué?** *(16)*
-Burn = tasa de error / presupuesto. Ventana larga (¿es grave?) y corta (¿sigue?). 14,4× en 1 h/5 min = 2 % del presupuesto mensual en una hora. Una caída **parcial** rara vez llega a 14,4× (con el 20 % del tráfico afectado y un presupuesto del 5 % el máximo es 4×): política de ticket (≥ 3×).
+Burn = tasa de error / presupuesto. Ventana larga (¿es grave?) y corta (¿sigue?). 14,4× en 1 h/5 min = 2 % del presupuesto mensual en una hora. Una caída **parcial** rara vez llega a 14,4× (con el 20 % del tráfico afectado y un presupuesto del 5 % el máximo es 4×): política de ticket (en el Workbook, 1× sostenido durante 3 d con ventana corta de 6 h; una quema de 4× la supera de sobra).
 
 **19. Latencia ↓, coste ↓, 👎 ↑ tras un despliegue. ¿Qué pasó y cómo lo demuestras?** *(15, 21)*
 Regresión silenciosa: el agente dejó de llamar herramientas. Demuestra con herramientas por ticket por versión, fracción sin herramientas, juez/trayectoria; mitiga con rollback.
@@ -88,6 +88,7 @@ Contexto perdido: librería de transporte, gateway que elimina `traceparent`, ca
 
 **24. ¿Qué hay en un buen runbook y un postmortem sin culpa?** *(16)*
 Runbook: qué significa la alerta, primeros 5 minutos, árbol de diagnóstico, mitigación, escalado. Postmortem: impacto con cifras, cronología, causa y factores contribuyentes, acciones con dueño, plazo y tipo (prevenir/detectar/mitigar).
+*Profundiza (nivel senior):* añade cultura de guardia con números: el libro de SRE de Google fija ≥ 50 % de tiempo de ingeniería, ≤ 25 % de guardia y como máximo 2 incidentes por turno (cada uno consume del orden de 6 h con su postmortem); pregunta qué métrica de guardia mirarías (páginas por turno, % accionables). Postmortem sin culpa en el sentido de Allspaw (2012): se pregunta *cómo* el sistema permitió el fallo, no *quién*. *Fuentes: SRE Book cap. 11 y 15; Allspaw, Etsy Code as Craft; cifras confirmadas por búsqueda (sre.google no abre desde el sandbox).*
 
 ### A5 · Calidad y evaluación
 
@@ -96,9 +97,11 @@ Muestreo (estratificado para cazar, uniforme para el SLO), juez LLM con sesgos c
 
 **26. ¿Cómo detectas una regresión de prompt antes de producción?** *(15)*
 Dataset de oro desde trazas, replay con compuerta apareada (McNemar), trayectoria de herramientas, canario con SPRT; evita «mirar 20 veces» (≈ 24 % de falsos positivos).
+*Profundiza:* haz primero un A/A (misma versión contra sí misma) para validar reparto (SRM) y ruido del juez; si vas a mirar de forma continua, usa p-valores siempre válidos (Johari et al., KDD '17) o un SPRT (Wald, 1945), no un p-valor por hora; y recuerda que con 20 casos por brazo solo detectas caídas de ≈ 15-30 puntos (`min_detectable_drop`, módulo 15).
 
 **27. ¿Por qué un LLM-juez puede mentirte?** *(14)*
 Sesgos de verbosidad, posición y autopreferencia; ruido; fallos silenciosos (`parse_error`). Sondas de sesgo por cambio de juez, código antes que LLM para lo verificable, métricas de fallos del juez.
+*Profundiza:* Zheng et al. (2023) midieron > 80 % de acuerdo juez-humano, **igual que entre humanos**: ese 20 % es el techo, no un bug; mídelo en tu dominio. Panickssery et al. (NeurIPS 2024) muestran que la capacidad de un modelo de reconocer su propio texto se correlaciona con su autopreferencia: no uses el mismo modelo como agente y juez sin sonda de autopreferencia.
 
 ### A6 · Privacidad y seguridad
 
@@ -122,6 +125,7 @@ Planificar antes: no escribir PII, contenido en almacén aparte con retención c
 **34. Elige entre instrumentación manual y automática (OpenLIT/OpenLLMetry).** *(06)* Auto: rápido, cubre clientes; riesgos: trazas huérfanas, contenido por defecto, doble instrumentación, ceros falsos en *streaming*. Híbrido: spans de agente/herramienta manuales + auto en el cliente, `max_retries=0`.
 
 **35. Un ejecutivo pregunta «¿cuánto cuesta la observabilidad y qué obtenemos?»** *(18, 22)* Cifras con supuestos, sensibilidad, y beneficios medibles: TTD/TTR de la mesa de incidentes, incidentes evitados por contratos, ahorro por bucles cortados.
+*Profundiza:* separa el coste del agente del de observarlo. Los agentes consumen ≈ 4× los tokens de un chat y los sistemas multi-agente ≈ 15× (Anthropic Engineering, 2025), así que el coste del agente suele dominar al de la telemetría; el de la telemetría se controla con series (`sample_limit` convierte una explosión en un apagón: documentación de Prometheus), muestreo por cola y retención por clase.
 
 **36. ¿Cómo aceptarías una plataforma de observabilidad nueva?** *(21, 22)* Con un examen de incidentes (mesa) + scorecard automático + checklist con lo manual declarado, no con una demo de dashboards.
 
@@ -227,4 +231,6 @@ evaluador online (otro servicio, traza enlazada) ──► eventos de evaluació
 Objetivo: ≥ 11/14 en los tres diseños antes de una entrevista de nivel senior/staff.
 
 ## Lecturas
+> Verificación (16-oct-2026): este documento no contiene enlaces; las referencias son libros y capítulos. Títulos y numeración de los capítulos del libro de SRE (4 *Service Level Objectives*, 6 *Monitoring Distributed Systems*, 11 *Being On-Call*, 15 *Postmortem Culture*) y del Workbook (5 *Alerting on SLOs*) coinciden con el índice; el texto de `sre.google` no abre desde el sandbox, así que las cifras se confirmaron por búsqueda web y no leyendo el capítulo.
+
 - Majors, Fong-Jones, Miranker (2022), *Observability Engineering*, O'Reilly · Beyer et al., *Site Reliability Engineering* (cap. 4, 6, 15) y *The Site Reliability Workbook* (cap. 5) · el compendio del curso (`21_elite_playbook/COMPENDIO_SECRETOS.md`) como lista de comprobación para las respuestas.

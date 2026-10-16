@@ -12,8 +12,8 @@ Agente: Verificador de referencias + Élite V2 · Módulos: 11–22 + extras · 
 - [x] 20_privacidad_seguridad
 - [x] 21_elite_playbook
 - [x] 22_capstone
-- [ ] extras/
-- [ ] check_course.py OK + informe final
+- [x] extras/
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - 11: arXiv 2512.08296 (3 versiones; 17,2x/4,4x estables), Anthropic 4x/15x verificado en la fuente; +3 élite (9-11). Verificado por WebFetch: anthropic.com, platform.claude.com. Bloqueados: sre.google, arxiv, grafana.com, etsy

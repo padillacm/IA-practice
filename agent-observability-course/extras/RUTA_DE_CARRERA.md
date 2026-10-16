@@ -51,8 +51,8 @@ Documento extra del curso «Observabilidad de agentes de IA en producción (Open
 | **Certified Kubernetes Administrator (CKA)** | CNCF / Linux Foundation | Base para operar el despliegue del módulo 19 (aparece como siguiente paso recomendado en la ficha de OTCA) | ✅ existe (la ficha de OTCA lo recomienda); ❔ temario no revisado aquí |
 | **Professional Cloud DevOps Engineer** | Google Cloud | SRE, CI/CD, observabilidad y optimización de coste en GCP | ✅ página oficial accesible; 🟡 precio y recomendaciones de experiencia varían (la ficha habla de 2 horas y 50-60 preguntas; confirma) |
 | **Datadog Fundamentals** (y APM/Log Management) | Datadog | Conocer una plataforma comercial de observabilidad para comparar con el stack abierto | ✅ página oficial de certificación accesible |
-| **Certified Grafana Associate / Professional** | Grafana Labs | Dashboards, alertas y exploración en Grafana | ❔ **no confirmado**: las búsquedas solo devolvieron sitios de terceros (cursos de práctica) que se contradicen sobre el nombre, el precio y el temario; no pude verificar que exista una certificación oficial actual. Comprueba en grafana.com antes de planificar |
-| Insignias/rutas gratuitas de Grafana (*learn.grafana.com*) | Grafana Labs | Aprender la plataforma con rutas guiadas | 🟡 mencionado por una guía de terceros; ❔ no abierto desde el sandbox |
+| **Grafana: insignias de GROT Academy** (y, según terceros, «Certified Grafana Associate») | Grafana Labs | Dashboards, alertas y exploración en Grafana | 🟡 **Lo oficial confirmado:** la página `learn.grafana.com/page/badges-certifications` (GROT Academy) describe **insignias verificables vía Credly** al completar rutas de aprendizaje y superar la evaluación asociada. ❔ **No confirmado:** un examen llamado «Certified Grafana Associate» (≈ 60 preguntas, 90 min, 70 % para aprobar, ≈ 250 USD) lo citan solo sitios de formación de terceros, y una guía de ellos admite no haber podido verificar la tarifa; no encontré un anuncio oficial. **Fuente secundaria / no verificada**: no planifiques ni pagues el examen sin comprobarlo en grafana.com y learn.grafana.com |
+| Rutas de aprendizaje de Grafana (*learn.grafana.com*, GROT Academy) | Grafana Labs | Aprender la plataforma con rutas guiadas | ✅ la página de insignias de GROT Academy existe (resultado de búsqueda); 🟡 qué insignias y cuáles son gratuitas varía: compruébalo allí |
 
 ## 5 · Comunidad y aprendizaje continuo
 
@@ -69,7 +69,7 @@ Documento extra del curso «Observabilidad de agentes de IA en producción (Open
 ### 5.2 · Conferencias
 | Evento | Dato | Verificación |
 |---|---|---|
-| **ObservabilityCON 2026** (Grafana Labs) | San Francisco, 19-21 oct 2026 (el día 19 es de talleres con entrada aparte); versiones de un día en São Paulo, Londres, Madrid y Bengaluru en otoño | ✅ según las páginas de grafana.com encontradas (revisa fechas y precios) |
+| **ObservabilityCON 2026** (Grafana Labs) | San Francisco, 19-21 oct 2026, Pier 27 (el lunes 19 son talleres con entrada aparte); versiones de un día en São Paulo, Londres, Madrid y Bengaluru en otoño | ✅ fechas y sede coinciden en las páginas oficiales de grafana.com devueltas por la búsqueda (16-oct-2026; el sitio no abre desde el sandbox); la oferta de precio anticipado ya había vencido (6-ago), revisa precios; las versiones de un día no se re-verificaron |
 | **KubeCon + CloudNativeCon** (CNCF) | Incluye contenido de observabilidad y OpenTelemetry | ❔ existe (conocimiento general); fechas 2026 no verificadas |
 | **SREcon** (USENIX) | Fiabilidad, incidentes, guardia | ❔ existe (conocimiento general); fechas 2026 no verificadas |
 | **Monitorama** | Monitorización y observabilidad | ❔ existe (conocimiento general); fechas 2026 no verificadas |
@@ -80,9 +80,11 @@ Documento extra del curso «Observabilidad de agentes de IA en producción (Open
 - B. Beyer, C. Jones, J. Petoff, N. R. Murphy (2016), *Site Reliability Engineering*; B. Beyer et al. (2018), *The Site Reliability Workbook*, O'Reilly (ambos gratuitos en línea en el sitio de SRE de Google; ❔ no abierto desde el sandbox).
 - A. Parker, D. Spoonhower, J. Mace, B. Sigelman, R. Isaacs (2020), *Distributed Tracing in Practice*, O'Reilly.
 - B. H. Sigelman et al. (2010), *Dapper* (Google Technical Report) — ✅ confirmado en `research.google`.
-- Netflix Technology Blog (2020), *Edgar: Solving Mysteries Faster with Observability* — ✅ confirmado (copia sindicada; la URL original es la del blog de Netflix).
+- E. Carretto, Netflix Technology Blog (sept-2020), *Edgar: Solving Mysteries Faster with Observability* — ✅ confirmado en una copia sindicada y en la charla de QCon Plus (InfoQ); la URL original es la del blog de Netflix (no abierta desde el sandbox).
 - D. Luu, `post-mortems` (recopilación pública de postmortems), GitHub — ❔ repositorio conocido; no verificado desde el sandbox.
-- OWASP, *Top 10 for LLM Applications 2025* — ✅ confirmado por búsqueda (LLM01 Prompt Injection, LLM02 Sensitive Information Disclosure) en fuentes secundarias; consulta el sitio de OWASP.
+- OWASP, *Top 10 for LLM Applications 2025* — 🟡 confirmado solo en fuentes secundarias (también LLM06 Excessive Agency, LLM07 System Prompt Leakage, LLM10 Unbounded Consumption) (LLM01 Prompt Injection, LLM02 Sensitive Information Disclosure) en fuentes secundarias; consulta el sitio de OWASP.
+- J. Allspaw (2012), *Blameless PostMortems and a Just Culture*, Etsy Code as Craft — ✅ existe (página del blog localizada por búsqueda; la fecha del 22-may-2012 viene de un enlace secundario).
+- Google SRE Workbook (2018) y Book (2016): ✅ capítulos y cifras de burn rate (14,4×/6×/1×), guardia (≤ 25 % del tiempo, ≤ 2 incidentes por turno) confirmados por búsqueda web y citas; el texto de `sre.google` no abre desde el sandbox.
 
 ## 6 · Cómo presentar este curso en una candidatura
 
