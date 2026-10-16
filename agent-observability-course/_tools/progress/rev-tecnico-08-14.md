@@ -6,7 +6,7 @@ Agente: Revisor técnico R2 · Módulos: 08–14 · Informe: agent-observability
 - [x] 11_multiagente (critical_path corregido; cita arXiv v1)
 - [x] 12_mcp_tools (sin cambios: spec MCP verificada, dashboard validado)
 - [x] 13_costes_finops (matices de caché rota, FinOps Foundation, cardinalidad)
-- [ ] 14_evaluacion_online
+- [x] 14_evaluacion_online (texto verbosidad, redacción)
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar

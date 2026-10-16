@@ -238,7 +238,7 @@ print({k: (round(v, 3) if isinstance(v, float) else v) for k, v in cm.items()})
     md(observe("""
     - Con **cero** llamadas a un LLM el evaluador de reglas encuentra **todas** las alucinaciones (sensibilidad 1,0) y no acusa a ninguna respuesta correcta (especificidad 1,0). En este laboratorio las alucinaciones son datos inventados *comprobables*.
     - **Cuidado con extrapolar**: en la vida real hay alucinaciones que el código no ve (un razonamiento falso sin cifras, una paráfrasis que cambia el significado). Para esas hace falta un juez semántico — y ahí empiezan los errores de medición.
-    - Las reglas también se equivocan si olvidas casos: mi primera versión marcaba como inventado el ejemplo de formato `ORD-00000` y el plazo de política «5 días» — los **falsos positivos** de una regla se corrigen añadiendo excepciones, y por eso se mide.
+    - Las reglas también se equivocan si olvidas casos: una primera versión ingenua de este evaluador marcaba como inventado el ejemplo de formato `ORD-00000` y el plazo de política «5 días» — los **falsos positivos** de una regla se corrigen añadiendo excepciones, y por eso se mide.
     """))
 
     # ------------------------------------------------------------------------------------------------------------- 4
@@ -328,7 +328,7 @@ plt.tight_layout(); plt.show()
 print({k: round(m, 3) for k, m, _ in d})
 ''')
     md(observe("""
-    - Con relleno sin información nueva, la puntuación de relevancia **sube** (de ≈ 0,5 a ≈ 0,65 en este laboratorio): el juez confunde longitud con calidad. Es el sesgo de verbosidad descrito por Zheng et al. (2023) para jueces LLM.
+    - Con relleno sin información nueva, la puntuación de relevancia **sube** con cada bloque de relleno (con la muestra rápida de `FAST_DEV_RUN`, solo ≈ 14 casos, de ≈ 0,6 a ≈ 0,8; con `FAST_DEV_RUN=False` la muestra llega a 200 casos y el intervalo de error es mucho más estrecho): el juez confunde longitud con calidad. Es el sesgo de verbosidad descrito por Zheng et al. (2023) para jueces LLM.
     - Consecuencia operativa: si un cambio de prompt hace al agente más hablador, tu «calidad» sube **sin que el cliente esté mejor atendido**. Defensas: rúbricas que penalicen el relleno, normalizar por longitud, y — sobre todo — **sondas de sesgo** como esta, ejecutadas cada vez que cambias de juez.
     """))
     md("## 5.3 Sesgo de posición en comparaciones por pares")
