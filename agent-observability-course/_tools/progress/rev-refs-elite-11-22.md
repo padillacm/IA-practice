@@ -1,7 +1,7 @@
 # Progreso: rev-refs-elite-11-22
 Agente: Verificador de referencias + Élite V2 · Módulos: 11–22 + extras · Informe: agent-observability-course/_tools/REVISION_REFERENCIAS_2.md
 - [x] 11_multiagente
-- [ ] 12_mcp_tools
+- [x] 12_mcp_tools
 - [ ] 13_costes_finops
 - [ ] 14_evaluacion_online
 - [ ] 15_calidad_regresion
@@ -18,3 +18,4 @@ Agente: Verificador de referencias + Élite V2 · Módulos: 11–22 + extras · 
 ## Notas para retomar
 - 11: arXiv 2512.08296 (3 versiones; 17,2x/4,4x estables), Anthropic 4x/15x verificado en la fuente; +3 élite (9-11). Verificado por WebFetch: anthropic.com, platform.claude.com. Bloqueados: sre.google, arxiv, grafana.com, etsy
 - Script de commit: scratchpad/commit.sh
+- 12: SEP-414 (Final, Adrian Cole, 25-abr-2025), Invariant Labs 1-abr-2025, Elastic blog título corregido; +2 élite
