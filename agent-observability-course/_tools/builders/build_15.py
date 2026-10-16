@@ -275,7 +275,7 @@ plt.tight_layout(); plt.show()
 print("n por grupo para detectar 97% → 92%:", required_n_per_arm(0.97, 0.92), "· 90% → 85%:", required_n_per_arm(0.90, 0.85), "· caída mínima con 120 casos y base 97%:", f"{min_detectable_drop(120, 0.97):.1%}")
 ''')
     md(observe("""
-    - Detectar una caída pequeña es **caro**: 5 puntos desde 90 % requieren unos 700 casos *por grupo*; desde 97 %, menos (la varianza es menor cerca del techo) pero aun así cientos. Con 120 casos *independientes* solo ves caídas de ≥ 6–8 puntos: v2 (−16) sí, v2.1 (−5) no… salvo que compares de forma **apareada**, como en la sección 4, donde v2.1 queda al límite de la significación (p ≈ 0,03-0,06).
+    - Detectar una caída pequeña es **caro**: 5 puntos desde 90 % requieren unos 700 casos *por grupo*; desde 97 %, menos (la varianza es menor cerca del techo) pero aun así cientos. Con 120 casos *independientes* solo ves caídas de ≥ 6 puntos si la base es ≈ 97 % (≈ 13 si es ≈ 85 %): v2 (−16) sí, v2.1 (−5) no… salvo que compares de forma **apareada**, como en la sección 4, donde v2.1 queda al límite de la significación (p ≈ 0,03-0,06).
     - Dos formas de ganar poder sin más datos: **comparación apareada** (cada caso es su propio control) y **métricas continuas/más finas** (puntuaciones del juez, no pass/fail).
     - Conclusión práctica: el dataset de oro es una **red de seguridad para regresiones grandes**; las pequeñas se vigilan online con volumen (canario + SLO de calidad, módulo 16).
     """))
@@ -533,7 +533,7 @@ if LIVE:
     1. **Las mejoras de latencia y coste tras un cambio de prompt son sospechosas hasta que se demuestre lo contrario**: suelen ser llamadas a herramientas o razonamiento que dejó de ocurrir. Todo cambio «de eficiencia» necesita guardarraíl de calidad y de trayectoria.
     2. **Evalúa la trayectoria, no solo la respuesta.** Comparar el conjunto/orden de herramientas llamadas con el de la traza aceptada detecta regresiones sin juez, baratas y deterministas (`trajectory_match`). El texto puede cambiar sin ser peor; la trayectoria cambia cuando cambia el comportamiento.
     3. **Compara apareado y al mismo tiempo.** Mismo conjunto de casos (replay) o mismo periodo (canario simultáneo). Comparar «esta semana» con «la semana pasada» mezcla la regresión con la estacionalidad y los cambios de tráfico.
-    4. **Fija el tamaño de muestra y la diferencia relevante antes de mirar**, o usa una prueba secuencial. Mirar cada hora y parar al primer p < 0,05 declara regresiones falsas en ≈ 1 de cada 4 comparaciones (Johari et al., 2017).
+    4. **Fija el tamaño de muestra y la diferencia relevante antes de mirar**, o usa una prueba secuencial. Mirar repetidamente y parar al primer p < 0,05 infla el error de tipo I muy por encima del 5 % (en nuestra simulación de 20 miradas, ≈ 1 de cada 4; el efecto crece con el nº de miradas, ver Johari et al., 2017).
     5. **Un dataset de oro envejece**: pesa los casos por su frecuencia real, retira los obsoletos, añade cada incidente nuevo y vigila la distancia entre su distribución y la de producción (PSI). Un dataset que ya no se parece a producción da luz verde a regresiones reales.
     6. **Los casos de `error` no son tests de calidad.** Un 503 del proveedor no se reproduce en un replay; mezclarlos infla la varianza. Sepáralos en una suite de resiliencia.
     7. **Etiqueta la versión en TODAS las señales** (spans, logs, métricas, eventos de evaluación) y mantén la cardinalidad acotada (versión ≈ decenas de valores, no un hash por despliegue de CI). Sin esa etiqueta, la regresión se descubre por correlación temporal con el calendario de despliegues.
@@ -559,7 +559,7 @@ if LIVE:
     # 13 · Autoevaluación
     """)
     md(details("1 · (Cálculo) Quieres detectar una caída de calidad de 0,90 a 0,85 con α = 5 % y potencia 80 %. ¿Cuántos casos por versión? ¿Cuántos si la base fuera 0,97 y la caída 0,92?",
-               "Con la fórmula de dos proporciones: ≈ 686 por grupo (90 → 85) y ≈ 435 por grupo (97 → 92) con esta aproximación. La varianza \\( p(1-p) \\) es menor cerca de 1, así que la misma caída de 5 puntos requiere menos casos cerca del techo. Con un dataset de 120 casos solo detectas caídas de ≥ 6–8 puntos."))
+               "Con la fórmula de dos proporciones: ≈ 686 por grupo (90 → 85) y ≈ 326 por grupo (97 → 92) con esta aproximación. La varianza \\( p(1-p) \\) es menor cerca de 1, así que la misma caída de 5 puntos requiere menos casos cerca del techo. Con un dataset de 120 casos solo detectas caídas de ≥ 6 puntos (base 97 %) o ≈ 13 (base 85 %)."))
     md(details("2 · (Cálculo) Tras el replay, 14 casos pasaban con v1 y fallan con v2, y 1 caso al revés. ¿Es significativa la regresión?",
                "McNemar exacto: b = 14, c = 1 → n = 15, min = 1. p = 2·P(Bin(15, ½) ≤ 1) = 2·(1 + 15)/32768 ≈ 0,001. Sí: significativa. Solo cuentan los casos discordantes; los que pasan o fallan en ambas versiones no aportan información sobre la diferencia."))
     md(details("3 · (Diagnóstico) Tras un despliegue el coste por ticket baja un 12 %, el p95 baja un 8 % y los errores no cambian. El equipo celebra. ¿Qué miras antes de aceptar?",
