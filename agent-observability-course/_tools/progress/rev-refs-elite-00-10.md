@@ -3,7 +3,7 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - [x] 00_entorno
 - [x] 01_agente_base
 - [x] 02_tres_pilares
-- [ ] 03_otel_sdk_python
+- [x] 03_otel_sdk_python
 - [ ] 04_genai_semconv
 - [ ] 05_collector
 - [ ] 06_autoinstrumentacion
@@ -20,3 +20,4 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - Método: URLs github -> raw.githubusercontent / gh api (repos no habilitados dan 403 en gh api; usar raw README). Script commit: /tmp/claude-0/commit.sh NN msg
 - 01: arXiv x3 y docs Anthropic confirmados por búsqueda; élite +2 (+celda coste cuadrático). Caché 0,1x/1,25x marcada secundaria.
 - 02: Dapper (autores/año/TR) OK, RED OK, ISBN OK, spec Ok-final verificada en trace/api.md. Élite +1 (#10 muestreo, celda medible), +cita Prometheus, +Tempo3 multiplier.
+- 03: Honeycomb distro archivada verificada (búsqueda); pre-fork/service.instance.id verificados en repo opentelemetry.io (raw); spec BSP defaults OK. Corregido: pre-fork afecta a métricas (PeriodicExportingMetricReader), no BSP. Élite +1 (#9 overhead medido).

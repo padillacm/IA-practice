@@ -812,7 +812,7 @@ ax.bar_label(bars, fmt="%.0f µs"); ax.set_xlabel("sobrecoste medio por span (µ
     - **Un SDK por proceso, configurado en el arranque.** Las empresas estandarizan una función `init_telemetry()` (o un *distro* interno) que fija `Resource`, sampler, procesadores y exportador; el código de negocio solo usa la API. Es la misma idea que `supportops.telemetry.setup_telemetry`.
     - **Exporta al Collector local/de la plataforma, no directamente al backend.** El Collector absorbe reintentos, cambia de backend sin redeploy, filtra y añade metadatos (módulo 05). Grafana Labs documenta [Grafana Alloy](https://grafana.com/docs/alloy/latest/introduction/otel_alloy/) como su distribución del OpenTelemetry Collector para este papel.
     - **Los proveedores convergen en el SDK upstream.** Honeycomb, por ejemplo, ya recomienda [el SDK de OpenTelemetry para Python](https://docs.honeycomb.io/send-data/python/opentelemetry-sdk) y declara archivadas sus distribuciones propias: instrumentar con OTel estándar evita el *lock-in*.
-    - **Servidores *pre-fork* (Gunicorn, uWSGI):** la documentación oficial de OpenTelemetry advierte de que bifurcar un proceso con hilos de fondo (el `BatchSpanProcessor`, el `PeriodicExportingMetricReader`) puede dejar hilos «fantasma» y bloqueos; la solución preferida es **inicializar OpenTelemetry después del fork**, en cada worker ([Zero-code Python · Troubleshooting](https://opentelemetry.io/docs/zero-code/python/troubleshooting/)).
+    - **Servidores *pre-fork* (Gunicorn, uWSGI):** la documentación oficial de OpenTelemetry advierte de que bifurcar un proceso crea inconsistencias en los hilos y cerrojos de fondo del SDK (el caso documentado es el del `PeriodicExportingMetricReader`: las **métricas** se rompen con varios workers aunque las trazas suelan funcionar); la solución preferida es **inicializar OpenTelemetry después del fork**, en cada worker ([Zero-code Python · Troubleshooting](https://opentelemetry.io/docs/zero-code/python/troubleshooting/)).
     - **Configuración por entorno** (`OTEL_*`) en el despliegue (Compose, Helm): el mismo código en laboratorio y producción cambia solo de variables. Lo veremos en el módulo 19.
     - **Observa tu observabilidad.** El Collector y el SDK exponen métricas internas (spans aceptados/descartados, cola, fallos de envío): una alerta de «`otelcol_exporter_send_failed_spans > 0`» vale más que descubrir el hueco meses después (módulos 05 y 16).
     """)
@@ -829,7 +829,35 @@ ax.bar_label(bars, fmt="%.0f µs"); ax.set_xlabel("sobrecoste medio por span (µ
     6. **Las cabeceras HTTP no distinguen mayúsculas; los `dict` sí.** Un `extract` sobre `dict(headers)` con `Traceparent` no encuentra `traceparent` y el servidor crea una traza nueva **sin error alguno** (lo vimos en 4.3). Las trazas rotas por esta causa son indistinguibles de las rotas por falta de `inject`.
     7. **El `trace_id` tiene que ser aleatorio de verdad.** `TraceIdRatioBased` decide mirando el `trace_id`, así que un generador de ids no uniforme (con prefijo temporal, como hacen algunos sistemas) **sesga el muestreo**. Por eso W3C Trace Context Level 2 definió el bit `random-trace-id` (`flags & 0x02`) y el SDK de Python lo activa (`traceparent: …-03`): es la promesa de que los 7 bytes de la derecha son aleatorios. Si implementas un `IdGenerator` propio (como el determinista de `supportops.telemetry`, solo para tests), declara `is_trace_id_random()` con honestidad.
     8. **`service.instance.id` es identidad, no adorno.** Cada réplica/worker necesita el suyo (el SDK ≥ 1.44 lo genera y lo regenera tras `fork`, según la documentación oficial): en Prometheus se convierte en la etiqueta `instance`, y compartirlo entre escritores viola el principio de *single-writer* de las métricas. Pero **nunca** lo uses como etiqueta de consulta de negocio.
+    9. **«Muestreado a 0 %» no es «coste 0».** Con un sampler que descarta, el SDK sigue creando el objeto de span no-recording y evaluando el sampler; en una medición de referencia (CPython, exportador nulo) un span descartado costó ≈ la mitad que uno exportado (≈ 10 frente a 18-22 µs), no cero. Además, con exportador nulo `BatchSpanProcessor` **no** salió más barato que `SimpleSpanProcessor` en el hilo del llamador: su ventaja es no bloquearte con la **E/S de red** del exportador real (el `SimpleSpanProcessor` exporta en línea), no ahorrar CPU. *Verificable:* la celda siguiente mide microsegundos por span con tres configuraciones (valores absolutos dependen de tu máquina; mira las **proporciones**). Esto decide si instrumentas bucles internos (cada paso de herramienta sí; cada token no).
     """)
+    code('''
+import time
+class _Null(SpanExporter):
+    def export(self, spans): return SpanExportResult.SUCCESS
+    def shutdown(self): pass
+
+def us_per_span(sampler, processor, n=20_000):
+    tp = TracerProvider(sampler=sampler)
+    if processor: tp.add_span_processor(processor)
+    tr = tp.get_tracer("bench")
+    t0 = time.perf_counter()
+    for i in range(n):
+        with tr.start_as_current_span("execute_tool", attributes={"gen_ai.tool.name": "get_order"}) as sp:
+            sp.set_attribute("k", i)
+    dt = (time.perf_counter() - t0) / n * 1e6
+    tp.shutdown()
+    return dt
+
+res = {
+  "ALWAYS_OFF (sin procesador)": us_per_span(sampling.ALWAYS_OFF, None),
+  "ALWAYS_ON + BatchSpanProcessor": us_per_span(sampling.ALWAYS_ON, BatchSpanProcessor(_Null(), max_queue_size=1_000_000)),
+  "ALWAYS_ON + SimpleSpanProcessor": us_per_span(sampling.ALWAYS_ON, SimpleSpanProcessor(_Null())),
+}
+base = res["ALWAYS_OFF (sin procesador)"]
+for k, v in res.items():
+    print(f"{k:34s} {v:7.1f} µs/span   ({v / base:4.1f}× el descartado)")
+''')
 
     md("""
     ---
@@ -889,6 +917,8 @@ ax.bar_label(bars, fmt="%.0f µs"); ax.set_xlabel("sobrecoste medio por span (µ
     - Repositorio del SDK — <https://github.com/open-telemetry/opentelemetry-python>
     - Grafana Labs. *OpenTelemetry in Alloy* — <https://grafana.com/docs/alloy/latest/introduction/otel_alloy/>
     - Honeycomb. *Send Data with the OpenTelemetry Python SDK* — <https://docs.honeycomb.io/send-data/python/opentelemetry-sdk>
+    - Honeycomb. *Migrate from Honeycomb OTel Distributions to OpenTelemetry* (la distribución Python está archivada y sin mantenimiento; se recomienda el SDK upstream) — <https://docs.honeycomb.io/troubleshoot/product-lifecycle/recommended-migrations/migrate-from-honeycomb-distributions> (confirmado por búsqueda web; el dominio no es accesible desde el entorno de revisión).
+    - OpenTelemetry. Valores por defecto `OTEL_BSP_*` (cola 2048, lote 512, retardo 5 s) — *Environment Variables* del SDK, enlace arriba.
 
     ## Siguiente
     `04_genai_semconv`: tus spans ya existen, pero sus **nombres de atributo** los inventas tú. Las *GenAI semantic conventions* los estandarizan; construirás un linter propio para validarlos.
