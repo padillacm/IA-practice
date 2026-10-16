@@ -276,7 +276,7 @@
           "links": [
             {
               "title": "Ver logs de warn/error",
-              "url": "/explore?schemaVersion=1&panes={\"a\":{\"datasource\":\"loki\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"uid\":\"loki\"},\"expr\":\"{service_name=\\\"$service\\\", detected_level=~\\\"warn|error\\\"}\",\"queryType\":\"range\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}}&orgId=1",
+              "url": "/explore?schemaVersion=1&panes={\"a\":{\"datasource\":\"loki\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"uid\":\"loki\"},\"expr\":\"{service_name=\\\"$service\\\"} | detected_level=~\\\"warn|error\\\"\",\"queryType\":\"range\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}}&orgId=1",
               "targetBlank": true
             }
           ]
@@ -987,7 +987,7 @@
     {
       "type": "table",
       "title": "Trazas más lentas (> 4 s)",
-      "description": "TraceQL: invoke_agent de más de 4 s en el rango del dashboard. Clic en el traceID: abre la traza (señal traza → logs vía el datasource Tempo).",
+      "description": "TraceQL: invoke_agent de más de 4 s en el rango del dashboard. El traceID es un enlace (menú de enlaces: el integrado de Tempo y «Abrir la traza»).",
       "gridPos": {
         "x": 0,
         "y": 23,
@@ -1194,7 +1194,7 @@
     {
       "type": "logs",
       "title": "Logs de warn y error (con trace_id)",
-      "description": "LogQL: logs de nivel warn/error del servicio. Despliega una línea: el campo trace_id tiene un botón «Ver traza en Tempo» (derived field del datasource Loki).",
+      "description": "LogQL: logs de nivel warn/error del servicio (detected_level es metadata estructurada: se filtra DESPUÉS del selector). Despliega una línea: el campo trace_id tiene un botón «Ver traza en Tempo» (derived field del datasource Loki).",
       "gridPos": {
         "x": 8,
         "y": 32,
@@ -1208,7 +1208,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{service_name=\"$service\", detected_level=~\"warn|error\"} |= \"$search\"",
+          "expr": "{service_name=\"$service\"} | detected_level=~\"warn|error\" |= \"$search\"",
           "legendFormat": "",
           "queryType": "range",
           "maxLines": 200,

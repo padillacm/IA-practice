@@ -52,7 +52,7 @@ def make_health_dashboard():
 
     rate_w = "$__rate_interval"
     slow_traces = dk.explore_url("tempo", {"queryType": "traceql", "query": '{ resource.service.name = "$service" && name =~ "invoke_agent.*" && duration > 4s }', "limit": 20, "tableType": "traces"})
-    err_logs = dk.explore_url("loki", {"expr": '{service_name="$service", detected_level=~"warn|error"}', "queryType": "range"})
+    err_logs = dk.explore_url("loki", {"expr": '{service_name="$service"} | detected_level=~"warn|error"', "queryType": "range"})
     d.row("1 · ¿Estoy bien? Los síntomas (RED)")
     d.add(
         dk.stat("Peticiones/s", f'sum(rate(supportops_agent_requests_total{{{SVC},{T}}}[{rate_w}]))', unit="reqps", decimals=2, color_mode="value", w=4,
@@ -95,7 +95,7 @@ def make_health_dashboard():
     trace_link = dk.link("Abrir la traza en Tempo", dk.explore_url("tempo", {"queryType": "traceql", "query": "${__value.raw}"}))
     d.add(
         dk.traces_table("Trazas más lentas (> 4 s)", '{ resource.service.name = "$service" && name =~ "invoke_agent.*" && duration > 4s }', w=12, h=9,
-                        description="TraceQL: invoke_agent de más de 4 s en el rango del dashboard. Clic en el traceID: abre la traza (señal traza → logs vía el datasource Tempo)."),
+                        description="TraceQL: invoke_agent de más de 4 s en el rango del dashboard. El traceID es un enlace (menú de enlaces: el integrado de Tempo y «Abrir la traza»)."),
         dk.traces_table("Trazas con error", '{ resource.service.name = "$service" && status = error }', w=12, h=9,
                         description="TraceQL: trazas con algún span en error."),
     )
@@ -104,8 +104,8 @@ def make_health_dashboard():
     d.add(
         dk.timeseries("Volumen de logs por nivel", [dk.loki(f'sum by (detected_level) (count_over_time({{service_name="$service"}} |= "$search" [$__interval]))', "{{detected_level}}")],
                       unit="short", w=8, h=8, stack=True, description="LogQL de métrica: logs por nivel (detected_level) a lo largo del tiempo."),
-        dk.logs("Logs de warn y error (con trace_id)", '{service_name="$service", detected_level=~"warn|error"} |= "$search"', w=16, h=8,
-                description="LogQL: logs de nivel warn/error del servicio. Despliega una línea: el campo trace_id tiene un botón «Ver traza en Tempo» (derived field del datasource Loki)."),
+        dk.logs("Logs de warn y error (con trace_id)", '{service_name="$service"} | detected_level=~"warn|error" |= "$search"', w=16, h=8,
+                description="LogQL: logs de nivel warn/error del servicio (detected_level es metadata estructurada: se filtra DESPUÉS del selector). Despliega una línea: el campo trace_id tiene un botón «Ver traza en Tempo» (derived field del datasource Loki)."),
     )
     return d
 
@@ -554,7 +554,7 @@ else:
     | Métrica | ¿Cómo evoluciona? ¿Hay picos? | **time series** | `histogram_quantile(0.95, sum by (le)(rate(..._bucket[...])))` |
     | Métrica | ¿Cómo se **distribuye** la latencia? (y rombos de exemplars) | **heatmap** | `sum by (le)(rate(..._bucket[...]))` con *format heatmap* y `exemplar: true` |
     | Traza | ¿Cuáles son las peores peticiones? | **table** (TraceQL, `tableType: traces`) | `{ resource.service.name = "x" && duration > 4s }` |
-    | Log | ¿Qué dijeron los logs? | **logs** | `{service_name="x", detected_level=~"warn\\|error"}` |
+    | Log | ¿Qué dijeron los logs? | **logs** | `{service_name="x"} \\| detected_level=~"warn\\|error"` |
     | Log | ¿Cuánto log y de qué nivel? | **time series** (LogQL de métrica) | `sum by (detected_level)(count_over_time({...}[$__interval]))` |
 
     Para tener datos reales, enviamos **tráfico en vivo con las tres señales** (trazas, métricas y logs) con un incidente en el último tercio: *proveedor lento* y una ráfaga de **errores 503** (suficiente para disparar la alerta de la sección 8). En segundo plano **sondeamos el estado de las alertas** para dibujar su ciclo de vida después.
@@ -636,7 +636,7 @@ if LIVE:
     md("""
     ![Dashboard «Salud del agente» durante el incidente: fila de síntomas con la tasa de error y el p95 en naranja/rojo, alertas activas, series, mapa de calor con exemplars, latencias por LLM y herramienta, tablas de trazas y logs](img/10_salud_incidente.png)
 
-    *Captura real del dashboard `10-salud-del-agente.json` (Grafana 13.2.4) tomada justo tras el incidente de esta sección.* **Qué debe ver el alumno:** (1) arriba, *Tasa de error* y *p95 del agente* **en color** (naranja/rojo) y el panel *Alertas activas* con la regla de error en *Firing*/*Pending*; (2) en el centro, el mapa de calor con cuadrados magenta (exemplars) más calientes en los buckets de 5-10 s; (3) en la fila 2, el p95 de la llamada al LLM disparado y `escalate_to_human`/`issue_refund` como herramientas más lentas; (4) abajo, la tabla de **trazas más lentas** (traceID con enlace), la de trazas con error, el volumen de logs por nivel y los logs de warn/error. Todo cambia con las variables de la cabecera (`Servicio`, `Tier`, `Buscar en logs`).
+    *Captura real del dashboard `10-salud-del-agente.json` (Grafana 13.2.4, Chromium sin interfaz) tomada justo tras un incidente como el de esta sección.* **Qué debe ver el alumno:** (1) arriba, **Tasa de error ≈ 17 % en rojo**, **p95 ≈ 6 s en naranja** y el panel *Alertas activas* con la regla de latencia (y la de error, debajo) en **Firing**; (2) en la fila de tendencia, la tasa por estado con `error`/`escalated` apareciendo en el incidente, los percentiles cruzando la línea roja de 6 s y el mapa de calor con **cuadrados magenta (exemplars)** en los buckets altos; (3) en la fila 2, el p95 de la llamada al LLM disparado y las latencias por herramienta; (4) abajo, las tablas de **trazas más lentas** y **con error** (cada `traceID` es un enlace), el volumen de logs por nivel (WARN en el incidente) y los **logs de warn/error**. Todo cambia con las variables de la cabecera (`Servicio`, `Tier`, `Buscar en logs`).
     """)
 
     # ------------------------------------------------------------------------------------------------ 6 · correlaciones
@@ -749,9 +749,9 @@ else:
     md("""
     ![Vista Explore de Grafana con la traza lenta abierta desde el enlace de datos: cascada de spans invoke_agent, chat y execute_tool, con el panel de logs relacionados](img/10_explore_traza.png)
 
-    *Captura real de **Explore** (Tempo) con la traza abierta a partir de un `traceID` de la tabla.* En la vista de traza, el botón **«Logs for this span»** (datasource Tempo → `tracesToLogsV2`) lanza la consulta `{service_name="supportops-agent"} | trace_id="…"` en Loki con el rango de la traza.
+    *Captura real de **Explore** (Tempo) con la traza del exemplar más lento (20 s) abierta por su `traceID`.* La cascada muestra **por qué** fue lenta: un `invoke_agent` con una llamada al LLM de 7,5 s, una búsqueda en la base de conocimiento de 0,5 s y **otra llamada al LLM de 12,2 s** (el proveedor degradado). Desde aquí, el datasource Tempo (`tracesToLogsV2`) enlaza a los logs de la traza con `{service_name="supportops-agent"} | trace_id="…"`.
 
-    **Explore** es el *banco de pruebas*: allí afinas la consulta (PromQL, LogQL, TraceQL) con sugerencias y *query history*; cuando la tienes, la conviertes en un panel (*Add to dashboard*) **y la llevas al repositorio**. Regla: lo que descubres en Explore y vale la pena repetir, se mete en el JSON.
+**Explore** es el *banco de pruebas*: allí afinas la consulta (PromQL, LogQL, TraceQL) con sugerencias y *query history*; cuando la tienes, la conviertes en un panel (*Add to dashboard*) **y la llevas al repositorio**. Regla: lo que descubres en Explore y vale la pena repetir, se mete en el JSON.
     """)
 
     # ------------------------------------------------------------------------------------------------ 7 · salud del agente
@@ -874,6 +874,11 @@ if LIVE:
     - Tras terminar la ráfaga la alerta **no se resuelve de golpe**: el `rate(...[2m])` sigue «recordando» los errores hasta 2 min después. Elegir la ventana es elegir entre **reaccionar rápido** (ventana corta, más ruido) y **estabilidad**.
     - La regla pausada (`sp-agent-idle`) y las que no se cumplen se quedan en *Normal*.
     """))
+    md("""
+    ![Lista de reglas de alerta en Grafana: las tres reglas provisionadas con la etiqueta Provisioned; la de error y la de p95 en Firing y la de ausencia de tráfico en estado distinto](img/10_alertas.png)
+
+    *Captura real de **Alerting → Alert rules**.* Las tres reglas aparecen marcadas **Provisioned** (no se editan en la UI), agrupadas en la carpeta del curso y el grupo `supportops-sintomas`; las dos primeras en rojo (*Firing*) tras el incidente. Cada una muestra su `summary`, la fuente de datos (Prometheus) y el número de instancias.
+    """)
     code('''
 if LIVE:
     al = dk.grafana("GET", "/api/alertmanager/grafana/api/v2/alerts")
@@ -910,7 +915,8 @@ if LIVE:
     7. **Un YAML de alertas inválido tumba Grafana entero.** Lo vivimos construyendo esta lección: con `interval: 15s` Grafana **no arranca** («interval (15s) should be non-zero and divided exactly by scheduler interval: 10»): el intervalo de evaluación debe ser **múltiplo de 10 s**. Valida el provisioning en un Grafana efímero en CI antes de desplegar. **Provisioning de alertas es de solo lectura en la UI y reemplaza la política raíz.** La documentación lo avisa: los recursos provisionados no se editan desde Grafana, y importar uno existente da conflicto. Y `policies:` **sustituye** el árbol de notificación entero: revisa que tu política por defecto siga teniendo un receptor.
     8. **Variables «All» + `=` = consultas rotas.** «All» (y multi-valor) se expande a una regex: usa `=~`, no `=`. Define `allValue: ".*"` para que «All» no genere una regex gigante con cientos de valores (más rápido y estable).
     9. **Los exemplars solo se dibujan en paneles y consultas que los soportan.** Series temporales y mapas de calor con una consulta de **rango** sobre `_bucket` y `exemplar: true`. Un `histogram_quantile(...)` no tiene exemplars (ya no es un bucket). Por eso la fila 1 incluye un mapa de calor además de las líneas de percentiles.
-    10. **La documentación del dashboard es parte del dashboard.** Cada panel lleva `description` (qué mide, cómo leerlo, umbral); `lint` lo exige. A las 3 de la mañana, el icono «i» ahorra más tiempo que un panel extra.
+    10. **`detected_level` no es una etiqueta de stream.** Lo descubrimos al ver el panel de logs **vacío** con `{service_name="x", detected_level=~"warn|error"}` mientras el panel de volumen (`sum by (detected_level)`) funcionaba: en Loki 3 es **metadata estructurada**: se filtra *después* del selector (`{service_name="x"} | detected_level=~"warn|error"`). Un `query_check` que **cuente filas** (no solo «sin error») lo habría cazado: una consulta puede ser válida y devolver 0 filas.
+    11. **La documentación del dashboard es parte del dashboard.** Cada panel lleva `description` (qué mide, cómo leerlo, umbral); `lint` lo exige. A las 3 de la mañana, el icono «i» ahorra más tiempo que un panel extra.
     """)
 
     md("""
@@ -1087,7 +1093,7 @@ def make_variables() -> list:
 
     Añade a `d` (con `d.add(...)`) dos *stats* (`w=4`):
 
-    1. **«Tasa de error»**: `sum(rate(supportops_agent_requests_total{<SVC>,<TIER>,supportops_status=~"error|max_steps"}[$__rate_interval])) / sum(rate(…{<SVC>,<TIER>}[$__rate_interval]))`, unidad `percentunit`, umbrales **verde → naranja en 0,05 → rojo en 0,10**, y un **data link** «Ver logs de warn/error» a Explore (Loki): `{service_name="$service", detected_level=~"warn|error"}`.
+    1. **«Tasa de error»**: `sum(rate(supportops_agent_requests_total{<SVC>,<TIER>,supportops_status=~"error|max_steps"}[$__rate_interval])) / sum(rate(…{<SVC>,<TIER>}[$__rate_interval]))`, unidad `percentunit`, umbrales **verde → naranja en 0,05 → rojo en 0,10**, y un **data link** «Ver logs de warn/error» a Explore (Loki): `{service_name="$service"} | detected_level=~"warn|error"`.
     2. **«p95 del agente»**: `histogram_quantile(0.95, sum by (le) (rate(gen_ai_invoke_agent_duration_seconds_bucket{<SVC>,<TIER>}[$__rate_interval])))`, unidad `s`, umbrales **4** (naranja) y **6** (rojo), y un **data link** a Explore (Tempo) con las trazas `{ resource.service.name = "$service" && name =~ "invoke_agent.*" && duration > 4s }`.
 
     (`SVC` y `TIER` ya están definidos arriba.) Cada panel necesita `description` (qué mide y cómo leerlo).
@@ -1139,7 +1145,7 @@ def where_row(d: dk.Dashboard) -> dk.Dashboard:
 
     Fila `3 · ¿Por qué?`:
     - **Tabla de trazas** (`dk.traces_table`, `w=12`): TraceQL `{ resource.service.name = "$service" && name =~ "invoke_agent.*" && duration > 4s }`. Añade un **override sobre el campo `traceID`** (`dk.field_link("traceID", enlace)`) cuyo enlace abra Explore (Tempo) con la consulta `${__value.raw}` (el id de la celda).
-    - **Panel de logs** (`dk.logs`, `w=12`): `{service_name="$service", detected_level=~"warn|error"} |= "$search"`.
+    - **Panel de logs** (`dk.logs`, `w=12`): `{service_name="$service"} | detected_level=~"warn|error" |= "$search"`.
 
     Para añadir el override a la tabla modifica `d.d["panels"][-1]["fieldConfig"]["overrides"]` justo después de `d.add(...)`.
     """)
@@ -1340,7 +1346,7 @@ def make_variables() -> list:
 # TODO 2
 def symptom_row(d: dk.Dashboard) -> dk.Dashboard:
     d.row("1 · ¿Estoy bien? Síntomas")
-    err_logs = dk.explore_url("loki", {"expr": '{service_name="$service", detected_level=~"warn|error"}', "queryType": "range"})
+    err_logs = dk.explore_url("loki", {"expr": '{service_name="$service"} | detected_level=~"warn|error"', "queryType": "range"})
     slow = dk.explore_url("tempo", {"queryType": "traceql", "query": '{ resource.service.name = "$service" && name =~ "invoke_agent.*" && duration > 4s }', "limit": 20, "tableType": "traces"})
     d.add(
         dk.stat("Tasa de error", f'sum(rate(supportops_agent_requests_total{{{SVC},{TIER},supportops_status=~"error|max_steps"}}[{RATE}])) / sum(rate(supportops_agent_requests_total{{{SVC},{TIER}}}[{RATE}]))',
@@ -1383,9 +1389,9 @@ def why_row(d: dk.Dashboard) -> dk.Dashboard:
     d.row("3 · ¿Por qué? Trazas y logs concretos")
     link = dk.link("Abrir la traza", dk.explore_url("tempo", {"queryType": "traceql", "query": "${__value.raw}"}))
     d.add(dk.traces_table("Trazas más lentas (> 4 s)", '{ resource.service.name = "$service" && name =~ "invoke_agent.*" && duration > 4s }', w=12, h=9,
-                          description="TraceQL: invoke_agent de más de 4 s. Clic en el traceID: abre la traza."))
+                          description="TraceQL: invoke_agent de más de 4 s. Clic en el traceID: menú de enlaces con «Abrir la traza»."))
     d.d["panels"][-1]["fieldConfig"]["overrides"] = [dk.field_link("traceID", link)]
-    d.add(dk.logs("Logs de warn y error", '{service_name="$service", detected_level=~"warn|error"} |= "$search"', w=12, h=9,
+    d.add(dk.logs("Logs de warn y error", '{service_name="$service"} | detected_level=~"warn|error" |= "$search"', w=12, h=9,
                   description="LogQL: logs warn/error del servicio; filtra con la variable «Buscar en logs»."))
     return d
 
