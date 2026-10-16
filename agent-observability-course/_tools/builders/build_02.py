@@ -718,7 +718,7 @@ ax.set_title("HIPÓTESIS de detectabilidad (la mediremos en el proyecto)"); ax.g
     - W3C, *Trace Context* (cabecera `traceparent`) — <https://www.w3.org/TR/trace-context/> (la especificación de OpenTelemetry ya referencia también el nivel 2, con el flag *random*).
     - Sigelman, Barroso, Burrows et al., *Dapper, a Large-Scale Distributed Systems Tracing Infrastructure*, Google Technical Report dapper-2010-1, 2010 — <https://research.google/pubs/pub36356/>.
     - Beyer, Jones, Petoff, Murphy (eds.), *Site Reliability Engineering*, O'Reilly 2016, cap. 6 *Monitoring Distributed Systems* (las cuatro golden signals) — <https://sre.google/sre-book/monitoring-distributed-systems/>.
-    - Tom Wilkie, *The RED Method: How to Instrument Your Services*, Grafana Labs, 2018 — <https://grafana.com/blog/the-red-method-how-to-instrument-your-services/>.
+    - Tom Wilkie, *The RED Method: How to Instrument Your Services*, Grafana Labs, 2018 — <https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/>.
     - Brendan Gregg, *The USE Method* — <https://www.brendangregg.com/usemethod.html>.
     - Charity Majors, Liz Fong-Jones, George Miranda, *Observability Engineering*, O'Reilly, 2022 (ISBN 978-1-492-07644-5).
     - Prometheus, *Histograms and summaries* y `histogram_quantile` (documentación oficial) — <https://prometheus.io/docs/practices/histograms/>.
