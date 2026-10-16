@@ -156,6 +156,7 @@ import collections, dataclasses, json, math, re, statistics, time
 import yaml
 from IPython.display import Markdown
 from supportops import incidents as I
+from supportops.telemetry import setup_telemetry, OTelInstrumentor
 STACK = check_stack("core+metrics")
 LIVE = not STACK.degraded
 """
@@ -445,11 +446,11 @@ print(f"Ahorro en tickets afectados: {1 - res.iloc[0, 1] / res.iloc[0, 0]:.0%} �
 bC = I.build_incident("INC-C", 7, variant="lesson")
 print(bC.summary()); display(pd.DataFrame(bC.changes)[["minute", "kind", "service", "desc"]].set_index("minute"))
 MC = pd.DataFrame(bC.metrics)
-panels = [("p95_s", "p95 (s)"), ("cost_per_ticket", "coste por ticket (USD)"), ("error_rate", "tickets malos"), ("tool_calls_per_ticket", "herramientas por ticket"), ("thumbs_down_rate", "👎 por ticket")]
+panels = [("p95_s", "p95 (s)"), ("cost_per_ticket", "coste por ticket (USD)"), ("error_rate", "tickets malos"), ("tool_calls_per_ticket", "herramientas por ticket"), ("thumbs_down_rate", "valoración negativa por ticket")]
 fig, axes = plt.subplots(1, 5, figsize=(16, 3.2))
 for ax, (c, ttl) in zip(axes, panels):
     y = MC[c].rolling(5, min_periods=1).mean(); ax.plot(MC["minute"], y, color=viz.PALETTE["traces"]); ax.axvline(bC.extra["params"]["rollout_start"], color="#d64545", ls="--"); ax.set_title(ttl, fontsize=9); ax.set_xlabel("minuto")
-plt.suptitle("Caso 3 · medias móviles de 5 min (línea roja = despliegue de «v2»): latencia y coste ↓, errores sin cambio, 👎 ↑", fontweight="bold"); plt.tight_layout(); plt.show()
+plt.suptitle("Caso 3 · medias móviles de 5 min (línea roja = despliegue de «v2»): latencia y coste ↓, errores sin cambio, valoración negativa ↑", fontweight="bold"); plt.tight_layout(); plt.show()
 ''')
     md(observe("""
     - **Ninguna** señal «mala» salta: la latencia y el coste **bajan**, los errores no cambian. Solo el 👎 sube (y cae el número de herramientas por ticket). Esta es la firma de la **regresión silenciosa** (módulo 15): el agente hace *menos* y lo hace más rápido y más barato.
@@ -469,7 +470,7 @@ pv = g.pivot(index="intent", columns="version", values="mean"); pv.plot.bar(ax=a
 plt.tight_layout(); plt.show()
 ''')
     md(observe("""
-    - Estos tickets **deberían** consultar una herramienta (consultar el pedido, reembolsar). Con `v1` casi ninguno se queda sin llamar; con `v2`, una de cada **tres** respuestas se «inventa» sin consultar: esa es la regresión y el origen del 👎.
+    - Estos tickets **deberían** consultar una herramienta (consultar el pedido, reembolsar). Con `v1` los tickets de estado de pedido **siempre** consultan; con `v2`, una de cada **tres** respuestas se «inventa» sin consultar: esa es la regresión y el origen de la valoración negativa.
     - Lo decisivo fue **etiquetar la versión en los spans** (`gen_ai.agent.version`, módulo 15): sin esa dimensión, el *bubble-up* no habría tenido de dónde tirar. La mitigación: **rollback del prompt** y, después, añadir estos casos al dataset de oro.
     """))
 
@@ -711,9 +712,10 @@ if LIVE and LIVE_OK:
             if v is not None and ok(v): return v
             time.sleep(wait)
         return v
-    p90 = poll(lambda: backends.prom_query('histogram_quantile(0.9, sum by (le) (increase(gen_ai_invoke_agent_tool_calls_bucket{service_name="supportops-agent"}[10m])))'), lambda r: len(r) > 0)
-    p50 = backends.prom_query('histogram_quantile(0.5, sum by (le) (increase(gen_ai_invoke_agent_tool_calls_bucket{service_name="supportops-agent"}[10m])))')
-    cost = backends.prom_query('sum(increase(supportops_agent_request_cost_USD_sum{service_name="supportops-agent"}[10m])) / sum(increase(supportops_agent_request_cost_USD_count{service_name="supportops-agent"}[10m]))')
+    # contadores acumulados desde que arrancó el stack (con una sola muestra de scrape `increase`/`rate` darían NaN)
+    p90 = poll(lambda: backends.prom_query('histogram_quantile(0.9, sum by (le) (gen_ai_invoke_agent_tool_calls_bucket{service_name="supportops-agent"}))'), lambda r: len(r) > 0 and r[0]["value"][1] != "NaN")
+    p50 = backends.prom_query('histogram_quantile(0.5, sum by (le) (gen_ai_invoke_agent_tool_calls_bucket{service_name="supportops-agent"}))')
+    cost = backends.prom_query('sum(supportops_agent_request_cost_USD_sum{service_name="supportops-agent"}) / sum(supportops_agent_request_cost_USD_count{service_name="supportops-agent"})')
     print("Prometheus · herramientas por ticket p50 / p90:", [m["value"][1] for m in p50], [m["value"][1] for m in p90 or []], "· coste medio por ticket:", [m["value"][1] for m in cost])
     tr = poll(lambda: backends.tempo_search('{ name =~ "execute_tool.*" } | count() >= 5', 10, 100).get("traces", []), lambda r: len(r) >= 10, tries=40)
     print("Tempo · trazas con ≥ 5 llamadas a herramientas:", len(tr or []), "· (esperadas ≈ 35-45)")

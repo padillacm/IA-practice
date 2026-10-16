@@ -16,6 +16,7 @@ nb = ["matplotlib>=3.7", "numpy>=1.24", "pandas>=2.0", "pyyaml", "ipykernel", "n
 anthropic = ["anthropic>=0.40"]
 openai = ["openai>=1.50"]
 otel = ["opentelemetry-sdk>=1.39", "opentelemetry-exporter-otlp-proto-http>=1.39"]   # >=1.39: Logger.emit con argumentos nombrados (supportops.telemetry)
+mcp = ["mcp>=2,<3"]            # módulo 12 (servidor/cliente MCP; probado con 2.2.0 y 2.3.0) y supportops.mcp_orders
 dev = ["pytest"]
 
 [tool.setuptools]

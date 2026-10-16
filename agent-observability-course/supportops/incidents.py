@@ -82,6 +82,29 @@ def pct(xs: Sequence[float], q: float) -> float:
     return xs[lo] + (xs[hi] - xs[lo]) * (k - lo)
 
 
+def find_window(x: Sequence[float], min_len: int = 5) -> tuple[int, int, float]:
+    """Ventana ``[a, b)`` cuya media difiere más del resto (estadístico t; ``min_len`` minutos dentro y fuera). Con ~4 tickets/min el ruido por minuto es alto: esto
+    detecta saltos y ventanas sin umbrales. Si la mejor ventana empieza en 0 y no cubre la serie se devuelve su complemento ``(b, n)``."""
+    import numpy as np
+    x = np.asarray(x, float)
+    n = len(x)
+    sd = x.std() or 1.0
+    c = np.concatenate([[0], np.cumsum(x)])
+    best, win = 0.0, (0, n)
+    for a in range(0, n - min_len + 1):
+        for b in range(a + min_len, n + 1):
+            n_in, n_out = b - a, n - (b - a)
+            if n_out < min_len:
+                continue
+            m_in, m_out = (c[b] - c[a]) / n_in, (c[n] - (c[b] - c[a])) / n_out
+            t = (m_in - m_out) / (sd * np.sqrt(1 / n_in + 1 / n_out))
+            if abs(t) > abs(best):
+                best, win = t, (a, b)
+    if win[0] == 0 and win[1] < n:
+        win = (win[1], n)
+    return win[0], win[1], float(best)
+
+
 def minute_table(rows: Sequence[Mapping[str, Any]], t0: float, minutes: int = MINUTES, *, status_key: str = "status", lat_key: str = "latency_s", cost_key: str = "cost_usd",
                  start_key: str = "start_s", extra: Mapping[str, Callable[[list], float]] | None = None) -> list[dict[str, Any]]:
     """Resume filas por ticket en una fila por minuto: n, error_rate (``error|degraded|max_steps``), p95_s, cost_per_ticket, y columnas extra."""
@@ -395,4 +418,4 @@ def evidence_keys(case_id: str) -> list[str]:
     return [k for k in reference_facts(case_id) if k not in ("culprit", "no_tool_share_before")]
 
 
-__all__ = ["PARAMS", "loop_tickets", "CASE_IDS", "CAUSES", "MITIGATIONS", "IncidentBundle", "build_incident", "grade", "reference_facts", "evidence_keys", "minute_table", "trace_table", "pct"]
+__all__ = ["find_window", "PARAMS", "loop_tickets", "CASE_IDS", "CAUSES", "MITIGATIONS", "IncidentBundle", "build_incident", "grade", "reference_facts", "evidence_keys", "minute_table", "trace_table", "pct"]

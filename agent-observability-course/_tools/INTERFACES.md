@@ -325,3 +325,42 @@ K.affinity_experiment(corpus.traces)      # 2 gateways con tail_sampling: sin af
 - **Entorno del sandbox (honestidad)**: `github.io`, `ghcr.io` (blobs), `quay.io` y `registry.k8s.io` bloqueados; Docker Hub y GitHub raw/clones accesibles. kind (1.31/1.34) y k3s **no arrancan pods** (runc anidado: «can't get final child's PID from pipe: EOF»): ningún pod se ejecutó en un clúster. Lo verificado: lint/template/kubeconform de 7 releases (42 manifiestos, 0 inválidos), configuraciones renderizadas validadas con otelcol/Tempo/Loki/promtool, `helm install` y `--dry-run=server` contra k3s 1.31.5, CRs del Operator validados por el esquema de los CRDs reales, flujo de telemetría de extremo a extremo con FlowLab y afinidad con AffinityLab.
 - **Hallazgos medidos**: `load_balancing.resolver.dns.port` debe ser **string** (`"4317"`); el preset `kubernetesAttributes` exige la variable `K8S_NODE_NAME` (la inyecta el pod); las listas de values se **reemplazan** y `null` borra (`K.deep_merge` = Helm, comprobado contra `helm template`); sin afinidad por traceID con 2 réplicas solo el 42 % de las trazas «interesantes» quedaron completas (100 % con `load_balancing`); métricas internas del Collector sin sufijo `_total` (`otelcol_receiver_accepted_spans`…).
 - **Despliegue**: namespaces `observability` y `supportops`; releases `otel-gateway` (Deployment+HPA+PDB, headless `otel-gateway-headless`), `otel-agent` (DaemonSet), `tempo`, `loki` (SingleBinary), `grafana`, `prometheus` (chart propio `prom-lab` con receptor OTLP), `supportops` (chart propio con `values.schema.json`, `runAsNonRoot`, `readOnlyRootFilesystem`, HPA, PDB). Servicios como en la lección (`tempo.observability.svc.cluster.local:4317`, etc.). `python -m supportops.k8s run` = bucle de tráfico del pod (`SUPPORTOPS_RATE`, `OTEL_*`). Dashboard `19-kubernetes.json` (uid `k8s-gateway`). Pruebas: `supportops/tests/test_k8s.py` (8; las de helm se saltan si no está).
+
+## A8 · Módulos 20–22 (privacidad y seguridad, élite, capstone) · `supportops.privacy`, `supportops.incidents`
+
+Módulos nuevos y propios (no tocan `telemetry.py`/`agent.py`). `privacy` usa solo la librería estándar (el instrumentor y el Collector efímero requieren `[otel]`/Docker); `incidents` requiere `[otel]`. Pruebas: `supportops/tests/test_privacy.py` (9) y `test_incidents.py` (6).
+
+### Módulo 20 · `supportops.privacy` (ver `20_privacidad_seguridad/README.md`)
+```python
+from supportops import privacy as P
+red = P.Redactor("tag"|"mask"|"hash", names=True)          # detectores en orden de prioridad (secret, iban, card, email, dni, phone) + diccionario de nombres; hash = HMAC-SHA256 (8 hex)
+red.redact(text); red.scan(text); P.evaluate_redactor(red, P.build_pii_corpus(300, 42))   # recall y sobre-redacción
+det = P.InjectionDetector(flag_at=0.5, block_at=0.85)       # reglas ponderadas + noisy-or tras normalizar (NFKC, invisibles, leetspeak, base64)
+llm = P.InjectableLLM(MockLLM(), susceptibility=0.6)        # modelo VULNERABLE determinista: refund_hijack / prompt_exfil (meta["fault"]="prompt_injection"); P.poison_kb(tools) = inyección indirecta
+P.BehaviorMonitor().flag_traces(spans)                      # sin contenido: issue_refund sin get_order previo, herramienta fuera de intención
+agent = SupportAgent(llm=llm, instrumentor=CompositeInstrumentor(OTelInstrumentor(tel, emit_metrics=False), P.PrivacyInstrumentor(tel)))   # PrivacyInstrumentor DESPUÉS del OTelInstrumentor
+P.AuditTrail(); P.loki_retention_config(); P.verify_loki_config(frag); P.redaction_collector_config("none|redaction|transform|both", pseudonymize=, hash_function=, allowed_keys=)
+with P.RedactionLab(cfg) as lab: ...   # Collector contrib efímero (puertos aleatorios, exportador file): lab.endpoint, lab.spans(), lab.logs_out(), lab.wait_settled()
+P.validate_collector_config(cfg)       # otelcol validate real (Docker); P.injection_alert_rule_json(folder_uid); P.docker_available()
+```
+- **Telemetría de `PrivacyInstrumentor`**: atributos `supportops.security.injection_score|injection_signals|injection_via_tool`, `supportops.privacy.pii_in_input|pii_in_output|pii_kinds`, `supportops.refund.amount_eur` (en `execute_tool issue_refund`); métricas → Prometheus `supportops_privacy_pii_findings_total{pii_kind,direction}`, `supportops_security_injection_suspected_total{verdict,source}`, `supportops_security_injection_score_bucket`; log WARN `possible prompt injection` (structured metadata `supportops_security_*`). `ContentLogInstrumentor` = antipatrón didáctico (texto en logs). Dashboard `20-privacidad-seguridad.json` (uid `privacidad-seguridad`).
+- **Hallazgos medidos** (Collector 0.162.0): el procesador `redaction` enmascara con `****` también el **cuerpo string de los logs** y JSON anidado en atributos; claves reales `allow_all_keys`, `allowed_keys` (falla cerrado: 31 → 8 claves), `blocked_values`, `hash_function` (`hmac-sha256` exige `hmac_key` ≥ 32 bytes), `summary` (`redaction.masked.count`…). En `transform`, `replace_pattern(..., SHA256, "<X:%s>")` hashea el **replacement**, no el match: usa `"$$0"`; los `\` del regex se duplican en OTTL; `IsValidLuhn` existe pero solo valida un valor completo. Las tarjetas **sintéticas** del catálogo no cumplen Luhn (`card_valid` acepta también el prefijo 4000 0000). `backends.tempo_search` devuelve un dict: usa `["traces"]`.
+
+### Módulo 21 · `supportops.incidents` (ver `21_elite_playbook/README.md`)
+```python
+from supportops import incidents as I
+b = I.build_incident("INC-A", seed=42, n=240, variant="mesa"|"lesson")    # IncidentBundle: alert, spans (SPAN_SCHEMA), logs, metrics (1/min), changes (con ruido), extra
+I.grade("INC-A", {"cause", "start_min", "end_min", "culprit", "evidence": {...}, "mitigation"})   # 5 comprobaciones; I.evidence_keys(caso); I.CAUSES, I.MITIGATIONS
+I.trace_table(spans, t0); I.minute_table(rows, t0); I.find_window(x); I.loop_tickets(seed, n, variant)
+```
+- Cinco casos con el agente REAL (mock, determinista): A cascada de reintentos (multi-agente, `tool_timeout` sticky en un especialista), B bucle (`tool_loop`), C regresión silenciosa (versiones `v1`/`v2` de `regression`), D tormenta de cardinalidad (modelo de series a partir de tickets reales; memoria/scrape = modelo simple ≈ 2,8 KB/serie), E trazas partidas (`propagation="none"` desde un minuto). `variant="lesson"` cambia agente/ventana/etiqueta para los ejemplos de la lección. La «verdad» vive en el módulo (sistema de honor). Detector de cambio recomendado: `find_window` (t-stat sobre ventanas; CUSUM no funciona con ≈ 4 tickets/min).
+- Dashboard `21-sala-de-guerra.json` (uid `sala-de-guerra`); `21_elite_playbook/COMPENDIO_SECRETOS.md` (63 secretos con módulo y fuente, generado por `build_21.py`).
+
+### Módulo 22 · `22_capstone/platform/` (ver `22_capstone/README.md`)
+- `collector-gateway.yaml` (generado por `build_22.py`; validado con `otelcol validate` 0.162.0): `memory_limiter` → `redaction` → (`forward` + `span_metrics` ANTES del muestreo) → `tail_sampling` (errores, lentas ≥ 8 s, caras con `ottl_condition`, 10 % base) → `batch`; exportadores `otlp_grpc/tempo`, `otlp_http/loki`, `otlp_http/prometheus` (receptor OTLP de Prometheus). Se probó como contenedor efímero en la red `agentobs_default` contra Tempo/Loki/Prometheus reales.
+- `production-checklist.yaml` (31 puntos; `automatica: true` = lo mide el scorecard), `architecture-review-template.md` (formato ADR). Dashboard `22-plataforma-agentes.json` (uid `plataforma-agentes`).
+- Convenciones del capstone: SLO de latencia ≤ 10 s al 95 % (línea base del multi-agente), política de **ticket** (3×, 5 min/1 min) para caídas parciales; muestreo/coste con el corpus del módulo 18 (agente único).
+
+### Qué se probó y qué no (autor A8)
+- **Probado con Docker real:** `otelcol validate` de todas las configuraciones propias; lección 20 (Collector efímero con `redaction`/`transform`, Loki `-verify-config`, stack vivo: métricas/logs/trazas de seguridad, regla de alerta por API), lección 21 (bucle en vivo, dashboard 21 con `query_check`), lección 22 (gateway del capstone contra el stack, dashboard 22 con `query_check`); proyectos 20-22 con la rúbrica al 100 % con la solución.
+- **No probado:** proveedores LLM reales; pods en Kubernetes; la calidad de los detectores de inyección frente a modelos reales (el modelo vulnerable es simulado); enlaces y certificaciones del extra `RUTA_DE_CARRERA.md` marcados ❔ (sandbox sin red abierta).

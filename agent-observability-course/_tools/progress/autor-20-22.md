@@ -1,11 +1,11 @@
 # Progreso: autor-20-22
 Agente: Autor A8 · Módulos: 20–22 + extras
 - [x] 20_privacidad_seguridad (lección 33 código/51 md, proyecto 15/19, supportops/privacy.py + tests, dashboard 20; lección ejecutada con nbclient sin stack y con stack; proyecto: rúbrica R1-R7 OK con la solución)
-- [ ] 21_elite_playbook (supportops/incidents.py + tests ya escritos; falta build_21.py, dashboard 21, ejecución)
-- [ ] 22_capstone
-- [ ] extras/ENTREVISTAS_SYSTEM_DESIGN.md
-- [ ] extras/RUTA_DE_CARRERA.md
-- [ ] README raíz + pyproject (extra mcp) + sección INTERFACES.md
+- [x] 21_elite_playbook (lección 27 código/51 md, proyecto 14/25, incidents.py+tests, COMPENDIO_SECRETOS.md (63), dashboard 21; ejecutado con nbclient sin stack y con stack; rúbrica del proyecto 8/8 con la solución)
+- [~] 22_capstone (build_22.py, platform/, dashboard 22 escritos; lección y proyecto ejecutados sin stack; en vivo: ajustar sección 11 (Tempo/span metrics), ver /tmp/claude-0/scr/probe.out)
+- [x] extras/ENTREVISTAS_SYSTEM_DESIGN.md
+- [x] extras/RUTA_DE_CARRERA.md
+- [x] README raíz + pyproject (extra mcp) + sección INTERFACES.md (A8)
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar
