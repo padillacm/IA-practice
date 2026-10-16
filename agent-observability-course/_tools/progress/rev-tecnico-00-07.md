@@ -4,7 +4,7 @@ Agente: Revisor técnico R1 · Módulos: 00–07 · Informe: agent-observability
 - [x] 01_agente_base
 - [x] 02_tres_pilares
 - [x] 03_otel_sdk_python
-- [ ] 04_genai_semconv
+- [x] 04_genai_semconv
 - [ ] 05_collector
 - [ ] 06_autoinstrumentacion
 - [ ] 07_tempo_traceql
@@ -17,3 +17,4 @@ Agente: Revisor técnico R1 · Módulos: 00–07 · Informe: agent-observability
 - 01 revisado sin cambios necesarios (cifras y rúbricas re-ejecutadas OK).
 - 02 revisado: cifras re-ejecutadas OK; URL de RED con fecha canónica.
 - 03 revisado: corregida autoeval Q4 (fracción de huérfanos); rúbricas y claims SDK verificados con SDK 1.45.1. Snapshot GenAI verificado contra raw repo (registry/spans/metrics/docs): coincide. Fuente: raw.githubusercontent (model/gen-ai/*.yaml, docs/gen-ai/*.md) copiados a /tmp/semconv.
+- 04 revisado: snapshot verificado 100% contra registry/spans/docs del repo oficial (79 atributos, 11 spans, 19 métricas); corregido 58%->50% ahorro caché; 'prohíbe'->'desaconseja (SHOULD NOT)' para conversation.id.

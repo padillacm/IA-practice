@@ -194,7 +194,7 @@ def lint_span(rec, local_agent=True):
     if isinstance(i, int) and not isinstance(i, bool):
         for sub in ("gen_ai.usage.cache_read.input_tokens", "gen_ai.usage.cache_write.input_tokens"):
             if isinstance(a.get(sub), int) and a[sub] > i: add("TOK", sub, f"{sub}={a[sub]} > input_tokens={i} (debe ser un subconjunto)")
-    if a.get("gen_ai.conversation.id") == rec["trace_id"]: add("CONV", "gen_ai.conversation.id", "es el trace_id: la spec prohíbe inventar la conversación")
+    if a.get("gen_ai.conversation.id") == rec["trace_id"]: add("CONV", "gen_ai.conversation.id", "es el trace_id: la spec desaconseja (SHOULD NOT) inventar la conversación")
     for k in CONTENT_ATTRS & set(a): add("PRIV", k, f"contenido capturado ({len(str(a[k]))} car.)")
     return F
 
@@ -421,7 +421,7 @@ plt.show()
 
     - **`invoke_agent` en proceso es `INTERNAL`**; si el agente fuera un servicio remoto gestionado (Bedrock Agents, asistentes de OpenAI) sería `CLIENT` y exigiría también `gen_ai.provider.name`.
     - **Nombre del span** = `{gen_ai.operation.name} {objeto}`: `chat {modelo}`, `execute_tool {herramienta}`, `invoke_agent {agente}` (o solo `invoke_agent` si no hay nombre). **Nunca** un id de ticket o pedido.
-    - **`gen_ai.conversation.id`**: úsalo solo si tienes un identificador **real** de conversación (para nosotros, el ticket). La spec prohíbe inventarlo con un UUID nuevo, el `trace_id` o un hash del contenido.
+    - **`gen_ai.conversation.id`**: úsalo solo si tienes un identificador **real** de conversación (para nosotros, el ticket). La spec **desaconseja** (SHOULD NOT) inventarlo con un UUID nuevo, el `trace_id` o un hash del contenido.
     - **`gen_ai.provider.name`**: lista de valores conocidos (`openai`, `anthropic`, `aws.bedrock`, `gcp.vertex_ai`…); se permite un valor propio (por eso `mock` es válido). `gen_ai.system` **ya no existe**.
     - **`gen_ai.request.model` en `invoke_agent`**: solo si el agente usa **un único** modelo; para agentes con varios, no se pone.
 
@@ -455,7 +455,7 @@ plt.tight_layout(); plt.show()
 ''')
     md(observe("""
     - Si un dashboard suma `input_tokens` de un proveedor tipo Anthropic **sin** aplicar la regla, ve 50 en vez de 170: **subestima el volumen un 70 %** y no puede explicar por qué la factura no cuadra.
-    - Con la spec, los tres números (total, lectura, escritura) permiten **recalcular el coste real**: la caché rebaja el coste de entrada (≈ 58 % menos en el ejemplo ilustrativo) y lo ves en la telemetría.
+    - Con la spec, los tres números (total, lectura, escritura) permiten **recalcular el coste real**: la caché rebaja el coste de entrada (50 % menos en el ejemplo ilustrativo: 85 frente a 170 unidades) y lo ves en la telemetría.
     - SupportOps (mock) no usa caché de prompt, así que sus `cache_*` no aparecen; el proyecto te hará mapear tres formas de uso de proveedor.
     """))
 
@@ -479,7 +479,7 @@ plt.tight_layout(); plt.show()
     | `KIND` | aviso | `SpanKind` distinto del esperado para el tipo |
     | `FINISH` | aviso | un `finish_reason` fuera del enum normalizado de la spec |
     | `CARD` | aviso | un identificador (pedido, ticket, UUID) dentro del **nombre** del span |
-    | `CONV` | aviso | `gen_ai.conversation.id` igual al `trace_id` (prohibido inventar la conversación) |
+    | `CONV` | aviso | `gen_ai.conversation.id` igual al `trace_id` (la spec desaconseja inventar la conversación) |
     | `PRIV` | info | atributos de **contenido** (opt-in) presentes: revísalo con privacidad |
 
     Primero las constantes y utilidades (tablas de la spec y funciones pequeñas):
@@ -705,7 +705,7 @@ for t, v in samp.items(): print(f"atributos «sampling relevant» de {t}:", v)
     2. **Sumar tokens de todos los spans los cuenta ~2 veces.** `invoke_agent` repite el total de sus `chat` (lo acabas de medir: ≈ 2,0×). Los tableros de coste deben agregar **solo spans `chat`** (o solo la raíz), y la spec lo refuerza con métricas distintas (`gen_ai.client.inference.usage.*` por inferencia; `gen_ai.invoke_agent.*` por agente, donde incluso cuenta cada llamada solo en el agente que la hizo para no duplicar en árboles de subagentes).
     3. **«Tokens de entrada» depende del proveedor.** Para Anthropic `input_tokens` excluye la caché; para la spec incluye todo. Si sumas lo que dice el proveedor sin normalizar, tus costes divergen de la factura. Y **factura con el modelo real**: `gen_ai.response.model` (el que atendió), no `gen_ai.request.model` (que puede ser un alias).
     4. **Los `finish_reasons` son la señal más barata de calidad degradada.** `length` = respuesta truncada; `content_filter` = bloqueada; `error` = terminó mal (la spec pide **reportar `error`** si se esperaba un motivo y no llegó, en vez de omitirlo). Normalizar los valores nativos (`end_turn`, `max_tokens`, `tool_use`, `tool_calls`…) al enum de la spec es lo que permite un único panel multi-proveedor; en el módulo 16 será un SLI.
-    5. **`gen_ai.conversation.id` no se inventa.** Un UUID nuevo por llamada o el `trace_id` rompen la semántica (agrupar mensajes de una conversación): la spec lo prohíbe expresamente. En SupportOps el ticket **es** la conversación; en un chat multi-turno sería el id de sesión.
+    5. **`gen_ai.conversation.id` no se inventa.** Un UUID nuevo por llamada o el `trace_id` rompen la semántica (agrupar mensajes de una conversación): la spec indica expresamente (SHOULD NOT) que no se usen como valor de reserva. En SupportOps el ticket **es** la conversación; en un chat multi-turno sería el id de sesión.
     6. **Los atributos «sampling relevant» deben existir al crear el span.** La spec marca `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.tool.name`, `gen_ai.tool.type`, `gen_ai.provider.name`… (lo viste impreso arriba) para que un muestreador de cabecera pueda decidir. Ponerlos tarde es un error silencioso que inutiliza reglas como «muestrea todo lo del modelo caro».
     7. **El contenido tiene su propio ciclo de vida.** En spans va como JSON string porque el SDK aún no soporta atributos estructurados en spans (sí en eventos/logs: OTEP 4485); los backends tienen límites por atributo/lote, y la propia spec avisa de que un prompt largo puede **superar los límites de atributo o de lote del backend**. El *hook* de subida a almacén externo se invoca aunque el span no se muestree: así el contenido sigue su política de retención, no la de las trazas.
     8. **`gen_ai.provider.name` identifica el «sabor» de telemetría, no necesariamente al proveedor real.** La spec lo dice: se fija según el mejor conocimiento de la instrumentación y puede diferir del upstream (un gateway compatible con OpenAI que enruta a otro modelo). Si facturas por proveedor, no uses este atributo como única fuente: añade el tuyo (`supportops.llm.upstream`).
