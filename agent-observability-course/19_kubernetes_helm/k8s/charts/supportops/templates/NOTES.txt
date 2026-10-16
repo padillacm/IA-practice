@@ -1,0 +1,3 @@
+SupportOps desplegado: {{ include "supportops.fullname" . }} ({{ .Values.replicaCount }} réplicas).
+Envía OTLP a {{ .Values.otlp.endpoint }} con service.name={{ .Values.otlp.serviceName }}.
+Comprueba: kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "supportops.fullname" . }} --tail=5

@@ -207,16 +207,16 @@ def build_dashboard() -> None:
                "Por último, el coste real: **series activas** de Prometheus (memoria ∝ series) y **descartes por límites** en Tempo y Loki (señal de tenants o aplicaciones que se pasan). "
                "Las métricas `otelcol_processor_tail_sampling_*` aparecen cuando el Collector del stack usa `tail_sampling` (ver `configs/collector-tail-sampling.yaml`).", h=3))
     d.row("Volumen y pérdidas en el Collector")
-    d.add(timeseries("Spans aceptados vs enviados (por segundo)", [prom("sum(rate(otelcol_receiver_accepted_spans_total[$__rate_interval]))", "aceptados"),
-                                                                     prom("sum(rate(otelcol_exporter_sent_spans_total[$__rate_interval]))", "enviados", ref="B")], unit="ops", w=12, h=7,
+    d.add(timeseries("Spans aceptados vs enviados (por segundo)", [prom("sum(rate(otelcol_receiver_accepted_spans[$__rate_interval]))", "aceptados"),
+                                                                     prom("sum(rate(otelcol_exporter_sent_spans[$__rate_interval]))", "enviados", ref="B")], unit="ops", w=12, h=7,
                      description="Diferencia entre lo que entra y lo que sale: con tail sampling activo es la fracción muestreada; sin él, cualquier hueco es una pérdida."),
-          timeseries("Spans rechazados o con fallo de envío (por segundo)", [prom("sum(rate(otelcol_receiver_refused_spans_total[$__rate_interval]))", "rechazados por el receptor"),
-                                                                              prom("sum(rate(otelcol_exporter_send_failed_spans_total[$__rate_interval]))", "fallo al exportar", ref="B")], unit="ops", w=12, h=7,
+          timeseries("Spans rechazados o con fallo de envío (por segundo)", [prom("sum(rate(otelcol_receiver_refused_spans[$__rate_interval]))", "rechazados por el receptor"),
+                                                                              prom("sum(rate(otelcol_exporter_send_failed_spans[$__rate_interval]))", "fallo al exportar", ref="B")], unit="ops", w=12, h=7,
                      description="Presión hacia atrás: el memory_limiter rechaza (refused) y los exportadores fallan cuando un backend aplica límites."))
     d.row("Tail sampling (si está activo)")
     d.add(timeseries("Decisiones de muestreo por política", [prom('sum by (policy) (rate(otelcol_processor_tail_sampling_count_traces_sampled{sampled="true"}[$__rate_interval]))', "{{policy}}")], unit="ops", w=12, h=7,
                      description="Trazas por segundo que cada política votó conservar. Una política «baseline» muy por encima de errors/slow indica que el muestreo base domina el presupuesto."),
-          timeseries("Trazas descartadas antes de decidir", [prom("sum(rate(otelcol_processor_tail_sampling_sampling_trace_dropped_too_early_total[$__rate_interval]))", "dropped_too_early")], unit="ops", w=12, h=7,
+          timeseries("Trazas descartadas antes de decidir", [prom("sum(rate(otelcol_processor_tail_sampling_sampling_trace_dropped_too_early[$__rate_interval]))", "dropped_too_early")], unit="ops", w=12, h=7,
                      description="Debe ser 0. Si crece, num_traces es insuficiente para (tráfico × decision_wait): se pierden trazas sin evaluar sus políticas."))
     d.row("Coste: series y límites")
     d.add(stat("Series activas en Prometheus", "prometheus_tsdb_head_series", w=6, h=5, thr=thresholds((None, "green"), (50000, "orange"), (200000, "red")),
@@ -1158,7 +1158,7 @@ except NameError as e:
     2. **`bytes_limiting` como red de seguridad**: añade la política y simula un incidente donde el 100 % de las trazas es error: ¿cuántos bytes/s dejas pasar y cuántos errores pierdes?
     3. **Muestreo por intención**: baja el baseline al 2 % para `kb_question` (la más barata de observar) y mantén el 20 % para `refund`; corrige las métricas con pesos por estrato.
     4. **Logs coherentes con las trazas**: calcula qué fracción de los logs quedaría con un `trace_id` colgante si descartas la traza pero conservas los logs, y diseña la política de logs.
-    5. **Alerta de descartes**: escribe la regla de Grafana (módulo 16) sobre `otelcol_processor_tail_sampling_sampling_trace_dropped_too_early_total` > 0 durante 5 min.
+    5. **Alerta de descartes**: escribe la regla de Grafana (módulo 16) sobre `otelcol_processor_tail_sampling_sampling_trace_dropped_too_early` > 0 durante 5 min.
     """)
     md("""
     ## Reflexión

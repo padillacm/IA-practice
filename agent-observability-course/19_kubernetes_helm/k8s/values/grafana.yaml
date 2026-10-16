@@ -1,0 +1,60 @@
+# Grafana 13.2.4 con datasources por código (chart grafana-community/grafana 14.0.0). adminPassword SOLO para laboratorio
+# Generado por _tools/builders/build_19.py (config como código en Python → YAML). Los `null` borran claves heredadas del chart (semántica de Helm).
+image:
+  registry: docker.io
+  repository: grafana/grafana
+  tag: 13.2.4
+adminUser: admin
+adminPassword: admin
+persistence:
+  enabled: false
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+sidecar:
+  dashboards:
+    enabled: false
+  datasources:
+    enabled: false
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        access: proxy
+        url: "http://tempo.observability.svc.cluster.local:3200"
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+            customQuery: true
+            query: "{service_name=\"${__span.tags[\"service.name\"]}\"} | trace_id=\"${__trace.traceId}\""
+      - name: Loki
+        uid: loki
+        type: loki
+        access: proxy
+        url: "http://loki.observability.svc.cluster.local:3100"
+        jsonData:
+          derivedFields:
+            - name: trace_id
+              matcherType: label
+              matcherRegex: trace_id
+              url: "${__value.raw}"
+              datasourceUid: tempo
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: "http://prometheus.observability.svc.cluster.local:9090"
+        isDefault: true
+initChownData:
+  enabled: false
+testFramework:
+  enabled: false
+env:
+  GF_ANALYTICS_REPORTING_ENABLED: "false"

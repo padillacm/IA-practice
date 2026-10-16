@@ -1,0 +1,85 @@
+# Agente del Collector (DaemonSet): k8s_attributes + load_balancing por traceID hacia el gateway (afinidad para tail sampling)
+# Generado por _tools/builders/build_19.py (config como código en Python → YAML). Los `null` borran claves heredadas del chart (semántica de Helm).
+fullnameOverride: otel-agent
+mode: daemonset
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: 0.162.0
+command:
+  name: otelcol-contrib
+presets:
+  kubernetesAttributes:
+    enabled: true
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 256Mi
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  otlp:
+    enabled: true
+    hostPort: 4317
+  otlp-http:
+    enabled: true
+    hostPort: 4318
+config:
+  receivers:
+    jaeger: null
+    zipkin: null
+    prometheus: null
+  exporters:
+    debug: null
+    load_balancing:
+      routing_key: traceID
+      protocol:
+        otlp:
+          tls:
+            insecure: true
+          timeout: 10s
+      resolver:
+        dns:
+          hostname: otel-gateway-headless.observability.svc.cluster.local
+          port: "4317"
+          interval: 15s
+    otlp_grpc/gateway:
+      endpoint: "otel-gateway.observability.svc.cluster.local:4317"
+      tls:
+        insecure: true
+  service:
+    pipelines:
+      traces:
+        receivers:
+          - otlp
+        processors:
+          - k8s_attributes
+          - memory_limiter
+          - batch
+        exporters:
+          - load_balancing
+      metrics:
+        receivers:
+          - otlp
+        processors:
+          - k8s_attributes
+          - memory_limiter
+          - batch
+        exporters:
+          - otlp_grpc/gateway
+      logs:
+        receivers:
+          - otlp
+        processors:
+          - k8s_attributes
+          - memory_limiter
+          - batch
+        exporters:
+          - otlp_grpc/gateway

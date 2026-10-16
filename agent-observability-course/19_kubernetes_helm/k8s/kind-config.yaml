@@ -1,0 +1,14 @@
+# Clúster local con kind (https://kind.sigs.k8s.io). Úsalo en TU máquina: kind create cluster --name obs19 --config kind-config.yaml --image kindest/node:v1.34.0
+# (En el sandbox de construcción de este curso kind NO pudo arrancar pods: runc anidado fallaba; ver el README del módulo.)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - {containerPort: 30300, hostPort: 3000, protocol: TCP}      # Grafana (NodePort 30300)

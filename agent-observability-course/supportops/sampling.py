@@ -709,7 +709,9 @@ def _scalar(v: Any) -> str:
     if isinstance(v, (dict, list)):
         return "{}" if isinstance(v, dict) else "[]"
     s = str(v)
-    return json.dumps(s, ensure_ascii=False) if (re.search(r"[:#{}\[\],&*!|>'\"%@`]", s) or s == "" or s.strip() != s or s.lower() in ("true", "false", "null", "yes", "no")) else s
+    looks_numeric = re.fullmatch(r"[-+]?(\d[\d_]*)(\.\d+)?([eE][-+]?\d+)?|0x[0-9a-fA-F]+|[-+]?\.(inf|nan)|~", s, re.I) is not None
+    return json.dumps(s, ensure_ascii=False) if (re.search(r"[:#{}\[\],&*!|>'\"%@`]", s) or s == "" or s.strip() != s or looks_numeric
+                                                  or s.lower() in ("true", "false", "null", "yes", "no", "on", "off", "y", "n")) else s
 
 
 def to_yaml(obj: Any) -> str:

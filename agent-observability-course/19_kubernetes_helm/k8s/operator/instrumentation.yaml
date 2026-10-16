@@ -1,0 +1,17 @@
+# Instrumentation (CRD v1alpha1): auto-instrumentación por inyección de un init container con el SDK de Python al anotar un Deployment:
+#   metadata.annotations: instrumentation.opentelemetry.io/inject-python: "true"     (o «<namespace>/<nombre>» para otra Instrumentation)
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: supportops-python
+  namespace: supportops
+spec:
+  exporter:
+    endpoint: http://otel-agent-opentelemetry-collector.observability.svc.cluster.local:4318
+  propagators: [tracecontext, baggage]
+  sampler:
+    type: parentbased_traceidratio
+    argument: "0.25"
+  python:
+    env:
+      - {name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED, value: "true"}
