@@ -350,7 +350,7 @@ for name, slo in DEFAULT_SLOS.items():
 BR = pd.DataFrame(rows).set_index("SLO"); display(BR.round(3))
 ''')
     md(observe("""
-    - Un solo día malo puede gastar buena parte del presupuesto **mensual**: la disponibilidad se lleva varios puntos porcentuales del mes en 45 minutos de incidente. Si el mes tuviera tres días así, el SLO estaría incumplido.
+    - Un solo día malo puede gastar buena parte del presupuesto **mensual**: la disponibilidad se lleva ≈ 12 % del mes en un día con 45 minutos de incidente. Con ocho días así el SLO estaría incumplido.
     - Fíjate en la columna «burn medio del día»: la calidad quema por encima de 1 **todo el día** aunque el valor absoluto parezca pequeño; la disponibilidad lo hace de golpe. Son dos *formas* de gastar presupuesto que piden alertas distintas (secciones 4-5).
     """))
 
@@ -391,10 +391,10 @@ ax.axvspan(*np.array(TRUTH["outage"]) / 60, color=viz.PALETTE["error"], alpha=0.
 plt.tight_layout(); plt.show()
 ''')
     md(observe("""
-    - **Umbral fijo**: detecta casi al instante, pero con 2-4 tickets por minuto dispara con unos pocos fallos seguidos: es el generador de ruido que acaba con la guardia (en la simulación del mes de abajo verás el efecto real).
-    - **Burn largo solo (1 h)**: tarda ≈ 14 min en detectar (necesita acumular un 14,4 % de malos en una hora) y **sigue disparada decenas de minutos después de que el incidente termine** (la ventana larga recuerda): el on-call recibe una alerta de algo que ya está arreglado.
-    - **Burn corto solo (5 min)**: detecta y se reajusta rápido, pero es sensible a ráfagas: sin ventana larga, un blip de 5 minutos dispararía igual.
-    - **Multiventana**: la ventana larga evita falsas alarmas por ráfagas cortas y la corta **apaga la alerta en cuanto el problema cesa** (≈ 1/12 del tiempo de reajuste). Es la razón de ser del diseño de la SRE Workbook.
+    - **Umbral fijo**: detecta al instante, pero con 2-4 tickets por minuto basta un par de fallos seguidos para disparar: ≈ 70 minutos de alerta **fuera** del incidente en un solo día. Es el generador de ruido que acaba con la guardia.
+    - **Burn largo solo (1 h)**: detecta a los ≈ 8 min (necesita acumular un 14,4 % de malos en la ventana) y **sigue disparada ≈ 45 min después de que el incidente termine** (la ventana larga recuerda): el on-call recibe una alerta de algo que ya está arreglado.
+    - **Burn corto solo (5 min)**: detecta y se reajusta rápido, pero sigue disparando por ráfagas ajenas al incidente (≈ 10 min fuera): sin ventana larga, un blip de 5 minutos dispara igual.
+    - **Multiventana**: detecta igual de pronto que la larga (≈ 8 min) y la corta **apaga la alerta en cuanto el problema cesa** (≈ 4 min tras el fin frente a ≈ 45): es la razón de ser del diseño de la SRE Workbook.
     """))
     md("""
     ## 4.1 Monte Carlo: un mes con ruido
@@ -413,17 +413,18 @@ def month(seed):
 def episodes(mask): idx = np.where(mask)[0]; return [] if not len(idx) else np.split(idx, np.where(np.diff(idx) > 30)[0] + 1)
 STRATS = {"umbral fijo (5 min > 5 %)": lambda g, t: threshold_fire_series(g, t, 0.05, 5), "burn 5 min solo": lambda g, t: np.nan_to_num(burn_series(g, t, 5, 0.99)) >= 14.4,
           "burn 1 h solo": lambda g, t: np.nan_to_num(burn_series(g, t, 60, 0.99)) >= 14.4, "multiventana (1 h y 5 min)": lambda g, t: fire_series(g, t, 0.99, GOOGLE_POLICIES[0])}
-agg = {k: {"incidentes detectados": 0, "incidentes": 0, "páginas": 0, "páginas falsas": 0} for k in STRATS}
+agg = {k: {"incidentes detectados": 0, "incidentes": 0, "páginas": 0, "páginas falsas": 0, "tarde": 0} for k in STRATS}
 for sd in range(40):
     g, t, real, inc = month(sd)
     for k, fn in STRATS.items():
         f = fn(g, t); eps = episodes(f)
         agg[k]["páginas"] += len(eps); agg[k]["páginas falsas"] += sum(not real[e].any() for e in eps)
         for d, h, dur, r in inc:
-            agg[k]["incidentes"] += 1; s0 = int(d * 1440 + h * 60); agg[k]["incidentes detectados"] += bool(f[s0: s0 + int(dur) + 5].any())
+            agg[k]["incidentes"] += 1; s0 = int(d * 1440 + h * 60); agg[k]["incidentes detectados"] += bool(f[s0: s0 + int(dur) + 5].any()); agg[k]["tarde"] += int(f[s0 + int(dur): s0 + int(dur) + 60].sum())
 M = pd.DataFrame(agg).T
 M["detección"] = M["incidentes detectados"] / M["incidentes"]; M["páginas/semana"] = M["páginas"] / (40 * 30 / 7); M["% de páginas falsas"] = M["páginas falsas"] / M["páginas"]
-display(M[["detección", "páginas/semana", "% de páginas falsas"]].round(3))
+M["min. de alerta tras acabar (por incidente)"] = M["tarde"] / M["incidentes"]
+display(M[["detección", "páginas/semana", "% de páginas falsas", "min. de alerta tras acabar (por incidente)"]].round(3))
 fig, axes = plt.subplots(1, 2, figsize=(12, 3.6))
 axes[0].bar(range(4), M["detección"], color=viz.PALETTE["traces"]); axes[0].set_xticks(range(4), [k.replace(" (", "\\n(") for k in M.index], fontsize=7); axes[0].set_ylim(0, 1.05); axes[0].set_title("Incidentes reales detectados")
 axes[1].bar(range(4), M["páginas/semana"] * (1 - M["% de páginas falsas"]), color=viz.PALETTE["ok"], label="páginas reales"); axes[1].bar(range(4), M["páginas/semana"] * M["% de páginas falsas"], bottom=M["páginas/semana"] * (1 - M["% de páginas falsas"]), color=viz.PALETTE["error"], label="páginas FALSAS")
@@ -431,9 +432,10 @@ axes[1].set_xticks(range(4), [k.replace(" (", "\\n(") for k in M.index], fontsiz
 plt.tight_layout(); plt.show()
 ''')
     md(observe("""
-    - El **umbral fijo** detecta todo, pero **la mayoría de sus páginas son falsas** (las ráfagas diarias): ≈ 1 página falsa al día es el camino directo a la fatiga de alertas y a ignorar la siguiente página, que sí era real.
-    - Las ventanas largas solas pierden los incidentes cortos o los detectan tarde; la **multiventana** mantiene la detección de los incidentes significativos y **elimina las páginas falsas** por ráfagas. Detectar un 100 % de lo que «cabe en el presupuesto» no es el objetivo: es detectar lo que **agota** el presupuesto.
-    - Mide siempre tu política con un **número de páginas por semana y su % de acciones útiles** — la métrica de salud de la guardia.
+    - El **umbral fijo** detecta todo, pero **≈ 99 % de sus páginas son falsas** (≈ 66 por semana, con las ráfagas diarias): el camino directo a la fatiga de alertas y a ignorar la siguiente página, que sí era real. El **burn de 5 min solo** mejora pero aún da ≈ 11 páginas/semana, ≈ 93 % falsas.
+    - Las dos políticas con ventana larga (1 h solo y multiventana) **eliminan las páginas falsas** (≈ 0,6 páginas/semana, todas reales) y detectan los incidentes que gastan presupuesto de verdad; el ≈ 8 % restante son incidentes tan suaves (≈ 12-14 % de fallos) que el burn no llega a 14,4 y no hace falta despertar a nadie. Detectar un 100 % no es el objetivo: es detectar lo que **agota** el presupuesto.
+    - ¿Dónde está entonces la ventaja de la multiventana sobre la ventana larga sola? En la última columna: **sigue disparada muchos menos minutos después de acabar el incidente** (la corta la apaga). El recuento de páginas no ve ese coste; la guardia sí (alertas «fantasma» de algo ya resuelto).
+    - Mide siempre tu política con **páginas por semana, % de acciones útiles y tiempo de reajuste** — la métrica de salud de la guardia.
     """))
 
     # ------------------------------------------------------------------------------------------------------------- 5
@@ -461,7 +463,7 @@ for pol in GOOGLE_POLICIES:
 ''')
     md(observe("""
     - Con el 25 % de muestreo y ≈ 2 tickets/min, una ventana de 5 min tiene ≈ 2-3 evaluaciones y una de 30 min, ≈ 15: **el burn de calidad con ventanas cortas es puro ruido** (por eso `min_events`). Para tener ≈ 30 eventos hacen falta ventanas de ≈ 1 h.
-    - Durante la regresión el burn de calidad está en ≈ 4-6×: **muy por encima de 1 pero por debajo de 14,4**. La política de página rápida (14,4×) no lo ve nunca; el burn de 6 h roza el 6× y las políticas lentas lo detectan con horas de retraso. Es una alerta de **ticket**. Está bien: la regresión consume ≈ 4-5 % del presupuesto mensual en 8 horas y el remedio no es despertar a nadie sino **bloquear el despliegue en canario** (módulo 15) y revisar por la mañana.
+    - Durante la regresión el burn de calidad está en ≈ 4×: **muy por encima de 1 pero por debajo de 6 y de 14,4**. Las políticas de página (14,4×/1 h y 6×/6 h) **no disparan nunca**; solo la de ticket (1×) lo detecta, ≈ 45 min después del despliegue (en este día de 24 h la ventana de «3 días» equivale a todo el historial). Es una alerta de **ticket**. Está bien: la regresión consume ≈ 4-5 % del presupuesto mensual en 8 horas y el remedio no es despertar a nadie sino **bloquear el despliegue en canario** (módulo 15) y revisar por la mañana.
     - Moraleja de diseño: la severidad la decide **cuánto presupuesto quema y con qué urgencia puedes actuar**, no lo «grave» que suene la métrica.
     """))
     md(box("exp", "Experimento: SLI sobre una métrica ruidosa", """
@@ -496,8 +498,8 @@ for i, (d, h, dur, r) in enumerate(incs):
     s0 = int(d * 1440 + h * 60); bad = (t[s0:s0 + dur] - g[s0:s0 + dur]).sum(); print(f"  incidente {i + 1} (día {d}, {dur} min al {r:.0%}): {bad:.0f} tickets malos = {bad / allowed_total:.1%} del presupuesto del mes")
 ''')
     md(observe("""
-    - Cada incidente es un **escalón** en la curva; el consumo de fondo (fallos «normales») es la pendiente entre incidentes. En esta simulación el presupuesto mensual se agota con el tercer o cuarto incidente: a partir de ahí la política dice «congelar».
-    - Un SLO del 99 % con un fondo del 0,4 % de fallos deja solo el 60 % del presupuesto para incidentes y cambios: **mide el fondo** antes de prometer un objetivo.
+    - Cada incidente es un **escalón** en la curva (entre el 2 % y el 7 % del presupuesto cada uno), pero la pendiente entre incidentes —el consumo de fondo, los fallos «normales»— se lleva **más que los cuatro incidentes juntos** (≈ 41 puntos frente a ≈ 18). Con un fondo del 0,4 % de fallos y un objetivo del 99 %, el 40 % del presupuesto ya está comprometido antes del primer incidente: **mide el fondo** antes de prometer un objetivo.
+    - Aquí el mes termina con ≈ 40 % de presupuesto: no se activa la congelación. Con un incidente más grande, o un fondo algo peor, la curva cruzaría el 0 y la política diría «congelar» (la celda dibuja la marca si ocurre).
     - Una política útil es **explícita y escalonada**: <50 % restante → revisar despliegues arriesgados; <25 % → solo cambios de fiabilidad; agotado → congelación y postmortem obligatorio. Se acuerda con producto **antes** del primer incidente.
     """))
 
@@ -580,7 +582,7 @@ if LIVE:
     fig, axes = plt.subplots(2, 1, figsize=(11, 5.6), sharex=True)
     for name, expr, col_ in (("burn 5 min", burn_promql(DEFAULT_SLOS["availability"], "5m"), viz.PALETTE["traces"]), ("burn 1 min", burn_promql(DEFAULT_SLOS["availability"], "1m"), viz.PALETTE["metrics"])):
         for r in prom_range(expr, minutes=7, step_s=5):
-            axes[0].plot([p[0] - T_START for p in r["values"]], [p[1] for p in r["values"]], label=name, color=col_)
+            axes[0].plot([x - T_START for x in r["t"]], r["v"], label=name, color=col_)
     axes[0].axhline(14.4, color=viz.PALETTE["error"], ls=":"); axes[0].axvspan(*OUT_LAB, color=viz.PALETTE["error"], alpha=0.12); axes[0].set_ylabel("burn rate disponibilidad"); axes[0].legend(); axes[0].set_title("Burn rate de disponibilidad (Prometheus) y estado de las alertas (Grafana)")
     names = sorted({n for _, st in STATES for n in st if "availability" in n or "latency" in n})
     for i, n in enumerate(names):
@@ -593,7 +595,7 @@ if LIVE:
 ''')
     md(observe("""
     - En la gráfica superior el burn de 1 min sube en cuanto empieza el fallo y el de 5 min lo sigue: la alerta de **página** (`fast-burn`) pasa a *firing* cuando **ambos** superan 14,4 y vuelve a *normal* poco después de acabar el incidente, cuando el burn de 1 min cae (la ventana corta apaga la alerta). Los tiempos reales dependen de que Prometheus raspa cada 15 s y Grafana evalúa cada 30 s: detectar en ≈ 1 min en laboratorio equivale a minutos en producción.
-    - La alerta de **latencia** no se activa (los errores son rápidos): cada SLO ve lo suyo. La de **disponibilidad lenta** (ticket, ventana de 15 min) dispara más tarde, tras el `for: 1m`, y **tarda más en resolverse**: recuerda 15 min.
+    - La alerta de **latencia** no se activa (los errores son rápidos): cada SLO ve lo suyo. La de **disponibilidad lenta** (ticket, ventana de 15 min) dispara más tarde, tras el `for: 1m`, y **tarda más en resolverse**: recuerda 15 min (si repites el experimento antes de que pasen, la verás ya activa al empezar: todavía «recuerda» el incidente anterior).
     - **Notificación:** el punto de contacto del módulo 10 (webhook al endpoint de salud del Collector) recibe las alertas con `severity=page`; en producción sería PagerDuty/Slack. Las alertas activas se ven en el Alertmanager de Grafana (última línea).
     """))
     md("""
@@ -663,8 +665,8 @@ facts = {"ttd": t_detect - o0, "start": hh(o0), "end": hh(o1), "detect": hh(t_de
 print(facts)
 ''')
     md(observe("""
-    - **TTD** (tiempo hasta detectar) ≈ 8-14 min: no es «instantáneo» porque la política exige acumular un 14,4 % de tickets malos en la ventana larga. Si eso es inaceptable para el negocio, la palanca es **bajar el factor o acortar la ventana larga** (a costa de más falsas alarmas) o añadir una sonda sintética que mida cada minuto.
-    - Cada minuto de incidente cuesta tickets reales; el postmortem debe traducirlo a **tickets perdidos y a presupuesto consumido** (aquí, ≈ un tercio del presupuesto mensual de disponibilidad en 45 minutos).
+    - **TTD** (tiempo hasta detectar) ≈ 8 min: no es «instantáneo» porque la política exige acumular un 14,4 % de tickets malos en la ventana larga. Si eso es inaceptable para el negocio, la palanca es **bajar el factor o acortar la ventana larga** (a costa de más falsas alarmas) o añadir una sonda sintética que mida cada minuto.
+    - Cada minuto de incidente cuesta tickets reales; el postmortem debe traducirlo a **tickets perdidos y a presupuesto consumido** (aquí, ≈ 10 % del presupuesto mensual de disponibilidad en 45 minutos).
     - La alerta se resuelve poco después de que acaba el incidente gracias a la ventana corta: ese es el *tiempo de reajuste*.
     """))
     code('''
@@ -774,8 +776,436 @@ display(Markdown(render_postmortem(pm)))
     nb.save(out)
 
 
+
+def build_project() -> None:
+    nb, out = nb_for(MOD, "16_proyecto_slos_alertas_incidentes.ipynb", "Proyecto 16 · SLOs, alertas, runbook y postmortem de SupportOps")
+    md, code = nb.md, nb.code
+
+    md(f"""
+    {nb.badge()}
+
+    # Proyecto 16 · SLOs, alertas, runbook y postmortem de SupportOps
+
+    | | |
+    |---|---|
+    | **Nivel** | 🔴 Experto |
+    | **Duración estimada** | ≈ 1 h 45 min |
+    | **Servicios de Compose** | Ninguno (todo en memoria). Opcional: `core` + `metrics` para ver tus reglas en Grafana (paso final) |
+    | **RAM aproximada** | < 500 MB |
+    | **Prerrequisitos** | Lección `16_slos_alertas_incidentes`, proyectos 14 y 15 y módulo 10 |
+    | **Conexión** | Cierra el bloque de calidad: la telemetría de los módulos 9-15 se convierte en **contrato** (SLO), **alerta** y **aprendizaje** (postmortem) |
+
+    ## Contexto de negocio
+
+    Eres ingeniero/a de plataforma en **SupportOps**. Dirección pide cuatro cosas: (1) SLOs medibles para disponibilidad, latencia, calidad y coste, (2) alertas que despierten solo por lo que agota el presupuesto,
+    (3) las reglas de alerta provisionadas como código y (4) tras el incidente de ayer —un fallo del proveedor LLM entre las 10:00 y las 10:45— un **postmortem sin culpa** con cifras reales.
+
+    ## Datos
+
+    Sintéticos y deterministas (semilla 42, `mock`): el **Paso 0** ejecuta el agente real sobre 24 h de tráfico (`simulate_day`) con el incidente del proveedor y una regresión de prompt. Recibes los eventos por ticket (`ROWS`) y los
+    contadores por minuto de disponibilidad (`AV_G`, `AV_T`) y calidad (`QU_G`, `QU_T`). La verdad del incidente (`TRUTH`) está en el notebook: úsala solo para validar.
+
+    ## Entregables y criterios de evaluación (rúbrica)
+
+    | # | Entregable | Criterio medido | Umbral (calibrado con la solución; `mock`, semilla 42) |
+    |---|---|---|---|
+    | R1 | `sli_counts` | Buenos/totales de los 4 SLIs sobre el día completo | exacto |
+    | R2 | `budget_math`, `hours_to_exhaustion` | Presupuesto, consumo, burn y tiempo hasta agotar en 5 vectores | 5/5 |
+    | R3 | `multiwindow_fire` | Igual que la referencia en disponibilidad y calidad; sin falsos positivos fuera del incidente | exacto / 3/3 |
+    | R4 | `alert_rule`, `provision_group` | Estructura de la regla, anotaciones, `for`, y rechazo de intervalos no múltiplos de 10 s | 7/7 |
+    | R5 | `incident_report` | TTD, reajuste, tickets perdidos y % del presupuesto mensual | exacto (tol. 1e-9) |
+    | R6 | `write_postmortem` | Secciones, cifras coherentes, ≥ 4 acciones con responsable/plazo/tipo y sin lenguaje de culpa | 7/7 |
+
+    > 📏 Los umbrales salen de la solución de referencia con la semilla 42 fija en el notebook; R1, R3 y R5 se comparan con las funciones del paquete `supportops.slo` ejecutadas en vivo.
+    """)
+
+    code(boot("viz,otel"))
+    code(IMPORTS + IMPORTS_16.replace('STACK = check_stack("core+metrics")', 'STACK = check_stack([])').replace("LIVE = not STACK.degraded", "LIVE = False"))
+
+    md("""
+    ## Paso 0 · Los datos (te lo damos hecho)
+    """)
+    code('''
+DAY = simulate_day(SEED)
+ROWS, NB, T0, TRUTH = DAY["rows"], DAY["n_bins"], DAY["t0"], DAY["truth"]
+AV_G, AV_T = bin_events(ROWS, DEFAULT_SLOS["availability"], t0=T0, n_bins=NB)
+QU_G, QU_T = bin_events(ROWS, DEFAULT_SLOS["quality"], t0=T0, n_bins=NB)
+O0, O1 = (int(x) for x in TRUTH["outage"])
+print(f"{len(ROWS)} tickets · incidente real: minutos {O0}-{O1} · fila de ejemplo: {ROWS[0]}")
+print({k: (v.description, v.objective, v.threshold) for k, v in DEFAULT_SLOS.items()})
+''')
+
+    # ------------------------------------------------------------------------------ 1
+    md("""
+    ## Paso 1 · Los SLIs
+
+    **TODO 1.** `sli_counts(rows, slo)` recibe la lista de filas (dicts con `status`, `latency_s`, `cost_usd`, `quality_good`) y un `dict` `slo` con `sli` y `threshold`, y devuelve `(buenos, totales)`:
+
+    - `availability`: bueno si `status` ∈ {`ok`, `escalated`}; todos los tickets son válidos.
+    - `latency`: bueno si `latency_s <= threshold`.
+    - `cost`: bueno si `cost_usd <= threshold`.
+    - `quality`: **válidos** solo los que tienen `quality_good` distinto de `None` (los evaluados); bueno si `quality_good` es `True`.
+    """)
+    code('''
+def sli_counts(rows: list, slo: dict) -> tuple:
+    # TODO 1
+    raise NotImplementedError("TODO 1")
+
+try:
+    print({k: sli_counts(ROWS, {"sli": v.sli, "threshold": v.threshold}) for k, v in DEFAULT_SLOS.items()})
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ------------------------------------------------------------------------------ 2
+    md("""
+    ## Paso 2 · Presupuesto y burn rate
+
+    **TODO 2a.** `budget_math(good, total, objective)` devuelve `{"sli", "bad", "allowed_bad", "consumed", "burn"}`: `sli = good/total`, `bad = total − good`, `allowed_bad = (1 − objective)·total`, `consumed = bad/allowed_bad` y `burn = (1 − sli)/(1 − objective)`.
+
+    **TODO 2b.** `hours_to_exhaustion(burn, period_h=720)` devuelve las horas hasta agotar **todo** el presupuesto del periodo a ese ritmo: `period_h / burn` (`float("inf")` si `burn <= 0`).
+    """)
+    code('''
+def budget_math(good: float, total: float, objective: float) -> dict:
+    # TODO 2a
+    raise NotImplementedError("TODO 2a")
+
+def hours_to_exhaustion(burn: float, period_h: float = 720) -> float:
+    # TODO 2b
+    raise NotImplementedError("TODO 2b")
+
+try:
+    print(budget_math(9_900, 10_000, 0.99), hours_to_exhaustion(14.4))
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ------------------------------------------------------------------------------ 3
+    md("""
+    ## Paso 3 · La alerta multiventana
+
+    **TODO 3.** `multiwindow_fire(good, total, objective, factor, long_min, short_min, min_events=5)` recibe arrays por minuto y devuelve un array booleano (uno por minuto): `True` si el burn rate de la ventana **larga** y el de la **corta** son `>= factor`.
+
+    - Cada ventana suma buenos y totales de los **últimos** `w` minutos (incluido el actual; al principio, los que haya).
+    - Si en la ventana hay menos de `min_events` eventos, ese burn **no cuenta** (no dispara).
+    - `burn = (1 − buenos/totales)/(1 − objective)`.
+    """)
+    md(hint(1, "Suma móvil con `np.cumsum`: `c = np.cumsum(np.insert(x, 0, 0))`; la suma de los últimos `w` hasta `i` es `c[i+1] - c[max(i+1-w, 0)]`."))
+    code('''
+def multiwindow_fire(good, total, objective, factor, long_min, short_min, min_events=5):
+    # TODO 3
+    raise NotImplementedError("TODO 3")
+
+try:
+    F = multiwindow_fire(AV_G, AV_T, 0.99, 14.4, 60, 5)
+    print("dispara", int(F.sum()), "minutos · primer minuto:", int(np.argmax(F)) if F.any() else None, "· incidente real:", O0)
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ------------------------------------------------------------------------------ 4
+    md("""
+    ## Paso 4 · La regla de Grafana como código
+
+    **TODO 4a.** `alert_rule(name, objective, threshold_sli, factor, long_w, short_w, severity, dashboard_uid, panel_id)` devuelve el `dict` de una regla de provisioning (formato del módulo 10) para un SLO de **disponibilidad**:
+
+    - `uid` = `f"slo-{name}-{severity}"`, `title` con el nombre, `condition` = `"F"`, `for` = `"0s"` si `severity == "page"` y `"1m"` si no, `noDataState` = `"OK"`, `execErrState` = `"Error"`.
+    - `data`: lista con refIds **A** (PromQL instantánea del burn con la ventana `long_w`, datasource `prometheus`), **B** (idem con `short_w`), **C** y **D** (`reduce` `last` con `settings.mode = dropNN` de A y B), **E** (`math`: `$C > f && $D > f`) y **F** (`threshold` `gt 0` sobre E). El burn de availability es `(1 - ratio) / (1 - objective)` con
+      `ratio = sum(rate(supportops_agent_requests_total{service_name="supportops-agent",supportops_status=~"ok|escalated"}[W])) / sum(rate(supportops_agent_requests_total{service_name="supportops-agent"}[W]))`.
+    - `annotations`: `__dashboardUid__`, `__panelId__` (**cadena**), `summary` y `runbook_url`. `labels`: `severity`, `service="supportops-agent"`, `slo=name`.
+
+    **TODO 4b.** `provision_group(rules, interval)` devuelve `{"apiVersion": 1, "groups": [{"orgId": 1, "name": "supportops-slo", "folder": "Curso observabilidad de agentes", "interval": interval, "rules": rules}]}` y lanza `ValueError` si `interval` no termina en `s` o no es múltiplo de 10 s.
+    """)
+    code('''
+def alert_rule(name, objective, threshold_sli, factor, long_w, short_w, severity, dashboard_uid, panel_id) -> dict:
+    # TODO 4a
+    raise NotImplementedError("TODO 4a")
+
+def provision_group(rules, interval) -> dict:
+    # TODO 4b
+    raise NotImplementedError("TODO 4b")
+
+try:
+    R = alert_rule("availability", 0.99, None, 14.4, "5m", "1m", "page", "slo-agente", 12)
+    print(R["uid"], [d["refId"] for d in R["data"]], R["annotations"]["__panelId__"])
+    print(provision_group([R], "30s")["groups"][0]["interval"])
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ------------------------------------------------------------------------------ 5
+    md("""
+    ## Paso 5 · Las cifras del incidente
+
+    **TODO 5.** `incident_report(good, total, fire, start_min, end_min, objective)` devuelve un `dict` con los arrays por minuto de disponibilidad, el array booleano `fire` de la alerta y la ventana real del incidente:
+
+    - `ttd_min`: minutos desde `start_min` hasta el **primer** minuto `>= start_min` con `fire` verdadero.
+    - `reset_min`: minutos desde `end_min` hasta el **último** minuto con `fire` verdadero (puede ser negativo si se apagó antes).
+    - `bad_tickets`: tickets malos (`total − good`) en `[start_min, end_min)` (entero).
+    - `budget_month_pct`: `100 · bad_tickets / ((1 − objective) · total.sum() · 30)` (el día se repite 30 veces).
+    - `false_minutes`: minutos con `fire` verdadero fuera de `[start_min − 5, end_min + 60)`.
+    """)
+    code('''
+def incident_report(good, total, fire, start_min, end_min, objective) -> dict:
+    # TODO 5
+    raise NotImplementedError("TODO 5")
+
+REPORT = {}
+try:
+    REPORT = incident_report(AV_G, AV_T, multiwindow_fire(AV_G, AV_T, 0.99, 14.4, 60, 5), O0, O1, 0.99)
+    print(REPORT)
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ------------------------------------------------------------------------------ 6
+    md("""
+    ## Paso 6 · El postmortem sin culpa
+
+    **TODO 6.** `write_postmortem(report)` devuelve el `dict` que acepta `render_postmortem` (claves `title, summary, impact, timeline, root_cause, contributing, went_well, went_wrong, lucky, actions`). Requisitos:
+
+    - `summary` e `impact` incluyen las **cifras de `report`**: el TTD (en minutos), los tickets malos y el % del presupuesto mensual (redondeado a entero).
+    - `timeline`: ≥ 5 entradas `("HH:MM", "evento")` en **orden cronológico** que incluyan el inicio real del incidente (`10:00`) y la hora de la alerta.
+    - `actions`: ≥ 4 tuplas `(acción, responsable, plazo, tipo)` con `tipo` ∈ {`prevenir`, `detectar`, `mitigar`}, **al menos una de cada tipo**, y responsables que sean equipos/roles (no nombres propios).
+    - **Sin culpa**: ni `root_cause` ni `contributing` contienen «culpa», «negligen», «error humano», «debería haber» ni «se olvidó».
+    """)
+    md(hint(1, "Puedes reutilizar la estructura de la lección (§9). Para la hora de alerta usa `f'{(O0 + report[\"ttd_min\"]) // 60:02d}:{(O0 + report[\"ttd_min\"]) % 60:02d}'`."))
+    code('''
+def write_postmortem(report: dict) -> dict:
+    # TODO 6
+    raise NotImplementedError("TODO 6")
+
+try:
+    PM = write_postmortem(REPORT); print(render_postmortem(PM)[:600])
+except NotImplementedError as e:
+    print("Pendiente:", e)
+''')
+
+    # ------------------------------------------------------------------------------ rúbrica
+    md("""
+    ## Paso 7 · Rúbrica
+    """)
+    code('''
+def run_rubric():
+    rows = []
+    def add(r, d, ok, det=""): rows.append({"criterio": r, "descripción": d, "resultado": "✅ OK" if ok else "❌ FALLA", "detalle": det})
+    # R1
+    try:
+        got = {k: tuple(int(x) for x in sli_counts(ROWS, {"sli": v.sli, "threshold": v.threshold})) for k, v in DEFAULT_SLOS.items()}
+        ref = {k: (int(bin_events(ROWS, v, t0=T0, n_bins=NB)[0].sum()), int(bin_events(ROWS, v, t0=T0, n_bins=NB)[1].sum())) for k, v in DEFAULT_SLOS.items()}
+        add("R1", "sli_counts: 4 SLIs", got == ref, f"{got}" if got != ref else f"exacto · {got}")
+    except Exception as e: add("R1", "sli_counts", False, f"{type(e).__name__}: {e}")
+    # R2
+    try:
+        b = budget_math(9_900, 10_000, 0.99); b2 = budget_math(9_900, 10_000, 0.999); b3 = budget_math(10_000, 10_000, 0.99)
+        checks = {"consumo = 1": abs(b["consumed"] - 1) < 1e-9 and abs(b["burn"] - 1) < 1e-9, "allowed_bad": abs(b["allowed_bad"] - 100) < 1e-9 and b["bad"] == 100, "burn 10×": abs(b2["burn"] - 10) < 1e-9 and abs(b2["consumed"] - 10) < 1e-9,
+                  "14,4 → 50 h": abs(hours_to_exhaustion(14.4) - 50) < 1e-9, "burn 0 → inf": hours_to_exhaustion(0) == float("inf") and b3["consumed"] == 0}
+        add("R2", "budget_math y hours_to_exhaustion: 5 vectores", all(checks.values()), str({k: v for k, v in checks.items() if not v} or "todas OK"))
+    except Exception as e: add("R2", "budget_math", False, f"{type(e).__name__}: {e}")
+    # R3
+    try:
+        p = GOOGLE_POLICIES[0]
+        f1 = multiwindow_fire(AV_G, AV_T, 0.99, 14.4, 60, 5); r1 = fire_series(AV_G, AV_T, 0.99, p)
+        inc = minute_mask(O0, O1, NB)
+        checks = {"disponibilidad = referencia": bool((np.asarray(f1) == r1).all()), "dispara dentro del incidente": bool(np.asarray(f1)[inc].any()), "sin falsos positivos fuera (±60 min)": not np.asarray(f1)[: O0 - 5].any() and not np.asarray(f1)[O1 + 60:].any()}
+        add("R3", "multiwindow_fire: 3 comprobaciones", all(checks.values()), str({k: v for k, v in checks.items() if not v} or f"todas OK · primer minuto {int(np.argmax(f1))}"))
+    except Exception as e: add("R3", "multiwindow_fire", False, f"{type(e).__name__}: {e}")
+    # R4
+    try:
+        r = alert_rule("availability", 0.99, None, 14.4, "5m", "1m", "page", "slo-agente", 12)
+        r2 = alert_rule("availability", 0.99, None, 3.0, "15m", "3m", "ticket", "slo-agente", 12)
+        ref = grafana_burn_rule(DEFAULT_SLOS["availability"], LAB_POLICIES[0], dashboard_uid="slo-agente", panel_id=12)
+        by = {d["refId"]: d for d in r["data"]}
+        def raises(iv):
+            try: provision_group([r], iv)
+            except ValueError: return True
+            return False
+        checks = {"refIds A-F y condición F": [d["refId"] for d in r["data"]] == list("ABCDEF") and r["condition"] == "F", "burn largo y corto": by["A"]["model"]["expr"] == ref["data"][0]["model"]["expr"] and by["B"]["model"]["expr"] == ref["data"][1]["model"]["expr"],
+                  "math y umbral": by["E"]["model"]["expression"].replace(" ", "") == "$C>14.4&&$D>14.4" and by["F"]["model"]["type"] == "threshold",
+                  "for según severidad": r["for"] == "0s" and r2["for"] == "1m", "anotaciones": r["annotations"]["__dashboardUid__"] == "slo-agente" and r["annotations"]["__panelId__"] == "12" and "runbook_url" in r["annotations"] and "summary" in r["annotations"],
+                  "etiquetas": r["labels"] == {"severity": "page", "service": "supportops-agent", "slo": "availability"} or (r["labels"].get("severity") == "page" and r["labels"].get("slo") == "availability"),
+                  "intervalo múltiplo de 10 s": provision_group([r], "30s")["groups"][0]["interval"] == "30s" and raises("15s") and raises("45")}
+        add("R4", "alert_rule y provision_group: 7 comprobaciones", all(checks.values()), str({k: v for k, v in checks.items() if not v} or "todas OK"))
+    except Exception as e: add("R4", "alert_rule/provision_group", False, f"{type(e).__name__}: {e}")
+    # R5
+    try:
+        f = multiwindow_fire(AV_G, AV_T, 0.99, 14.4, 60, 5); rep = incident_report(AV_G, AV_T, f, O0, O1, 0.99)
+        idx = np.where(f)[0]; first = int(idx[idx >= O0][0]); last = int(idx[-1])
+        exp = {"ttd_min": first - O0, "reset_min": last - O1, "bad_tickets": int((AV_T[O0:O1] - AV_G[O0:O1]).sum()), "budget_month_pct": 100 * (AV_T[O0:O1] - AV_G[O0:O1]).sum() / (0.01 * AV_T.sum() * 30),
+               "false_minutes": int(f[: max(O0 - 5, 0)].sum() + f[O1 + 60:].sum())}
+        ok = all(abs(rep[k] - v) < 1e-9 for k, v in exp.items())
+        add("R5", "incident_report: 5 cifras", ok, f"{ {k: round(rep[k], 3) for k in exp} } (ref {exp})")
+    except Exception as e: add("R5", "incident_report", False, f"{type(e).__name__}: {e}")
+    # R6
+    try:
+        rep = incident_report(AV_G, AV_T, multiwindow_fire(AV_G, AV_T, 0.99, 14.4, 60, 5), O0, O1, 0.99); pm = write_postmortem(rep); md_ = render_postmortem(pm)
+        txt = json.dumps(pm, ensure_ascii=False).lower()
+        times = [h for h, _ in pm["timeline"]]
+        hdet = f"{(O0 + rep['ttd_min']) // 60:02d}:{(O0 + rep['ttd_min']) % 60:02d}"
+        types = {a[3] for a in pm["actions"]}
+        blame = ["culpa", "negligen", "error humano", "debería haber", "se olvidó"]
+        checks = {"secciones": all(h in md_ for h in ("## Resumen", "## Impacto", "## Cronología", "## Acciones")),
+                  "cifras coherentes": str(int(rep["ttd_min"])) in pm["summary"] and str(rep["bad_tickets"]) in txt and str(round(rep["budget_month_pct"])) in txt,
+                  "cronología ≥ 5, ordenada, con inicio y alerta": len(times) >= 5 and times == sorted(times) and "10:00" in times and hdet in times,
+                  "≥ 4 acciones completas": len(pm["actions"]) >= 4 and all(len(a) == 4 and all(str(x).strip() for x in a) for a in pm["actions"]),
+                  "los 3 tipos": {"prevenir", "detectar", "mitigar"} <= types,
+                  "responsables = equipos": all(not re.search(r"\\b[A-Z][a-z]+ [A-Z][a-z]+\\b", a[1]) for a in pm["actions"]),
+                  "sin lenguaje de culpa": not any(b in (pm["root_cause"] + " ".join(pm["contributing"])).lower() for b in blame)}
+        add("R6", "write_postmortem: 7 comprobaciones", all(checks.values()), str({k: v for k, v in checks.items() if not v} or "todas OK"))
+    except Exception as e: add("R6", "write_postmortem", False, f"{type(e).__name__}: {e}")
+    return pd.DataFrame(rows).set_index("criterio")
+''')
+    code('''
+# Ejecuta esta celda cuando hayas terminado los TODO
+display(run_rubric())
+''')
+
+    md("""
+    ---
+    ## Paso final (opcional) · Míralo funcionar
+
+    Con el stack: escribe `provision_group(...)` a `stack/grafana/provisioning/alerting/` con `yaml.safe_dump` y recarga con `POST /api/admin/provisioning/alerting/reload`; después reproduce el incidente en vivo con el código de la sección 7.1 de la lección.
+    Comprueba que tu regla de página pasa a *firing* y se resuelve sola.
+
+    ## Retos extra (nivel experto)
+
+    1. **Cuatro SLOs, ocho reglas**: genera las reglas de los cuatro SLOs y de ambas políticas con un bucle y compara tu YAML con `16-slo-alerts.yaml`.
+    2. **Sensibilidad**: barre `factor` (3-30) y `long_min` (15-240) y dibuja TTD frente a minutos falsos con 40 meses simulados (`simulate_month`); elige el punto de operación y defiéndelo.
+    3. **Política escalonada**: implementa «<50 % de presupuesto → revisar despliegues; <25 % → solo fiabilidad; agotado → congelar» como función de `budget_math` sobre un mes simulado.
+    4. **SLO de un cliente premium** con 20 tickets/día: diseña ventanas, `min_events` y una sonda sintética que lo hagan alertable.
+    5. **Segundo postmortem**: escribe el de la regresión de prompt (6:00-14:00) con las cifras de calidad; ¿qué acciones de *prevenir* cambian respecto al del proveedor?
+
+    ## Reflexión (producción e hilo conductor)
+
+    - Tu TTD es de varios minutos. ¿Qué cuesta acortarlo (falsas alarmas, sondas sintéticas) y quién decide el compromiso?
+    - ¿Qué SLO pondrías al proveedor del LLM en el contrato y cómo lo medirías tú, no él?
+    - En el capstone (módulo 22) el agente es multi-agente: ¿cómo descompones el SLO de extremo a extremo entre orquestador y subagentes?
+    - ¿Qué parte del postmortem sería distinta si el incidente hubiera sido una fuga de PII (módulo 20)?
+    """)
+
+    md("""
+    ---
+    # ⛔ SPOILER — intenta resolverlo primero
+
+    A continuación, la **solución de referencia** completa y ejecutable (redefine las funciones y vuelve a lanzar la rúbrica).
+    """)
+    code('''
+# ===================== SOLUCIÓN DE REFERENCIA =====================
+def sli_counts(rows, slo):
+    k = slo["sli"]
+    if k == "availability": ok = [r["status"] in ("ok", "escalated") for r in rows]
+    elif k == "latency": ok = [r["latency_s"] <= slo["threshold"] for r in rows]
+    elif k == "cost": ok = [r["cost_usd"] <= slo["threshold"] for r in rows]
+    else: ok = [bool(r["quality_good"]) for r in rows if r["quality_good"] is not None]
+    return sum(ok), len(ok)
+
+def budget_math(good, total, objective):
+    sli = good / total; bad = total - good; allowed = (1 - objective) * total
+    return {"sli": sli, "bad": bad, "allowed_bad": allowed, "consumed": bad / allowed, "burn": (1 - sli) / (1 - objective)}
+
+def hours_to_exhaustion(burn, period_h=720):
+    return float("inf") if burn <= 0 else period_h / burn
+
+def multiwindow_fire(good, total, objective, factor, long_min, short_min, min_events=5):
+    cg, ct = np.cumsum(np.insert(np.asarray(good, float), 0, 0)), np.cumsum(np.insert(np.asarray(total, float), 0, 0))
+    def burn(w):
+        i = np.arange(len(good)); lo = np.maximum(i + 1 - w, 0)
+        g, t = cg[i + 1] - cg[lo], ct[i + 1] - ct[lo]
+        with np.errstate(divide="ignore", invalid="ignore"): return np.where(t >= min_events, (1 - g / np.maximum(t, 1)) / (1 - objective), 0.0)
+    return (burn(long_min) >= factor) & (burn(short_min) >= factor)
+
+def alert_rule(name, objective, threshold_sli, factor, long_w, short_w, severity, dashboard_uid, panel_id):
+    def expr(w):
+        sel = 'service_name="supportops-agent"'
+        ratio = f'sum(rate(supportops_agent_requests_total{{{sel},supportops_status=~"ok|escalated"}}[{w}])) / sum(rate(supportops_agent_requests_total{{{sel}}}[{w}]))'
+        return f"(1 - ({ratio})) / {1 - objective:.6g}"
+    q = lambda ref, w: {"refId": ref, "relativeTimeRange": {"from": 600, "to": 0}, "datasourceUid": "prometheus", "model": {"refId": ref, "expr": expr(w), "instant": True, "intervalMs": 15000, "maxDataPoints": 43200}}
+    red = lambda ref, src: {"refId": ref, "datasourceUid": "__expr__", "model": {"refId": ref, "type": "reduce", "expression": src, "reducer": "last", "settings": {"mode": "dropNN"}}}
+    return {"uid": f"slo-{name}-{severity}", "title": f"SLO {name} · {severity} (×{factor:g})", "condition": "F", "for": "0s" if severity == "page" else "1m", "noDataState": "OK", "execErrState": "Error", "isPaused": False,
+            "data": [q("A", long_w), q("B", short_w), red("C", "A"), red("D", "B"),
+                     {"refId": "E", "datasourceUid": "__expr__", "model": {"refId": "E", "type": "math", "expression": f"$C > {factor:g} && $D > {factor:g}"}},
+                     {"refId": "F", "datasourceUid": "__expr__", "model": {"refId": "F", "type": "threshold", "expression": "E", "conditions": [{"evaluator": {"type": "gt", "params": [0]}}]}}],
+            "annotations": {"__dashboardUid__": dashboard_uid, "__panelId__": str(panel_id), "summary": f"SLO {name}: burn rate >= {factor:g}x en {long_w} y {short_w}", "runbook_url": f"https://example.com/runbooks/slo-{name}"},
+            "labels": {"severity": severity, "service": "supportops-agent", "slo": name}}
+
+def provision_group(rules, interval):
+    if not interval.endswith("s") or not interval[:-1].isdigit() or int(interval[:-1]) % 10: raise ValueError("el intervalo debe ser múltiplo de 10 s")
+    return {"apiVersion": 1, "groups": [{"orgId": 1, "name": "supportops-slo", "folder": "Curso observabilidad de agentes", "interval": interval, "rules": rules}]}
+
+def incident_report(good, total, fire, start_min, end_min, objective):
+    idx = np.where(fire)[0]; first = int(idx[idx >= start_min][0]); last = int(idx[-1])
+    bad = int((total[start_min:end_min] - good[start_min:end_min]).sum())
+    return {"ttd_min": first - start_min, "reset_min": last - end_min, "bad_tickets": bad, "budget_month_pct": 100 * bad / ((1 - objective) * total.sum() * 30),
+            "false_minutes": int(fire[: max(start_min - 5, 0)].sum() + fire[end_min + 60:].sum())}
+
+def write_postmortem(report):
+    hh = lambda m: f"{int(m) // 60:02d}:{int(m) % 60:02d}"
+    det = O0 + report["ttd_min"]; pct = round(report["budget_month_pct"]); bad = report["bad_tickets"]
+    return {"title": "El proveedor de LLM devuelve 503 durante 45 minutos", "severity": "SEV-2", "summary": f"Entre las 10:00 y las 10:45 el proveedor del LLM falló de forma persistente. {bad} tickets terminaron mal; la alerta de quema rápida saltó a las {hh(det)} (TTD {report['ttd_min']} min) y se consumió el {pct} % del presupuesto mensual.",
+            "impact": [f"{bad} tickets malos en 45 minutos.", f"{pct} % del presupuesto mensual de disponibilidad consumido."],
+            "timeline": [("10:00", "Empiezan los 503 del proveedor."), (hh(O0 + 4), "El burn rate de 5 min supera 14,4×."), (hh(det), f"Salta la alerta de quema rápida (TTD {report['ttd_min']} min)."), (hh(det + 3), "La guardia reconoce la alerta y abre el dashboard."),
+                         (hh(det + 8), "Las trazas muestran 503 en todos los `chat`: causa externa."), ("10:45", "El proveedor se recupera.")],
+            "root_cause": "Degradación del proveedor de LLM sin proveedor de reserva ni modo degradado automático en el sistema.",
+            "contributing": ["No existía conmutación a un modelo de reserva.", "El runbook no describía el procedimiento de conmutación."],
+            "went_well": ["La alerta multiventana no dio falsas alarmas y se resolvió sola."], "went_wrong": [f"El TTD de {report['ttd_min']} min dejó clientes sin respuesta."], "lucky": ["Ocurrió en horas de bajo tráfico."],
+            "actions": [("Proveedor/modelo de reserva con conmutación automática", "plataforma", "3 semanas", "mitigar"), ("Sonda sintética por minuto del camino LLM", "observabilidad", "2 semanas", "detectar"),
+                        ("Actualizar el runbook con el procedimiento de conmutación", "guardia", "1 semana", "prevenir"), ("Plantilla de comunicación a clientes", "soporte", "2 semanas", "mitigar")]}
+
+display(run_rubric())
+''')
+    nb.save(out)
+
+
+# =====================================================================================================================
+def build_readme() -> None:
+    readme = """# Módulo 16 · SLOs, alertas e incidentes de agentes de IA
+
+🔴 **Experto** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+
+> ⚠️ Tráfico e incidentes **simulados y deterministas** (`mock`, semilla 42): el agente real procesa 24 h de tickets con un fallo del proveedor LLM y una regresión de prompt inyectados, así que conocemos la verdad de cada alerta.
+> Las ventanas del laboratorio en vivo están **comprimidas** (minutos); las de producción (1 h/5 min, 6 h/30 min, 3 d/6 h) se tratan con simulación y aritmética.
+
+De «creo que va mal» a «el presupuesto se agota en 2 horas»: **SLIs específicos de agentes** (disponibilidad, latencia, calidad, coste), **presupuesto de error** y **burn rate multiventana**, comparado con umbrales fijos en un Monte Carlo de 40 meses;
+**alertas de Grafana provisionadas como código** (intervalo múltiplo de 10 s, enlace alerta→panel en `annotations`) probadas con un incidente real en el stack; **runbooks**, guardia sostenible y **postmortem sin culpa** con cifras de la telemetría.
+
+## Objetivos
+1. Definir SLIs como «eventos buenos / válidos» y fijar SLOs con la línea base medida.
+2. Calcular presupuesto, burn rate y tiempo hasta agotarlo; derivar el 14,4 de la SRE Workbook.
+3. Implementar y comparar alertas por burn rate (umbral fijo, una ventana, multiventana).
+4. Dimensionar ventanas para SLIs de poco volumen (calidad) y entender las quemas lentas.
+5. Provisionar reglas de alerta como código y probarlas en vivo.
+6. Redactar runbook y postmortem sin culpa.
+
+## Contenido
+| Archivo | Qué es |
+|---|---|
+| `16_slos_alertas_incidentes.ipynb` | Lección (14 secciones, 9 gráficos, incidente en vivo con alertas reales, 🧠 de élite, autoevaluación) |
+| `16_proyecto_slos_alertas_incidentes.ipynb` | Proyecto: SLIs, presupuesto, alerta multiventana, regla de Grafana como código, informe del incidente y postmortem (rúbrica, pistas 🪜, solución tras ⛔ SPOILER) |
+| `runbooks/` | Runbooks de las alertas (`slo-availability-fast-burn`, `slo-quality-slow-burn`) y plantilla de postmortem |
+| `../supportops/slo.py` | `SLO`, burn rate y políticas (`GOOGLE_POLICIES`, `LAB_POLICIES`), `fire_series`, `alert_quality`, `simulate_day`/`simulate_month`, PromQL, `grafana_burn_rule`, `rules_yaml`, `render_postmortem` |
+| `../supportops/tests/test_slo.py` | Pruebas del módulo |
+| `../stack/grafana/dashboards/16-slos.json` | Dashboard «16 · SLOs de SupportOps» (uid `slo-agente`) |
+| `../stack/grafana/provisioning/alerting/16-slo-alerts.yaml` | 8 reglas de alerta de SLO (grupo `supportops-slo`, intervalo 30 s) |
+
+## Servicios necesarios
+- **Sin Docker** (modo degradado): todo salvo la sección 7.1 de la lección y el paso final del proyecto. Funciona en Colab.
+- **Con stack** (opcional): `cd stack && docker compose --profile core --profile metrics up -d`. Grafana: http://localhost:3000 (`admin`/`admin`). La sección 7.1 tarda ≈ 3 min.
+
+## Lecturas
+- Google, *The Site Reliability Workbook*, cap. 5 «Alerting on SLOs» · *Site Reliability Engineering*, caps. 4, 11 y 15.
+- Grafana Labs, alertas multiventana multi-burn-rate · Allspaw (2012), *Blameless PostMortems and a Just Culture*.
+
+## Cómo se conecta
+Antes: módulos 09 (métricas), 10 (alertas básicas), 13 (coste), 14 (calidad online), 15 (regresión). Después: el 18 usa el presupuesto para decidir muestreo y retención; el 21 reutiliza los incidentes en la «mesa de incidentes»; el 22 integra SLOs y runbooks en el capstone.
+"""
+    (COURSE / MOD / "README.md").write_text(readme, encoding="utf-8")
+    print("OK README", MOD)
+
+
 if __name__ == "__main__":
     build_runbooks()
     ids = build_dashboard()
     build_alerts(ids)
     build_lesson()
+    build_project()
+    build_readme()
