@@ -1244,6 +1244,7 @@ cfg = yaml.safe_load(MIMIR_EXPORTER); print("YAML válido · exporters:", list(c
     8. **Los nombres son una API pública.** `USD` acaba en el nombre (`..._USD_total`), un gauge con unidad `1` recibe `_ratio`, `{token}` desaparece. Con Prometheus 3 puedes conservar los puntos (`NoUTF8EscapingWithSuffixes`), y entonces las consultas llevan el nombre entre comillas (`{"gen_ai.client.inference.duration_seconds_bucket"}`), como hace la propia spec GenAI en sus ejemplos. Elige una vez, documenta y no lo cambies sin migración.
     9. **`service.instance.id` único… y estable por proceso.** Dos procesos con el mismo id escribirían en la **misma serie** (contadores a saltos, `rate()` sin sentido). Al revés, un id nuevo en cada arranque (como hace `setup_telemetry`, y como pasa al relanzar una celda de notebook) deja series muertas durante el *lookback* de 5 min: en dashboards usa `sum without (instance)` y no compares `instance`.
     10. **`resource_to_telemetry_conversion` está obsoleto en el Collector 0.162** (el log lo avisa): copiar todos los atributos de recurso a cada serie mezcla identidad con descripción. La vía recomendada es `target_info` + promover unos pocos atributos.
+    11. **Un p99 «plano» es una alarma, no una buena noticia.** En un histograma clásico, si el cuantil cae en el bucket `+Inf`, `histogram_quantile` devuelve el límite superior del **segundo bucket más alto** (documentación de PromQL): con límites hasta 10,24 s, un p99 de 10,24 s puede esconder llamadas de 60 s. Detecta las observaciones fuera de rejilla con `sum(rate(x_bucket{le="+Inf"}[5m])) - sum(rate(x_bucket{le="10.24"}[5m]))` (> 0 ⇒ la cola no cabe en tus buckets) y alerta sobre eso además de sobre el p99.
     """)
 
     md("""
@@ -1299,6 +1300,7 @@ cfg = yaml.safe_load(MIMIR_EXPORTER); print("YAML válido · exporters:", list(c
     - Prometheus, *Using Prometheus as your OpenTelemetry backend* (receptor OTLP, `promote_resource_attributes`, `target_info`, UTF-8, delta): <https://github.com/prometheus/docs/blob/main/docs/guides/opentelemetry.md>
     - Prometheus, *Histograms and summaries* (por qué no se agregan los cuantiles): <https://github.com/prometheus/docs/blob/main/docs/practices/histograms.md> · *Metric and label naming*: <https://github.com/prometheus/docs/blob/main/docs/practices/naming.md>
     - Prometheus, *Feature flags* (`exemplar-storage`, `otlp-deltatocumulative`, `otlp-native-delta-ingestion`) y *Configuration* (`otlp:`, `scrape_native_histograms`): <https://github.com/prometheus/prometheus/blob/v3.15.0/docs/feature_flags.md>, <https://github.com/prometheus/prometheus/blob/v3.15.0/docs/configuration/configuration.md>
+    - Prometheus, *PromQL functions* (`histogram_quantile`: casos especiales del bucket más alto): <https://github.com/prometheus/prometheus/blob/v3.15.0/docs/querying/functions.md>
     - Prometheus, *CHANGELOG* (3.8.0: histogramas nativos estables; 3.9.0: el flag `native-histograms` pasa a no-op): <https://github.com/prometheus/prometheus/blob/v3.15.0/CHANGELOG.md>
 
     **Grafana**
