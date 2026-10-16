@@ -181,13 +181,18 @@ def _gen_cascade(seed: int, n: int, prm: Mapping[str, Any]) -> IncidentBundle:
     return b
 
 
+def loop_tickets(seed: int = 42, n: int = 240, variant: str = "mesa"):
+    """Los tickets (con los fallos inyectados) del incidente de bucle: sirven para **re-ejecutar** el incidente con una mitigación y medir su efecto."""
+    prm = PARAMS[variant]["INC-B"]
+    inc = Incident("loop", "tool_loop", prm["start"] * 60, prm["end"] * 60, prm["prob"], {})
+    return generate_tickets(n, seed, duration_s=MINUTES * 60, fault_rates={"latency_spike": 0.02, "llm_error": 0.01, "tool_error": 0.01}, incidents=[inc], pii_rate=0.0)
+
+
 def _gen_loop(seed: int, n: int, prm: Mapping[str, Any]) -> IncidentBundle:
     from .agent import SupportAgent
     from .telemetry import OTelInstrumentor, setup_telemetry
-    from .tools import default_tools
     rng = stable_rng("incident-B", seed)
-    inc = Incident("loop", "tool_loop", prm["start"] * 60, prm["end"] * 60, prm["prob"], {})
-    tickets = generate_tickets(n, seed, duration_s=MINUTES * 60, fault_rates={"latency_spike": 0.02, "llm_error": 0.01, "tool_error": 0.01}, incidents=[inc], pii_rate=0.0)
+    tickets = loop_tickets(seed, n, "lesson" if prm is PARAMS["lesson"]["INC-B"] else "mesa")
     tel = setup_telemetry("supportops-agent", mode="memory", set_global=False, metrics=False)
     agent = SupportAgent(instrumentor=OTelInstrumentor(tel, emit_metrics=False), max_steps=6)
     results = [agent.run(t) for t in tickets]
@@ -390,4 +395,4 @@ def evidence_keys(case_id: str) -> list[str]:
     return [k for k in reference_facts(case_id) if k not in ("culprit", "no_tool_share_before")]
 
 
-__all__ = ["CASE_IDS", "CAUSES", "MITIGATIONS", "IncidentBundle", "build_incident", "grade", "reference_facts", "evidence_keys", "minute_table", "trace_table", "pct"]
+__all__ = ["PARAMS", "loop_tickets", "CASE_IDS", "CAUSES", "MITIGATIONS", "IncidentBundle", "build_incident", "grade", "reference_facts", "evidence_keys", "minute_table", "trace_table", "pct"]
