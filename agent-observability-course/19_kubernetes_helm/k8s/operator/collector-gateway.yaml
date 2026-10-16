@@ -1,4 +1,4 @@
-# OpenTelemetryCollector (CRD v1beta1): el operador crea el Deployment, Service, ConfigMap, HPA y PDB. Equivale al gateway de los values de Helm.
+# OpenTelemetryCollector (CRD v1beta1): el operador crea el Deployment, Service, ConfigMap, HPA y PDB. Versión SIMPLIFICADA del gateway de los values de Helm (sin la política «costly», sin span_metrics y solo con el exportador de trazas): sirve para validar el CRD, no como sustituto completo.
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:

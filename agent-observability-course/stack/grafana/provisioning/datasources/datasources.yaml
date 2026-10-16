@@ -31,8 +31,9 @@ datasources:
         tags:
           - key: service.name
             value: service_name
-        customQuery: true
-        query: '{service_name="$${__span.tags["service.name"]}", span_id="$${__span.spanId}"}'
+        # Sin customQuery: Grafana construye {service_name="..."} y, si el span lleva pyroscope.profile.id, filtra por ese span
+        # (spanSelector). OJO: `span_id="..."` dentro del selector de etiquetas NO funciona en Pyroscope 2.1.2 (medido: 0 muestras;
+        # span_id se consulta con SelectMergeSpanProfile/spanSelector, no como etiqueta).
       streamingEnabled:
         search: true
 

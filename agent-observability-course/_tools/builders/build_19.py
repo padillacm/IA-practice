@@ -55,9 +55,9 @@ serviceAccount:
   create: true
   name: ""
 
-# Dónde envía OTLP el agente. Con el DaemonSet «otel-agent» (hostPort 4317/4318 del nodo) se usa la IP del nodo; aquí por defecto el Service del agente.
+# Dónde envía OTLP el agente: el Service «otel-agent» del DaemonSet (values/otel-agent.yaml activa `service.enabled`; el chart lo crea con internalTrafficPolicy: Local, es decir, el tráfico va al agente de SU nodo).
 otlp:
-  endpoint: "http://otel-agent-opentelemetry-collector.observability.svc.cluster.local:4318"
+  endpoint: "http://otel-agent.observability.svc.cluster.local:4318"
   serviceName: supportops-agent
 
 # Generador de tráfico sintético (el mismo de los módulos anteriores: semilla fija, fallos inyectados)
@@ -178,6 +178,14 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "supportops.fullname" . }}
+          # El proceso no abre ningún puerto: la vivacidad se comprueba con un «latido» (fichero tocado en cada ciclo del bucle de tráfico).
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/heartbeat') < 90 else 1)"]
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
@@ -408,6 +416,7 @@ def agent_values() -> dict:
         "image": {"repository": "otel/opentelemetry-collector-contrib", "tag": "0.162.0"},
         "command": {"name": "otelcol-contrib"},
         "presets": {"kubernetesAttributes": {"enabled": True}},
+        "service": {"enabled": True},            # en modo daemonset el chart NO crea Service por defecto: lo necesitan los pods (otel-agent.observability:4318)
         "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"memory": "256Mi"}},
         "ports": {"jaeger-compact": {"enabled": False}, "jaeger-thrift": {"enabled": False}, "jaeger-grpc": {"enabled": False}, "zipkin": {"enabled": False},
                   "otlp": {"enabled": True, "hostPort": 4317}, "otlp-http": {"enabled": True, "hostPort": 4318}},
@@ -510,7 +519,7 @@ admissionWebhooks:
 replicaCount: 1
 """
 
-COLLECTOR_CR = """# OpenTelemetryCollector (CRD v1beta1): el operador crea el Deployment, Service, ConfigMap, HPA y PDB. Equivale al gateway de los values de Helm.
+COLLECTOR_CR = """# OpenTelemetryCollector (CRD v1beta1): el operador crea el Deployment, Service, ConfigMap, HPA y PDB. Versión SIMPLIFICADA del gateway de los values de Helm (sin la política «costly», sin span_metrics y solo con el exportador de trazas): sirve para validar el CRD, no como sustituto completo.
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
@@ -564,11 +573,10 @@ metadata:
   namespace: supportops
 spec:
   exporter:
-    endpoint: http://otel-agent-opentelemetry-collector.observability.svc.cluster.local:4318
+    endpoint: http://otel-agent.observability.svc.cluster.local:4318
   propagators: [tracecontext, baggage]
   sampler:
-    type: parentbased_traceidratio
-    argument: "0.25"
+    type: parentbased_always_on          # NO muestrear en el SDK: el tail_sampling del gateway decide (módulo 18: las probabilidades se multiplican y se pierden errores)
   python:
     env:
       - {name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED, value: "true"}
@@ -577,7 +585,7 @@ spec:
 SUPPORTOPS_VALUES_LAB = """# Valores de laboratorio del chart supportops.
 replicaCount: 2
 otlp:
-  endpoint: http://otel-agent-opentelemetry-collector.observability.svc.cluster.local:4318
+  endpoint: http://otel-agent.observability.svc.cluster.local:4318
 traffic:
   ratePerSecond: 4
 autoscaling:

@@ -797,6 +797,10 @@ def run_traffic(rate: float | None = None, seconds: float | None = None, seed: i
             agent.run(t)
             n += 1
         tick += 1
+        try:                                   # «latido» para la livenessProbe exec del chart supportops (el proceso no abre puertos)
+            pathlib.Path(os.environ.get("SUPPORTOPS_HEARTBEAT", "/tmp/heartbeat")).touch()
+        except OSError:
+            pass
         time.sleep(max(0.0, 1.0 - ((time.time() - t0) % 1.0)))
     tel.force_flush(10)
     tel.shutdown()

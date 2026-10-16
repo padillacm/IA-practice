@@ -55,6 +55,14 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "supportops.fullname" . }}
+          # El proceso no abre ningún puerto: la vivacidad se comprueba con un «latido» (fichero tocado en cada ciclo del bucle de tráfico).
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import os,sys,time; sys.exit(0 if time.time() - os.path.getmtime('/tmp/heartbeat') < 90 else 1)"]
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

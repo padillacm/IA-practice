@@ -470,7 +470,7 @@ print({k: round(v, 1) for k, v in cm_full.daily_gb().items()}, "GB/día (todo) �
     # 5 · SLOs y alertas sobre la ejecución con incidente
 
     La caída es **parcial**: solo la ruta de reembolsos (el `billing-agent`, ≈ 20 % del tráfico) agota plazos entre los minutos 10 y 20, y el sistema **degrada bien** (reintentos, escalado a humano). Calculamos dos SLIs —**disponibilidad** (`ok` o `escalated`) y **latencia** (≤ 10 s, el objetivo medido
-    sobre la línea base de un multi-agente: más cadena, más latencia que el agente único)— y aplicamos burn rate multiventana de laboratorio (larga 5 min, corta 1 min). Una caída parcial **nunca** quema a 14,4×: con el 20 % del tráfico afectado el máximo teórico de la fracción mala es ≈ 20 %, es decir 4× un presupuesto del 5 %: por eso aquí usamos la
+    sobre la línea base de un multi-agente: más cadena, más latencia que el agente único)— y aplicamos burn rate multiventana de laboratorio (larga 5 min, corta 1 min). Una caída parcial rara vez quema a 14,4×: con el 20 % del tráfico afectado el máximo teórico de la fracción mala es ≈ 20 %, es decir 4× el presupuesto del 5 % de la latencia (y, en disponibilidad, solo una fracción pequeña de esos tickets acaba mal porque el sistema degrada y escala a humano, que cuenta como disponible): por eso aquí usamos la
     política de **ticket (≥ 3×)** y no la de página (módulo 16: dimensiona la política al tipo de incidente).
     """)
     code('''
@@ -497,7 +497,7 @@ for name, f in FIRES.items(): print(f"{name:34} primer disparo: {int(np.argmax(f
 ''')
     md(observe("""
     - Las **dos** alertas saltan **dentro** de la caída y no antes: la de disponibilidad casi de inmediato (los pocos tickets `degraded` bastan para una quema de ticket) y la de **latencia** unos minutos después (necesita acumular en la ventana larga); la mayor parte del daño está en la latencia, porque el sistema **degrada bien** (reintentos y escalado a humano cuentan como disponibles). Qué SLI es el «de verdad» es una decisión que defenderás en la revisión.
-        - Una alerta de **página** (14,4×) nunca saltaría con un 20 % del tráfico afectado: la política (ticket, 3×) debe corresponder al tipo de fallo. Lo contrario es la receta de las alertas que nadie atiende.
+        - Una alerta de **página** (14,4×) no saltaría con un 20 % del tráfico afectado y un sistema que degrada bien: la política (ticket, 3×) debe corresponder al tipo de fallo. Lo contrario es la receta de las alertas que nadie atiende.
     """))
     code('''
 UNI = [r for r in RES if int(hashlib.sha256(r.ticket_id.encode()).hexdigest(), 16) % 4 == 0]          # muestra uniforme determinista del 25 %
@@ -719,7 +719,7 @@ if LIVE and LIVE_RUN:
 
     - **Revisiones de arquitectura (*design reviews*)**: los equipos de plataforma de las grandes empresas exigen un documento con requisitos medibles, alternativas descartadas, riesgos con detección y plan de pruebas; es el formato de los ADR (*Architecture Decision Records*, Michael Nygard, 2011) y de las *production readiness reviews* de SRE (*Site Reliability Engineering*, cap. 32 «The Evolving SRE Engagement Model»).
     - **Checklists de preparación para producción** (*Production Readiness*) en la práctica SRE de Google: monitorización, capacidad, respuesta a incidentes y gestión del cambio se revisan **antes** de aceptar un servicio en guardia.
-    - **Grafana Labs** documenta como arquitectura de referencia para LLM y agentes el uso de OpenTelemetry (GenAI semconv) con Tempo, Loki y Prometheus/Mimir y dashboards de coste y calidad; es el patrón que este capstone reproduce con el stack del curso.
+    - **Grafana Labs** promueve OpenTelemetry (convenciones GenAI) con Tempo, Loki y Prometheus/Mimir como base de la observabilidad de aplicaciones de IA; es el patrón que este capstone reproduce con el stack del curso. *(Afirmación general sin cita concreta: contrasta con la documentación actual de Grafana antes de citarla en tu revisión.)*
     - **El coste de observabilidad** es un tema de dirección en las empresas con mucho tráfico: la combinación de *tail sampling*, métricas previas al muestreo y retención por clase es la forma estándar de contenerlo (módulo 18).
     """)
 

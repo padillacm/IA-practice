@@ -616,7 +616,7 @@ print(st[["n", "bounded", "series_added", "rss_mb_before", "rss_mb_after"]].roun
     """)
     code('''
 if DOCKER:
-    BK = S.backends_experiment(CORPUS)
+    BK = S.backends_experiment()      # su propio corpus con marcas de tiempo «en vivo» (con las del corpus simulado, de hace semanas, Tempo no las muestra en la búsqueda)
 else:
     BK = REC["backends"]
 rows = []

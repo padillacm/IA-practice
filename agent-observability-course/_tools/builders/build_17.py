@@ -565,7 +565,7 @@ same = ([r.status for r in base.results] == [r.status for r in fast.results], [r
 print("¿Mismo comportamiento? (estados, tokens, ranking de la KB):", same)
 ''')
     md(observe("""
-    - **Optimizar la constante da poco**: la regex acelera el escáner ≈ 3-4× en solitario y solo ≈ ×1,5-2 el total. **Eliminar el trabajo repetido** (caché por línea) lo lleva a ≈ ×5-6 y la variante completa a un orden de magnitud más.
+    - **Optimizar la constante da poco**: la regex acelera el escáner ≈ 3-4× en solitario y solo ≈ ×2 el total. **Eliminar el trabajo repetido** (caché por línea) lo lleva a ≈ ×4-6 y la variante completa a un orden de magnitud más.
     - Cada barra verde queda **por debajo de su tope de Amdahl**: lo que se arregla suma, lo que queda limita; la última supera los topes anteriores porque ataca *todas* las etapas.
     - **Un arreglo sin verificación de equivalencia no es un arreglo**: la última línea comprueba que estados, tokens y ranking de documentos son idénticos antes y después.
     """))
@@ -649,7 +649,7 @@ else:
     md("""
     ## 9 · Traza ↔ perfil: del span lento a su flamegraph
 
-    El mecanismo, idéntico al de logs↔trazas: **cada muestra del perfil lleva el `span_id` del span raíz que estaba activo en ese hilo**. Cuando abres un span en Tempo, Grafana consulta Pyroscope con `{span_id="…"}` y te muestra solo la CPU de **esa** petición.
+    El mecanismo, idéntico al de logs↔trazas: **cada muestra del perfil lleva el `span_id` del span raíz que estaba activo en ese hilo**. Cuando abres un span en Tempo, Grafana consulta Pyroscope filtrando por ese `span_id` (el campo `spanSelector` de la API, **no** un `{span_id="…"}` en el selector de etiquetas: lo medimos contra Pyroscope 2.1.2 y devuelve 0 muestras) y te muestra solo la CPU de **esa** petición.
 
     **A mano (funciona sin Docker).** Un instrumentor de 10 líneas pone la etiqueta durante `agent_run`; nuestro muestreador la guarda con cada muestra.
     """)
@@ -693,9 +693,8 @@ plt.tight_layout(); plt.show()
       datasourceUid: pyroscope
       profileTypeId: "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
       tags: [{ key: service.name, value: service_name }]
-      customQuery: true
-      query: '{service_name="${__span.tags["service.name"]}", span_id="${__span.spanId}"}'
     ```
+    Sin `customQuery`: Grafana arma `{service_name="…"}` y, como el span lleva `pyroscope.profile.id`, pide el perfil de **ese** span. (Una consulta personalizada con `span_id="…"` dentro del selector de etiquetas no devuelve nada en Pyroscope 2.1.2. ⚠️ El salto con el botón «Profiles for this span» de la interfaz no se pudo probar en el sandbox del curso; la mitad Pyroscope sí está medida con `SelectMergeSpanProfile`.)
     """)
     code('''
 TRACES_OK = PYRO_UP and HAVE_SDK and check_stack(["collector", "tempo"], verbose=False).degraded is False
@@ -787,7 +786,7 @@ print({n: f"{f['storage_gb']:.0f} GB (30 días, sin compresión adicional)" for 
     3. **Self ≠ total.** Optimiza donde el *self* es grande (hojas). Una función con total enorme y self cero (`run_workload`) es solo un camino. Y por Amdahl, el beneficio máximo de arreglar una función con fracción $f$ es $1/(1-f)$.
     4. **El perfil de CPU de un agente está casi vacío de espera.** La latencia vive en el *wall* y en las trazas; la CPU es **coste**. No uses un perfil de CPU para explicar un p95 dominado por el proveedor LLM.
     5. **`span_id` no es una etiqueta normal.** Pyroscope lo guarda fuera del índice de etiquetas (no aparece en `LabelNames`: lo medimos) y se consulta con `SelectMergeSpanProfile`; no lo agrupes ni lo uses como dimensión. Y solo existe para spans **raíz** etiquetados.
-    6. **Optimizar la constante vs eliminar trabajo.** La regex dio ≈ ×1,5-2 en total; la caché por línea (no volver a escanear lo que no cambió) ≈ ×5-6 (§7.1). En agentes casi todo el contexto se repite entre llamadas: la pregunta correcta es «¿por qué estoy recalculando esto?». Y **los cuellos de botella migran**: Tras arreglar el 68 %, el siguiente (tokens) pasa de ≈ 20 % a dominante. Planifica varias rondas «perfilar → arreglar → perfilar» con **perfil diferencial normalizado**.
+    6. **Optimizar la constante vs eliminar trabajo.** La regex dio ≈ ×2 en total; la caché por línea (no volver a escanear lo que no cambió) ≈ ×4-6 (§7.1). En agentes casi todo el contexto se repite entre llamadas: la pregunta correcta es «¿por qué estoy recalculando esto?». Y **los cuellos de botella migran**: Tras arreglar el 68 %, el siguiente (tokens) pasa de ≈ 20 % a dominante. Planifica varias rondas «perfilar → arreglar → perfilar» con **perfil diferencial normalizado**.
     7. **Un perfil corto es una opinión; uno agregado es un hecho.** Error ∝ 1/√N (§2): decide con ≥ 1 000 muestras y compara con ventanas iguales.
     8. **Cuidado con el coste oculto de las etiquetas.** Cada valor nuevo de `version`/`tenant` multiplica series y bloques a consultar. Ponlas en la lista de cardinalidad del módulo 18 desde el día uno.
     """)

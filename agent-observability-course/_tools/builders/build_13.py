@@ -277,14 +277,14 @@ fig, axes = plt.subplots(1, 2, figsize=(12.5, 4))
 axes[0].plot(B.index, B["ahorro"] * 100, marker="o", color=viz.PALETTE["logs"]); axes[0].set_xscale("log"); axes[0].set_xlabel("tickets por hora (log)"); axes[0].set_ylabel("ahorro por la caché (%)"); axes[0].set_ylim(0, 100)
 ax2 = axes[0].twinx(); ax2.plot(B.index, B["hit ratio"] * 100, marker="s", color=viz.PALETTE["traces"], ls="--"); ax2.set_ylabel("hit ratio (%)"); ax2.set_ylim(0, 100); ax2.grid(False); axes[0].set_title("Más tráfico = caché más caliente")
 vals = {"sin caché": sin.cost_usd.sum(), "caché sana": sano.cost_usd.sum(), "caché ROTA\\n(prefijo cambiante)": rota.cost_usd.sum()}
-axes[1].bar(list(vals), [v * 1000 for v in vals.values()], color=[viz.PALETTE["neutral"], viz.PALETTE["logs"], viz.PALETTE["error"]]); axes[1].set_ylabel("coste de 200 tickets (milésimas de USD)"); axes[1].set_title("Caché rota: se pierde casi todo el ahorro")
+axes[1].bar(list(vals), [v * 1000 for v in vals.values()], color=[viz.PALETTE["neutral"], viz.PALETTE["logs"], viz.PALETTE["error"]]); axes[1].set_ylabel("coste de 200 tickets (milésimas de USD)"); axes[1].set_title("Caché rota: se pierde más de la mitad del ahorro")
 for i, v in enumerate(vals.values()): axes[1].text(i, v * 1000, f"${v:.4f}", ha="center", va="bottom", fontsize=9)
 plt.tight_layout(); plt.show()
 print(f"hit ratio sano {sano.cache_hit_ratio.mean():.0%} · roto {rota.cache_hit_ratio.mean():.0%} · coste roto / sano = {rota.cost_usd.sum() / sano.cost_usd.sum():.1f}× · roto / sin caché = {rota.cost_usd.sum() / sin.cost_usd.sum():.2f}×")
 ''')
     md(observe("""
     - **El ahorro crece con el tráfico y se satura** (≈ 80 %): con poco tráfico el prefijo caduca (TTL de 5 min) entre tickets y solo se aprovecha la reutilización *dentro* de cada ticket; con tráfico denso el prefijo siempre está caliente.
-    - **Caché rota:** si algo cambia al principio del prompt en cada petición (una fecha, un identificador de petición, un orden de herramientas distinto), el proveedor ve un prefijo nuevo cada vez: la reutilización *entre* tickets desaparece (solo queda la de dentro de cada ticket) y la primera llamada de cada ticket **se escribe con recargo**. Resultado: el coste se multiplica por ≈ 3-4 respecto a la caché sana y se pierde casi todo el ahorro (y en peticiones de una sola llamada sale más caro que no usar caché). Es el incidente de coste más traicionero porque **la calidad no cambia**.
+    - **Caché rota:** si algo cambia al principio del prompt en cada petición (una fecha, un identificador de petición, un orden de herramientas distinto), el proveedor ve un prefijo nuevo cada vez: la reutilización *entre* tickets desaparece (solo queda la de dentro de cada ticket) y la primera llamada de cada ticket **se escribe con recargo**. Resultado: el coste se multiplica por ≈ 3-4 respecto a la caché sana y se pierde más de la mitad del ahorro (el gasto vuelve a ≈ 2/3 del que tendrías sin caché, y en peticiones de una sola llamada sale más caro que no usar caché). Es el incidente de coste más traicionero porque **la calidad no cambia**.
     - Síntoma observable y barato: el **hit ratio** (`cache_read / input_total`) cae de golpe tras un despliegue. Lo vigilaremos en el panel.
     """))
     md("""
@@ -569,7 +569,7 @@ if LIVE:
     ---
     # 🏭 En producción
 
-    - **La disciplina FinOps aplicada a IA** (FinOps Foundation, *Optimizing GenAI Usage: A FinOps Perspective on Cost, Performance, and Efficiency*) pide los mismos tres pasos que la nube: **visibilidad** (atribución), **asignación** (a quién se imputa) y **optimización** (caché, modelo adecuado, límites). Este módulo implementa los tres con telemetría.
+    - **La disciplina FinOps aplicada a IA** (FinOps Foundation, *Optimizing GenAI Usage: A FinOps Perspective on Cost, Performance, and Efficiency*) aplica a la IA el ciclo FinOps habitual de la nube (informar, optimizar y operar): **visibilidad y asignación** del gasto (¿quién lo genera?), **optimización** (caché, modelo adecuado, límites) y **operación continua** (presupuestos, alertas). Este módulo implementa esas tres cosas con telemetría.
     - **Las plataformas de observabilidad de LLM** (Datadog, Langfuse, Helicone, LangSmith…) calculan coste a partir de tokens y tablas de precios del modelo, igual que aquí; la diferencia es quién mantiene la tabla. Verifica siempre contra tu factura real: la **reconciliación** mensual (telemetría vs factura del proveedor) es la prueba definitiva.
     - **Quién paga qué**: en SaaS multi-tenant el coste de IA se imputa por tenant (*showback/chargeback*): necesitas el identificador de tenant en spans y logs y una política de retención acorde (módulo 18/20).
     - **Prompt caching en la práctica**: la documentación de los proveedores insiste en poner el contenido **estable al principio** (herramientas, sistema, documentos) y lo **variable al final**; cambiar una definición de herramienta o el orden invalida la caché de ese nivel y de los siguientes.
@@ -584,7 +584,7 @@ if LIVE:
     5. **Vigila el p99 y la concentración, no la media.** Los bucles y los reintentos forman la cola larga; una pequeña fracción de tickets concentra una fracción desproporcionada del gasto (curva de concentración).
     6. **El presupuesto se vigila como un SLO.** `burn = (S/B)/(t/T)`; la previsión a fin de periodo avisa **antes** de gastar. Un tope por ticket evita el desastre local pero **se evalúa entre llamadas**: se paga hasta el tope más una llamada; y un bloqueo es un ticket sin resolver (calidad), así que degrada de modelo antes de bloquear.
     7. **Los tokens son la fuente de verdad; el coste, un derivado.** Guarda tokens (y la versión de la tabla de precios en un atributo) y reprecia a posteriori; si guardas solo dólares, no puedes corregir una tabla errónea ni simular otro proveedor.
-    8. **Cardinalidad:** `customer_id` como etiqueta de métrica multiplica las series ×N clientes (aquí 200×). Atribuye por cliente con **logs/atributos de span** y usa las métricas para agregados (modelo, *feature*, tier). Y cuenta el coste **solo en las hojas** (módulo 11) para no duplicar.
+    8. **Cardinalidad:** `customer_id` como etiqueta de métrica multiplica las series ×N clientes (en la sección 4: 69 clientes → 69× más series). Atribuye por cliente con **logs/atributos de span** y usa las métricas para agregados (modelo, *feature*, tier). Y cuenta el coste **solo en las hojas** (módulo 11) para no duplicar.
     """))
 
     md(box("warn", "⚠️ Errores comunes", """

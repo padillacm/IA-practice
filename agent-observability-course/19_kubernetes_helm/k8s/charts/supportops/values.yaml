@@ -10,9 +10,9 @@ serviceAccount:
   create: true
   name: ""
 
-# Dónde envía OTLP el agente. Con el DaemonSet «otel-agent» (hostPort 4317/4318 del nodo) se usa la IP del nodo; aquí por defecto el Service del agente.
+# Dónde envía OTLP el agente: el Service «otel-agent» del DaemonSet (values/otel-agent.yaml activa `service.enabled`; el chart lo crea con internalTrafficPolicy: Local, es decir, el tráfico va al agente de SU nodo).
 otlp:
-  endpoint: "http://otel-agent-opentelemetry-collector.observability.svc.cluster.local:4318"
+  endpoint: "http://otel-agent.observability.svc.cluster.local:4318"
   serviceName: supportops-agent
 
 # Generador de tráfico sintético (el mismo de los módulos anteriores: semilla fija, fallos inyectados)

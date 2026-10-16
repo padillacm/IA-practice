@@ -7,11 +7,10 @@ metadata:
   namespace: supportops
 spec:
   exporter:
-    endpoint: http://otel-agent-opentelemetry-collector.observability.svc.cluster.local:4318
+    endpoint: http://otel-agent.observability.svc.cluster.local:4318
   propagators: [tracecontext, baggage]
   sampler:
-    type: parentbased_traceidratio
-    argument: "0.25"
+    type: parentbased_always_on          # NO muestrear en el SDK: el tail_sampling del gateway decide (módulo 18: las probabilidades se multiplican y se pierden errores)
   python:
     env:
       - {name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED, value: "true"}

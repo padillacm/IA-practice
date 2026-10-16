@@ -10,6 +10,8 @@ command:
 presets:
   kubernetesAttributes:
     enabled: true
+service:
+  enabled: true
 resources:
   requests:
     cpu: 50m

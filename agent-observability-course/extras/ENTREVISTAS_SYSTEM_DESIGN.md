@@ -69,7 +69,7 @@ Multiplica por ≈ 2,5 los bytes por traza (1,8 → 4,7 KB/ticket en el laborato
 Disponibilidad (ok|escalated), latencia (percentil o fracción ≤ umbral, **medida sobre la línea base**), calidad (groundedness, muestra uniforme con IC), coste (USD por ticket resuelto). Presupuesto de error, política de congelación pactada de antemano.
 
 **18. ¿Qué es el burn rate multiventana y por qué?** *(16)*
-Burn = tasa de error / presupuesto. Ventana larga (¿es grave?) y corta (¿sigue?). 14,4× en 1 h/5 min = 2 % del presupuesto mensual en una hora. Una caída **parcial** no llega a 14,4×: política de ticket (≥ 3×).
+Burn = tasa de error / presupuesto. Ventana larga (¿es grave?) y corta (¿sigue?). 14,4× en 1 h/5 min = 2 % del presupuesto mensual en una hora. Una caída **parcial** rara vez llega a 14,4× (con el 20 % del tráfico afectado y un presupuesto del 5 % el máximo es 4×): política de ticket (≥ 3×).
 
 **19. Latencia ↓, coste ↓, 👎 ↑ tras un despliegue. ¿Qué pasó y cómo lo demuestras?** *(15, 21)*
 Regresión silenciosa: el agente dejó de llamar herramientas. Demuestra con herramientas por ticket por versión, fracción sin herramientas, juez/trayectoria; mitiga con rollback.
