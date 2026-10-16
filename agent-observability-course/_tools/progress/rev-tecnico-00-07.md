@@ -7,8 +7,8 @@ Agente: Revisor técnico R1 · Módulos: 00–07 · Informe: agent-observability
 - [x] 04_genai_semconv
 - [x] 05_collector
 - [x] 06_autoinstrumentacion
-- [ ] 07_tempo_traceql
-- [ ] check_course.py OK + informe final
+- [x] 07_tempo_traceql
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (qué archivo/celda, decisiones tomadas, comandos largos lanzados y su resultado)
@@ -20,3 +20,4 @@ Agente: Revisor técnico R1 · Módulos: 00–07 · Informe: agent-observability
 - 04 revisado: snapshot verificado 100% contra registry/spans/docs del repo oficial (79 atributos, 11 spans, 19 métricas); corregido 58%->50% ahorro caché; 'prohíbe'->'desaconseja (SHOULD NOT)' para conversation.id.
 - 05 revisado: snapshot de componentes == 'otelcol components' 0.162 (exacto); labs reales ejecutados con docker (puertos aleatorios) OK; solución verificada con validate+funcional; corregida afirmación falsa de sufijo _total en métricas internas (en 0.162 sin _total). Pendiente: R11 (extremo a extremo con stack vivo) no ejecutado.
 - 06 revisado: versiones/licencias/cadencia verificadas contra PyPI (exacto); Traceloop->ServiceNow y Datadog verificados por búsqueda web; cifras del dataset pregrabado re-calculadas; corregidos 3 números de la matriz (3,81/3,74; 57%) y 'de 0 a 9'. No verificado: comportamiento interno de openlit/traceloop (no instalados).
+- 07 revisado: validado en vivo contra Tempo 3.1 (18/18 consultas == mini motor; proyecto R1-R6 OK con stack; dashboard 07 query_check OK); retirada cifra 2-2,5x no verificable. Informe en _tools/REVISION_TECNICA_1.md
