@@ -291,19 +291,19 @@ def cardinality_experiment(n=300):
             "needle": {"etiqueta": timed(f'{{service_name="cardlab-label-{run}", trace_id="{needle}"}}'),
                        "metadato": timed(f'{{service_name="cardlab-meta-{run}"}} | trace_id="{needle}"')}}
 CARD = cached("cardinality", cardinality_experiment, live=HAVE_LOKI)
-print("streams creados:", CARD["series"], "· chunks / entradas:", {k: (v.get("chunks"), v.get("entries")) for k, v in CARD["stats"].items()})
+print("streams creados:", CARD["series"], "· líneas por stream:", {k: CARD["n"] / v for k, v in CARD["series"].items()})
 print("buscar UNA traza →", {k: {"ms": round(v["ms"], 1), "líneas devueltas": v["lines_returned"], "líneas procesadas": v["lines_processed"]} for k, v in CARD["needle"].items()})
 ''')
     code('''
 fig, axs = plt.subplots(1, 3, figsize=(15, 3.9)); cols = [viz.PALETTE["error"], viz.PALETTE["logs"]]; names = ["trace_id = ETIQUETA", "trace_id = METADATO"]
 v = [CARD["series"]["etiqueta"], CARD["series"]["metadato"]]; axs[0].bar(names, v, color=cols); axs[0].set_title("streams creados"); [axs[0].text(i, x, str(x), ha="center", va="bottom") for i, x in enumerate(v)]
-v = [int(CARD["stats"]["etiqueta"].get("chunks", 0)), int(CARD["stats"]["metadato"].get("chunks", 0))]; axs[1].bar(names, v, color=cols); axs[1].set_title("chunks (índice/stats)"); [axs[1].text(i, x, str(x), ha="center", va="bottom") for i, x in enumerate(v)]
+v = [CARD["n"] / CARD["series"]["etiqueta"], CARD["n"] / CARD["series"]["metadato"]]; axs[1].bar(names, v, color=cols); axs[1].set_title("líneas por stream (media)"); [axs[1].text(i, x, f"{x:g}", ha="center", va="bottom") for i, x in enumerate(v)]
 v = [CARD["needle"]["etiqueta"]["lines_processed"] or 0, CARD["needle"]["metadato"]["lines_processed"] or 0]; axs[2].bar(names, v, color=cols); axs[2].set_title("líneas procesadas al buscar 1 traza"); [axs[2].text(i, x, str(x), ha="center", va="bottom") for i, x in enumerate(v)]
 for a in axs: a.tick_params(axis="x", labelsize=8)
 plt.tight_layout(); plt.show()
 ''')
     md(observe("""
-    - **Etiqueta:** 300 streams (uno por `trace_id`) y, como mínimo, un chunk por stream: una sola línea por chunk. **Metadato:** **1 stream** con las 300 líneas juntas.
+    - **Etiqueta:** **300 streams** (uno por `trace_id`), con **una sola línea** cada uno; como cada stream tiene sus propios *chunks*, serían 300 chunks diminutos (según el modelo de almacenamiento de la documentación; el recuento de chunks no se puede medir aquí porque los datos recientes están aún en memoria del ingester). **Metadato:** **1 stream** con las 300 líneas juntas.
     - **Buscar una traza:** con la etiqueta, el índice localiza el stream y Loki procesa una línea; con el metadato, Loki **recorre las 300 líneas del stream** y filtra por `trace_id` (fuerza bruta). A 300 líneas es irrelevante; a millones de líneas por stream, el recorrido pesa. El *trade-off* es cómo Loki está pensado: **índice pequeño + scan paralelo**, y para identificadores se acepta el scan a cambio de no multiplicar streams.
     - **Por qué la etiqueta es peor en la práctica:** 300 streams son inocuos; **millones** (un `trace_id` por petición) arruinan el índice, el tamaño de los chunks y los límites (por defecto, 15 etiquetas y 100 000 streams activos como referencia por tenant). La documentación de Loki lo dice sin ambages: **no extraigas IDs efímeros como etiqueta**.
     """))
@@ -374,8 +374,13 @@ if HAVE_LOKI:
     LSPANS, LRES = LB.spans, pd.DataFrame(LB.results); LIDS = LB.trace_ids; LENTRIES = lq.entries_from_payload(PUSH.full_payload())
     n_json = sum(1 for e in LENTRIES if e.labels["service_name"] == "supportops-agent-json")
     wait_for_logs('{service_name="supportops-agent-json"}', int(0.98 * n_json), 60)
-    wait_for_logs('{service_name="supportops-agent"}', 1, 60)
-    print("enviado:", {s["stream"]["service_name"]: len(s["values"]) for s in PUSH.full_payload()["streams"]}, "· logs OTLP en Loki:", len(backends.loki_query('{service_name="supportops-agent"}', minutes=30, limit=5000)))
+    def wait_stable(q, every=3, patience=2, timeout=90):                     # la ruta OTLP tarda más (SDK → Collector → Loki): espera a que el recuento se estabilice
+        t0, last, same = time.time(), -1, 0
+        while time.time() - t0 < timeout and same < patience:
+            n = len(backends.loki_query(q, minutes=30, limit=5000)); same = same + 1 if n == last and n > 0 else 0; last = n; time.sleep(every)
+        return last
+    n_otlp = wait_stable('{service_name="supportops-agent"}')
+    print("enviado:", {s["stream"]["service_name"]: len(s["values"]) for s in PUSH.full_payload()["streams"]}, "· logs OTLP en Loki:", n_otlp)
 else:
     LB, LSPANS, LRES, LIDS, LENTRIES = None, SPANS, RES, DATA["trace_ids"], ENTRIES
     print("Sin Loki: se usa el lote pregrabado (las 3 rutas de ingesta, salvo las líneas OTLP que solo existen en vivo).")
