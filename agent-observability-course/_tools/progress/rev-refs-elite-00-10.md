@@ -4,7 +4,7 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - [x] 01_agente_base
 - [x] 02_tres_pilares
 - [x] 03_otel_sdk_python
-- [ ] 04_genai_semconv
+- [x] 04_genai_semconv
 - [ ] 05_collector
 - [ ] 06_autoinstrumentacion
 - [ ] 07_tempo_traceql
@@ -21,3 +21,4 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - 01: arXiv x3 y docs Anthropic confirmados por búsqueda; élite +2 (+celda coste cuadrático). Caché 0,1x/1,25x marcada secundaria.
 - 02: Dapper (autores/año/TR) OK, RED OK, ISBN OK, spec Ok-final verificada en trace/api.md. Élite +1 (#10 muestreo, celda medible), +cita Prometheus, +Tempo3 multiplier.
 - 03: Honeycomb distro archivada verificada (búsqueda); pre-fork/service.instance.id verificados en repo opentelemetry.io (raw); spec BSP defaults OK. Corregido: pre-fork afecta a métricas (PeriodicExportingMetricReader), no BSP. Élite +1 (#9 overhead medido).
+- 04: Datadog blog (1-dic-2025, v1.37+) verificado por búsqueda; OTel blog autores Liu(IBM)/Solomon(Google) 2025-03-06 verificado en repo opentelemetry.io (corregido ref en 00); python-genai/contrib README leídos; élite +1 (#9 buckets, celda medida). Aviso openai-v2 reformulado.

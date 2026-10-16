@@ -680,7 +680,7 @@ display(M.loc[[n for n in M.index if n.startswith("gen_ai.client.inference") or 
     # 6 · 🏭 En producción
 
     - **Los *backends* ya consumen estas convenciones.** Datadog anunció soporte nativo de las GenAI semantic conventions (v1.37 en adelante) para recibir trazas OTel sin su SDK ([Datadog: *OTel GenAI semantic conventions*](https://www.datadoghq.com/blog/llm-otel-semantic-convention/)); las herramientas de código abierto de autoinstrumentación (OpenLIT, OpenLLMetry; módulo 06) también se alinean con estos nombres. Tu inversión en nombres estándar es portable entre ellos.
-    - **Las librerías de instrumentación oficiales se reorganizan.** El repositorio [`opentelemetry-python-genai`](https://github.com/open-telemetry/opentelemetry-python-genai) agrupa `opentelemetry-util-genai` (la base común: spans, métricas, eventos y *hook* de subida de contenido) y paquetes `opentelemetry-instrumentation-genai-*` (OpenAI, Anthropic, Bedrock, LangChain, LlamaIndex…, en beta); el paquete antiguo `opentelemetry-instrumentation-openai-v2` está marcado **obsoleto** en favor del nuevo. Fija versiones y lee el CHANGELOG antes de actualizar.
+    - **Las librerías de instrumentación oficiales se reorganizan.** El repositorio [`opentelemetry-python-genai`](https://github.com/open-telemetry/opentelemetry-python-genai) agrupa `opentelemetry-util-genai` (la base común: spans, métricas, eventos y *hook* de subida de contenido) y paquetes `opentelemetry-instrumentation-genai-*` (OpenAI, Anthropic, Bedrock, LangChain, LlamaIndex…, en beta); las copias que siguen en `opentelemetry-python-contrib/instrumentation-genai` solo reciben parches de seguridad y se retirarán (aviso en su README), así que los paquetes antiguos como `opentelemetry-instrumentation-openai-v2` son un callejón sin salida. Fija versiones y lee el CHANGELOG antes de actualizar.
     - **Gobierno de nombres en una empresa:** un *schema registry* interno (YAML por servicio con los atributos que emite), un linter en CI (como el de esta lección) sobre los spans de los tests y otro en el pipeline de ingestión que cuenta los desvíos como métrica («% de spans con `UNK`»).
     - **Contenido de prompts:** la práctica habitual de producción es el patrón 3 (almacén externo con control de acceso y retención corta) o muestrear el contenido (guardarlo solo para un % de trazas y para los errores), nunca «todo en atributos».
     - **Cambio de versión sin romper tableros:** emitir ambos nombres un tiempo (doble emisión) o traducir en el Collector, y cambiar los dashboards después de comprobar con el linter que nadie emite ya el nombre antiguo.
@@ -709,7 +709,26 @@ for t, v in samp.items(): print(f"atributos «sampling relevant» de {t}:", v)
     6. **Los atributos «sampling relevant» deben existir al crear el span.** La spec marca `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.request.model`, `gen_ai.tool.name`, `gen_ai.tool.type`, `gen_ai.provider.name`… (lo viste impreso arriba) para que un muestreador de cabecera pueda decidir. Ponerlos tarde es un error silencioso que inutiliza reglas como «muestrea todo lo del modelo caro».
     7. **El contenido tiene su propio ciclo de vida.** En spans va como JSON string porque el SDK aún no soporta atributos estructurados en spans (sí en eventos/logs: OTEP 4485); los backends tienen límites por atributo/lote, y la propia spec avisa de que un prompt largo puede **superar los límites de atributo o de lote del backend**. El *hook* de subida a almacén externo se invoca aunque el span no se muestree: así el contenido sigue su política de retención, no la de las trazas.
     8. **`gen_ai.provider.name` identifica el «sabor» de telemetría, no necesariamente al proveedor real.** La spec lo dice: se fija según el mejor conocimiento de la instrumentación y puede diferir del upstream (un gateway compatible con OpenAI que enruta a otro modelo). Si facturas por proveedor, no uses este atributo como única fuente: añade el tuyo (`supportops.llm.upstream`).
+    9. **Los *buckets* por defecto del SDK no sirven para latencias en segundos.** La spec del SDK de métricas fija por defecto `[0, 5, 10, 25, 50, 75, 100, 250, …, 10000]` (pensado para milisegundos); un histograma en **segundos** con esos límites mete casi todas las llamadas LLM en el bucket `(0, 5]` y el p95 estimado sale como una interpolación sin sentido. La spec GenAI pide (SHOULD) límites explícitos para `gen_ai.client.operation.duration` y similares: `[0.01, 0.02, 0.04, …, 81.92]` (doblando). La celda siguiente mide el error (con latencias de mediana 0,8 s, semilla 42: p95 real ≈ 2,2 s; estimado con los límites por defecto ≈ 4,8 s; con los de la spec GenAI ≈ 2,4 s). Comprueba que tu SDK aplica el *advisory* de la instrumentación (o fija una `View` con los límites).
     """)
+    code('''
+import numpy as np
+rng = np.random.default_rng(42)
+lat = rng.lognormal(mean=np.log(0.8), sigma=0.6, size=20_000)         # latencias sintéticas en segundos (mediana ≈ 0,8 s)
+DEFAULT = [0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]   # defecto del SDK (spec de métricas)
+GENAI = [0.01 * 2**i for i in range(14)]                                              # recomendado por la spec GenAI
+def p_from_hist(x, bounds, q=0.95):
+    counts, edges = np.histogram(x, bins=[-np.inf, *bounds, np.inf])
+    cum, target = np.cumsum(counts), q * len(x)
+    i = int(np.searchsorted(cum, target))
+    lo = bounds[i - 1] if i > 0 else 0.0
+    hi = bounds[i] if i < len(bounds) else bounds[-1]
+    prev = cum[i - 1] if i > 0 else 0
+    return lo + (hi - lo) * (target - prev) / max(counts[i], 1)                       # interpolación lineal (como histogram_quantile)
+print(f"p95 exacto            : {np.quantile(lat, .95):6.2f} s")
+print(f"p95 con buckets SDK   : {p_from_hist(lat, DEFAULT):6.2f} s")
+print(f"p95 con buckets GenAI : {p_from_hist(lat, GENAI):6.2f} s")
+''')
 
     md("""
     ---
@@ -758,7 +777,8 @@ for t, v in samp.items(): print(f"atributos «sampling relevant» de {t}:", v)
     - OpenTelemetry. *Attribute requirement levels* y *Recording errors* (convenciones generales) — <https://github.com/open-telemetry/semantic-conventions/blob/main/docs/general/attribute-requirement-level.md> · <https://github.com/open-telemetry/semantic-conventions/blob/main/docs/general/recording-errors.md>
     - OpenTelemetry. *OTEP 4485: Extending attributes to support complex values* — <https://github.com/open-telemetry/opentelemetry-specification/blob/main/oteps/4485-extending-attributes-to-support-complex-values.md>
     - OpenTelemetry. `opentelemetry-python-genai` y `opentelemetry-util-genai` (README con variables de entorno) — <https://github.com/open-telemetry/opentelemetry-python-genai> · <https://github.com/open-telemetry/opentelemetry-python-genai/blob/main/util/opentelemetry-util-genai/README.rst>
-    - Datadog. *OTel GenAI semantic conventions* — <https://www.datadoghq.com/blog/llm-otel-semantic-convention/>
+    - Datadog. *OTel GenAI semantic conventions* (1-dic-2025; soporte nativo de las convenciones GenAI v1.37+; confirmado por búsqueda web, el dominio no es accesible desde el entorno de revisión) — <https://www.datadoghq.com/blog/llm-otel-semantic-convention/>
+    - OpenTelemetry. *Metrics SDK* (límites por defecto del histograma explícito) — <https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/sdk.md> · *GenAI metrics* (límites recomendados) — <https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-metrics.md>.
 
     ## Siguiente
     `05_collector`: el Collector recibe estos spans, métricas y logs y los reparte a Tempo, Loki y Prometheus; allí podrás aplicar transformaciones (renombres, redacción) en el camino.

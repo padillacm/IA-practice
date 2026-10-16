@@ -789,7 +789,7 @@ plt.tight_layout(); plt.show()
     - OpenTelemetry Collector, `memorylimiterprocessor` y «Recommended Processors» — <https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/memorylimiterprocessor/README.md> y <https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/README.md>.
     - Phillip Carter (Honeycomb), *All the Hard Stuff Nobody Talks About when Building Products with LLMs* (2023) — <https://www.honeycomb.io/blog/hard-stuff-nobody-talks-about-llm>.
     - Honeycomb, *So We Shipped an AI Product. Did it Work?* (2023) — <https://www.honeycomb.io/blog/we-shipped-ai-product>.
-    - OpenTelemetry, *AI Agent Observability — Evolving Standards and Best Practices* (2025) — <https://opentelemetry.io/blog/2025/ai-agent-observability/>.
+    - Guangya Liu (IBM) y Sujay Solomon (Google), *AI Agent Observability — Evolving Standards and Best Practices*, blog de OpenTelemetry (SIG GenAI Observability), 6-mar-2025 (autoría y fecha verificadas en el código fuente del sitio, `open-telemetry/opentelemetry.io`) — <https://opentelemetry.io/blog/2025/ai-agent-observability/>.
     - Beyer, Jones, Petoff, Murphy (eds.), *Site Reliability Engineering*, O'Reilly 2016, cap. 6 «Monitoring Distributed Systems» — <https://sre.google/sre-book/monitoring-distributed-systems/>.
     - Sculley et al., *Hidden Technical Debt in Machine Learning Systems*, NeurIPS 2015 — <https://papers.nips.cc/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html> (la analogía de «el modelo es una pequeña parte del sistema»).
 
