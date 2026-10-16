@@ -925,17 +925,33 @@ def agent_tree_text(rows: Sequence[dict[str, Any]], *, ops: tuple[str, ...] = ("
 
 
 def critical_path(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Camino crítico (aprox.): desde la raíz, en cada nivel el hijo que termina el último (el que «sostiene» al padre)."""
+    """Camino crítico en orden cronológico (preorden): desde la raíz que termina la última, y en cada span se recorre su ventana HACIA ATRÁS:
+    el hijo que termina el último (≤ fin del padre) pertenece al camino; el siguiente es el que termina el último antes de que ése empiece, etc.
+    Los hijos que se solapan con uno ya elegido (ramas paralelas más cortas, p. ej. el pre-chequeo más rápido) quedan FUERA: acelerarlos no acorta la
+    petición. Cada elegido aporta a su vez su propio camino crítico interior. (Antes solo se seguía al hijo que terminaba el último y se perdía
+    la cadena enrutar → max(pre-chequeos) → facturación → sintetizar.)"""
     kids, _ = _children(rows)
     roots = kids.get(None, [])
     if not roots:
         return []
-    path, node = [], max(roots, key=lambda r: r["end_unix_nano"] or 0)
-    while node:
-        path.append(node)
-        ch = kids.get(node["span_id"], [])
-        node = max(ch, key=lambda r: r["end_unix_nano"] or 0) if ch else None
-    return path
+
+    def walk(node: dict[str, Any]) -> list[dict[str, Any]]:
+        children = kids.get(node["span_id"], [])
+        cursor = node["end_unix_nano"] or 0
+        chain: list[dict[str, Any]] = []
+        while True:
+            cands = [k for k in children if (k["end_unix_nano"] or 0) <= cursor and k not in chain]
+            if not cands:
+                break
+            k = max(cands, key=lambda r: (r["end_unix_nano"] or 0, -(r["start_unix_nano"] or 0)))
+            chain.append(k)
+            cursor = k["start_unix_nano"] or 0
+        out = [node]
+        for k in reversed(chain):
+            out += walk(k)
+        return out
+
+    return walk(max(roots, key=lambda r: r["end_unix_nano"] or 0))
 
 
 def cost_rollup(rows: Sequence[dict[str, Any]], price_fn: Callable[[str, int, int], float] = cost_usd) -> dict[str, dict[str, float]]:

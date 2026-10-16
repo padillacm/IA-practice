@@ -110,7 +110,7 @@ plt.show()
     - El orquestador usa un modelo **pequeño para enrutar** y uno **grande para sintetizar**; facturación usa el grande porque mueve dinero. Esa mezcla de modelos hace que el coste **no se reparta** como el tráfico (sección 6).
     """))
     md(box("warn", "¿Cuándo NO usar multi-agente?", """
-    Más agentes = más llamadas, más tokens y más superficie de fallo. Anthropic midió en su sistema de investigación que los agentes usan ≈ **4×** más tokens que un chat y los sistemas multi-agente ≈ **15×** (ver referencias). Un estudio de Google (arXiv 2512.08296) encontró que en tareas **secuenciales** todas las variantes multi-agente *empeoraron* el rendimiento (39-70 %) y que sin orquestador central los errores se amplifican ≈ 17×, frente a ≈ 4× con un orquestador.
+    Más agentes = más llamadas, más tokens y más superficie de fallo. Anthropic midió en su sistema de investigación que los agentes usan ≈ **4×** más tokens que un chat y los sistemas multi-agente ≈ **15×** (ver referencias). Un preprint de Google/MIT (arXiv 2512.08296, **v1** de dic-2025; la v2 revisó el estudio y no se han contrastado esas cifras) reportó que en tareas **secuenciales** todas las variantes multi-agente *empeoraron* el rendimiento (39-70 %) y que con agentes independientes los errores se amplifican ≈ 17×, frente a ≈ 4× con un orquestador central. Tómalo como una señal, no como una ley.
     Regla práctica: empieza con **un** agente; divide solo si hay **herramientas/permisos que aislar**, **contextos que no caben** o **trabajo paralelizable**. Y mide el coste (sección 6) antes de aceptar la arquitectura.
     """))
 
@@ -343,7 +343,9 @@ t0 = min(r["start_unix_nano"] for r in rows)
 dur = lambda r: (r["end_unix_nano"] - r["start_unix_nano"]) / 1e9
 pre = [r for r in agents if r["attributes"]["supportops.delegation.role"] == "precheck"]
 seq_extra = sum(dur(r) for r in pre) - max(dur(r) for r in pre)
-print("camino crítico:", " → ".join(r["name"].replace("invoke_agent ", "") for r in cp))
+top = [r for r in cp[2:] if r["resource"]["service.name"] == ORCH]           # tramos del orquestador que sostienen la latencia (sin los internos de cada subagente)
+print("camino crítico:", " → ".join(("chat " + r["attributes"]["gen_ai.request.model"]) if r["attributes"].get("gen_ai.operation.name") == "chat" else r["name"].replace("invoke_agent ", "") for r in top))
+print(f"suma de esos tramos = {sum(dur(r) for r in top):.2f}s  (≈ latencia real {res.latency_s:.2f}s: lo que NO está en el camino, como el pre-chequeo corto, no la acorta)")
 print(f"latencia real {res.latency_s:.2f}s · si los pre-chequeos fueran secuenciales: {res.latency_s + seq_extra:.2f}s  (el paralelismo ahorra {seq_extra:.2f}s = {seq_extra / (res.latency_s + seq_extra):.0%})")
 
 fig, ax = plt.subplots(figsize=(11, 3.8))

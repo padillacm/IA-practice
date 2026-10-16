@@ -78,7 +78,14 @@ def test_delegate_single_trace_across_services(refund_ticket):
     cl = [r for r in rows if r["kind"] == "CLIENT" and r["name"].startswith("invoke_agent") and "supportops.delegation.role" in r["attributes"]]
     pre = [r for r in cl if r["attributes"]["supportops.delegation.role"] == "precheck"]
     assert len(pre) == 2 and pre[0]["start_unix_nano"] == pre[1]["start_unix_nano"]
-    assert [r["name"] for r in critical_path(rows)][:2] == ["invoke_workflow support_ticket", "invoke_agent supportops-orchestrator"]
+    cp = critical_path(rows)
+    assert [r["name"] for r in cp][:2] == ["invoke_workflow support_ticket", "invoke_agent supportops-orchestrator"]
+    # camino crítico real: enrutar -> (solo el pre-chequeo MÁS LENTO) -> facturación -> sintetizar; el pre-chequeo corto queda fuera
+    top = [r for r in cp if r["resource"]["service.name"] == ORCH and r["span_id"] not in {cp[0]["span_id"], cp[1]["span_id"]}]
+    assert [r["attributes"].get("gen_ai.operation.name") for r in top][0] == "chat" and top[-1]["attributes"].get("gen_ai.operation.name") == "chat"
+    assert sum(1 for r in top if r["attributes"].get("supportops.delegation.role") == "precheck") == 1
+    assert sum(1 for r in top if r["attributes"].get("supportops.delegation.role") not in (None, "precheck")) == 1
+    assert sum((r["end_unix_nano"] - r["start_unix_nano"]) for r in top) / 1e9 == pytest.approx(res.latency_s, rel=0.02)
 
 
 def test_handoff_is_flatter_and_cheaper(refund_ticket):
