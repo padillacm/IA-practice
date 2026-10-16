@@ -522,7 +522,7 @@ plt.tight_layout(); plt.show()
     md("""
     ## 4.2 Un recorrido por Grafana
 
-    Abre <http://localhost:3000> → usuario `admin`, contraseña `admin` (solo laboratorio; Grafana 13 ya solo permite acceso anónimo como *Viewer*, por eso usamos login).
+    Abre <http://localhost:3000> → usuario `admin`, contraseña `admin` (solo laboratorio; el acceso anónimo está desactivado en `docker-compose.yml`, por eso usamos login).
 
     1. **Connections → Data sources**: deben aparecer **Tempo, Loki, Prometheus y Pyroscope** (provisionados; Pyroscope saldrá en rojo si no arrancaste el perfil `profiling`).
     2. **Dashboards → «Curso observabilidad de agentes» → «00 · Stack overview»**: vacío hasta que llegue telemetría.
