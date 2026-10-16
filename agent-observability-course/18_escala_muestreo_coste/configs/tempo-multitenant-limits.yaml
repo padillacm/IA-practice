@@ -1,0 +1,38 @@
+# Tempo multi-tenant con límites (verificado con `tempo -config.verify=true`).
+multitenancy_enabled: true
+stream_over_http_enabled: true
+server:
+  http_listen_port: 3200
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+live_store:
+  wal:
+    ingestion_time_range_slack: 15m
+  max_trace_idle: 5s
+  max_block_duration: 1m
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        compaction_window: 1h
+        block_retention: 24h
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+overrides:
+  defaults:
+    global:
+      max_bytes_per_trace: 5000000
+    ingestion:
+      rate_limit_bytes: 15000000
+      burst_size_bytes: 20000000
+usage_report:
+  reporting_enabled: false

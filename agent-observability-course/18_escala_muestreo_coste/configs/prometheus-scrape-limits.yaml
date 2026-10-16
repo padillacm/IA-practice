@@ -1,0 +1,13 @@
+# Prometheus: límites por trabajo de scrape (verificado con `promtool check config`). Una tormenta de cardinalidad ENTERA se rechaza en el scrape
+# (el objetivo pasa a up=0) en vez de reventar la memoria. La retención se fija con FLAGS: --storage.tsdb.retention.time=15d --storage.tsdb.retention.size=20GB
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: otel-collector-apps
+    honor_labels: true
+    sample_limit: 20000           # máx. muestras por scrape tras relabeling (si se supera, se descarta TODO el scrape)
+    label_limit: 30               # máx. nº de etiquetas por muestra
+    label_name_length_limit: 64
+    label_value_length_limit: 200
+    static_configs:
+      - targets: ["otel-collector:8889"]
