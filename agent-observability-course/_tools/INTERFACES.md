@@ -354,7 +354,7 @@ I.grade("INC-A", {"cause", "start_min", "end_min", "culprit", "evidence": {...},
 I.trace_table(spans, t0); I.minute_table(rows, t0); I.find_window(x); I.loop_tickets(seed, n, variant)
 ```
 - Cinco casos con el agente REAL (mock, determinista): A cascada de reintentos (multi-agente, `tool_timeout` sticky en un especialista), B bucle (`tool_loop`), C regresión silenciosa (versiones `v1`/`v2` de `regression`), D tormenta de cardinalidad (modelo de series a partir de tickets reales; memoria/scrape = modelo simple ≈ 2,8 KB/serie), E trazas partidas (`propagation="none"` desde un minuto). `variant="lesson"` cambia agente/ventana/etiqueta para los ejemplos de la lección. La «verdad» vive en el módulo (sistema de honor). Detector de cambio recomendado: `find_window` (t-stat sobre ventanas; CUSUM no funciona con ≈ 4 tickets/min).
-- Dashboard `21-sala-de-guerra.json` (uid `sala-de-guerra`); `21_elite_playbook/COMPENDIO_SECRETOS.md` (63 secretos con módulo y fuente, generado por `build_21.py`).
+- Dashboard `21-sala-de-guerra.json` (uid `sala-de-guerra`); `21_elite_playbook/COMPENDIO_SECRETOS.md` (74 secretos con módulo y fuente, generado por `build_21.py`).
 
 ### Módulo 22 · `22_capstone/platform/` (ver `22_capstone/README.md`)
 - `collector-gateway.yaml` (generado por `build_22.py`; validado con `otelcol validate` 0.162.0): `memory_limiter` → `redaction` → (`forward` + `span_metrics` ANTES del muestreo) → `tail_sampling` (errores, lentas ≥ 8 s, caras con `ottl_condition`, 10 % base) → `batch`; exportadores `otlp_grpc/tempo`, `otlp_http/loki`, `otlp_http/prometheus` (receptor OTLP de Prometheus). Se probó como contenedor efímero en la red `agentobs_default` contra Tempo/Loki/Prometheus reales.
