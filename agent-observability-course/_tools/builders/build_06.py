@@ -370,7 +370,7 @@ ax.set_xticks(range(len(months))); ax.set_xticklabels(months, rotation=45); ax.s
 ax.set_title(f"Cadencia de publicación (oct-2025 → sep-2026) · fuente: {src}"); ax.legend(); plt.tight_layout(); plt.show()
 ''')
     md(observe("""
-    - OpenLIT y OpenLLMetry publican **de 1 a 9 versiones al mes**; la oficial publica poco (y es beta). Más versiones = más correcciones **y** más oportunidades de que cambie un nombre de atributo.
+    - OpenLIT y OpenLLMetry publican **de 0 a 9 versiones al mes** (según el mes); la oficial publica poco (y es beta). Más versiones = más correcciones **y** más oportunidades de que cambie un nombre de atributo.
     - El patrón no es lineal: el ritmo de ambos bajó de mayo de 2026 en adelante. No lo interpretes como abandono ni como estabilidad: es un dato para **fijar versiones** (`pip install openlit==1.45.0`) y subir de versión a propósito, con una prueba de contrato como la del proyecto.
     - La cadencia se cuenta por *paquete*: OpenLLMetry tiene decenas de paquetes `opentelemetry-instrumentation-*` que versionan juntos.
     """))
@@ -770,8 +770,8 @@ display(RANK)
     md(observe("""
     - Para **SupportOps** (agente propio, un proveedor, PII) gana el **híbrido** (4,35) por delante del manual (4,07): ambos tienen el contexto de agente, pero el híbrido mantiene menos código propio. Las dos plataformas pierden por *contexto de agente* y *privacidad por defecto*.
     - Para una **plataforma interna** con muchos frameworks pesa más la amplitud, pero el híbrido sigue ganando (4,02 frente a 3,70 de la oficial): la amplitud de OpenLIT/OpenLLMetry no compensa que sus spans queden huérfanos y con contenido por defecto, **salvo** que añadas el `SpanProcessor` de contexto y apagues el contenido (que es justo el híbrido).
-    - Para un **prototipo de un día** gana OpenLIT (3,82), pero por muy poco sobre la oficial (3,75): 1 línea y listo. Con datos reales, apaga el contenido.
-    - **Sensibilidad:** con pesos aleatorios el híbrido gana en ≈ 58 % de los casos, la oficial en ≈ 22 %, el manual en ≈ 17 % y OpenLIT en ≈ 4 %. Ninguna opción gana siempre, y que el híbrido gane en una mayoría amplia es la evidencia de que la recomendación no depende de haber acertado con los pesos. OpenLLMetry no gana en ningún caso con estos criterios (la huella de 61 paquetes y la captura de contenido por defecto pesan).
+    - Para un **prototipo de un día** gana OpenLIT (3,81), pero por muy poco sobre la oficial (3,74): 1 línea y listo. Con datos reales, apaga el contenido.
+    - **Sensibilidad:** con pesos aleatorios el híbrido gana en ≈ 57 % de los casos, la oficial en ≈ 22 %, el manual en ≈ 17 % y OpenLIT en ≈ 4 %. Ninguna opción gana siempre, y que el híbrido gane en una mayoría amplia es la evidencia de que la recomendación no depende de haber acertado con los pesos. OpenLLMetry no gana en ningún caso con estos criterios (la huella de 61 paquetes y la captura de contenido por defecto pesan).
     """))
 
     md(box("idea", "Recomendación para SupportOps", """
