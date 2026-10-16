@@ -90,7 +90,7 @@ Recopila y amplía las secciones «🧠 Secretos de la élite» de todas las lec
 | Módulo | Secreto | Por qué importa / medido | Fuente |
 |---|---|---|---|
 | 17 | **El profiler de Python escrito en Python miente un poco; mide antes de optimizar** | 1 000 Hz pedidos dieron ≈ 300 Hz efectivos; el escaneo de PII era el 68 % de la CPU, no la serialización. | Módulo 17 |
-| 17 | **Self ≠ total; elimina trabajo, no solo constantes** | Regex ≈ ×1,5-2; caché por línea ≈ ×5-6; el cuello de botella migra: planifica varias rondas con perfil diferencial. | Módulo 17 |
+| 17 | **Self ≠ total; elimina trabajo, no solo constantes** | Regex ≈ ×2; caché por línea ≈ ×4-6; el cuello de botella migra: planifica varias rondas con perfil diferencial. | Módulo 17 |
 | 18 | **Métricas antes, trazas después** | Las métricas derivadas de spans ya muestreados están sesgadas (tasa de error 2,6 % → ≈ 12 %): RED en `traces/in`. | Módulo 18 |
 | 18 | **El modo de fallo del tail sampling es silencioso; `numeric_attribute` es de enteros** | `num_traces` insuficiente: 1 300 de 1 500 trazas perdidas sin error; un atributo decimal con `numeric_attribute` hace caer el Collector 0.162.0 (SIGSEGV): usa `ottl_condition`. | Módulo 18 |
 | 18 | **El coste de las métricas está en las series; los logs dependen de las trazas; sin presupuesto una política es una opinión** | ≈ 1-3 KB de RAM por serie (medido). Un `trace_id` colgando por muestreo desigual rompe el salto de Grafana. | Módulo 18 |
