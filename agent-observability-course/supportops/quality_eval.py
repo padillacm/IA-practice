@@ -112,6 +112,7 @@ class EvalCase:
     customer_id: str = ""
     model: str = "mock-small"
     version: str = "v1"
+    intent: str = ""                  # intención PREDICHA por el agente (la que ya está en el span `invoke_agent`)
     n_llm_calls: int = 1
     n_tool_calls: int = 0
     cost_usd: float = 0.0
@@ -165,7 +166,7 @@ class CaseCollector(Instrumentor):
         case = EvalCase(
             ticket_id=t.ticket_id, question=scrub_pii(q) if self.scrub else q, answer=a, context="\n".join(ctx.state["qe_context"]),
             trace_id=tid, span_id=(final or {}).get("span_id", ""), agent_span_id=agent_sid, response_id=(final or {}).get("response_id", ""),
-            status=r.status, tier=t.tier, customer_id=t.customer_id, model=r.model, version=self.version, n_llm_calls=r.n_llm_calls,
+            status=r.status, tier=t.tier, customer_id=t.customer_id, model=r.model, version=self.version, intent=r.intent_pred or "", n_llm_calls=r.n_llm_calls,
             n_tool_calls=r.n_tool_calls, cost_usd=r.cost_usd, latency_s=r.latency_s, t=r.end_s,
             truth={"grounded": r.grounded and "qe_ungrounded" not in ctx.state, "pii_leaked": r.pii_leaked, "intent_true": t.intent_true,
                    "faults": list(dict.fromkeys([*r.injected_faults, *([ctx.state["qe_ungrounded"]] if "qe_ungrounded" in ctx.state else [])])),

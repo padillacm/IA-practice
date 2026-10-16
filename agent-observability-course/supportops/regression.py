@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import collections
 import dataclasses
 import json
 import math
@@ -185,7 +186,12 @@ def select_golden(cases: Sequence[EvalCase], verdicts: Mapping[str, Verdict], fe
     muestra aleatoria de los que salieron bien; deduplica por pregunta normalizada y scrub de PII. Peso = nº de tickets que
     representa cada caso. Solo usa lo que está en telemetría (juez, feedback, estado, herramientas de la traza)."""
     feedback = feedback or {}
-    rng = stable_rng("golden", seed)
+    # trayectoria aceptada por intención = la más frecuente entre los tickets que el juez aprobó (solo telemetría: intención predicha + herramientas)
+    accepted: dict[tuple, collections.Counter] = {}
+    for c in cases:
+        v = verdicts.get(c.ticket_id)
+        if tools_by_ticket and v is not None and v.passed and c.status == "ok" and c.ticket_id in tools_by_ticket:
+            accepted.setdefault((c.intent, bool(ORDER_RE.search(c.question))), collections.Counter())[tuple(tools_by_ticket[c.ticket_id])] += 1
     buckets: dict[str, list[EvalCase]] = {"thumbs_down": [], "judge_fail": [], "error": [], "escalated": [], "random_pass": []}
     for c in cases:
         v = verdicts.get(c.ticket_id)
@@ -203,17 +209,21 @@ def select_golden(cases: Sequence[EvalCase], verdicts: Mapping[str, Verdict], fe
     seen: dict[str, GoldenCase] = {}
     quota = {"thumbs_down": n_total, "judge_fail": n_total, "error": max(n_total // 6, 4), "escalated": max(n_total // 6, 4), "random_pass": n_total}
     for reason in ("thumbs_down", "judge_fail", "error", "escalated", "random_pass"):
-        pool = buckets[reason]
-        rng.shuffle(pool)
+        pool = sorted(buckets[reason], key=lambda c: stable_hex(8, "golden", seed, c.ticket_id))       # orden pseudoaleatorio pero reproducible
         for c in pool:
             if len(out) >= n_total or quota[reason] <= 0:
                 break
-            key = normalize_question(c.question)
+            key = re.sub(r"\s*mi correo es.*$", "", c.question.lower()).strip()        # mismo texto (con su pedido) = mismo caso; el pedido distinto SÍ es otro caso
             if key in seen:
                 seen[key].weight += 1
                 continue
             quota[reason] -= 1
-            tools = list(tools_by_ticket.get(c.ticket_id, [])) if tools_by_ticket else []
+            ak = (c.intent, bool(ORDER_RE.search(c.question)))
+            vv = verdicts.get(c.ticket_id)
+            if tools_by_ticket and vv is not None and vv.passed and c.status == "ok" and c.ticket_id in tools_by_ticket:
+                tools = list(tools_by_ticket[c.ticket_id])                       # su propia trayectoria, ya aceptada por el juez
+            else:
+                tools = list(accepted[ak].most_common(1)[0][0]) if ak in accepted else []      # relleno: la trayectoria más frecuente de su intención
             g = GoldenCase(f"G-{len(out) + 1:03d}", re.sub(r"\s*Mi correo es.*$", "", scrub_pii(c.question)),
                            reason, c.trace_id, c.ticket_id, tools, must_not=["pii", "fabricated_claim"])
             seen[key] = g
@@ -258,19 +268,28 @@ class ReleaseGate:
     quality_margin: float = 0.03
     max_cost_ratio: float = 1.25
     max_latency_ratio: float = 1.25
-    min_trajectory: float = 0.90
+    max_trajectory_drop: float = 0.05
 
     def decide(self, base: Sequence[Mapping[str, Any]], cand: Sequence[Mapping[str, Any]]) -> tuple[str, list[str]]:
+        """``"block"``/``"ship"`` + motivos. Si las dos listas son de los MISMOS casos (mismo ``case_id``) usa McNemar exacto (apareado, más
+        potente); si no, la prueba z de dos proporciones con el IC de la diferencia."""
         def mean(rows, k):
             return sum(float(r[k]) for r in rows) / len(rows)
         reasons = []
         q0, q1 = mean(base, "passed"), mean(cand, "passed")
-        k0, k1 = sum(bool(r["passed"]) for r in base), sum(bool(r["passed"]) for r in cand)
-        t = two_proportion_test(k0, len(base), k1, len(cand))
-        if t["ci_high"] < -self.quality_margin or (q1 < q0 - self.quality_margin and t["p_value"] < 0.05):
-            reasons.append(f"calidad {q0:.1%} → {q1:.1%} (IC95 de la diferencia [{t['ci_low']:+.1%}, {t['ci_high']:+.1%}])")
-        if mean(cand, "trajectory_ok") < self.min_trajectory:
-            reasons.append(f"trayectoria correcta {mean(cand, 'trajectory_ok'):.1%} < {self.min_trajectory:.0%}")
+        if [r["case_id"] for r in base] == [r["case_id"] for r in cand]:
+            b = sum(bool(x["passed"]) and not bool(y["passed"]) for x, y in zip(base, cand))
+            c = sum((not bool(x["passed"])) and bool(y["passed"]) for x, y in zip(base, cand))
+            p = mcnemar_exact(b, c)
+            if q0 - q1 > self.quality_margin and p < 0.05:
+                reasons.append(f"calidad {q0:.1%} → {q1:.1%} (McNemar apareado: {b} casos empeoran, {c} mejoran, p = {p:.3g})")
+        else:
+            k0, k1 = sum(bool(r["passed"]) for r in base), sum(bool(r["passed"]) for r in cand)
+            t = two_proportion_test(k0, len(base), k1, len(cand))
+            if t["ci_high"] < -self.quality_margin or (q1 < q0 - self.quality_margin and t["p_value"] < 0.05):
+                reasons.append(f"calidad {q0:.1%} → {q1:.1%} (IC95 de la diferencia [{t['ci_low']:+.1%}, {t['ci_high']:+.1%}])")
+        if mean(base, "trajectory_ok") - mean(cand, "trajectory_ok") > self.max_trajectory_drop:
+            reasons.append(f"trayectoria correcta {mean(base, 'trajectory_ok'):.1%} → {mean(cand, 'trajectory_ok'):.1%}")
         if mean(cand, "cost_usd") > self.max_cost_ratio * mean(base, "cost_usd"):
             reasons.append("coste por caso por encima del guardarraíl")
         if mean(cand, "latency_s") > self.max_latency_ratio * mean(base, "latency_s"):
