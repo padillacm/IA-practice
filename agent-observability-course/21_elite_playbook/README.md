@@ -18,7 +18,7 @@ cultura de observabilidad (con una autoevaluación de madurez) y un **compendio 
 ## Contenido
 | Archivo | Qué es |
 |---|---|
-| `21_elite_playbook.ipynb` | Lección (15 secciones, 20 gráficos, cinco casos resueltos, 🧠 de élite, compendio consultable, autoevaluación) |
+| `21_elite_playbook.ipynb` | Lección (15 secciones, 13 gráficos, cinco casos resueltos, 🧠 de élite, compendio consultable, autoevaluación) |
 | `21_proyecto_mesa_de_incidentes.ipynb` | Proyecto «mesa de incidentes»: diagnostica 5 incidentes **sin pistas directas** (rúbrica R1-R8, pistas 🪜 solo de método, solución tras ⛔ SPOILER) |
 | `COMPENDIO_SECRETOS.md` | Compendio de secretos de élite 00-21 por tema, con módulo y fuente (generado por `build_21.py`) |
 | `../supportops/incidents.py` | `build_incident`, `grade`, `trace_table`, `minute_table`, `loop_tickets`, catálogos de causas y mitigaciones (¡la verdad está dentro: no la leas antes de diagnosticar!) |

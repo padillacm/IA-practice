@@ -276,18 +276,19 @@ def build_lesson() -> None:
     code('''
 fig, ax = viz.canvas(13, 5.0, (0, 130), (0, 50))
 P_ = viz.PALETTE
-steps = [("1 · Síntoma\\n(alerta de usuario)", P_["error"]), ("2 · Ámbito\\n¿a quién, desde cuándo?", P_["metrics"]), ("3 · ¿Qué cambió?\\n(despliegues, flags, tráfico)", P_["warn"]),
-         ("4 · Comparar poblaciones\\nmalos vs buenos (bubble-up)", P_["traces"]), ("5 · Hipótesis", P_["profiles"]), ("6 · Falsar\\notra consulta, otra señal", P_["logs"]), ("7 · Mitigar y\\nconfirmar con datos", P_["ok"])]
+steps = [("1 · Síntoma\\n(alerta de\\nusuario)", P_["error"]), ("2 · Ámbito\\n¿a quién y\\ndesde cuándo?", P_["metrics"]), ("3 · ¿Qué cambió?\\n(despliegues,\\nflags, tráfico)", P_["warn"]),
+         ("4 · Comparar\\npoblaciones\\n(bubble-up)", P_["traces"]), ("5 · Hipótesis", P_["profiles"]), ("6 · Falsar\\notra consulta,\\notra señal", P_["logs"]), ("7 · Mitigar y\\nconfirmar\\ncon datos", P_["ok"])]
 bs = []
 for i, (t, c) in enumerate(steps):
     x = 1 + i * 18.4
-    bs.append(viz.box(ax, x, 24, 16.5, 11, t, c, fontsize=7.6))
+    bs.append(viz.box(ax, x, 24, 16.0, 11, t, c, fontsize=7.4))
 for a, b in zip(bs, bs[1:]): viz.arrow(ax, viz.right(a), viz.left(b), "", P_["neutral"])
-viz.arrow(ax, viz.bottom(bs[5]), viz.bottom(bs[4]), "¿no se sostiene?\\nvuelve a 4", P_["error"], rad=-0.6, dashed=True)
-viz.arrow(ax, viz.top(bs[6]), viz.top(bs[0]), "", P_["ok"], rad=0.25, dashed=True)
-ax.text(65, 47, "El bucle de análisis: cada vuelta descarta hipótesis, no recoge más datos al azar", ha="center", fontsize=11, fontweight="bold")
-for x, t in [(5, "¿Qué señal discrepa?"), (42, "El cambio más cercano\\nNO es siempre la causa"), (80, "Compara contra el\\ndenominador (tráfico)"), (112, "Confirma: ¿vuelve\\nla señal a la línea base?")]:
-    ax.text(x, 14, t, fontsize=8, color=P_["neutral"], ha="center")
+viz.arrow(ax, viz.bottom(bs[5]), viz.bottom(bs[3]), "", P_["error"], rad=-0.45, dashed=True)
+ax.text(86, 12.5, "¿no se sostiene? vuelve al paso 4", ha="center", fontsize=8, color=P_["error"])
+viz.arrow(ax, viz.top(bs[6]), viz.top(bs[0]), "", P_["ok"], rad=0.12, dashed=True)
+ax.text(65, 48.5, "El bucle de análisis: cada vuelta descarta hipótesis, no recoge más datos al azar", ha="center", fontsize=11, fontweight="bold")
+for x, t in [(9, "¿Qué señal discrepa?"), (46, "El cambio más cercano\\nNO es siempre la causa"), (65, "Compara contra el\\ndenominador (tráfico)"), (120, "Confirma: ¿vuelve la señal\\na la línea base?")]:
+    ax.text(x, 17.5, t, fontsize=8, color=P_["neutral"], ha="center")
 plt.show()
 ''')
     md(observe("""
@@ -1171,7 +1172,7 @@ cultura de observabilidad (con una autoevaluación de madurez) y un **compendio 
 ## Contenido
 | Archivo | Qué es |
 |---|---|
-| `21_elite_playbook.ipynb` | Lección (15 secciones, 20 gráficos, cinco casos resueltos, 🧠 de élite, compendio consultable, autoevaluación) |
+| `21_elite_playbook.ipynb` | Lección (15 secciones, 13 gráficos, cinco casos resueltos, 🧠 de élite, compendio consultable, autoevaluación) |
 | `21_proyecto_mesa_de_incidentes.ipynb` | Proyecto «mesa de incidentes»: diagnostica 5 incidentes **sin pistas directas** (rúbrica R1-R8, pistas 🪜 solo de método, solución tras ⛔ SPOILER) |
 | `COMPENDIO_SECRETOS.md` | Compendio de secretos de élite 00-21 por tema, con módulo y fuente (generado por `build_21.py`) |
 | `../supportops/incidents.py` | `build_incident`, `grade`, `trace_table`, `minute_table`, `loop_tickets`, catálogos de causas y mitigaciones (¡la verdad está dentro: no la leas antes de diagnosticar!) |
