@@ -8,7 +8,7 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - [x] 05_collector
 - [x] 06_autoinstrumentacion
 - [x] 07_tempo_traceql
-- [ ] 08_loki_logql
+- [x] 08_loki_logql
 - [ ] 09_metricas
 - [ ] 10_grafana
 - [ ] check_course.py OK + informe final
@@ -25,3 +25,4 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - 05: docs Collector (scaling/resiliency/config), READMEs de processor/memory_limiter/exporterhelper/transform/loadbalancing leídos vía raw. Corregido: Alloy 'experimental'->'public preview'; 'guía oficial prefiere sending_queue.batch' suavizado. Élite +2 (#9 error_mode fail-open, #10 LB vs spanmetrics).
 - 06: Grafana AI Obs (5 vs 6 dashboards) matizado; openai DEFAULT_MAX_RETRIES=2, OpenLIT/OpenLLMetry defaults de contenido verificados en repos. Hallazgo: bandera OTEL_SEMCONV_STABILITY_OPT_IN eliminada en python-genai (corregido texto de 04 y 06). Élite +2.
 - 07: Tempo 3.0 blog (1-jun-2026) por búsqueda; config/CHANGELOG/notas 3.1 verificados en grafana/tempo raw (slack 2m/30s, 168h/24h). Élite +2 (#10 extrapolate 3.1, #11 fail_on_high_lag). build_07 imprime ERR sin stack (normal).
+- 08: todas las cifras de Loki (100k streams, 15 labels, 64KB/128, 1w, SSD->4.0, bloom 75TB, helm community) verificadas en grafana/loki raw. Élite +2 (#10 17 atributos OTLP incl. pod/instance.id, #11 multiplicación + streams limit).
