@@ -333,7 +333,7 @@ def rules_yaml(rules: Sequence[dict[str, Any]], *, group: str = "supportops-slo"
     if int(interval.rstrip("s")) % 10 or not interval.endswith("s"):
         raise ValueError("el intervalo del grupo debe ser un múltiplo de 10 s (tick del planificador de Grafana)")
     doc = {"apiVersion": 1, "groups": [{"orgId": 1, "name": group, "folder": folder, "interval": interval, "rules": list(rules)}]}
-    return header + yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=200)
+    return header + yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, width=100000)
 
 
 # =====================================================================================================================

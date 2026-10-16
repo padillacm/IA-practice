@@ -1,0 +1,1182 @@
+{
+  "uid": "slo-agente",
+  "title": "16 · SLOs de SupportOps",
+  "description": "SLIs, SLOs, presupuesto de error y burn rate multiventana de SupportOps (disponibilidad, latencia, calidad y coste). Ventanas COMPRIMIDAS de laboratorio (1-15 min).",
+  "tags": [
+    "curso",
+    "slo",
+    "alertas"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "text",
+      "title": "Cómo leer este dashboard",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "transparent": false,
+      "options": {
+        "mode": "markdown",
+        "content": "SLOs de laboratorio: **disponibilidad 99 %**, **latencia ≤ 5 s 97 %**, **calidad (groundedness) 95 %**, **coste ≤ 0,0005 USD 98 %**. El *burn rate* = (fracción de eventos malos) / (presupuesto = 1 − objetivo): 1 = ritmo sostenible; 14,4 = presupuesto agotado en 1/14,4 del periodo. Las alertas son **multiventana**: ventana larga (5 min) Y corta (1 min) por encima del factor (14,4 página; 3 ticket con 15 min y 3 min). En producción las ventanas serían 1 h/5 min y 6 h/30 min (SRE Workbook)."
+      },
+      "id": 1
+    },
+    {
+      "type": "row",
+      "id": 2,
+      "title": "Estado de los SLO (ventana de 30 min)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "SLI availability (30 min)",
+      "description": "Fracción de eventos buenos en 30 min. Objetivo 99.00%. El ticket termina `ok` o `escalated` (no error, degradado ni max_steps).",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\",supportops_status=~\"ok|escalated\"}[30m])) / sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\"}[30m]))",
+          "legendFormat": "__auto",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "sin datos",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "SLI latency (30 min)",
+      "description": "Fracción de eventos buenos en 30 min. Objetivo 97.00%. El ticket se resuelve en ≤ 5 s (extremo a extremo, `invoke_agent`).",
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name=\"supportops-agent\",le=\"5.0\"}[30m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name=\"supportops-agent\"}[30m]))",
+          "legendFormat": "__auto",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "sin datos",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.97
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 4
+    },
+    {
+      "type": "stat",
+      "title": "SLI quality (30 min)",
+      "description": "Fracción de eventos buenos en 30 min. Objetivo 95.00%. La respuesta evaluada está fundamentada (groundedness ≥ 0,5) en una muestra uniforme del 25 %.",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\",gen_ai_evaluation_score_label=\"pass\"}[30m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\"}[30m]))",
+          "legendFormat": "__auto",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "sin datos",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 5
+    },
+    {
+      "type": "stat",
+      "title": "SLI cost (30 min)",
+      "description": "Fracción de eventos buenos en 30 min. Objetivo 98.00%. El ticket cuesta ≤ 0,0005 USD (precios ilustrativos).",
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(supportops_agent_request_cost_USD_bucket{service_name=\"supportops-agent\",le=\"0.0005\"}[30m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name=\"supportops-agent\"}[30m]))",
+          "legendFormat": "__auto",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "textMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "sin datos",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.98
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 6
+    },
+    {
+      "type": "gauge",
+      "title": "Presupuesto restante · availability",
+      "description": "Presupuesto de error restante del periodo de laboratorio (30 min): 1 = intacto, 0 = agotado, <0 = SLO incumplido. Presupuesto = 1.00% de eventos malos.",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1 - (1 - (sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\",supportops_status=~\"ok|escalated\"}[30m])) / sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\"}[30m])))) / 0.01",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": -1,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 7
+    },
+    {
+      "type": "gauge",
+      "title": "Presupuesto restante · latency",
+      "description": "Presupuesto de error restante del periodo de laboratorio (30 min): 1 = intacto, 0 = agotado, <0 = SLO incumplido. Presupuesto = 3.00% de eventos malos.",
+      "gridPos": {
+        "x": 6,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1 - (1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name=\"supportops-agent\",le=\"5.0\"}[30m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name=\"supportops-agent\"}[30m])))) / 0.03",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": -1,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 8
+    },
+    {
+      "type": "gauge",
+      "title": "Presupuesto restante · quality",
+      "description": "Presupuesto de error restante del periodo de laboratorio (30 min): 1 = intacto, 0 = agotado, <0 = SLO incumplido. Presupuesto = 5.00% de eventos malos.",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1 - (1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\",gen_ai_evaluation_score_label=\"pass\"}[30m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\"}[30m])))) / 0.05",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": -1,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 9
+    },
+    {
+      "type": "gauge",
+      "title": "Presupuesto restante · cost",
+      "description": "Presupuesto de error restante del periodo de laboratorio (30 min): 1 = intacto, 0 = agotado, <0 = SLO incumplido. Presupuesto = 2.00% de eventos malos.",
+      "gridPos": {
+        "x": 18,
+        "y": 8,
+        "w": 6,
+        "h": 5
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "1 - (1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name=\"supportops-agent\",le=\"0.0005\"}[30m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name=\"supportops-agent\"}[30m])))) / 0.02",
+          "legendFormat": "__auto",
+          "range": false,
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": -1,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 10
+    },
+    {
+      "type": "row",
+      "id": 11,
+      "title": "Burn rate multiventana (las alertas usan estas mismas consultas)",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Burn rate · availability",
+      "description": "Burn rate del SLO availability: >14.4 con ventana larga Y corta = página; >3 (15/3 min) = ticket. 1 = ritmo sostenible.",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\",supportops_status=~\"ok|escalated\"}[5m])) / sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\"}[5m])))) / 0.01",
+          "legendFormat": "larga 5 min",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\",supportops_status=~\"ok|escalated\"}[1m])) / sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\"}[1m])))) / 0.01",
+          "legendFormat": "corta 1 min",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\",supportops_status=~\"ok|escalated\"}[15m])) / sum(rate(supportops_agent_requests_total{service_name=\"supportops-agent\"}[15m])))) / 0.01",
+          "legendFormat": "larga 15 min",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3.0
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 12
+    },
+    {
+      "type": "timeseries",
+      "title": "Burn rate · latency",
+      "description": "Burn rate del SLO latency: >14.4 con ventana larga Y corta = página; >3 (15/3 min) = ticket. 1 = ritmo sostenible.",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name=\"supportops-agent\",le=\"5.0\"}[5m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name=\"supportops-agent\"}[5m])))) / 0.03",
+          "legendFormat": "larga 5 min",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name=\"supportops-agent\",le=\"5.0\"}[1m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name=\"supportops-agent\"}[1m])))) / 0.03",
+          "legendFormat": "corta 1 min",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name=\"supportops-agent\",le=\"5.0\"}[15m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name=\"supportops-agent\"}[15m])))) / 0.03",
+          "legendFormat": "larga 15 min",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3.0
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 13
+    },
+    {
+      "type": "timeseries",
+      "title": "Burn rate · quality",
+      "description": "Burn rate del SLO quality: >14.4 con ventana larga Y corta = página; >3 (15/3 min) = ticket. 1 = ritmo sostenible.",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\",gen_ai_evaluation_score_label=\"pass\"}[5m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\"}[5m])))) / 0.05",
+          "legendFormat": "larga 5 min",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\",gen_ai_evaluation_score_label=\"pass\"}[1m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\"}[1m])))) / 0.05",
+          "legendFormat": "corta 1 min",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\",gen_ai_evaluation_score_label=\"pass\"}[15m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name=\"groundedness\"}[15m])))) / 0.05",
+          "legendFormat": "larga 15 min",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3.0
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 14
+    },
+    {
+      "type": "timeseries",
+      "title": "Burn rate · cost",
+      "description": "Burn rate del SLO cost: >14.4 con ventana larga Y corta = página; >3 (15/3 min) = ticket. 1 = ritmo sostenible.",
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name=\"supportops-agent\",le=\"0.0005\"}[5m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name=\"supportops-agent\"}[5m])))) / 0.02",
+          "legendFormat": "larga 5 min",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name=\"supportops-agent\",le=\"0.0005\"}[1m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name=\"supportops-agent\"}[1m])))) / 0.02",
+          "legendFormat": "corta 1 min",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "editorMode": "code",
+          "expr": "(1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name=\"supportops-agent\",le=\"0.0005\"}[15m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name=\"supportops-agent\"}[15m])))) / 0.02",
+          "legendFormat": "larga 15 min",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3.0
+              },
+              {
+                "color": "red",
+                "value": 14.4
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "id": 15
+    },
+    {
+      "type": "row",
+      "id": 16,
+      "title": "Alertas y contexto",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "alertlist",
+      "title": "Alertas de SLO (estado actual)",
+      "description": "Reglas de Grafana en estado firing/pending/error (provisionadas desde `provisioning/alerting/16-slo-alerts.yaml`).",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 8,
+        "h": 8
+      },
+      "options": {
+        "viewMode": "list",
+        "groupMode": "default",
+        "groupBy": [],
+        "maxItems": 10,
+        "sortOrder": 1,
+        "dashboardAlerts": false,
+        "alertName": "",
+        "alertInstanceLabelFilter": "",
+        "showInstances": false,
+        "folder": null,
+        "stateFilter": {
+          "firing": true,
+          "pending": true,
+          "noData": true,
+          "normal": false,
+          "error": true
+        }
+      },
+      "id": 17
+    },
+    {
+      "type": "table",
+      "title": "Trazas con error (Tempo)",
+      "description": "Tickets del agente que terminaron con error: abre uno para ver qué span falló.",
+      "gridPos": {
+        "x": 8,
+        "y": 29,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"supportops-agent\" && name =~ \"invoke_agent.*\" && status = error }",
+          "limit": 20,
+          "tableType": "traces",
+          "filters": [],
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "id": 18
+    },
+    {
+      "type": "logs",
+      "title": "Errores del agente (Loki)",
+      "description": "Logs de aviso/error del agente; cada línea lleva trace_id.",
+      "gridPos": {
+        "x": 16,
+        "y": 29,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "editorMode": "code",
+          "expr": "{service_name=\"supportops-agent\"} | detected_level=~\"warn|error\"",
+          "legendFormat": "",
+          "queryType": "range",
+          "maxLines": 200,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending",
+        "enableInfiniteScrolling": false
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "id": 19
+    }
+  ]
+}
