@@ -2,8 +2,8 @@
 Agente: Autor A3 · Módulos: 06–08
 - [x] 06_autoinstrumentacion (README + lección 72 celdas + proyecto 33 celdas; ejecutados con nbclient OK; rúbrica 6/6 con la solución)
 - [x] 07_tempo_traceql (lección 76 celdas, proyecto 24, dashboard 07; en vivo + degradado OK, rúbrica 6/6; falta solo revisión final)
-- [ ] 08_loki_logql
-- [ ] check_course.py OK + informe final
+- [x] 08_loki_logql (lección 60 celdas, proyecto 24, dashboard 08; en vivo + degradado OK, rúbrica 6/6)
+- [x] check_course.py OK (mis módulos) · pendiente: informe final
 
 ## Hecho / decisiones (módulo 06)
 - Investigación verificada (oct-2026): OpenLIT 1.45.0, traceloop-sdk/OpenLLMetry 0.62.4, instrumentación oficial OTel `opentelemetry-instrumentation-genai-openai` 1.2b0
@@ -25,3 +25,5 @@ Agente: Autor A3 · Módulos: 06–08
 - Siguiente: 07_tempo_traceql. Plan: stack vivo con candado; Tempo 3.1 con `TEMPO_CONFIG=tempo-metrics.yaml`; lote con fallos inyectados con `generate_tickets(start_s="live")` + `setup_telemetry` + `OTelInstrumentor`.
 - 07 TERMINADO (commit). Capturas: `SUPPORTOPS_CAPTURE=1` ejecutando la lección con stack limpio (down -v; up con TEMPO_CONFIG=tempo-metrics.yaml). Mini motor 18/18 vs Tempo 3.1. Hallazgo clave: `live_store.wal.ingestion_time_range_slack` (ver INTERFACES).
 - Siguiente: 08_loki_logql. `supportops/loki_lab.py` ya escrito y probado con servidor falso; falta builder (build_08.py), ejecutar en vivo (pedir candado con `flock -n`, down -v al acabar), capturas `08_loki_logql/recorded/`, dashboard 08-*.json, proyecto. Loki docs clonadas en scratchpad (repos/loki/docs/sources) — re-clonar con `git clone --depth 1 --filter=blob:none --sparse https://github.com/grafana/loki.git` si se pierde.
+
+- 08 TERMINADO. Mini LogQL 11/11 vs Loki 3.7.8; proyecto 07 verificado en vivo 8/8 contra Tempo. Stack bajado y candado liberado al terminar.
