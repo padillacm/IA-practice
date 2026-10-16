@@ -721,7 +721,7 @@ if LIVE and LIVE_RUN:
     - **Revisiones de arquitectura (*design reviews*)**: los equipos de plataforma de las grandes empresas exigen un documento con requisitos medibles, alternativas descartadas, riesgos con detección y plan de pruebas; es el formato de los ADR (*Architecture Decision Records*, Michael Nygard, 2011) y de las *production readiness reviews* de SRE (*Site Reliability Engineering*, cap. 32 «The Evolving SRE Engagement Model»).
     - **Checklists de preparación para producción** (*Production Readiness*) en la práctica SRE de Google: monitorización, capacidad, respuesta a incidentes y gestión del cambio se revisan **antes** de aceptar un servicio en guardia.
     - **Grafana Labs** promueve OpenTelemetry (convenciones GenAI) con Tempo, Loki y Prometheus/Mimir como base de la observabilidad de aplicaciones de IA; es el patrón que este capstone reproduce con el stack del curso. *(Afirmación general sin cita concreta: contrasta con la documentación actual de Grafana antes de citarla en tu revisión.)*
-    - **El coste de observabilidad** es un tema de dirección en las empresas con mucho tráfico: la combinación de *tail sampling*, métricas previas al muestreo y retención por clase es la forma estándar de contenerlo (módulo 18).
+    - **El coste de observabilidad** es un tema de dirección en las empresas con mucho tráfico: la combinación de *tail sampling*, métricas previas al muestreo y retención por clase es la combinación que este curso mide y recomienda para contenerlo (módulo 18); no afirmamos que sea «la forma estándar» de ninguna empresa concreta.
     """)
 
     md("""
@@ -736,6 +736,8 @@ if LIVE and LIVE_RUN:
     6. **Declara lo que NO verificaste.** Un capstone honesto separa *medido*, *entregado*, *no verificado aquí* y *pendiente*: un revisor desconfía de los verdes sin matices.
     7. **El coste de la plataforma también es un SLO.** Series, bytes y retención por clase con presupuesto y alerta de desvío, igual que el coste del agente.
     8. **La plataforma se acepta con un examen de incidentes**, no con una demo de dashboards: si alguien ajeno no resuelve la mesa en 15 minutos, la observabilidad no es suficiente aunque los paneles sean bonitos.
+    9. **Cada decisión de telemetría merece un ADR con sus consecuencias medibles.** Nygard propone un formato corto (título, estado, contexto, decisión, consecuencias) para que las decisiones de arquitectura queden como historia que se puede revisar. En observabilidad la sección «Consecuencias» debe llevar números: series nuevas, bytes/s y días de retención, qué señal se pierde con el muestreo elegido y quién paga. Un ADR de «muestreo por cola al 10 % de la base» sin la tasa de error resultante en las métricas RED es una opinión (módulo 18). *Fuente: M. Nygard, «Documenting Architecture Decisions» (15-nov-2011, Cognitect).*
+    10. **Haz de la preparación para producción una puerta, no un trámite.** Las *production readiness reviews* de Google SRE revisan monitorización, capacidad, respuesta a incidentes y gestión del cambio antes de aceptar un servicio en guardia; añade a esa puerta el **contrato de telemetría** (una traza por ticket, cero PII, SLO con alerta multiventana, runbook con dueño) y no aceptes en guardia lo que no lo cumpla. *Fuente: Google SRE Book, cap. 32 «The Evolving SRE Engagement Model» (título conocido del libro; no abierto desde el sandbox).*
     """)
 
     md("""

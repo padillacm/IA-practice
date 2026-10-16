@@ -766,7 +766,7 @@ plt.show()
     md("""
     ## 13 · 🏭 En producción
 
-    - **Dapper** (Google, 2010) muestreaba una traza de cada 1 024 por defecto y lo hacía **adaptativo** según la carga; es el origen del muestreo *head* de baja probabilidad.
+    - **Dapper** (Google, 2010) empezó muestreando de forma uniforme una traza de cada 1 024 y describe el paso a un muestreo **adaptativo** según la carga (en el artículo, como evolución en curso); es el origen del muestreo *head* de baja probabilidad.
     - **Honeycomb Refinery** es un proxy de *tail sampling* (código abierto) con **muestreo dinámico**: mantiene tasas distintas según claves (endpoint, código de estado) para conservar la diversidad y pondera las trazas (`SampleRate`) para que los agregados se corrijan: exactamente la idea de los pesos 1/π de §7.
     - En el **Collector contrib** la arquitectura recomendada es de **dos capas**: una de Collectors con el exportador `load_balancing` (por `traceID`) y otra con `tail_sampling`, para garantizar que todos los spans de una traza lleguen al mismo nodo.
     - **Grafana Cloud** ofrece *Adaptive Metrics* (agregación automática de series poco usadas) y límites por tenant en Mimir/Loki/Tempo; en OSS se logra con `limits_config`/`overrides` (§9) y revisión de series.
@@ -783,6 +783,8 @@ plt.show()
     6. **Los logs dependen de las trazas.** Si descartas una traza pero conservas sus logs, el `trace_id` queda **colgando** (el salto de Grafana no encuentra nada). Decide la retención de logs y trazas **juntas**, o muestrea los logs con la misma decisión.
     7. **Los límites por tenant son tu radio de explosión.** Sin ellos, un solo servicio con un bucle de logs consume la ingesta de todos. Con ellos, el error es 429 para él y se ve en una métrica.
     8. **Una política sin presupuesto es una opinión.** Fija límite de bytes/s (`bytes_limiting`/`rate_limiting`) como red de seguridad para que un incidente masivo (todo falla ⇒ todo es «interesante») no multiplique tu factura justo cuando más telemetría se emite.
+    9. **`sample_limit` convierte una explosión de cardinalidad en un apagón de métricas.** Según la documentación de Prometheus, si tras el *relabeling* un objetivo expone más muestras que `sample_limit`, **el scrape entero se trata como fallido**: no se guarda nada de ese objetivo (ni sus alertas funcionan), no solo «lo que sobra». Es la red de seguridad correcta (protege al servidor) pero con un coste real: pon `extra_scrape_metrics` y alerta sobre `scrape_sample_limit` frente a `scrape_samples_scraped` al 80 % para enterarte antes del corte. *Fuente: documentación de configuración de Prometheus (`docs/configuration/configuration.md`, leída en el repositorio el 16-oct-2026).*
+    10. **La tasa de muestreo uniforme que sirve a un servicio de mucho tráfico mata a uno de poco.** Dapper empezó con 1/1024 uniforme porque en servicios de alto volumen los patrones relevantes se repiten miles de veces y aun así aparecen; en un servicio con 50 peticiones/h esa misma tasa produce una traza **cada 20 h**, y un fallo raro no deja ninguna. De ahí el muestreo adaptativo o por cola con presupuesto por servicio. Cálculo: peticiones/h ÷ 1 024 = trazas/h (50 ÷ 1 024 ≈ 0,05/h). *Fuente: Sigelman et al. (2010), §4.4; la cuenta es aritmética del curso.*
     """)
     md("""
     ## 15 · ⚠️ Errores comunes
