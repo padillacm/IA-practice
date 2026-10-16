@@ -917,6 +917,8 @@ if LIVE:
     9. **Los exemplars solo se dibujan en paneles y consultas que los soportan.** Series temporales y mapas de calor con una consulta de **rango** sobre `_bucket` y `exemplar: true`. Un `histogram_quantile(...)` no tiene exemplars (ya no es un bucket). Por eso la fila 1 incluye un mapa de calor además de las líneas de percentiles.
     10. **`detected_level` no es una etiqueta de stream.** Lo descubrimos al ver el panel de logs **vacío** con `{service_name="x", detected_level=~"warn|error"}` mientras el panel de volumen (`sum by (detected_level)`) funcionaba: en Loki 3 es **metadata estructurada**: se filtra *después* del selector (`{service_name="x"} | detected_level=~"warn|error"`). Un `query_check` que **cuente filas** (no solo «sin error») lo habría cazado: una consulta puede ser válida y devolver 0 filas.
     11. **La documentación del dashboard es parte del dashboard.** Cada panel lleva `description` (qué mide, cómo leerlo, umbral); `lint` lo exige. A las 3 de la mañana, el icono «i» ahorra más tiempo que un panel extra.
+    12. **Una alerta puede resolverse porque la serie murió.** Si el servicio que producía la serie con error desaparece (crash, despliegue sin telemetría), Grafana marca esa instancia como obsoleta tras **2 evaluaciones consecutivas** (por defecto) y la pasa a `Normal (MissingSeries)` como *Resuelta*. No es `noDataState` (la consulta *sí* devolvió datos, pero esa dimensión ya no): tu alerta de «ratio de errores alto por modelo» se apaga justo cuando el modelo deja de reportar. Complétala con una regla de ausencia por dimensión (`absent_over_time` / `sp-agent-idle`) y no te fíes de que «resuelta» signifique «sana». Fuente: documentación de Grafana Alerting, *Stale alert instances*.
+    13. **En reglas, ventana fija; y la documentación lo dice.** Para reglas de grabación y alertas la guía de `$__rate_interval` recomienda un rango fijo (p. ej. `[5m]`) en lugar de la variable, porque la variable depende del panel y del intervalo de la gráfica (ver 5).
     """)
 
     md("""
@@ -967,12 +969,13 @@ if LIVE:
     - Grafana, *Dashboard best practices* (RED, USE, golden signals, modelo de madurez, *sprawl*): <https://github.com/grafana/grafana/blob/main/docs/sources/visualizations/dashboards/build-dashboards/best-practices/index.md>
     - Grafana, *Provision alerting resources: file provisioning* (formato de reglas, contact points, políticas): <https://github.com/grafana/grafana/blob/main/docs/sources/alerting/set-up/provision-alerting-resources/file-provisioning/index.md>
     - Grafana, *Prometheus data source: template variables* (`$__rate_interval`): <https://grafana.com/docs/grafana/latest/datasources/prometheus/template-variables/>
-    - Grafana Labs, *New in Grafana 7.2: `$__rate_interval` for Prometheus rate queries that just work* (2020): <https://grafana.com/blog/2020/09/28/new-in-grafana-7.2-__rate_interval-for-prometheus-rate-queries-that-just-work>
+    - Grafana Labs, *New in Grafana 7.2: `$__rate_interval` for Prometheus rate queries that just work* (28-sep-2020; la fórmula `max($__interval + scrape, 4 × scrape)` figura en la documentación de la fuente de datos Prometheus): <https://grafana.com/blog/2020/09/28/new-in-grafana-7.2-__rate_interval-for-prometheus-rate-queries-that-just-work>
+    - Grafana, *Stale alert instances* (instancias obsoletas, `Normal (MissingSeries)`, 2 evaluaciones por defecto) — `docs/sources/alerting/fundamentals/alert-rule-evaluation/stale-alert-instances.md` en el repositorio `grafana/grafana`.
     - Grafana, *Correlations* (crear y provisionar): <https://grafana.com/docs/grafana/latest/administration/correlations/create-a-new-correlation/>
 
     **Dashboards y recursos como código**
     - Grafana Foundation SDK (Go, TypeScript, Python, PHP, Java): <https://github.com/grafana/grafana-foundation-sdk> · Grafonnet: <https://github.com/grafana/grafonnet> · Terraform provider: <https://github.com/grafana/terraform-provider-grafana>
-    - `grafanactl` (en desuso a favor de `gcx`): <https://github.com/grafana/grafanactl> · `gcx`: <https://github.com/grafana/gcx>
+    - `grafanactl` (en desuso a favor de `gcx`; su README anuncia el archivado del repositorio el 1-jun-2026): <https://github.com/grafana/grafanactl> · `gcx`: <https://github.com/grafana/gcx>
     - KubeCon 2019, *Fool-Proof Kubernetes Dashboards for Sleep-Deprived Oncalls* (citada por la guía de Grafana): <https://www.youtube.com/watch?v=YE2aQFiMGfY>
 
     **Método RED y señales de oro**

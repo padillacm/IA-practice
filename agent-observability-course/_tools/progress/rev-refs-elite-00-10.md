@@ -10,8 +10,8 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - [x] 07_tempo_traceql
 - [x] 08_loki_logql
 - [x] 09_metricas
-- [ ] 10_grafana
-- [ ] check_course.py OK + informe final
+- [x] 10_grafana
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (qué archivo/celda, decisiones tomadas)
@@ -27,3 +27,4 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - 07: Tempo 3.0 blog (1-jun-2026) por búsqueda; config/CHANGELOG/notas 3.1 verificados en grafana/tempo raw (slack 2m/30s, 168h/24h). Élite +2 (#10 extrapolate 3.1, #11 fail_on_high_lag). build_07 imprime ERR sin stack (normal).
 - 08: todas las cifras de Loki (100k streams, 15 labels, 64KB/128, 1w, SSD->4.0, bloom 75TB, helm community) verificadas en grafana/loki raw. Élite +2 (#10 17 atributos OTLP incl. pod/instance.id, #11 multiplicación + streams limit).
 - 09: spec cardinality 2000, Prometheus guide (30m OOO), CHANGELOG 3.8/3.9, Mimir flags, Grafana best practices (RED/symptoms) verificados vía raw. Sin correcciones. Élite +1 (#11 p99 clamp +Inf).
+- 10: KubeCon/maturity/RED/grafanactl->gcx (archivado 1-jun-2026)/rate_interval/correlations verificados. Élite +2 (stale instances, ventana fija). Corrección URL OpenAI en 01. Informe REVISION_REFERENCIAS_1.md escrito. TODO COMPLETO.

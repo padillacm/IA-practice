@@ -708,12 +708,12 @@ for n in (1, 3, 6, 12):
     ---
     # 10 · Referencias
 
-    - Anthropic Engineering, *Building effective agents* (19-dic-2024) — <https://www.anthropic.com/engineering/building-effective-agents> (definiciones de *workflow* vs *agent*, condiciones de parada, coste y errores acumulados).
+    - Erik Schluntz y Barry Zhang (Anthropic), *Building effective agents* (dic-2024; autoría y existencia confirmadas por búsqueda web, el dominio no es accesible desde el entorno de revisión; el día exacto «19» no se pudo confirmar) — <https://www.anthropic.com/engineering/building-effective-agents> (definiciones de *workflow* vs *agent*, condiciones de parada, coste y errores acumulados).
     - Yao, Zhao, Yu, Du, Shafran, Narasimhan, Cao, *ReAct: Synergizing Reasoning and Acting in Language Models*, 2022 — <https://arxiv.org/abs/2210.03629>.
-    - Lewis et al., *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*, NeurIPS 2020 — <https://arxiv.org/abs/2005.11401>.
+    - Lewis et al., *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*, NeurIPS 2020 — <https://arxiv.org/abs/2005.11401> (título, primer autor y congreso confirmados por búsqueda; el identificador arXiv no se pudo abrir desde aquí).
     - Ji et al., *Survey of Hallucination in Natural Language Generation*, 2022 (arXiv; revisiones posteriores) — <https://arxiv.org/abs/2202.03629>.
     - Anthropic, *Tool use with Claude* (documentación) — <https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview> (flujo `tool_use` → `tool_result`, `stop_reason`).
-    - OpenAI, *Function calling* (guía) — <https://developers.openai.com/api/docs/guides/function-calling>. (Nuestro adaptador usa Chat Completions con `tools`; la guía actual puede centrarse en otra API: revisa la documentación vigente.)
+    - OpenAI, *Function calling* (guía) — <https://developers.openai.com/docs/guides/function-calling>. (Nuestro adaptador usa Chat Completions con `tools`; la guía actual puede centrarse en otra API: revisa la documentación vigente.)
     - Honeycomb, *So We Shipped an AI Product. Did it Work?* (2 de octubre de 2023) — <https://www.honeycomb.io/blog/we-shipped-ai-product>.
     - Anthropic, *Pricing / Prompt caching* (multiplicadores de lectura y escritura de caché citados en 🧠 #10: **fuente secundaria, no verificada** contra la página oficial desde este entorno).
     - OpenTelemetry, *GenAI semantic conventions* (estado Development; repositorio actual) — <https://github.com/open-telemetry/semantic-conventions-genai>.
