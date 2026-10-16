@@ -651,11 +651,12 @@ ax.set_title("HIPÓTESIS de detectabilidad (la mediremos en el proyecto)"); ax.g
     - **Honeycomb** (Majors, Fong-Jones y Miranda, *Observability Engineering*, 2022) defiende guardar **eventos estructurados de alta dimensionalidad** y explorar de forma abierta, en lugar de depender solo de métricas pre-agregadas: es la razón de que las trazas con muchos atributos (modelo, tokens, cliente, herramienta) sean tan valiosas en agentes.
     - **Grafana Labs** formalizó **RED** (Tom Wilkie, 2015-2018) para servicios y recomienda, junto con la **USE** de Brendan Gregg para recursos, un conjunto **mínimo y consistente** de métricas por servicio: es lo que replicamos para `invoke_agent`, `chat` y `execute_tool`.
     - **Google SRE (cap. 6):** las cuatro *golden signals* y la recomendación de **alertar sobre síntomas** (lo que siente el usuario) más que sobre causas internas.
+    - **Grafana Tempo 3.0** (notas de la versión) incorpora en el metrics-generator el *span multiplier* «para entornos con muestreo» y limitación de cardinalidad por etiqueta: el propio backend reconoce que las métricas derivadas de trazas muestreadas hay que corregirlas y acotarlas (ver 🧠 #10 y #1).
     - **OpenTelemetry:** especifica el modelo de datos de las tres señales y de **correlación** entre ellas (trace_id en logs, exemplars en métricas). Los atributos específicos de GenAI (`gen_ai.*`) están en estado *Development*: úsalos con versión fijada (módulo 04).
     """)
     md(box("elite", "Secretos de la élite · los tres pilares", """
     1. **Cardinalidad = coste (y caídas).** Cada combinación de etiquetas es una serie. Los IDs (cliente, ticket, `trace_id`) pertenecen a trazas y logs; en métricas, pocas dimensiones acotadas (modelo, intención, estado, tier). Controla la cardinalidad con *views* del SDK o el Collector (módulos 05 y 18).
-    2. **Los percentiles no se agregan; los histogramas sí.** Elige los *buckets* alrededor de tus umbrales de SLO. Los histogramas **exponenciales** de OpenTelemetry (si tu backend los soporta) dan buena precisión con pocos parámetros — compruébalo en tu backend antes de adoptarlos.
+    2. **Los percentiles no se agregan; los histogramas sí.** Elige los *buckets* alrededor de tus umbrales de SLO: la documentación de Prometheus advierte de que el cálculo de la fracción «≤ umbral» solo es exacto si hay un límite de bucket exactamente en el umbral y, si no, se **interpola**. Los histogramas **exponenciales** de OpenTelemetry (si tu backend los soporta) dan buena precisión con pocos parámetros — compruébalo en tu backend antes de adoptarlos.
     3. **El muestreo sesga las métricas.** Si calculas «tasa de error» solo con las trazas que sobreviven al *tail sampling* (que conserva errores y lentas), tu tasa sale inflada. Las métricas RED deben calcularse **antes** de muestrear (span metrics del Collector, o instrumentos de métricas en la app).
     4. **El error de la raíz oculta errores de los hijos.** Un agente que absorbe un fallo (reintento, disculpa) deja la petición en `ok`. Alerta sobre **errores por tipo de span** (`execute_tool` por herramienta, `chat` por proveedor), no solo sobre la raíz.
     5. **Relojes:** las duraciones deben medirse con reloj **monotónico**; las marcas de tiempo de pared (NTP) pueden retroceder y producir spans con duración negativa o hijos «antes» que su padre entre máquinas. Las trazas multi-host siempre tienen algo de *skew*.
@@ -663,7 +664,24 @@ ax.set_title("HIPÓTESIS de detectabilidad (la mediremos en el proyecto)"); ax.g
     7. **Status:** deja `Unset` salvo error; `Ok` (que las librerías *no* deberían establecer) es **final** y suprime errores posteriores en las herramientas de análisis. Ponerlo «por si acaso» esconde fallos.
     8. **Nombres de span de baja cardinalidad** (`execute_tool get_order`, no `…ORD-00012`): el nombre agrupa en *service maps*, *span metrics* y consultas; el detalle va en atributos.
     9. **Contenido de prompts y completions = datos sensibles y voluminosos.** No es una métrica ni un log por defecto: se captura de forma opcional, redactada y con retención corta (módulo 20).
+    10. **El sesgo del muestreo se corrige pesando, y la fórmula es sencilla.** Si conservas cada traza con probabilidad $p_i$ (p. ej. 100 % de errores, 10 % de OK), cada traza superviviente «representa» $1/p_i$ peticiones (estimador de Horvitz-Thompson). Por eso Tempo 3.0 añadió *span multiplier* en el metrics-generator «para entornos con muestreo» (notas de la versión 3.0) y por eso la especificación OTel (*TraceState: Probability Sampling*, estado Development) define cómo anotar el umbral de muestreo en el `tracestate` para recuperar el «adjusted count» de cada span. La celda siguiente mide el sesgo.
     """))
+    code('''
+import random
+random.seed(42)
+N, P_ERR = 100_000, 0.02                       # 2 % de errores reales
+KEEP = {"error": 1.0, "ok": 0.10}              # tail sampling: todos los errores, 10 % de los OK
+kept = {"error": 0, "ok": 0}
+for _ in range(N):
+    kind = "error" if random.random() < P_ERR else "ok"
+    if random.random() < KEEP[kind]:
+        kept[kind] += 1
+naive = kept["error"] / (kept["error"] + kept["ok"])
+weighted = (kept["error"] / KEEP["error"]) / (kept["error"] / KEEP["error"] + kept["ok"] / KEEP["ok"])
+print(f"tasa de error real      : {P_ERR:.2%}")
+print(f"ingenua (solo trazas)   : {naive:.2%}   ← inflada ≈ {naive / P_ERR:.1f}×")
+print(f"ponderada por 1/p       : {weighted:.2%}")
+''')
     md(box("warn", "Errores comunes (pitfalls)", """
     - Promediar percentiles o «p95 medio por instancia».
     - Restar contadores a mano (valores negativos tras un reinicio).
@@ -721,7 +739,10 @@ ax.set_title("HIPÓTESIS de detectabilidad (la mediremos en el proyecto)"); ax.g
     - Tom Wilkie, *The RED Method: How to Instrument Your Services*, Grafana Labs, 2018 — <https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/>.
     - Brendan Gregg, *The USE Method* — <https://www.brendangregg.com/usemethod.html>.
     - Charity Majors, Liz Fong-Jones, George Miranda, *Observability Engineering*, O'Reilly, 2022 (ISBN 978-1-492-07644-5).
-    - Prometheus, *Histograms and summaries* y `histogram_quantile` (documentación oficial) — <https://prometheus.io/docs/practices/histograms/>.
+    - Prometheus, *Histograms and summaries* y `histogram_quantile` (documentación oficial) — <https://prometheus.io/docs/practices/histograms/> (fuente: <https://github.com/prometheus/docs/blob/main/docs/practices/histograms.md>).
+    - OpenTelemetry, *TraceState: Probability Sampling* (Development) — <https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/tracestate-probability-sampling.md>.
+    - Grafana Tempo, *Version 3.0 release notes* (span multiplier, límite de cardinalidad por etiqueta en el metrics-generator) — <https://grafana.com/docs/tempo/latest/release-notes/v3-0/>.
+    - Especificación OTel, *Trace API*, sección «Set Status» (`Ok` final; las herramientas de análisis suprimen errores ante `Ok`) — enlace de Trace API arriba.
     - OpenTelemetry, *GenAI semantic conventions* (estado Development) — <https://github.com/open-telemetry/semantic-conventions-genai>.
 
     **Siguiente:** haz el **proyecto** (`02_proyecto_tres_pilares.ipynb`): clasificar 10 incidentes de SupportOps según qué señal los detecta. Después, módulo 03: producirás estas señales con el SDK de OpenTelemetry.
