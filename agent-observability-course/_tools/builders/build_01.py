@@ -647,8 +647,18 @@ print("¿todos los logs comparten el trace_id de la traza?", set(lg.trace_id) ==
     5. **«Más rápido y más barato» puede ser peor**: una alucinación no llama herramientas. Vigila `tool_calls por petición` como señal de salud, no solo latencia y coste.
     6. **El contexto crece cuadráticamente en coste**: resumir o podar el historial suele ahorrar más que cambiar de modelo.
     7. **Determinismo reproducible = capacidad de depuración.** Si puedes re-ejecutar un incidente con la misma semilla/entrada, conviertes un fallo «no determinista» en un *test*. En producción real, graba entradas y respuestas de herramientas para *replay*.
-    8. **`temperature=0` no garantiza determinismo** en proveedores reales (paralelismo, versiones del modelo, enrutado): no diseñes tests que lo asuman.
+    8. **`temperature=0` no garantiza determinismo** en proveedores reales (paralelismo, versiones del modelo, enrutado): no diseñes tests que lo asuman. *(Fuente secundaria / no verificada contra la página oficial de la API: varias guías de terceros lo indican; la documentación de cada proveedor lo matiza, compruébalo en la tuya.)*
+    9. **Mide el coste cuadrático, no lo supongas.** Si cada paso reenvía el historial completo, los tokens de *entrada* acumulados de una petición de $n$ pasos son $n\\,c_0 + d\\,n(n-1)/2$ ($c_0$ = prompt fijo, $d$ = tokens que añade cada paso): con los valores de la celda, pasar de 3 a 6 pasos multiplica el coste de entrada por ≈ 2,9, **no** por 2. La celda siguiente lo calcula.
+    10. **La caché de prompt es la palanca del coste cuadrático**, pero cambia lo que ves: en las APIs con caché explícita los tokens leídos de caché se facturan a una fracción del precio de entrada (cifras habituales: lectura ≈ 0,1× y escritura ≈ 1,25× el precio base en Anthropic; *fuente secundaria / no verificada: consulta la página de precios vigente*). Por eso el módulo 04 separa los tokens de caché en atributos propios: sin ellos, tu coste calculado no cuadra con la factura.
     """))
+    code('''
+# Coste de entrada acumulado de una petición con n pasos, reenviando todo el historial en cada paso
+C0, D = 600, 250        # tokens del prompt fijo y tokens que añade cada paso (hipótesis ilustrativas)
+def input_tokens(n: int) -> int:
+    return sum(C0 + D * k for k in range(n))      # paso k reenvía C0 + k*D
+for n in (1, 3, 6, 12):
+    print(f"n={n:2d} pasos → {input_tokens(n):6d} tokens de entrada  ({input_tokens(n) / input_tokens(1):4.1f}× el de 1 paso)")
+''')
     md(box("warn", "Errores comunes (pitfalls)", """
     - **Escribir tests de «la respuesta debe ser exactamente X»** contra un LLM real: usa propiedades (llamó a la herramienta correcta, citó el documento, no incluyó PII).
     - **Medir solo el estado final**: un agente puede responder `ok` tras tres herramientas fallidas.
@@ -704,7 +714,8 @@ print("¿todos los logs comparten el trace_id de la traza?", set(lg.trace_id) ==
     - Ji et al., *Survey of Hallucination in Natural Language Generation*, 2022 (arXiv; revisiones posteriores) — <https://arxiv.org/abs/2202.03629>.
     - Anthropic, *Tool use with Claude* (documentación) — <https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview> (flujo `tool_use` → `tool_result`, `stop_reason`).
     - OpenAI, *Function calling* (guía) — <https://developers.openai.com/api/docs/guides/function-calling>. (Nuestro adaptador usa Chat Completions con `tools`; la guía actual puede centrarse en otra API: revisa la documentación vigente.)
-    - Honeycomb, *So We Shipped an AI Product. Did it Work?* (2023) — <https://www.honeycomb.io/blog/we-shipped-ai-product>.
+    - Honeycomb, *So We Shipped an AI Product. Did it Work?* (2 de octubre de 2023) — <https://www.honeycomb.io/blog/we-shipped-ai-product>.
+    - Anthropic, *Pricing / Prompt caching* (multiplicadores de lectura y escritura de caché citados en 🧠 #10: **fuente secundaria, no verificada** contra la página oficial desde este entorno).
     - OpenTelemetry, *GenAI semantic conventions* (estado Development; repositorio actual) — <https://github.com/open-telemetry/semantic-conventions-genai>.
 
     **Siguiente:** `02_tres_pilares` — traces, metrics y logs, el modelo de datos de OpenTelemetry y las *golden signals* aplicadas a agentes. Haz primero el **proyecto** de este módulo: `01_proyecto_agente_base.ipynb`.
