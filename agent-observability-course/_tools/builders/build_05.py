@@ -879,7 +879,7 @@ print("códigos HTTP vistos por el cliente:", dict(collections.Counter(Q["codes"
     | `otelcol_exporter_enqueue_failed_*` | No cupieron en la cola (**pérdida**) | `> 0` |
     | `otelcol_process_memory_rss`, `otelcol_process_cpu_seconds` | Consumo del proceso | Cerca del límite del contenedor |
 
-    Nombres en Prometheus: los contadores llevan sufijo `_total` (p. ej. `otelcol_exporter_send_failed_spans_total`). La **conservación** (`accepted − dropped_por_filtros = sent` cuando todo va bien) es el test más simple de que no pierdes datos.
+    Nombres en Prometheus: con la configuración de telemetría interna del stack (`service.telemetry.metrics.readers.pull`, versión 0.162) los contadores se exponen **sin** sufijo `_total` (`otelcol_exporter_send_failed_spans`; verificado con `curl :8888/metrics`); otras versiones o ajustes del lector pueden añadirlo, así que comprueba el nombre exacto en tu `/metrics` antes de escribir una alerta. La **conservación** (`accepted − dropped_por_filtros = sent` cuando todo va bien) es el test más simple de que no pierdes datos.
     Verificamos esa conservación con el **Collector real del stack** (si está arriba): enviamos 60 spans y miramos el incremento de las métricas.
     """)
     code('''
@@ -938,7 +938,7 @@ else:
     5. **Definir ≠ activar, y `validate` no lo ve.** Un receptor o exportador sin pipeline se ignora sin error (lo vimos con `validate` en 3.1): es la causa más habitual de «mis logs no llegan». Un linter (o un test que envía telemetría de prueba y la lee) lo detecta.
     6. **La cola se mide en *peticiones* (`sizer: requests`), no en spans.** `queue_size: 1000` son 1000 peticiones; con lotes de 512 spans son hasta ~512 000 spans en memoria. Dimensiona con la memoria disponible; y recuerda que tras `max_elapsed_time` (300 s por defecto) el dato más antiguo **se descarta**. La cola persistente no conserva el contexto que añaden las extensiones de autenticación.
     7. **`resource_to_telemetry_conversion` es un cañón de cardinalidad.** El exportador `prometheus` del stack convierte **todos** los atributos de resource en etiquetas: añade `service.instance.id` por réplica y tendrás una serie por instancia. Con OTLP hacia Prometheus no se promociona nada por defecto (los atributos van a `target_info`): decides tú cuáles.
-    8. **Los nombres de componente y de opciones cambian entre versiones `0.x`.** En 0.162 los canónicos son `otlp_grpc`, `otlp_http`, `file_log`, `span_metrics`, `k8s_attributes`… (los antiguos se aceptan como alias, pero `otelcol components` solo lista los nuevos); y las etiquetas de métricas internas cambian de nombre con el sufijo `_total`. Fija la imagen, ejecuta `validate` en CI con **esa misma imagen** y lee el *changelog* antes de actualizar.
+    8. **Los nombres de componente y de opciones cambian entre versiones `0.x`.** En 0.162 los canónicos son `otlp_grpc`, `otlp_http`, `file_log`, `span_metrics`, `k8s_attributes`… (los antiguos se aceptan como alias, pero `otelcol components` solo lista los nuevos); y también cambian los nombres exactos de las métricas internas (según la versión y el lector de telemetría aparecen con o sin `_total`). Fija la imagen, ejecuta `validate` en CI con **esa misma imagen** y lee el *changelog* antes de actualizar.
     """)
 
     md("""

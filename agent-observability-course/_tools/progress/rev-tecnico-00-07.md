@@ -5,7 +5,7 @@ Agente: Revisor técnico R1 · Módulos: 00–07 · Informe: agent-observability
 - [x] 02_tres_pilares
 - [x] 03_otel_sdk_python
 - [x] 04_genai_semconv
-- [ ] 05_collector
+- [x] 05_collector
 - [ ] 06_autoinstrumentacion
 - [ ] 07_tempo_traceql
 - [ ] check_course.py OK + informe final
@@ -18,3 +18,4 @@ Agente: Revisor técnico R1 · Módulos: 00–07 · Informe: agent-observability
 - 02 revisado: cifras re-ejecutadas OK; URL de RED con fecha canónica.
 - 03 revisado: corregida autoeval Q4 (fracción de huérfanos); rúbricas y claims SDK verificados con SDK 1.45.1. Snapshot GenAI verificado contra raw repo (registry/spans/metrics/docs): coincide. Fuente: raw.githubusercontent (model/gen-ai/*.yaml, docs/gen-ai/*.md) copiados a /tmp/semconv.
 - 04 revisado: snapshot verificado 100% contra registry/spans/docs del repo oficial (79 atributos, 11 spans, 19 métricas); corregido 58%->50% ahorro caché; 'prohíbe'->'desaconseja (SHOULD NOT)' para conversation.id.
+- 05 revisado: snapshot de componentes == 'otelcol components' 0.162 (exacto); labs reales ejecutados con docker (puertos aleatorios) OK; solución verificada con validate+funcional; corregida afirmación falsa de sufijo _total en métricas internas (en 0.162 sin _total). Pendiente: R11 (extremo a extremo con stack vivo) no ejecutado.
