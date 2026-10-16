@@ -333,7 +333,7 @@ print("  ", shared)
 
     ### El mecanismo de transición: *opt-in* por variable de entorno
 
-    Para no romper a quien ya consume los nombres antiguos, las librerías de instrumentación suelen emitir los nombres nuevos solo bajo una variable (`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`, que documenta el README de `opentelemetry-util-genai`) y la captura de contenido bajo otra (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`: `NO_CONTENT` por defecto, `SPAN_ONLY`, `EVENT_ONLY`, `SPAN_AND_EVENT`).
+    Para no romper a quien ya consume los nombres antiguos, las librerías de instrumentación suelen emitir los nombres nuevos solo bajo una variable (`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`, valor añadido en `opentelemetry-python-contrib` (PR #3716); el repositorio nuevo `opentelemetry-python-genai` **eliminó** esa bandera y emite por defecto lo que antes era «experimental», según el CHANGELOG de `opentelemetry-util-genai`, PR #117; la documentación de Datadog aún la pide para alguna librería, p. ej. Strands) y la captura de contenido bajo otra (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`: `NO_CONTENT` por defecto, `SPAN_ONLY`, `EVENT_ONLY`, `SPAN_AND_EVENT`).
     Lección práctica: **trata los nombres de atributo como un contrato versionado**: fija la versión de spec que sigues, conserva un **mapa de renombres** y, si migras, emite ambos nombres durante un periodo (doble emisión).
 
     ## 2.1 La deriva, medida: el paquete de Python frente a la spec

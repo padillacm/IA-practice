@@ -6,7 +6,7 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - [x] 03_otel_sdk_python
 - [x] 04_genai_semconv
 - [x] 05_collector
-- [ ] 06_autoinstrumentacion
+- [x] 06_autoinstrumentacion
 - [ ] 07_tempo_traceql
 - [ ] 08_loki_logql
 - [ ] 09_metricas
@@ -23,3 +23,4 @@ Agente: Verificador de referencias + Élite V1 · Módulos: 00–10 · Informe: 
 - 03: Honeycomb distro archivada verificada (búsqueda); pre-fork/service.instance.id verificados en repo opentelemetry.io (raw); spec BSP defaults OK. Corregido: pre-fork afecta a métricas (PeriodicExportingMetricReader), no BSP. Élite +1 (#9 overhead medido).
 - 04: Datadog blog (1-dic-2025, v1.37+) verificado por búsqueda; OTel blog autores Liu(IBM)/Solomon(Google) 2025-03-06 verificado en repo opentelemetry.io (corregido ref en 00); python-genai/contrib README leídos; élite +1 (#9 buckets, celda medida). Aviso openai-v2 reformulado.
 - 05: docs Collector (scaling/resiliency/config), READMEs de processor/memory_limiter/exporterhelper/transform/loadbalancing leídos vía raw. Corregido: Alloy 'experimental'->'public preview'; 'guía oficial prefiere sending_queue.batch' suavizado. Élite +2 (#9 error_mode fail-open, #10 LB vs spanmetrics).
+- 06: Grafana AI Obs (5 vs 6 dashboards) matizado; openai DEFAULT_MAX_RETRIES=2, OpenLIT/OpenLLMetry defaults de contenido verificados en repos. Hallazgo: bandera OTEL_SEMCONV_STABILITY_OPT_IN eliminada en python-genai (corregido texto de 04 y 06). Élite +2.
