@@ -14,8 +14,6 @@ groups:
         noDataState: OK
         execErrState: Error
         isPaused: false
-        dashboardUid: salud-agente              # enlace de la alerta al dashboard…
-        panelId: 3                       # …y al panel concreto (el on-call llega a la gráfica que importa)
         data:
           - refId: A                       # consulta (PromQL, instantánea: un valor por serie)
             relativeTimeRange: {from: 300, to: 0}
@@ -43,6 +41,8 @@ groups:
               conditions:
                 - evaluator: {type: gt, params: [0.1]}
         annotations:
+          __dashboardUid__: salud-agente          # enlace de la alerta al dashboard…
+          __panelId__: "3"                 # …y al panel concreto (el on-call llega a la gráfica que importa)
           summary: "Más del 10 % de los tickets terminan en error"
           description: "La tasa de error de los últimos 2 min es {{ humanizePercentage $values.B.Value }}. Mira el panel «Trazas con error» del dashboard Salud del agente."
           runbook_url: "https://example.com/runbooks/supportops-error-ratio"
@@ -57,8 +57,6 @@ groups:
         noDataState: OK
         execErrState: Error
         isPaused: false
-        dashboardUid: salud-agente              # enlace de la alerta al dashboard…
-        panelId: 4                       # …y al panel concreto (el on-call llega a la gráfica que importa)
         data:
           - refId: A                       # consulta (PromQL, instantánea: un valor por serie)
             relativeTimeRange: {from: 300, to: 0}
@@ -86,6 +84,8 @@ groups:
               conditions:
                 - evaluator: {type: gt, params: [6]}
         annotations:
+          __dashboardUid__: salud-agente          # enlace de la alerta al dashboard…
+          __panelId__: "4"                 # …y al panel concreto (el on-call llega a la gráfica que importa)
           summary: "p95 del agente por encima de 6 s"
           description: "El p95 de invoke_agent de los últimos 2 min es {{ humanizeDuration $values.B.Value }}. Revisa si el LLM o una herramienta es la lenta (fila 2 del dashboard)."
           runbook_url: "https://example.com/runbooks/supportops-latency"
@@ -100,8 +100,6 @@ groups:
         noDataState: Alerting
         execErrState: Error
         isPaused: true
-        dashboardUid: salud-agente              # enlace de la alerta al dashboard…
-        panelId: 2                       # …y al panel concreto (el on-call llega a la gráfica que importa)
         data:
           - refId: A                       # consulta (PromQL, instantánea: un valor por serie)
             relativeTimeRange: {from: 300, to: 0}
@@ -129,6 +127,8 @@ groups:
               conditions:
                 - evaluator: {type: lt, params: [0.001]}
         annotations:
+          __dashboardUid__: salud-agente          # enlace de la alerta al dashboard…
+          __panelId__: "2"                 # …y al panel concreto (el on-call llega a la gráfica que importa)
           summary: "Sin peticiones durante 5 minutos"
           description: "Sin tráfico (o sin métricas): puede ser un incidente aguas arriba o un fallo de la telemetría. NoData cuenta como alerta (Alerting)."
           runbook_url: "https://example.com/runbooks/supportops-idle"

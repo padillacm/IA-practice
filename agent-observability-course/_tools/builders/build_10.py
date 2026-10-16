@@ -168,8 +168,6 @@ def _rule(uid, title, expr, thr, *, summary, description, severity, for_="30s", 
         noDataState: {no_data}
         execErrState: Error
         isPaused: {"true" if paused else "false"}
-        dashboardUid: salud-agente              # enlace de la alerta al dashboard…
-        panelId: {_panel_id(panel) if panel else 1}                       # …y al panel concreto (el on-call llega a la gráfica que importa)
         data:
           - refId: A                       # consulta (PromQL, instantánea: un valor por serie)
             relativeTimeRange: {{from: {window}, to: 0}}
@@ -197,6 +195,8 @@ def _rule(uid, title, expr, thr, *, summary, description, severity, for_="30s", 
               conditions:
                 - evaluator: {{type: {thr[0]}, params: [{thr[1]}]}}
         annotations:
+          __dashboardUid__: salud-agente          # enlace de la alerta al dashboard…
+          __panelId__: "{_panel_id(panel) if panel else 1}"                 # …y al panel concreto (el on-call llega a la gráfica que importa)
           summary: "{summary}"
           description: "{description}"
           runbook_url: "{runbook or 'https://example.com/runbooks/' + uid}"
@@ -687,7 +687,7 @@ ax.set_title("El recorrido del on-call: alerta → dashboard → exemplar → tr
 ''')
     md(observe("""
     - Cada flecha es **un enlace configurado como código**, no magia. Si falta uno (p. ej. `trace_id` no llega a Loki), el recorrido se **rompe** en ese punto: por eso conviene *recorrerlo con un ticket real* tras cada cambio de instrumentación.
-    - El camino típico a las 3 de la mañana: la alerta lleva al dashboard (`dashboardUid` + `panelId`), el *stat* en rojo lleva a la métrica, el exemplar a **la** traza lenta, la traza a **sus** logs. Cuatro clics, sin escribir una consulta.
+    - El camino típico a las 3 de la mañana: la alerta lleva al dashboard (`__dashboardUid__` + `__panelId__`), el *stat* en rojo lleva a la métrica, el exemplar a **la** traza lenta, la traza a **sus** logs. Cuatro clics, sin escribir una consulta.
     """))
     md("""
     ## 6.1 Recorrer el camino «a mano» (por API)
@@ -826,7 +826,7 @@ else:
     | **Anotaciones** | Texto para humanos (plantillas Go) | `summary`, `description`, **`runbook_url`** |
     | **Política** | Árbol que decide contacto, agrupación y frecuencia | `group_by`, `group_wait`, `repeat_interval` |
 
-    Reglas de diseño: **alerta sobre síntomas** (error, latencia: lo que siente el usuario), **cada alerta con *runbook*** y enlace al panel (`dashboardUid`/`panelId`), y **ventana de `rate` explícita** (`[2m]`): en una regla no hay panel que resuelva `$__rate_interval`. Las alertas por **SLO y *burn rate*** son el módulo 16.
+    Reglas de diseño: **alerta sobre síntomas** (error, latencia: lo que siente el usuario), **cada alerta con *runbook*** y enlace al panel (anotaciones `__dashboardUid__` y `__panelId__`), y **ventana de `rate` explícita** (`[2m]`): en una regla no hay panel que resuelva `$__rate_interval`. Las alertas por **SLO y *burn rate*** son el módulo 16.
 
     El archivo `stack/grafana/provisioning/alerting/10-alert-rules.yaml` (se carga al arrancar Grafana o con `POST /api/admin/provisioning/alerting/reload`):
     """)
@@ -904,7 +904,7 @@ if LIVE:
     1. **`$__rate_interval` depende de un ajuste que Grafana no puede verificar.** Es `max($__interval + scrape, 4 × scrape)` con el `timeInterval` del *datasource*; si no coincide con el *scrape* real de Prometheus, `rate()` queda sin muestras (panel vacío) o se suaviza demasiado. Lo verificamos en 4: Grafana resolvió exactamente la fórmula. Mantén el `timeInterval` del datasource **en el mismo repo** que el `scrape_interval` de Prometheus.
     2. **Apilar series puede mentir.** La guía de Grafana recomienda desactivar el apilado en la mayoría de los casos. Aquí lo usamos en *Peticiones/s por estado* porque las partes **suman un todo** (los estados son excluyentes). **Nunca** apiles percentiles ni ratios.
     3. **El archivo manda… hasta que alguien guarda en la UI.** Con `allowUiUpdates: true` el guardado se acepta y **diverge** del repositorio (lo reprodujimos en 7). En producción: `false` y cambios por *pull request*.
-    4. **El `uid` es una API.** Cambiarlo rompe enlaces (`/d/<uid>`), *dashboard links* por tag y las alertas con `dashboardUid`. Generarlo en cada build es el error más caro de «dashboards como código».
+    4. **El `uid` es una API.** Cambiarlo rompe enlaces (`/d/<uid>`), *dashboard links* por tag y las alertas con `__dashboardUid__`. Generarlo en cada build es el error más caro de «dashboards como código».
     5. **Una alerta no puede usar un panel como fuente de ventana:** `$__rate_interval` no tiene panel que lo resuelva en una regla; fija la ventana (`[2m]`) y que sea **≥ 4 × scrape**. Y recuerda la cadena de retardos: exportación + *scrape* + ventana + evaluación + `for`.
     6. **`noDataState` es una decisión de negocio, no un detalle.** «Sin datos» puede significar *sin tráfico* (normal en horas valle) o *telemetría caída* (grave). Por eso `sp-error-ratio-high` usa `OK` (sin tráfico = sin errores) y la regla de ausencia (`sp-agent-idle`) usa `Alerting`: las dos preguntas son distintas y **necesitan reglas distintas**. `execErrState: Error` además separa «la consulta falló» de «el sistema falló».
     7. **Un YAML de alertas inválido tumba Grafana entero.** Lo vivimos construyendo esta lección: con `interval: 15s` Grafana **no arranca** («interval (15s) should be non-zero and divided exactly by scheduler interval: 10»): el intervalo de evaluación debe ser **múltiplo de 10 s**. Valida el provisioning en un Grafana efímero en CI antes de desplegar. **Provisioning de alertas es de solo lectura en la UI y reemplaza la política raíz.** La documentación lo avisa: los recursos provisionados no se editan desde Grafana, y importar uno existente da conflicto. Y `policies:` **sustituye** el árbol de notificación entero: revisa que tu política por defecto siga teniendo un receptor.
@@ -925,7 +925,7 @@ if LIVE:
     | Variable multi-valor usada con `=` | «No data» al elegir varios valores | `=~` |
     | Editar dashboards provisionados en la UI | Divergencia silenciosa | `allowUiUpdates: false` + PR |
     | Alertas sobre causas (CPU de un nodo) | Ruido sin impacto en usuario | Alertas RED sobre síntomas |
-    | Alertas sin `runbook_url` ni enlace al panel | El on-call pierde minutos buscando | `annotations.runbook_url` + `dashboardUid`/`panelId` |
+    | Alertas sin `runbook_url` ni enlace al panel | El on-call pierde minutos buscando | `annotations.runbook_url` + `__dashboardUid__`/`__panelId__` |
     | `for: 0s` y ventanas muy cortas | Alertas que parpadean (*flapping*) | `for` ≥ 2 evaluaciones; ventana ≥ 4 × scrape |
     | Contact point con secretos en el repo | Fuga de credenciales | Variables de entorno / gestor de secretos |
     | Dashboard «TEST» olvidado | *Sprawl* | Prefijo `TEST:`/`TMP:` y borrado (como hicimos con `mini-demo`) |
@@ -945,11 +945,11 @@ if LIVE:
     md(details("4 · **(Diagnóstico)** Un panel de tasa de peticiones queda en blanco al ampliar el zoom a 1 minuto, pero con rangos largos funciona. Su consulta es `rate(x_total[30s])`. ¿Por qué y cómo se arregla?",
                "Con *scrape* de 15 s, una ventana de 30 s contiene **2 muestras justas** (a veces 1): `rate()` necesita ≥ 2 dentro de la ventana y falla con el desfase. Arreglo: **`$__rate_interval`** (≥ 4 × scrape) y comprobar que el `timeInterval` del datasource coincide con el *scrape* real."))
     md(details("5 · **(Diagnóstico)** Renombras `uid: salud-agente` a `uid: salud` «por estética» y al día siguiente las alertas ya no enlazan al panel y el equipo recibe 404 en los *runbooks*. ¿Qué ha pasado y qué regla de equipo lo evita?",
-               "El `uid` es la identidad usada por los enlaces (`/d/<uid>`), las alertas (`dashboardUid`) y los *dashboard links*. Regla: **el uid es una API pública: no se cambia sin migración**; el título sí puede cambiar."))
+               "El `uid` es la identidad usada por los enlaces (`/d/<uid>`), las alertas (`__dashboardUid__`) y los *dashboard links*. Regla: **el uid es una API pública: no se cambia sin migración**; el título sí puede cambiar."))
     md(details("6 · **(Diagnóstico)** La regla de error no se dispara aunque el dashboard muestra un 25 % de errores. Enumera tres causas posibles.",
                "(1) Ventana o `for` más largos que la duración del pico (la tasa en `[2m]` nunca superó el umbral el tiempo suficiente); (2) la consulta de la regla usa etiquetas distintas a las del panel (p. ej. `service_name`) y no casa; (3) `noDataState: OK` oculta que la consulta no devuelve datos; (4) la regla está pausada o el *reduce* usa `mean` en vez de `last`; (5) el intervalo de evaluación del grupo es mayor que el pico."))
     md(details("7 · **(Transferencia, backend/SRE)** Tienes 12 microservicios con el mismo RED. ¿Cómo evitas 12 dashboards casi idénticos y cómo conectas cada alerta con su vista?",
-               "Un **solo dashboard con variable de servicio** (`label_values(..., service_name)`), enlazado desde cada alerta con `dashboardUid` + variable en la URL; el JSON se **genera** desde código (una función `service_dashboard(service)` si necesitas variantes), con `lint`/`query_check` en CI."))
+               "Un **solo dashboard con variable de servicio** (`label_values(..., service_name)`), enlazado desde cada alerta con `__dashboardUid__` + variable en la URL; el JSON se **genera** desde código (una función `service_dashboard(service)` si necesitas variantes), con `lint`/`query_check` en CI."))
     md(details("8 · **(Transferencia, ML)** Quieres un dashboard de *drift* de tu agente (longitud de prompt, tasa de herramientas, calidad). ¿Qué filas pondrías y qué enlaces añadirías?",
                "Fila 1: señales de deriva (p50/p95 de tokens de entrada hoy vs `offset 7d`, mezcla de intenciones, pasos por ticket). Fila 2: calidad online (módulo 14). Fila 3: ejemplos (trazas/logs filtrados por la versión de prompt). Enlaces: de la métrica a trazas de la versión sospechosa (atributo `supportops.release`), y a Explore con la consulta ya escrita."))
 
@@ -1027,7 +1027,7 @@ def build_project() -> None:
     | R5 | Por qué | tabla Tempo (`traceql`) con override de `traceID` con `${{__value.raw}}` y panel de logs Loki con `$service`, `$search` y `detected_level` | 2/2 |
     | R6 | Navegación | ≥ 3 *data links* en total y ≥ 2 enlaces de dashboard (uno por *tags*) | ≥ 3 / ≥ 2 |
     | R7 | Higiene | `dk.lint()` sin problemas (uid, tags, `description` en cada panel, datasource…) y **determinismo** (dos *builds* → mismo hash) | 0 problemas |
-    | R8 | Alerta | YAML válido: cadena A (Prometheus `instant`) → B (reduce) → C (umbral `gt` entre 0,05 y 0,20), `for` ≥ 30 s, `severity`, `summary` y `runbook_url`, ventana explícita ≥ 1 m (sin `$__rate_interval`), `dashboardUid` y `panelId` correctos | 8 puntos |
+    | R8 | Alerta | YAML válido: cadena A (Prometheus `instant`) → B (reduce) → C (umbral `gt` entre 0,05 y 0,20), `for` ≥ 30 s, `severity`, `summary` y `runbook_url`, ventana explícita ≥ 1 m (sin `$__rate_interval`), `__dashboardUid__` y `__panelId__` correctos | 11 comprobaciones |
     | L1-L2 | *(con stack)* | Todas las consultas ejecutan sin error contra Grafana; el dashboard se sube y se lee | informativo |
 
     > 📏 Los umbrales salen de la solución de referencia (más abajo); son estructurales y no dependen de tu máquina.
@@ -1192,10 +1192,10 @@ print(len(panels(D)), "paneles ·", len(D["templating"]["list"]), "variables ·"
     - **B**: `reduce` (`reducer: last`) de A; **C**: `threshold` de B con `gt` y un umbral entre 0,05 y 0,20 (usa **0.10**); `condition: C`;
     - `for` ≥ `30s`; `noDataState`; `execErrState: Error`;
     - `labels` con `severity` (`page` o `ticket`); `annotations` con `summary` y `runbook_url`;
-    - `dashboardUid` = el de **tu** dashboard (`UID`) y `panelId` = el **id** de tu panel «Tasa de error».
+    - en `annotations`, `__dashboardUid__` = el de **tu** dashboard (`UID`) y `__panelId__` = el **id** (como texto) de tu panel «Tasa de error».
     """)
-    md(hint(1, "Estructura: `apiVersion: 1` / `groups: [{orgId: 1, name: ..., folder: ..., interval: 15s, rules: [{uid, title, condition: C, for, noDataState, execErrState, dashboardUid, panelId, data: [A, B, C], annotations, labels}]}]`. Las expresiones B y C usan `datasourceUid: __expr__`."))
-    md(hint(2, "Mira `stack/grafana/provisioning/alerting/10-alert-rules.yaml` (la regla `sp-error-ratio-high`): copia la forma y **cambia** `uid`, `dashboardUid`, `panelId` y el `runbook_url`. El `panelId` sale de `titled(D, 'error')[0]['id']`."))
+    md(hint(1, "Estructura: `apiVersion: 1` / `groups: [{orgId: 1, name: ..., folder: ..., interval: 15s, rules: [{uid, title, condition: C, for, noDataState, execErrState, data: [A, B, C], annotations (con __dashboardUid__ y __panelId__), labels}]}]`. Las expresiones B y C usan `datasourceUid: __expr__`."))
+    md(hint(2, "Mira `stack/grafana/provisioning/alerting/10-alert-rules.yaml` (la regla `sp-error-ratio-high`): copia la forma y **cambia** `uid`, `__dashboardUid__`, `__panelId__` y el `runbook_url`. El `panelId` sale de `titled(D, 'error')[0]['id']`."))
     code('''
 ALERT_YAML = """
 # TODO 7: tu regla de alerta (YAML de provisioning)
@@ -1277,7 +1277,7 @@ def run_rubric():
                   "B reduce last": B["model"]["type"] == "reduce" and B["model"]["reducer"] == "last" and B["model"]["expression"] == "A",
                   "C umbral gt 0,05-0,20": C["model"]["type"] == "threshold" and thr["type"] == "gt" and 0.05 <= float(thr["params"][0]) <= 0.20 and C["model"]["expression"] == "B" and r["condition"] == "C",
                   "for ≥ 30s": secs(r["for"]) >= 30, "etiquetas/anotaciones": r["labels"].get("severity") in ("page", "ticket") and r["annotations"].get("summary") and r["annotations"].get("runbook_url"),
-                  "enlace a tu dashboard y panel": r.get("dashboardUid") == UID and int(r.get("panelId", -1)) == pid, "execErrState": r.get("execErrState") in ("Error", "Alerting", "OK"), "noDataState": r.get("noDataState") in ("OK", "NoData", "Alerting")}
+                  "enlace a tu dashboard y panel": r["annotations"].get("__dashboardUid__") == UID and int(r["annotations"].get("__panelId__", -1)) == pid, "execErrState": r.get("execErrState") in ("Error", "Alerting", "OK"), "noDataState": r.get("noDataState") in ("OK", "NoData", "Alerting")}
         bad = [k for k, v in checks.items() if not v]
         add("R8", "Regla de alerta aprovisionable (11 comprobaciones)", not bad, "todas OK" if not bad else "fallan: " + ", ".join(bad))
     except Exception as e: add("R8", "Alerta", False, type(e).__name__ + ": " + str(e)[:60])
@@ -1410,8 +1410,6 @@ groups:
         for: 30s
         noDataState: OK
         execErrState: Error
-        dashboardUid: {UID}
-        panelId: {titled(_quiet_build(), "error")[0]["id"] if "_quiet_build" in globals() else 3}
         data:
           - refId: A
             relativeTimeRange: {{from: 300, to: 0}}
@@ -1432,13 +1430,15 @@ groups:
               conditions:
                 - evaluator: {{type: gt, params: [0.10]}}
         annotations:
+          __dashboardUid__: {UID}
+          __panelId__: "{titled(_quiet_build(), 'error')[0]['id']}"
           summary: "Más del 10 % de los tickets terminan en error"
           runbook_url: "https://example.com/runbooks/proj10-error-ratio"
         labels:
           severity: page
           team: plataforma
 """
-print(len(panels(_quiet_build())), "paneles; regla de alerta con panelId", yaml.safe_load(ALERT_YAML)["groups"][0]["rules"][0]["panelId"])
+print(len(panels(_quiet_build())), "paneles; regla de alerta enlazada al panel", yaml.safe_load(ALERT_YAML)["groups"][0]["rules"][0]["annotations"]["__panelId__"])
 display(run_rubric())
 if LIVE:
     dk.grafana("DELETE", f"/api/dashboards/uid/{UID}"); print("dashboard del alumno borrado del Grafana de laboratorio")
