@@ -954,7 +954,7 @@ display(pd.DataFrame(rows))
     > | **Flujo de telemetría de extremo a extremo** | Tempo, Loki, Prometheus y el gateway en contenedores con **esas mismas configuraciones** y los DNS de los Services como alias de red |
     > | **Afinidad por `traceID`** con 2 réplicas del gateway | Collectors reales (`load_balancing`) y comparación de trazas completas |
     >
-    > **No** verificado: planificación y ciclo de vida de pods, sondas, `hostPort`, HPA con métricas reales (no hay metrics-server), el Operator en ejecución (sus imágenes están en `ghcr.io`/`quay.io`, inaccesibles aquí), el webhook de admisión y la inyección de auto-instrumentación.
+    > **No** verificado: planificación y ciclo de vida de pods, sondas (también la `livenessProbe` por latido del chart `supportops`), el Service `otel-agent` con `internalTrafficPolicy: Local`, `hostPort`, HPA con métricas reales (no hay metrics-server), el Operator en ejecución (sus imágenes están en `ghcr.io`/`quay.io`, inaccesibles aquí), el webhook de admisión y la inyección de auto-instrumentación.
     > En tu máquina con kind o k3d todo eso se ejecuta con los mismos archivos (`k8s/kind-config.yaml`, `k8s/values/`).
     """)
 
@@ -1758,7 +1758,7 @@ En el sandbox donde se construyó este módulo **kind (K8s 1.31 y 1.34) y k3s no
 
 **Sí se verificó con binarios reales:** `helm lint`/`template` de los 7 releases (Helm 4.3.1), `kubeconform` (K8s 1.31), validación de las configuraciones **renderizadas** con `otelcol-contrib 0.162.0`, Tempo 3.1.0, Loki 3.7.8 y promtool; `helm install` y `--dry-run=server` de todo, y los CRs del Operator, contra un **API server real (k3s 1.31.5)**; el **flujo de telemetría de extremo a extremo** (Tempo + Loki + Prometheus + gateway en contenedores con los ConfigMaps renderizados y los DNS de los Services como alias); y la **afinidad por `traceID`** con 2 Collectors reales.
 
-**No verificado:** planificación y sondas de pods, `hostPort`, HPA con métricas reales (sin metrics-server), el Operator en ejecución (webhook, cert, inyección), kind/k3d con pods y la imagen `supportops:lab` ejecutándose en un pod (`python -m supportops.k8s run` sí se usó localmente).
+**No verificado:** planificación y sondas de pods (la `livenessProbe` por latido del chart `supportops` y el Service `otel-agent` con `internalTrafficPolicy: Local` solo pasaron el esquema y el API server), `hostPort`, HPA con métricas reales (sin metrics-server), el Operator en ejecución (webhook, cert, inyección), kind/k3d con pods y la imagen `supportops:lab` ejecutándose en un pod (`python -m supportops.k8s run` sí se usó localmente).
 
 ## Lecturas
 
