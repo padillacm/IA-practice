@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import gzip
 import hashlib
+import functools
 import json
 import math
 import os
@@ -31,6 +32,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zlib
 from collections import Counter, defaultdict
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
@@ -530,14 +532,12 @@ class PyroscopeClient:
         self._rpc("push.v1.PusherService/Push", series)
 
     def push_ingest(self, app: str, labels: Mapping[str, str], pprof: bytes, from_s: float, until_s: float, sample_rate: int = 100) -> None:
-        """Ingesta compatible con los SDK (``/ingest``): pprof en un formulario *multipart* (campo ``profile``)."""
+        """Ingesta compatible con los SDK (``/ingest``): el cuerpo es el pprof tal cual (con o sin gzip); nombre y etiquetas van en la URL
+        (``name=app{k=v}``). Medido con Pyroscope 2.1.2: un formulario *multipart* NO funciona (422: lo interpreta como pprof)."""
         name = app + ("{" + ",".join(f"{k}={v}" for k, v in labels.items()) + "}" if labels else "")
         q = urllib.parse.urlencode({"name": name, "from": int(from_s), "until": int(until_s), "format": "pprof", "sampleRate": sample_rate,
                                     "spyName": "supportops"})
-        boundary = uuid.uuid4().hex
-        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"profile\"; filename=\"profile.pprof\"\r\n"
-                f"Content-Type: application/octet-stream\r\n\r\n").encode() + pprof + f"\r\n--{boundary}--\r\n".encode()
-        self._req("/ingest?" + q, body, {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        self._req("/ingest?" + q, pprof, {"Content-Type": "application/octet-stream"})
 
     # ----- lectura
     def profile_types(self, minutes: int = 60) -> list[str]:
@@ -574,6 +574,17 @@ class PyroscopeClient:
         fg.setdefault("names", [])
         fg.setdefault("levels", [])
         fg["levels"] = [[int(x) for x in lv.get("values", [])] if isinstance(lv, dict) else [int(x) for x in lv] for lv in fg["levels"]]
+        fg["total"] = int(fg.get("total", 0))
+        return fg
+
+    def span_profile(self, span_ids: Sequence[str], selector: str = "{}", profile_type: str = CPU_PROFILE_TYPE, minutes: int = 15) -> dict[str, Any]:
+        """``SelectMergeSpanProfile``: perfil de CPU de UNOS spans concretos (``span_id`` hex de 16 caracteres). Es la mitad «perfil» del salto traza → perfil:
+        Pyroscope guarda ``span_id`` fuera del índice de etiquetas normal (no aparece en ``label_names``) y se consulta con este método."""
+        end = int(time.time() * 1000)
+        r = self._rpc("querier.v1.QuerierService/SelectMergeSpanProfile", {
+            "profileTypeID": profile_type, "labelSelector": selector, "spanSelector": list(span_ids), "start": end - minutes * 60_000, "end": end})
+        fg = r.get("flamegraph") or {"names": [], "levels": [], "total": 0}
+        fg["levels"] = [[int(x) for x in lv.get("values", [])] if isinstance(lv, dict) else [int(x) for x in lv] for lv in fg.get("levels", [])]
         fg["total"] = int(fg.get("total", 0))
         return fg
 
@@ -694,6 +705,32 @@ def count_tokens_fast(text: str) -> int:
 EXAMPLES = few_shot_examples()
 
 
+@functools.lru_cache(maxsize=65536)
+def _scan_line(line: str) -> tuple[int, int]:
+    r = scan_pii_fast(line)
+    return r["emails"], r["cards"]
+
+
+@functools.lru_cache(maxsize=65536)
+def _tokens_line(line: str) -> int:
+    return count_tokens_fast(line)
+
+
+def scan_pii_cached(text: str) -> dict[str, int]:
+    """Escaneo por LÍNEA con caché (lru): el prompt y los ejemplos se repiten idénticos en cada llamada, así que solo las líneas nuevas cuestan.
+    Equivale al escaneo completo porque un correo/tarjeta nunca atraviesa un salto de línea. Es el arreglo ESTRUCTURAL (no repetir trabajo)."""
+    e = c = 0
+    for line in text.split("\n"):
+        a, b = _scan_line(line)
+        e += a
+        c += b
+    return {"emails": e, "cards": c}
+
+
+def count_tokens_cached(text: str) -> int:
+    return sum(_tokens_line(line) for line in text.split("\n"))
+
+
 def serialize_slow(system: str, messages: Sequence[Any]) -> str:
     """Reserializa SIEMPRE todo el historial (con ``indent`` y ``sort_keys``) en cada llamada al LLM: O(pasos²) con el historial."""
     payload = {"system": system, "examples": EXAMPLES, "messages": [asdict(m) if hasattr(m, "__dataclass_fields__") else m for m in messages]}
@@ -769,10 +806,11 @@ class HotPathInstrumentor(Instrumentor):
 
     STAGES = ("serialize", "pii_scan", "tokens", "embed_rerank")
 
-    def __init__(self, variant: str = "slow", system_prompt: str | None = None):
+    def __init__(self, variant: str = "slow", system_prompt: str | None = None, *, scan_fn=None, tokens_fn=None):
         if variant not in ("slow", "fast"):
             raise ValueError("variant ∈ {slow, fast}")
         self.variant = variant
+        self.scan_fn, self.tokens_fn = scan_fn or scan_pii_slow, tokens_fn or count_tokens_slow    # ganchos del proyecto: tu propia corrección
         self.system = system_prompt if system_prompt is not None else policy_text()
         self.stage_s: Counter[str] = Counter()
         self.calls: Counter[str] = Counter()
@@ -788,10 +826,10 @@ class HotPathInstrumentor(Instrumentor):
         body = serialize_slow(self.system, messages)
         self.stage_s["serialize"] += self._pc() - t
         t = self._pc()
-        found = scan_pii_slow(body)
+        found = self.scan_fn(body)
         self.stage_s["pii_scan"] += self._pc() - t
         t = self._pc()
-        count_tokens_slow(body)
+        self.tokens_fn(body)
         self.stage_s["tokens"] += self._pc() - t
         self.pii_found.update(found)
 
@@ -854,10 +892,15 @@ class WorkloadStats:
     results: list[Any] = field(default_factory=list, repr=False)
     rerank_order: dict[str, list[str]] = field(default_factory=dict, repr=False)
     pii_found: dict[str, int] = field(default_factory=dict)
+    per_ticket_cpu_ms: list[float] = field(default_factory=list, repr=False)
 
     @property
     def ms_per_ticket(self) -> float:
         return 1000 * self.cpu_s / max(1, self.n_tickets)
+
+    def cpu_fraction(self) -> dict[str, float]:
+        """Fracción de la CPU TOTAL del experimento que ocupa cada etapa (la usa Amdahl; ``stage_share`` normaliza solo entre las 4 etapas)."""
+        return {k: v / self.cpu_s for k, v in self.stage_s.items()} if self.cpu_s else {}
 
     def stage_share(self) -> dict[str, float]:
         tot = sum(self.stage_s.values()) or 1.0
@@ -865,7 +908,7 @@ class WorkloadStats:
 
 
 def run_workload(variant: str = "slow", n: int = 60, seed: int = 42, *, profiler: Any = None, extra: Sequence[Instrumentor] = (),
-                 tags: Mapping[str, str] | None = None, tickets: Sequence[Any] | None = None, warmup: int = 3) -> WorkloadStats:
+                 tags: Mapping[str, str] | None = None, tickets: Sequence[Any] | None = None, warmup: int = 10, scan_fn=None, tokens_fn=None) -> WorkloadStats:
     """Ejecuta ``n`` tickets de SupportOps (mock, semilla fija) con la ruta caliente ``variant``. Mide CPU de proceso real.
 
     ``profiler``: cualquier objeto con ``start()/stop()`` (``SamplingProfiler``) que rodea SOLO la parte medida. ``extra``: instrumentores
@@ -874,7 +917,7 @@ def run_workload(variant: str = "slow", n: int = 60, seed: int = 42, *, profiler
     from .agent import SupportAgent
     from .instrument import CompositeInstrumentor
     from .traffic import generate_tickets
-    hot = HotPathInstrumentor(variant)
+    hot = HotPathInstrumentor(variant, scan_fn=scan_fn, tokens_fn=tokens_fn)
     instr = CompositeInstrumentor(*extra, hot) if extra else hot
     agent = SupportAgent(instrumentor=instr)
     tk = list(tickets) if tickets is not None else generate_tickets(n + warmup, seed=seed, fault_rates=None)
@@ -888,17 +931,19 @@ def run_workload(variant: str = "slow", n: int = 60, seed: int = 42, *, profiler
     if profiler is not None:
         profiler.start()
     c0, w0 = time.process_time(), time.perf_counter()
-    results = []
+    results, per_ticket = [], []
     for t in measured:
+        c1 = time.process_time()
         if tags:
             with (profiler.tag(**tags) if hasattr(profiler, "tag") else _null()):
                 results.append(agent.run(t))
         else:
             results.append(agent.run(t))
+        per_ticket.append(1000 * (time.process_time() - c1))
     cpu, wall = time.process_time() - c0, time.perf_counter() - w0
     if profiler is not None:
         profiler.stop()
-    return WorkloadStats(variant, len(measured), cpu, wall, dict(hot.stage_s), dict(hot.calls), results, dict(hot.rerank_order), dict(hot.pii_found))
+    return WorkloadStats(variant, len(measured), cpu, wall, dict(hot.stage_s), dict(hot.calls), results, dict(hot.rerank_order), dict(hot.pii_found), per_ticket)
 
 
 @contextmanager
@@ -962,6 +1007,75 @@ def have_pyroscope_sdk() -> bool:
         return True
     except Exception:
         return False
+
+
+# =====================================================================================================================
+# 6b. Dibujo de flamegraphs (matplotlib) y carga de datos pregrabados
+# =====================================================================================================================
+def trim_common_prefix(stacks: Mapping[Stack, int], keep: int = 1) -> Counter[Stack]:
+    """Quita los marcos iniciales que comparten TODAS las pilas (en un notebook: ~30 marcos del kernel de Jupyter), dejando ``keep`` marcos comunes."""
+    items = [(s, n) for s, n in stacks.items() if s]
+    if not items:
+        return Counter()
+    k = 0
+    first = items[0][0]
+    while all(len(s) > k + keep and s[k] == first[k] for s, _ in items):
+        k += 1
+    out: Counter[Stack] = Counter()
+    for s, n in items:
+        out[s[k:]] += n
+    return out
+
+
+def trim_to(stacks: Mapping[Stack, int], root: str) -> Counter[Stack]:
+    """Se queda solo con las pilas que contienen una función cuyo nombre incluye ``root`` y descarta los marcos anteriores (el kernel de Jupyter, hilos ajenos)."""
+    out: Counter[Stack] = Counter()
+    for s, n in stacks.items():
+        for i, fn in enumerate(s):
+            if root in fn:
+                out[s[i:]] += n
+                break
+    return out
+
+
+def plot_flamegraph(stacks: Mapping[Stack, int], ax=None, title: str = "", min_frac: float = 0.01, highlight: Sequence[str] = (), short: bool = True,
+                    icicle: bool = False, trim: bool = True, root: str | None = None):
+    """Dibuja un flamegraph: ancho = muestras, eje vertical = profundidad. ``highlight``: subcadenas de función que se pintan en rojo (p. ej. el sospechoso).
+    ``icicle=True`` lo invierte (raíz arriba, como el «tree» de Pyroscope)."""
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
+    stacks = trim_to(stacks, root) if root else (trim_common_prefix(stacks) if trim else stacks)
+    rows = flame_rows(stacks)
+    total = sum(stacks.values()) or 1
+    own = ax is None
+    if own:
+        _, ax = plt.subplots(figsize=(11, 3.8))
+    maxd = 0
+    for r in rows:
+        if r.width / total < min_frac:
+            continue
+        maxd = max(maxd, r.depth)
+        label = r.name.split(".")[-1] if short else r.name
+        hot = any(h in r.name for h in highlight)
+        hue = (zlib.crc32(r.name.encode()) % 997) / 997.0
+        color = "#d64545" if hot else plt.cm.YlOrBr(0.35 + 0.35 * hue)
+        y = -r.depth if icicle else r.depth
+        ax.add_patch(Rectangle((r.x / total * 100, y), r.width / total * 100, 0.92, facecolor=color, edgecolor="white", linewidth=0.6))
+        if r.width / total > 0.045:
+            ax.text(r.x / total * 100 + 0.4, y + 0.46, label[: int(r.width / total * 130)], va="center", fontsize=7.5, color="#1f2937")
+    ax.set_xlim(0, 100)
+    ax.set_ylim((-maxd - 0.5, 1.5) if icicle else (-0.2, maxd + 1.4))
+    ax.set_xlabel("% de las muestras (ancho = tiempo)")
+    ax.set_yticks([])
+    ax.grid(False)
+    ax.set_title(title or f"Flamegraph · {total} muestras")
+    return ax
+
+
+def load_recorded(path: str) -> dict[str, Any]:
+    """Carga una captura pregrabada (``.json.gz``) del módulo; las pilas se guardan en formato folded."""
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        return json.load(f)
 
 
 # =====================================================================================================================

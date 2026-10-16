@@ -25,6 +25,14 @@ datasources:
         datasourceUid: prometheus
         spanStartTimeShift: "-5m"
         spanEndTimeShift: "5m"
+      tracesToProfiles:                  # salto span -> perfil en Pyroscope (módulo 17; el span lleva pyroscope.profile.id = span_id)
+        datasourceUid: pyroscope
+        profileTypeId: "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
+        tags:
+          - key: service.name
+            value: service_name
+        customQuery: true
+        query: '{service_name="$${__span.tags["service.name"]}", span_id="$${__span.spanId}"}'
       streamingEnabled:
         search: true
 
