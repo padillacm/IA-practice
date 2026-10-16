@@ -221,7 +221,7 @@ print((ROOT / "stack" / "loki" / "loki.yaml").read_text())
     | `schema_config` (`store: tsdb`, `schema: v13`, `period: 24h`) | Formato de índice y chunk | **v13 es requisito** de structured metadata y OTLP nativo |
     | `limits_config.allow_structured_metadata: true` | Admite metadatos por línea | Sin él, Loki rechaza el payload OTLP |
     | `limits_config.volume_enabled: true` | Endpoints de volumen | Los usa Grafana Logs Drilldown |
-    | `limits_config.retention_period: 168h` | 7 días de retención (aplicada por el compactor) | Laboratorio |
+    | `limits_config.retention_period: 168h` + `compactor.retention_enabled: true` | 7 días de retención | Laboratorio. El periodo solo se aplica si el compactor tiene la retención activada (requiere `delete_request_store`); sin ese bloque Loki no borraba nada |
 
     Versión y módulos en ejecución (consulta en vivo a la API de Loki):
     """)
@@ -586,7 +586,7 @@ plt.tight_layout(); plt.show()
     ## 🏭 En producción
 
     - **Grafana Labs** diseña Loki alrededor de la apuesta «índice pequeño + chunks en almacenamiento de objetos»: la documentación apunta como referencia a **menos de 100 000 streams activos por tenant** (y menos de un millón en 24 h) incluso para tenants enormes (> 10 TB/día) y a **etiquetas de decenas de valores** como mucho. El coste de Loki es, sobre todo, **disciplina de etiquetas**.
-    - **OTLP nativo:** desde Loki 3.0 se ingiere OpenTelemetry directamente (`/otlp`); los atributos de *resource* mapean bien a etiquetas y el resto a *structured metadata* (por eso el Collector necesita solo `otlphttp` y no un exportador específico de Loki).
+    - **OTLP nativo:** desde Loki 3.0 se ingiere OpenTelemetry directamente (`/otlp`); los atributos de *resource* mapean bien a etiquetas y el resto a *structured metadata* (por eso el Collector necesita solo el exportador `otlp_http` y no uno específico de Loki).
     - **Despliegue:** el modo *Simple Scalable* está deprecado (se elimina en 4.0); la recomendación es el **HA monolítico** para la mayoría y microservicios para los muy grandes. Los charts de Helm de Loki los mantiene desde 2026 la comunidad (`grafana-community/helm-charts`, según las notas de la 3.7).
     - **Bloom filters** (experimentales, a partir de Loki 3.3, para grandes clientes de > 75 TB/mes) usan *structured metadata*: otra razón para guardar ahí los identificadores.
     - **Patrón de equipo:** logs estructurados (JSON/logfmt) o OTLP, **un esquema de campos acordado** (`trace_id`, `span_id`, `service.name`, `ticket_id`...), derived fields hacia Tempo y trazas con `tracesToLogs` hacia Loki; alertas desde el *ruler* sobre `rate(... | json | level="error")` solo para señales que no existan como métrica.

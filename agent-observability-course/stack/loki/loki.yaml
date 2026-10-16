@@ -33,5 +33,10 @@ limits_config:
   volume_enabled: true              # usado por Grafana Logs Drilldown
   retention_period: 168h
 
+compactor:                          # la retención solo se aplica si el compactor la activa
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem  # obligatorio con retention_enabled
+
 analytics:
   reporting_enabled: false
