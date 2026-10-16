@@ -501,7 +501,7 @@ top = pd.DataFrame([{"función": fn.split(".")[-1], "self %": 100 * n / sum(st_s
 display(top.round(1))
 ''')
     md(observe("""
-    - El total que ve Pyroscope coincide, a pocos %, con la CPU que midió el sistema operativo: el perfil **cuenta CPU de verdad**, no una estimación inventada.
+    - El total que ve Pyroscope coincide, con una desviación de unas decenas de %, con la CPU que midió el sistema operativo (cada muestra a 100 Hz son 10 ms: un perfil corto es ruidoso, §2): el perfil **cuenta CPU de verdad**, no una estimación inventada.
     - Los nombres de función del SDK son *sin módulo* (`scan_pii_slow`), los de nuestro perfilador llevan `modulo.función`: otro motivo para comparar por el final del nombre.
     - Mismo ranking que con el perfilador a mano: dos implementaciones independientes (Python con GIL / Rust fuera del GIL) coinciden en **dónde** está el problema.
     """))
@@ -724,7 +724,7 @@ else:
     print("Sección en vivo omitida (necesita Pyroscope + core). Levántalos con:  cd stack && docker compose --profile core --profile profiling up -d")
 ''')
     md(observe("""
-    - El `span_id` del span raíz de Tempo es el mismo que devuelve `SelectMergeSpanProfile`: **un identificador, dos pilares**. La CPU del span (decenas de ms) coincide con la medida por ticket.
+    - El `span_id` del span raíz de Tempo es el mismo que devuelve `SelectMergeSpanProfile`: **un identificador, dos pilares**. La CPU del span (decenas de ms; a 100 Hz solo unas pocas muestras de 10 ms) es del mismo orden que la medida por ticket, no idéntica.
     - En Grafana: abre la traza en Explore → Tempo, pulsa el span raíz → **«Profiles for this span»** te lleva al flamegraph de Pyroscope con ese `span_id`. El dashboard `17 · Profiling continuo` (uid `profiling`) lista las trazas con `pyroscope.profile.id`.
     - Solo se etiquetan los **spans raíz**: los hijos (`chat`, `execute_tool`) no tienen perfil propio. Si necesitas el perfil de un hijo, tendrías que etiquetar también esos spans (más series).
     """))

@@ -8,7 +8,7 @@ Agente: Revisor técnico R3 · Módulos: 15–22 + stack/ · Informe: agent-obse
 - [x] 20_privacidad_seguridad
 - [x] 21_elite_playbook
 - [x] 22_capstone
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final (REVISION_TECNICA_3.md escrito; sesion con stack vivo hecha y stack bajado)
 
 ## Notas para retomar
 - (qué archivo/celda, decisiones tomadas, comandos largos lanzados y su resultado)
