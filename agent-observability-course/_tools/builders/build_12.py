@@ -54,7 +54,7 @@ def build_lesson() -> None:
     | | |
     |---|---|
     | **Nivel** | 🟠 Avanzado |
-    | **Duración estimada** | ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min) |
+    | **Duración estimada** | ≈ 5 h (lección ≈ 3 h 15 min + proyecto ≈ 1 h 45 min) |
     | **Servicios de Compose** | Opcional: `--profile core` + `metrics` (sección 11). Sin Docker funciona en **modo degradado** (telemetría en memoria; los spans del servidor MCP se leen de un fichero JSONL). Necesita lanzar un proceso hijo: en Colab funciona; en entornos muy restringidos puede no ser posible |
     | **RAM aproximada** | < 700 MB sin stack · ≈ 1,3 GB con `core` + `metrics` |
     | **Prerrequisitos** | Módulos 03 (SDK, `OTelInstrumentor`), 04 (GenAI semconv) y 11 (propagación W3C, trazas partidas) |
@@ -76,6 +76,13 @@ def build_lesson() -> None:
     8. **Operar** con la métrica `mcp.*.operation.duration` y consultas TraceQL de «traza partida».
     """)
 
+    md("""
+    > 🧭 **Ruta núcleo vs ampliación (75 celdas: dos sesiones).**
+    > - **Sesión A (≈ 1 h 40 min):** secciones 1-5 → qué es MCP, la convención de spans, el servidor de pedidos, lo que emite el SDK y cómo el agente usa las herramientas remotas.
+    > - **Sesión B (≈ 1 h 35 min):** secciones 6-10 → hilos y contexto, fallos, reintentos idempotentes, seguridad y estado de la spec. Después, el proyecto (usa A y B).
+    > - **Ampliación opcional (≈ 20 min, requiere stack):** sección 11 (métricas, dashboard y TraceQL en Grafana).
+    """)
+
     md("## 🔁 Conexión con módulos anteriores")
     md(details("1 · (Módulo 11) Un subagente aparece como una traza suelta en Tempo. ¿Qué dos causas comunes hay y cómo las distingues?",
                "(a) Nadie inyectó `traceparent` en la llamada (propagación `none`) o (b) el contexto se perdió al cambiar de hilo/proceso/cola. Se distinguen mirando si la cabecera/`_meta` llegó al receptor: si no llegó, falla el emisor; si llegó y el receptor abrió traza nueva, falla la extracción. El detector estructural es «raíz `invoke_agent` sin padre fuera del orquestador»; aquí será «span servidor MCP sin padre»."))
@@ -83,6 +90,9 @@ def build_lesson() -> None:
                "Dos: cada lado conserva su `trace_id` y el consumidor lleva un enlace al contexto del productor. Con padre-hijo habría una sola traza."))
     md(details("3 · (Módulo 04) ¿Qué atributos lleva un span `execute_tool` y cuál de ellos es sensible por defecto?",
                "`gen_ai.operation.name=execute_tool`, `gen_ai.tool.name`, `gen_ai.tool.call.id`, `gen_ai.tool.type`. `gen_ai.tool.call.arguments` y `gen_ai.tool.call.result` son **opt-in** y pueden contener datos sensibles (la spec lo avisa)."))
+
+    md(details("4 · (Módulo 11, diagnóstico) Un `ThreadPoolExecutor` ejecuta llamadas a herramientas y sus spans salen como trazas sueltas aunque el padre sí inyecta `traceparent`. ¿Qué pasa y cómo se arregla?",
+               "El contexto de OpenTelemetry vive en `contextvars`, y los hilos del *pool* **no lo heredan**: dentro del hilo no hay span activo, así que el span nace como raíz con otro `trace_id`. Arreglo: capturar el contexto al encolar (`ctx = contextvars.copy_context()` y `executor.submit(ctx.run, fn, ...)`) o pasar y adjuntar el contexto explícitamente. Lo verás medido en la sección 6."))
 
     code(boot("viz,otel"))
     code(PIP_MCP)
@@ -664,7 +674,7 @@ TEL.force_flush()
     - **Costes:** cada salto añade spans (≈ ×2 por llamada: cliente y servidor) y, si capturas argumentos/resultados, bytes. Con muestreo por cola (módulo 18) decide por traza completa, no por servicio.
     """)
 
-    md(box("elite", "Secretos de la élite", """
+    md(box("elite", "", """
     1. **Dos spans por salto, y un tercero del agente.** `execute_tool` (agente), `MCP send tools/call` (cliente SDK) y `tools/call` (servidor) describen la **misma** llamada. La spec dice que el span MCP es *compatible* con `execute_tool`: elige **uno** como «la herramienta» para latencia y errores y usa los otros para **descomponer** (overhead = cliente − servidor). Si sumas los tres, tus gráficas de latencia de herramientas están inflados ×2–3.
     2. **`isError` no es un error de protocolo.** Un fallo de herramienta viaja como resultado «exitoso» con `isError: true`; el span cliente del SDK sale **sin error**. Mide los fallos en el servidor (`error.type=tool_error`) **y** en el `execute_tool` del agente; una alerta basada solo en spans CLIENT de MCP es ciega a ellos (sección 7, medido).
     3. **El timeout no cancela.** El SDK envía una notificación de cancelación de cortesía, pero una herramienta síncrona (hilo) no se interrumpe: el servidor completa el trabajo (y el efecto) **después** de que el cliente abandonó. La notificación llega además como un span raíz huérfano `notifications/cancelled`: ruido que conviene filtrar o enlazar.
@@ -677,7 +687,7 @@ TEL.force_flush()
     10. **Compara siempre contra la spec de MCP de OpenTelemetry, no contra un blog.** La página oficial recomienda seguir las convenciones MCP en lugar de las de RPC, define `mcp.method.name`/`gen_ai.tool.name`/`error.type` y propone `_meta` para propagar; los nombres de span varían entre blogs y SDK (`MCP send tools/call` frente a `tools/call echo`). Mide tu desviación: un contrato de telemetría que falle la CI cuando falte `mcp.method.name` en un span `tools/call` cuesta una línea y evita paneles vacíos tras actualizar el SDK. *Fuente: opentelemetry.io/docs/specs/semconv/gen-ai/mcp (Development).*
     """))
 
-    md(box("warn", "⚠️ Errores comunes", """
+    md(box("warn", "Errores comunes", """
     - **Mezclar relojes:** instrumentar el agente con el reloj simulado y el SDK de MCP con el de pared ⇒ spans hijos fuera del padre. Usa un solo reloj.
     - **Llamar a herramientas desde `ThreadPoolExecutor` sin `copy_context()`** (sección 6).
     - **Confiar en que «no hay excepción» = «herramienta correcta»:** `isError`.
@@ -941,6 +951,8 @@ except NotImplementedError as e:
 
     **TODO 6.** `spec_gaps(span_row, kind)` devuelve `{"required": [...], "conditional": [...], "recommended": [...]}` con los atributos de `SPEC[kind]` (`kind` = `"client"` o `"server"`) que **faltan** en `span_row["attributes"]` (listas ordenadas alfabéticamente). Solo aplica a spans de `tools/call`. Úsala como **prueba de contrato** para un servidor real: `spec_gaps(<span servidor>, "server")["required"]` debe estar vacío.
     """)
+    md(hint(1, "Es una **diferencia de conjuntos** por nivel: para cada nivel (`required`, `conditional`, `recommended`), los nombres de `SPEC[kind][nivel]` que **no** están en `span_row[\"attributes\"]`. Devuelve listas ordenadas. Es la misma idea que un test de contrato con un esquema: «¿qué campos esperados faltan?»."))
+
     code('''
 SPEC = {"client": {"required": ["mcp.method.name"], "conditional": ["gen_ai.tool.name", "jsonrpc.request.id"], "recommended": ["gen_ai.operation.name", "mcp.protocol.version", "network.transport"]},
         "server": {"required": ["mcp.method.name"], "conditional": ["gen_ai.tool.name"], "recommended": ["gen_ai.operation.name", "mcp.protocol.version", "network.transport"]}}
