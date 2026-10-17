@@ -1,0 +1,897 @@
+{
+"distribution": "OpenTelemetry Collector Contrib",
+"version": "0.162.0",
+"generated_with": "docker run --rm otel/opentelemetry-collector-contrib:0.162.0 components",
+"receivers": {
+"active_directory_ds": {
+"metrics": "Beta"
+},
+"aerospike": {
+"metrics": "Alpha"
+},
+"apache": {
+"metrics": "Beta"
+},
+"apache_spark": {
+"metrics": "Alpha"
+},
+"aws_cloudwatch": {
+"logs": "Alpha",
+"metrics": "Alpha"
+},
+"aws_lambda": {
+"logs": "Alpha",
+"metrics": "Alpha"
+},
+"aws_s3": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"awscontainerinsightreceiver": {
+"metrics": "Beta"
+},
+"awsecscontainermetrics": {
+"metrics": "Beta"
+},
+"awsfirehose": {
+"logs": "Alpha",
+"metrics": "Alpha"
+},
+"awsxray": {
+"traces": "Beta"
+},
+"azure_blob": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"azure_event_hub": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"azure_monitor": {
+"metrics": "Alpha"
+},
+"carbon": {
+"metrics": "Beta"
+},
+"chrony": {
+"metrics": "Beta"
+},
+"cisco_os": {
+"metrics": "Development"
+},
+"cloud_foundry": {
+"logs": "Development",
+"metrics": "Beta"
+},
+"cloudflare": {
+"logs": "Alpha"
+},
+"collectd": {
+"metrics": "Beta"
+},
+"couchdb": {
+"metrics": "Beta"
+},
+"datadog": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"docker_stats": {
+"metrics": "Alpha"
+},
+"elasticsearch": {
+"metrics": "Beta"
+},
+"envoy_als": {
+"logs": "Alpha"
+},
+"expvar": {
+"metrics": "Alpha"
+},
+"faro": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"file_log": {
+"logs": "Beta"
+},
+"file_stats": {
+"metrics": "Beta"
+},
+"flink_metrics": {
+"metrics": "Alpha"
+},
+"fluent_forward": {
+"logs": "Beta"
+},
+"github": {
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"gitlab": {
+"traces": "Development"
+},
+"google_cloud_spanner": {
+"metrics": "Beta"
+},
+"googlecloudmonitoring": {
+"metrics": "Alpha"
+},
+"googlecloudpubsub": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"haproxy": {
+"metrics": "Beta"
+},
+"host_metrics": {
+"logs": "Development",
+"metrics": "Beta"
+},
+"http_check": {
+"metrics": "Alpha"
+},
+"icmp_check": {
+"metrics": "Development"
+},
+"iis": {
+"metrics": "Beta"
+},
+"influxdb": {
+"metrics": "Beta"
+},
+"jaeger": {
+"traces": "Beta"
+},
+"journald": {
+"logs": "Alpha"
+},
+"k8s_cluster": {
+"logs": "Beta",
+"metrics": "Beta"
+},
+"k8s_events": {
+"logs": "Alpha"
+},
+"k8s_objects": {
+"logs": "Beta"
+},
+"kafka": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"kafka_metrics": {
+"metrics": "Beta"
+},
+"kubelet_stats": {
+"metrics": "Beta"
+},
+"libhoney": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"loki": {
+"logs": "Alpha"
+},
+"macos_unified_logging": {
+"logs": "Alpha"
+},
+"memcached": {
+"metrics": "Beta"
+},
+"mongodb": {
+"logs": "Development",
+"metrics": "Beta"
+},
+"mongodb_atlas": {
+"logs": "Beta",
+"metrics": "Beta"
+},
+"mysql": {
+"logs": "Development",
+"metrics": "Beta"
+},
+"named_pipe": {
+"logs": "Alpha"
+},
+"netflow": {
+"logs": "Alpha"
+},
+"nginx": {
+"metrics": "Beta"
+},
+"nop": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"nsxt": {
+"metrics": "Alpha"
+},
+"ntp": {
+"metrics": "Beta"
+},
+"obi": {
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"oracledb": {
+"logs": "Development",
+"metrics": "Alpha"
+},
+"otelarrow": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"otlp": {
+"logs": "Stable",
+"metrics": "Stable",
+"traces": "Stable"
+},
+"otlp_json_file": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"podman_stats": {
+"metrics": "Alpha"
+},
+"postgresql": {
+"logs": "Development",
+"metrics": "Beta"
+},
+"pprof": {},
+"prometheus": {
+"metrics": "Beta"
+},
+"prometheus_remote_write": {
+"metrics": "Alpha"
+},
+"prometheus_simple": {
+"metrics": "Unmaintained"
+},
+"pulsar": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"purefa": {
+"metrics": "Alpha"
+},
+"purefb": {
+"metrics": "Alpha"
+},
+"rabbitmq": {
+"metrics": "Beta"
+},
+"receiver_creator": {
+"logs": "Alpha",
+"metrics": "Beta",
+"traces": "Alpha"
+},
+"redis": {
+"metrics": "Beta"
+},
+"riak": {
+"metrics": "Beta"
+},
+"saphana": {
+"metrics": "Alpha"
+},
+"skywalking": {
+"metrics": "Development",
+"traces": "Beta"
+},
+"snmp": {
+"metrics": "Alpha"
+},
+"snowflake": {
+"metrics": "Alpha"
+},
+"solace": {
+"traces": "Beta"
+},
+"splunk_enterprise": {
+"metrics": "Alpha"
+},
+"splunk_hec": {
+"logs": "Beta",
+"metrics": "Beta"
+},
+"sql_query": {
+"logs": "Development",
+"metrics": "Alpha"
+},
+"sqlserver": {
+"logs": "Development",
+"metrics": "Beta"
+},
+"ssh_check": {
+"metrics": "Beta"
+},
+"statsd": {
+"metrics": "Beta"
+},
+"stef": {
+"metrics": "Alpha"
+},
+"syslog": {
+"logs": "Beta"
+},
+"systemd": {
+"metrics": "Alpha"
+},
+"tcp_check": {
+"metrics": "Alpha"
+},
+"tcp_log": {
+"logs": "Alpha"
+},
+"tls_check": {
+"metrics": "Alpha"
+},
+"udp_log": {
+"logs": "Alpha"
+},
+"vcenter": {
+"metrics": "Alpha"
+},
+"webhook_event": {
+"logs": "Beta"
+},
+"windows_event_log": {
+"logs": "Alpha"
+},
+"windows_perf_counters": {
+"metrics": "Beta"
+},
+"windows_service": {
+"metrics": "Alpha"
+},
+"yang_grpc": {
+"metrics": "Alpha"
+},
+"zipkin": {
+"traces": "Beta"
+},
+"zookeeper": {
+"metrics": "Alpha"
+}
+},
+"processors": {
+"attributes": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"batch": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"cardinality_guardian": {
+"metrics": "Development"
+},
+"coralogix": {
+"traces": "Development"
+},
+"cumulative_to_delta": {
+"metrics": "Beta"
+},
+"delta_to_cumulative": {
+"metrics": "Alpha"
+},
+"delta_to_rate": {
+"metrics": "Alpha"
+},
+"drain": {
+"logs": "Alpha"
+},
+"filter": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"gen_ai_normalizer": {
+"traces": "Alpha"
+},
+"geoip": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"groupbyattrs": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"groupbytrace": {
+"traces": "Beta"
+},
+"interval": {
+"metrics": "Alpha"
+},
+"isolationforest": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"k8s_attributes": {
+"logs": "Stable",
+"metrics": "Stable",
+"traces": "Stable"
+},
+"log_dedup": {
+"logs": "Alpha"
+},
+"memory_limiter": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"metric_start_time": {
+"metrics": "Beta"
+},
+"metrics_transform": {
+"metrics": "Beta"
+},
+"metricsgeneration": {
+"metrics": "Alpha"
+},
+"probabilistic_sampler": {
+"logs": "Alpha",
+"traces": "Beta"
+},
+"redaction": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Beta"
+},
+"remotetap": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"resource": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"resource_detection": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"schema": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"span": {
+"traces": "Alpha"
+},
+"span_pruning": {
+"traces": "Alpha"
+},
+"sumologic": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"tail_sampling": {
+"traces": "Beta"
+},
+"transform": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"unroll": {
+"logs": "Alpha"
+}
+},
+"exporters": {
+"alibabacloud_logservice": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"awscloudwatchlogs": {
+"logs": "Alpha"
+},
+"awsemf": {
+"metrics": "Beta"
+},
+"awskinesis": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"awss3": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"awsxray": {
+"traces": "Beta"
+},
+"azure_blob": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"azure_monitor": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"azuredataexplorer": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"bmc_helix": {
+"metrics": "Alpha"
+},
+"cassandra": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"clickhouse": {
+"logs": "Beta",
+"metrics": "Alpha",
+"traces": "Beta"
+},
+"coralogix": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"datadog": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"dataset": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"debug": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"doris": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"elasticsearch": {
+"logs": "Beta",
+"metrics": "Development",
+"traces": "Beta"
+},
+"faro": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"file": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"google_cloud_storage": {
+"logs": "Alpha",
+"traces": "Development"
+},
+"googlecloud": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"googlecloudpubsub": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"googlemanagedprometheus": {
+"metrics": "Beta"
+},
+"honeycomb_marker": {
+"logs": "Alpha"
+},
+"influxdb": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"kafka": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"load_balancing": {
+"logs": "Beta",
+"metrics": "Alpha",
+"traces": "Beta"
+},
+"logicmonitor": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"logzio": {
+"logs": "Beta",
+"traces": "Beta"
+},
+"nop": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"opensearch": {
+"logs": "Alpha",
+"metrics": "Development",
+"traces": "Alpha"
+},
+"otelarrow": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"otlp_grpc": {
+"logs": "Stable",
+"metrics": "Stable",
+"traces": "Stable"
+},
+"otlp_http": {
+"logs": "Stable",
+"metrics": "Stable",
+"traces": "Stable"
+},
+"prometheus": {
+"metrics": "Beta"
+},
+"prometheus_remote_write": {
+"metrics": "Beta"
+},
+"pulsar": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"rabbitmq": {
+"logs": "Alpha",
+"metrics": "Alpha",
+"traces": "Alpha"
+},
+"sentry": {
+"logs": "Alpha",
+"traces": "Alpha"
+},
+"signalfx": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Deprecated"
+},
+"splunk_hec": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"stef": {
+"metrics": "Alpha"
+},
+"sumologic": {
+"logs": "Beta",
+"metrics": "Beta",
+"traces": "Beta"
+},
+"syslog": {
+"logs": "Alpha"
+},
+"tencentcloud_logservice": {
+"logs": "Beta"
+},
+"tinybird": {
+"logs": "Development",
+"metrics": "Development",
+"traces": "Development"
+},
+"zipkin": {
+"traces": "Beta"
+}
+},
+"connectors": {
+"count": {
+"logs-to-metrics": "Alpha",
+"metrics-to-metrics": "Alpha",
+"traces-to-metrics": "Alpha"
+},
+"datadog": {
+"traces-to-metrics": "Beta",
+"traces-to-traces": "Beta"
+},
+"exceptions": {
+"logs-to-logs": "Alpha",
+"logs-to-metrics": "Alpha",
+"traces-to-logs": "Alpha",
+"traces-to-metrics": "Alpha"
+},
+"failover": {
+"logs-to-logs": "Alpha",
+"metrics-to-metrics": "Alpha",
+"traces-to-traces": "Alpha"
+},
+"forward": {
+"logs-to-logs": "Beta",
+"metrics-to-metrics": "Beta",
+"traces-to-traces": "Beta"
+},
+"grafana_cloud": {
+"traces-to-metrics": "Alpha"
+},
+"otlp_json": {
+"logs-to-logs": "Alpha",
+"logs-to-metrics": "Alpha",
+"logs-to-traces": "Alpha"
+},
+"round_robin": {
+"logs-to-logs": "Beta",
+"metrics-to-metrics": "Beta",
+"traces-to-traces": "Beta"
+},
+"routing": {
+"logs-to-logs": "Alpha",
+"metrics-to-metrics": "Alpha",
+"traces-to-traces": "Alpha"
+},
+"service_graph": {
+"traces-to-metrics": "Alpha"
+},
+"signal_to_metrics": {
+"logs-to-metrics": "Alpha",
+"metrics-to-metrics": "Alpha",
+"traces-to-metrics": "Alpha"
+},
+"span_metrics": {
+"traces-to-metrics": "Alpha"
+},
+"sum": {
+"logs-to-metrics": "Alpha",
+"metrics-to-metrics": "Alpha",
+"traces-to-metrics": "Alpha"
+}
+},
+"extensions": {
+"ack": {
+"extension": "Alpha"
+},
+"asapclient": {
+"extension": "Beta"
+},
+"aws_iam_db_auth": {
+"extension": "Alpha"
+},
+"aws_logs_encoding": {
+"extension": "Alpha"
+},
+"awscloudwatchmetricstreams_encoding": {
+"extension": "Alpha"
+},
+"awsproxy": {
+"extension": "Beta"
+},
+"azure_auth": {
+"extension": "Beta"
+},
+"azure_encoding": {
+"extension": "Alpha"
+},
+"basicauth": {
+"extension": "Beta"
+},
+"bearertokenauth": {
+"extension": "Beta"
+},
+"cgroup_runtime": {
+"extension": "Alpha"
+},
+"datadog": {
+"extension": "Alpha"
+},
+"db_storage": {
+"extension": "Alpha"
+},
+"docker_observer": {
+"extension": "Beta"
+},
+"ecs_observer": {
+"extension": "Beta"
+},
+"file_storage": {
+"extension": "Beta"
+},
+"google_cloud_logentry_encoding": {
+"extension": "Alpha"
+},
+"googleclientauth": {
+"extension": "Beta"
+},
+"headers_setter": {
+"extension": "Alpha"
+},
+"health_check": {
+"extension": "Alpha"
+},
+"host_observer": {
+"extension": "Beta"
+},
+"http_forwarder": {
+"extension": "Beta"
+},
+"jaeger_encoding": {
+"extension": "Alpha"
+},
+"jaegerremotesampling": {
+"extension": "Alpha"
+},
+"json_log_encoding": {
+"extension": "Alpha"
+},
+"k8s_leader_elector": {
+"extension": "Development"
+},
+"k8s_observer": {
+"extension": "Alpha"
+},
+"oauth2client": {
+"extension": "Beta"
+},
+"oidc": {
+"extension": "Beta"
+},
+"opamp": {
+"extension": "Alpha"
+},
+"otlp_encoding": {
+"extension": "Beta"
+},
+"pebble_tail_storage": {
+"extension": "Alpha"
+},
+"pprof": {
+"extension": "Beta"
+},
+"redis_storage": {
+"extension": "Alpha"
+},
+"sd_notify": {
+"extension": "Alpha"
+},
+"sigv4auth": {
+"extension": "Beta"
+},
+"skywalking_encoding": {
+"extension": "Alpha"
+},
+"sumologic": {
+"extension": "Alpha"
+},
+"text_encoding": {
+"extension": "Beta"
+},
+"zipkin_encoding": {
+"extension": "Alpha"
+},
+"zpages": {
+"extension": "Beta"
+}
+}
+}

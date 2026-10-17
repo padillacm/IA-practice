@@ -1,0 +1,40 @@
+# Loki: retención por compactor (verificado con `loki -verify-config` en 3.7.8).
+# ⚠️ Con retention_enabled: true Loki EXIGE compactor.delete_request_store (sin él: «CONFIG ERROR … should be configured when retention is enabled»).
+auth_enabled: false
+server:
+  http_listen_port: 3100
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+schema_config:
+  configs:
+    - from: 2024-04-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+limits_config:
+  allow_structured_metadata: true
+  retention_period: 336h            # 14 días por defecto
+  retention_stream:                 # más tiempo para lo que importa en un incidente; menos para el ruido
+    - selector: '{detected_level="debug"}'
+      priority: 1
+      period: 24h
+    - selector: '{detected_level=~"warn|error"}'
+      priority: 2
+      period: 720h

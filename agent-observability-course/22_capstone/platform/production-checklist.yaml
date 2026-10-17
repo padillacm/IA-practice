@@ -1,0 +1,158 @@
+# Checklist de producción de la plataforma de observabilidad de agentes (módulo 22). `automatica: true` = lo comprueba el scorecard de la lección con telemetría.
+version: 1
+items:
+- id: I1
+  area: Instrumentación
+  item: Una traza por petición de extremo a extremo (n_trazas == n_tickets en una prueba canario)
+  modulo: 11 · 21
+  automatica: true
+- id: I2
+  area: Instrumentación
+  item: Convenciones GenAI validadas con el linter/instantánea de la spec; versión de la spec fijada
+  modulo: '04'
+  automatica: false
+- id: I3
+  area: Instrumentación
+  item: Tokens y coste contados solo en las hojas `chat` (sin doble conteo)
+  modulo: 04 · 11 · 13
+  automatica: true
+- id: I4
+  area: Instrumentación
+  item: '`gen_ai.agent.version` y versión de prompt en todos los spans'
+  modulo: '15'
+  automatica: false
+- id: I5
+  area: Instrumentación
+  item: '`ParentBased` en todos los servicios (muestreo coherente)'
+  modulo: '11'
+  automatica: false
+- id: I6
+  area: Instrumentación
+  item: Logs con `trace_id`/`span_id` al 100 %
+  modulo: 08
+  automatica: true
+- id: I7
+  area: Instrumentación
+  item: Reintentos del SDK desactivados o contados (`max_retries=0` + span por intento)
+  modulo: '06'
+  automatica: false
+- id: C1
+  area: Collector
+  item: '`memory_limiter` primero; `batch` último; redacción antes de cualquier exportador'
+  modulo: 05 · 20
+  automatica: true
+- id: C2
+  area: Collector
+  item: Configuración validada con `otelcol validate` en CI y con el binario real
+  modulo: 05 · 19
+  automatica: true
+- id: C3
+  area: Collector
+  item: Métricas RED calculadas **antes** del muestreo (`span_metrics` en `traces/in`)
+  modulo: '18'
+  automatica: true
+- id: C4
+  area: Collector
+  item: Tail sampling con `num_traces` ≥ tráfico × `decision_wait` y vigilancia de `dropped_too_early`
+  modulo: '18'
+  automatica: false
+- id: C5
+  area: Collector
+  item: Gateway con afinidad por `traceID` si hay más de una réplica
+  modulo: '19'
+  automatica: false
+- id: S1
+  area: SLOs y alertas
+  item: SLIs de disponibilidad, latencia, calidad y coste con objetivos medidos sobre la línea base
+  modulo: '16'
+  automatica: true
+- id: S2
+  area: SLOs y alertas
+  item: Alertas por burn rate multiventana, provisionadas como código (intervalo múltiplo de 10 s)
+  modulo: '16'
+  automatica: true
+- id: S3
+  area: SLOs y alertas
+  item: Runbook por alerta de página y plantilla de postmortem sin culpa
+  modulo: '16'
+  automatica: false
+- id: S4
+  area: SLOs y alertas
+  item: Política de presupuesto de error pactada con producto antes del incidente
+  modulo: '16'
+  automatica: false
+- id: Q1
+  area: Calidad
+  item: Evaluación online con muestreo estratificado y corrección por sensibilidad/especificidad del juez
+  modulo: '14'
+  automatica: false
+- id: Q2
+  area: Calidad
+  item: Compuerta de regresión apareada y canario con SPRT
+  modulo: '15'
+  automatica: false
+- id: Q3
+  area: Calidad
+  item: Estimación de calidad (muestra uniforme) con intervalo y objetivo
+  modulo: 14 · 16
+  automatica: true
+- id: K1
+  area: Coste
+  item: Coste por ticket resuelto con tokens como fuente de verdad y precios versionados
+  modulo: '13'
+  automatica: true
+- id: K2
+  area: Coste
+  item: Presupuestos, `BudgetGuard` y `LoopGuard` fuera del instrumentor de coste
+  modulo: '13'
+  automatica: false
+- id: K3
+  area: Coste
+  item: Coste del propio stack estimado y retención por clase de dato
+  modulo: 18 · 20
+  automatica: true
+- id: P1
+  area: Privacidad y seguridad
+  item: Captura de contenido apagada por defecto; redacción en la app y en el Collector
+  modulo: '20'
+  automatica: true
+- id: P2
+  area: Privacidad y seguridad
+  item: Cero PII en spans y logs tras el Collector (excluyendo nombres), medido
+  modulo: '20'
+  automatica: true
+- id: P3
+  area: Privacidad y seguridad
+  item: Detección de inyección (contenido + comportamiento) con alerta y revisión
+  modulo: '20'
+  automatica: false
+- id: P4
+  area: Privacidad y seguridad
+  item: Auditoría de accesos a contenido con cadena de hashes; retención por clase
+  modulo: '20'
+  automatica: false
+- id: D1
+  area: Despliegue
+  item: Charts y versiones de imagen fijados (sin `latest`); valores como código
+  modulo: '19'
+  automatica: true
+- id: D2
+  area: Despliegue
+  item: 'Dashboards, datasources y alertas aprovisionados desde ficheros (`allowUiUpdates: false`)'
+  modulo: 10 · 16
+  automatica: false
+- id: D3
+  area: Despliegue
+  item: Límites por tenant en Loki/Tempo (radio de explosión) y presupuesto de ingesta
+  modulo: '18'
+  automatica: false
+- id: R1
+  area: Operación
+  item: Mesa de incidentes superada (los cinco casos en < 15 min con solo telemetría)
+  modulo: '21'
+  automatica: false
+- id: R2
+  area: Operación
+  item: Contratos de telemetría en CI y simulacros (game days) trimestrales
+  modulo: '21'
+  automatica: false

@@ -1,0 +1,43 @@
+# OpenTelemetryCollector (CRD v1beta1): el operador crea el Deployment, Service, ConfigMap, HPA y PDB. Versión SIMPLIFICADA del gateway de los values de Helm (sin la política «costly», sin span_metrics y solo con el exportador de trazas): sirve para validar el CRD, no como sustituto completo.
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: gateway
+  namespace: observability
+spec:
+  mode: deployment
+  image: otel/opentelemetry-collector-contrib:0.162.0
+  replicas: 2
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+  autoscaler:
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilization: 70
+  podDisruptionBudget:
+    minAvailable: 1
+  config:                               # en v1beta1 la configuración es YAML estructurado (no una cadena)
+    receivers:
+      otlp:
+        protocols:
+          grpc: {endpoint: 0.0.0.0:4317}
+          http: {endpoint: 0.0.0.0:4318}
+    processors:
+      memory_limiter: {check_interval: 5s, limit_percentage: 80, spike_limit_percentage: 25}
+      batch: {}
+      tail_sampling:
+        decision_wait: 10s
+        num_traces: 20000
+        policies:
+          - {name: errors, type: status_code, status_code: {status_codes: [ERROR]}}
+          - {name: slow, type: latency, latency: {threshold_ms: 5000}}
+          - {name: baseline, type: probabilistic, probabilistic: {sampling_percentage: 10}}
+    exporters:
+      otlp_grpc/tempo: {endpoint: "tempo.observability.svc.cluster.local:4317", tls: {insecure: true}}
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, tail_sampling, batch]
+          exporters: [otlp_grpc/tempo]

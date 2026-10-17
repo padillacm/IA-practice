@@ -1,0 +1,1631 @@
+{
+ "source": {
+  "repo": "https://github.com/open-telemetry/semantic-conventions-genai",
+  "commit": "f3c6d0c9bb66ebd474668a3a0be25c61226f02c2",
+  "date": "2026-10-14",
+  "status": "development"
+ },
+ "attributes": {
+  "gen_ai.provider.name": {
+   "type": "enum",
+   "stability": "development",
+   "enum": [
+    "openai",
+    "gcp.gen_ai",
+    "gcp.vertex_ai",
+    "gcp.gemini",
+    "anthropic",
+    "cohere",
+    "azure.ai.inference",
+    "azure.ai.openai",
+    "ibm.watsonx.ai",
+    "aws.bedrock",
+    "perplexity",
+    "x_ai",
+    "deepseek",
+    "groq",
+    "mistral",
+    "moonshot_ai"
+   ],
+   "brief": "The Generative AI provider as identified by the client or server instrumentation."
+  },
+  "gen_ai.request.model": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The name of the GenAI model a request is being made to."
+  },
+  "gen_ai.request.max_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The maximum number of tokens the model generates for a request."
+  },
+  "gen_ai.request.choice.count": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The target number of candidate completions to return."
+  },
+  "gen_ai.request.temperature": {
+   "type": "double",
+   "stability": "development",
+   "enum": null,
+   "brief": "The temperature setting for the GenAI request."
+  },
+  "gen_ai.request.top_p": {
+   "type": "double",
+   "stability": "development",
+   "enum": null,
+   "brief": "The top_p sampling setting for the GenAI request."
+  },
+  "gen_ai.request.top_k": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The top-K sampling setting for the GenAI request: restricts token generation at each step to the K most likely next tokens."
+  },
+  "gen_ai.request.stop_sequences": {
+   "type": "string[]",
+   "stability": "development",
+   "enum": null,
+   "brief": "List of sequences that the model will use to stop generating further tokens."
+  },
+  "gen_ai.request.frequency_penalty": {
+   "type": "double",
+   "stability": "development",
+   "enum": null,
+   "brief": "The frequency penalty setting for the GenAI request."
+  },
+  "gen_ai.request.presence_penalty": {
+   "type": "double",
+   "stability": "development",
+   "enum": null,
+   "brief": "The presence penalty setting for the GenAI request."
+  },
+  "gen_ai.request.encoding_formats": {
+   "type": "string[]",
+   "stability": "development",
+   "enum": null,
+   "brief": "The encoding formats requested in an embeddings operation, if specified."
+  },
+  "gen_ai.request.seed": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "Requests with same seed value more likely to return same result."
+  },
+  "gen_ai.request.stream": {
+   "type": "boolean",
+   "stability": "development",
+   "enum": null,
+   "brief": "Indicates whether the GenAI request was made in streaming mode."
+  },
+  "gen_ai.request.reasoning.level": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The reasoning or thinking effort level requested for a GenAI model."
+  },
+  "gen_ai.request.previous_response.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The unique identifier of a previous response or interaction used to provide context for the current operation."
+  },
+  "gen_ai.request.stream_cursor": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The cursor identifying the last streamed event already received, used to resume a streamed response from that position."
+  },
+  "gen_ai.response.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The unique identifier for the completion."
+  },
+  "gen_ai.response.model": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The name of the model that generated the response."
+  },
+  "gen_ai.response.finish_reasons": {
+   "type": "string[]",
+   "stability": "development",
+   "enum": null,
+   "brief": "Array of reasons the model stopped generating tokens, corresponding to each generation received."
+  },
+  "gen_ai.response.status": {
+   "type": "enum",
+   "stability": "development",
+   "enum": [
+    "queued",
+    "in_progress",
+    "completed",
+    "incomplete",
+    "failed",
+    "cancelled"
+   ],
+   "brief": "The lifecycle status of a generated response, as reported by the provider when the response is fetched or polled."
+  },
+  "gen_ai.response.time_to_first_chunk": {
+   "type": "double",
+   "stability": "development",
+   "enum": null,
+   "brief": "Time to first chunk in a streaming response, measured from request issuance, in seconds. The value is measured from when the client issues the generation reques"
+  },
+  "gen_ai.usage.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of tokens used in the GenAI input (prompt)."
+  },
+  "gen_ai.usage.cache_read.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of input tokens served from a provider-managed cache."
+  },
+  "gen_ai.usage.cache_write.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of input tokens written to a provider-managed cache."
+  },
+  "gen_ai.usage.text.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of text input tokens."
+  },
+  "gen_ai.usage.image.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of image input tokens."
+  },
+  "gen_ai.usage.audio.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of audio input tokens."
+  },
+  "gen_ai.usage.output_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of tokens used in the GenAI response (completion)."
+  },
+  "gen_ai.usage.reasoning.output_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of output tokens used for reasoning (e.g. chain-of-thought, extended thinking)."
+  },
+  "gen_ai.usage.text.output_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of text output tokens."
+  },
+  "gen_ai.usage.image.output_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of image output tokens."
+  },
+  "gen_ai.usage.audio.output_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of audio output tokens."
+  },
+  "gen_ai.usage.text.cache_read.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of text input tokens served from a provider-managed cache."
+  },
+  "gen_ai.usage.image.cache_read.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of image input tokens served from a provider-managed cache."
+  },
+  "gen_ai.usage.audio.cache_read.input_tokens": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of audio input tokens served from a provider-managed cache."
+  },
+  "gen_ai.token.modality": {
+   "type": "enum",
+   "stability": "development",
+   "enum": [
+    "text",
+    "image",
+    "audio",
+    "unknown"
+   ],
+   "brief": "The modality of the tokens being counted."
+  },
+  "gen_ai.conversation.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The unique identifier for a conversation (session, thread), used to store and correlate messages within this conversation."
+  },
+  "gen_ai.conversation.compacted": {
+   "type": "boolean",
+   "stability": "development",
+   "enum": null,
+   "brief": "Indicates whether the effective conversation context used for this operation is a compacted view of a prior conversation."
+  },
+  "gen_ai.agent.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The unique and stable identifier of the GenAI hosted agent resource."
+  },
+  "gen_ai.agent.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "Human-readable name of the GenAI agent provided by the application."
+  },
+  "gen_ai.agent.description": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "Free-form description of the GenAI agent provided by the application."
+  },
+  "gen_ai.agent.version": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The version of the GenAI agent."
+  },
+  "gen_ai.main_agent.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The unique and stable identifier of the top-level Generative AI agent in the process"
+  },
+  "gen_ai.main_agent.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The human-readable name of the top-level Generative AI agent in the process."
+  },
+  "gen_ai.main_agent.description": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The free-form description of the top-level Generative AI agent in the process."
+  },
+  "gen_ai.tool.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "Name of the tool utilized by the agent."
+  },
+  "gen_ai.tool.call.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The tool call identifier."
+  },
+  "gen_ai.tool.description": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The tool description."
+  },
+  "gen_ai.tool.type": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "Type of the tool utilized by the agent"
+  },
+  "gen_ai.tool.call.arguments": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "Parameters passed to the tool call."
+  },
+  "gen_ai.tool.call.result": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "The result returned by the tool call (if any and if execution was successful)."
+  },
+  "gen_ai.tool.definitions": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "The list of tool definitions available to the GenAI agent or model."
+  },
+  "gen_ai.data_source.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The data source identifier."
+  },
+  "gen_ai.operation.name": {
+   "type": "enum",
+   "stability": "development",
+   "enum": [
+    "chat",
+    "generate_content",
+    "text_completion",
+    "embeddings",
+    "retrieval",
+    "fetch_response",
+    "create_agent",
+    "invoke_agent",
+    "execute_tool",
+    "invoke_workflow",
+    "plan",
+    "search_memory",
+    "create_memory",
+    "update_memory",
+    "upsert_memory",
+    "delete_memory",
+    "create_memory_store",
+    "delete_memory_store"
+   ],
+   "brief": "The name of the operation being performed."
+  },
+  "gen_ai.output.type": {
+   "type": "enum",
+   "stability": "development",
+   "enum": [
+    "text",
+    "json",
+    "image",
+    "speech"
+   ],
+   "brief": "Represents the content type requested by the client."
+  },
+  "gen_ai.embeddings.dimension.count": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of dimensions the resulting output embeddings should have."
+  },
+  "gen_ai.retrieval.documents": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "The documents retrieved."
+  },
+  "gen_ai.retrieval.query.text": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The query text used for retrieval."
+  },
+  "gen_ai.retrieval.top_k": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The maximum number of documents the retriever was asked to return for the query (also known as `k`, `limit`, or `max_num_results`)."
+  },
+  "gen_ai.memory.store.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The unique identifier of the memory store."
+  },
+  "gen_ai.memory.record.id": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The unique identifier of the memory record."
+  },
+  "gen_ai.memory.record.count": {
+   "type": "int",
+   "stability": "development",
+   "enum": null,
+   "brief": "The number of memory records relevant to the operation."
+  },
+  "gen_ai.memory.query.text": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The search query used to retrieve memories."
+  },
+  "gen_ai.memory.records": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "The memory records stored or retrieved in a memory operation."
+  },
+  "gen_ai.system_instructions": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "The system message or instructions provided to the GenAI model separately from the chat history."
+  },
+  "gen_ai.input.messages": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "The chat history provided to the model as an input."
+  },
+  "gen_ai.output.messages": {
+   "type": "any",
+   "stability": "development",
+   "enum": null,
+   "brief": "Messages returned by the model where each message represents a specific model response (choice, candidate)."
+  },
+  "gen_ai.evaluation.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The name of the evaluation metric used for the GenAI response."
+  },
+  "gen_ai.evaluation.score.value": {
+   "type": "double",
+   "stability": "development",
+   "enum": null,
+   "brief": "The evaluation score returned by the evaluator."
+  },
+  "gen_ai.evaluation.score.label": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "Human readable label for evaluation."
+  },
+  "gen_ai.evaluation.explanation": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "A free-form explanation for the assigned score provided by the evaluator."
+  },
+  "gen_ai.prompt.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The name of the prompt that uniquely identifies it."
+  },
+  "gen_ai.prompt.version": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The version of the prompt template used."
+  },
+  "gen_ai.prompt.variable": {
+   "type": "template[string]",
+   "stability": "development",
+   "enum": null,
+   "brief": "The variables supplied to the prompt template, the `<key>` being the variable name, the value being the variable value."
+  },
+  "gen_ai.workflow.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "Human-readable name of the GenAI workflow provided by the application."
+  },
+  "gen_ai.skill.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The name of the [Agent Skill](https://agentskills.io/specification#skill-md-format)."
+  },
+  "gen_ai.skill.description": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The [description of the Agent Skill](https://agentskills.io/specification#skill-md-format)."
+  },
+  "gen_ai.skill.source.uri": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The source URI for loading the skill."
+  },
+  "gen_ai.skill.resource.name": {
+   "type": "string",
+   "stability": "development",
+   "enum": null,
+   "brief": "The skill-relative name of the resource (script, reference, or asset) being accessed or executed."
+  }
+ },
+ "spans": {
+  "gen_ai.client.inference": {
+   "kind": "client",
+   "name_note": "**Span name** SHOULD be `{gen_ai.operation.name} {gen_ai.request.model}`. Semantic conventions for individual GenAI systems and frameworks MAY specify different span name format and MUST follow the ov",
+   "stability": "development",
+   "attributes": {
+    "gen_ai.request.model": {
+     "level": "conditionally_required",
+     "condition": "If available.",
+     "sampling_relevant": true
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.address": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.port": {
+     "level": "conditionally_required",
+     "condition": "If `server.address` is set.",
+     "sampling_relevant": true
+    },
+    "gen_ai.usage.input_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.output_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.text.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.image.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.audio.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.text.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.image.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.audio.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.text.output_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.image.output_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.audio.output_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.cache_write.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.system_instructions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.input.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.definitions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.max_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.choice.count": {
+     "level": "conditionally_required",
+     "condition": "If available, in the request, and !=1.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.temperature": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.top_k": {
+     "level": "conditionally_required",
+     "condition": "If applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.top_p": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.stop_sequences": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.frequency_penalty": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.presence_penalty": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.seed": {
+     "level": "conditionally_required",
+     "condition": "If applicable and if the request includes a seed.",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.type": {
+     "level": "conditionally_required",
+     "condition": "When applicable and if the request includes an output format.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.stream": {
+     "level": "conditionally_required",
+     "condition": "If and only if the request is streaming. If unset, the request is assumed to be non-streaming.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.reasoning.level": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.previous_response.id": {
+     "level": "recommended",
+     "condition": "When available and if the request references a previous response.",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.id": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.model": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.finish_reasons": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.time_to_first_chunk": {
+     "level": "recommended",
+     "condition": "If the request was a streaming request.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.reasoning.output_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.prompt.name": {
+     "level": "conditionally_required",
+     "condition": "when a named prompt template is used",
+     "sampling_relevant": false
+    },
+    "gen_ai.prompt.version": {
+     "level": "conditionally_required",
+     "condition": "when `gen_ai.prompt.name` is set and a version is available",
+     "sampling_relevant": false
+    },
+    "gen_ai.prompt.variable": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.conversation.id": {
+     "level": "conditionally_required",
+     "condition": "If and only if the instrumented library has one readily available, or the user application provides one through OpenTelemetry context or library-specific mechanisms.",
+     "sampling_relevant": false
+    },
+    "gen_ai.conversation.compacted": {
+     "level": "recommended",
+     "condition": "when available",
+     "sampling_relevant": false
+    },
+    "gen_ai.provider.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    }
+   }
+  },
+  "gen_ai.embeddings.client": {
+   "kind": "client",
+   "name_note": "**Span name** SHOULD be `{gen_ai.operation.name} {gen_ai.request.model}`.",
+   "stability": "development",
+   "attributes": {
+    "gen_ai.request.model": {
+     "level": "conditionally_required",
+     "condition": "If available.",
+     "sampling_relevant": true
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.address": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.port": {
+     "level": "conditionally_required",
+     "condition": "If `server.address` is set.",
+     "sampling_relevant": true
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.provider.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.request.encoding_formats": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.input_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.embeddings.dimension.count": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.model": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.retrieval.client": {
+   "kind": "client",
+   "name_note": "**Span name** SHOULD be `{gen_ai.operation.name} {gen_ai.data_source.id}`. Semantic conventions for individual GenAI providers and retrievers MAY specify different span name format.",
+   "stability": "development",
+   "attributes": {
+    "gen_ai.request.model": {
+     "level": "conditionally_required",
+     "condition": "If available.",
+     "sampling_relevant": false
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "server.address": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "server.port": {
+     "level": "conditionally_required",
+     "condition": "If `server.address` is set.",
+     "sampling_relevant": false
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.retrieval.query.text": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.retrieval.top_k": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.retrieval.documents": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.provider.name": {
+     "level": "conditionally_required",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.data_source.id": {
+     "level": "conditionally_required",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.fetch_response.client": {
+   "kind": "client",
+   "name_note": "**Span name** SHOULD be `{gen_ai.operation.name}`. The response identifier is high cardinality, so it is not included in the span name. Semantic conventions for individual GenAI providers MAY specify ",
+   "stability": "development",
+   "attributes": {
+    "server.address": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.port": {
+     "level": "conditionally_required",
+     "condition": "If `server.address` is set.",
+     "sampling_relevant": true
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.provider.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.response.id": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.stream_cursor": {
+     "level": "conditionally_required",
+     "condition": "When the fetch resumes a streamed response from a prior position.",
+     "sampling_relevant": false
+    },
+    "gen_ai.system_instructions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.definitions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.model": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.status": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.finish_reasons": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.memory.client": {
+   "kind": "client",
+   "name_note": "**Span name** SHOULD be `{gen_ai.operation.name}`.",
+   "stability": "development",
+   "attributes": {
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "server.address": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "server.port": {
+     "level": "conditionally_required",
+     "condition": "If `server.address` is set.",
+     "sampling_relevant": false
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.provider.name": {
+     "level": "conditionally_required",
+     "condition": "If the operation is handled by a named external GenAI provider or service.",
+     "sampling_relevant": false
+    },
+    "gen_ai.memory.store.id": {
+     "level": "conditionally_required",
+     "condition": "If applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.memory.record.id": {
+     "level": "conditionally_required",
+     "condition": "When the operation applies to a specific memory record.",
+     "sampling_relevant": false
+    },
+    "gen_ai.memory.record.count": {
+     "level": "recommended",
+     "condition": "If the operation involves memory records and the count is available.",
+     "sampling_relevant": false
+    },
+    "gen_ai.memory.query.text": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.memory.records": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.create_agent.client": {
+   "kind": "client",
+   "name_note": "**Span name** SHOULD be `create_agent {gen_ai.agent.name}`. Semantic conventions for individual GenAI systems and frameworks MAY specify different span name format.",
+   "stability": "development",
+   "attributes": {
+    "gen_ai.request.model": {
+     "level": "conditionally_required",
+     "condition": "If available.",
+     "sampling_relevant": true
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.address": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.port": {
+     "level": "conditionally_required",
+     "condition": "If `server.address` is set.",
+     "sampling_relevant": true
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.provider.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.agent.id": {
+     "level": "conditionally_required",
+     "condition": "If applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.name": {
+     "level": "conditionally_required",
+     "condition": "If provided by the application.",
+     "sampling_relevant": true
+    },
+    "gen_ai.agent.description": {
+     "level": "conditionally_required",
+     "condition": "If provided by the application.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.version": {
+     "level": "conditionally_required",
+     "condition": "If provided by the application.",
+     "sampling_relevant": false
+    },
+    "gen_ai.system_instructions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.invoke_agent.client": {
+   "kind": "client",
+   "name_note": "**Span name** SHOULD be `invoke_agent {gen_ai.agent.name}` if `gen_ai.agent.name` is readily available. When `gen_ai.agent.name` is not available, it SHOULD be `invoke_agent`. Semantic conventions for",
+   "stability": "development",
+   "attributes": {
+    "gen_ai.usage.input_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.output_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.system_instructions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.input.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.definitions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.name": {
+     "level": "conditionally_required",
+     "condition": "When available.",
+     "sampling_relevant": true
+    },
+    "gen_ai.request.model": {
+     "level": "recommended",
+     "condition": "If applicable.",
+     "sampling_relevant": true
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.request.max_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.choice.count": {
+     "level": "conditionally_required",
+     "condition": "If available, in the request, and !=1.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.temperature": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.top_p": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.stop_sequences": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.frequency_penalty": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.presence_penalty": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.seed": {
+     "level": "conditionally_required",
+     "condition": "If applicable and if the request includes a seed.",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.type": {
+     "level": "conditionally_required",
+     "condition": "When applicable and if the request includes an output format.",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.finish_reasons": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.conversation.id": {
+     "level": "conditionally_required",
+     "condition": "If and only if the instrumented library has one readily available, or the user application provides one through OpenTelemetry context or library-specific mechanisms.",
+     "sampling_relevant": false
+    },
+    "gen_ai.data_source.id": {
+     "level": "conditionally_required",
+     "condition": "If applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.description": {
+     "level": "conditionally_required",
+     "condition": "When available.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.text.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.image.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.audio.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.text.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.image.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.audio.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.text.output_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.image.output_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.audio.output_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.cache_read.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.cache_write.input_tokens": {
+     "level": "recommended",
+     "condition": "When applicable.",
+     "sampling_relevant": false
+    },
+    "server.address": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "server.port": {
+     "level": "conditionally_required",
+     "condition": "If `server.address` is set.",
+     "sampling_relevant": true
+    },
+    "gen_ai.provider.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.request.previous_response.id": {
+     "level": "recommended",
+     "condition": "When available and if the request references a previous response.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.id": {
+     "level": "conditionally_required",
+     "condition": "If applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.version": {
+     "level": "conditionally_required",
+     "condition": "When available.",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.invoke_agent.internal": {
+   "kind": "internal",
+   "name_note": "**Span name** SHOULD be `invoke_agent {gen_ai.agent.name}` if `gen_ai.agent.name` is readily available. When `gen_ai.agent.name` is not available, it SHOULD be `invoke_agent`. Semantic conventions for",
+   "stability": "development",
+   "attributes": {
+    "gen_ai.usage.input_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.usage.output_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.system_instructions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.input.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.definitions": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.name": {
+     "level": "conditionally_required",
+     "condition": "When available.",
+     "sampling_relevant": true
+    },
+    "gen_ai.request.model": {
+     "level": "recommended",
+     "condition": "If applicable.",
+     "sampling_relevant": true
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.request.max_tokens": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.choice.count": {
+     "level": "conditionally_required",
+     "condition": "If available, in the request, and !=1.",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.temperature": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.top_p": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.stop_sequences": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.frequency_penalty": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.presence_penalty": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.request.seed": {
+     "level": "conditionally_required",
+     "condition": "If applicable and if the request includes a seed.",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.type": {
+     "level": "conditionally_required",
+     "condition": "When applicable and if the request includes an output format.",
+     "sampling_relevant": false
+    },
+    "gen_ai.response.finish_reasons": {
+     "level": "recommended",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.conversation.id": {
+     "level": "conditionally_required",
+     "condition": "If and only if the instrumented library has one readily available, or the user application provides one through OpenTelemetry context or library-specific mechanisms.",
+     "sampling_relevant": false
+    },
+    "gen_ai.data_source.id": {
+     "level": "conditionally_required",
+     "condition": "If applicable.",
+     "sampling_relevant": false
+    },
+    "gen_ai.agent.description": {
+     "level": "conditionally_required",
+     "condition": "When available.",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.execute_tool.internal": {
+   "kind": "internal",
+   "name_note": "**Span name** SHOULD be `execute_tool {gen_ai.tool.name}`.",
+   "stability": "development",
+   "attributes": {
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.tool.type": {
+     "level": "recommended",
+     "condition": "If available.",
+     "sampling_relevant": true
+    },
+    "gen_ai.agent.name": {
+     "level": "conditionally_required",
+     "condition": "When applicable.",
+     "sampling_relevant": true
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.tool.call.id": {
+     "level": "recommended",
+     "condition": "If available.",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.description": {
+     "level": "recommended",
+     "condition": "If available.",
+     "sampling_relevant": false
+    },
+    "gen_ai.conversation.id": {
+     "level": "conditionally_required",
+     "condition": "If available.",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.call.arguments": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.tool.call.result": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.invoke_workflow.internal": {
+   "kind": "internal",
+   "name_note": "**Span name** SHOULD be `invoke_workflow {gen_ai.workflow.name}`.",
+   "stability": "development",
+   "attributes": {
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.workflow.name": {
+     "level": "conditionally_required",
+     "condition": "When available.",
+     "sampling_relevant": false
+    },
+    "gen_ai.conversation.id": {
+     "level": "conditionally_required",
+     "condition": "If and only if the instrumented library has one readily available, or the user application provides one through OpenTelemetry context or library-specific mechanisms.",
+     "sampling_relevant": false
+    },
+    "gen_ai.input.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    },
+    "gen_ai.output.messages": {
+     "level": "opt_in",
+     "condition": "",
+     "sampling_relevant": false
+    }
+   }
+  },
+  "gen_ai.plan.internal": {
+   "kind": "internal",
+   "name_note": "**Span name** SHOULD be `plan {gen_ai.agent.name}` if `gen_ai.agent.name` is readily available. When `gen_ai.agent.name` is not available, it SHOULD be `plan`.",
+   "stability": "development",
+   "attributes": {
+    "error.type": {
+     "level": "conditionally_required",
+     "condition": "If the operation ended in an error.",
+     "sampling_relevant": false
+    },
+    "gen_ai.operation.name": {
+     "level": "required",
+     "condition": "",
+     "sampling_relevant": true
+    },
+    "gen_ai.agent.name": {
+     "level": "conditionally_required",
+     "condition": "When available.",
+     "sampling_relevant": true
+    }
+   }
+  }
+ },
+ "metrics": {
+  "gen_ai.client.operation.duration": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.duration": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.time_to_first_chunk": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.time_per_output_chunk": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.server.request.duration": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.server.time_per_output_token": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.server.time_to_first_token": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.invoke_workflow.duration": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.invoke_agent.duration": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.invoke_agent.inference_calls": {
+   "instrument": "histogram",
+   "unit": "{inference_call}",
+   "stability": "development"
+  },
+  "gen_ai.invoke_agent.tool_calls": {
+   "instrument": "histogram",
+   "unit": "{tool_call}",
+   "stability": "development"
+  },
+  "gen_ai.execute_tool.duration": {
+   "instrument": "histogram",
+   "unit": "s",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.usage.input_tokens": {
+   "instrument": "counter",
+   "unit": "{token}",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.usage.output_tokens": {
+   "instrument": "counter",
+   "unit": "{token}",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.usage.cache_read.input_tokens": {
+   "instrument": "counter",
+   "unit": "{token}",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.usage.cache_write.input_tokens": {
+   "instrument": "counter",
+   "unit": "{token}",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.usage.reasoning.output_tokens": {
+   "instrument": "counter",
+   "unit": "{token}",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.operation.input_tokens": {
+   "instrument": "histogram",
+   "unit": "{token}",
+   "stability": "development"
+  },
+  "gen_ai.client.inference.operation.output_tokens": {
+   "instrument": "histogram",
+   "unit": "{token}",
+   "stability": "development"
+  }
+ },
+ "finish_reason_enum": [
+  "stop",
+  "length",
+  "content_filter",
+  "tool_call",
+  "compaction",
+  "error"
+ ]
+}

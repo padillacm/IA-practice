@@ -1,0 +1,532 @@
+[
+ {
+  "id": "l6_connected_speech",
+  "title": "Decode connected speech",
+  "instructions": "Write each sentence in full, standard English (as you would write it).",
+  "items": [
+   {
+    "q": "Whaddaya wanna do tonight?",
+    "a": [
+     "What do you want to do tonight?"
+    ]
+   },
+   {
+    "q": "I dunno, lemme think.",
+    "a": [
+     "I don't know, let me think."
+    ]
+   },
+   {
+    "q": "We shoulda left earlier.",
+    "a": [
+     "We should have left earlier."
+    ]
+   },
+   {
+    "q": "Ya gotta be kidding me.",
+    "a": [
+     "You have got to be kidding me.",
+     "You've got to be kidding me.",
+     "You have to be kidding me.",
+     "You've gotta be kidding me."
+    ]
+   },
+   {
+    "q": "I'm gonna grab a coffee. D'ya want one?",
+    "a": [
+     "I am going to grab a coffee. Do you want one?",
+     "I'm going to grab a coffee. Do you want one?"
+    ]
+   },
+   {
+    "q": "It's kinda weird, innit?",
+    "a": [
+     "It's kind of weird, isn't it?",
+     "It is kind of weird, is it not?"
+    ]
+   },
+   {
+    "q": "She musta forgotten.",
+    "a": [
+     "She must have forgotten."
+    ]
+   },
+   {
+    "q": "Didja see that?",
+    "a": [
+     "Did you see that?"
+    ]
+   },
+   {
+    "q": "Gimme a sec.",
+    "a": [
+     "Give me a second.",
+     "Give me a sec."
+    ]
+   },
+   {
+    "q": "I oughta call him.",
+    "a": [
+     "I ought to call him."
+    ]
+   },
+   {
+    "q": "Wouldja mind closing the window?",
+    "a": [
+     "Would you mind closing the window?"
+    ]
+   },
+   {
+    "q": "Where'dja get that jacket?",
+    "a": [
+     "Where did you get that jacket?"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_weak_strong",
+  "title": "Strong or weak form?",
+  "instructions": "Is the CAPITALISED word said in its strong form or its weak form (with /ə/)? Write strong or weak. Say each sentence aloud.",
+  "items": [
+   {
+    "q": "I CAN swim, but not very well.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "A: Can you swim?  B: Yes, I CAN.",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "What are you looking AT?",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "Meet me AT six.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "She WAS late again.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "A: Was she late?  B: Yes, she WAS.",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "Where are you FROM?",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "I'm FROM Seville.",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "Would you like SOME tea?",
+    "a": [
+     "weak"
+    ]
+   },
+   {
+    "q": "SOME people just never learn. (= certain people)",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "It's not FOR you, it's from you.",
+    "a": [
+     "strong"
+    ]
+   },
+   {
+    "q": "She's taller THAN me.",
+    "a": [
+     "weak"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_micro",
+  "title": "Micro-dictations",
+  "instructions": "Type each sentence you heard with micro(1) ... micro(10).",
+  "items": [
+   {
+    "q": "micro(1)",
+    "a": [
+     "I'd have told you if I'd known.",
+     "I would have told you if I had known."
+    ]
+   },
+   {
+    "q": "micro(2)",
+    "a": [
+     "What are you going to do about it?"
+    ]
+   },
+   {
+    "q": "micro(3)",
+    "a": [
+     "There's a lot of work to do before the end of the week."
+    ]
+   },
+   {
+    "q": "micro(4)",
+    "a": [
+     "Could you give him a call and ask him to come in?"
+    ]
+   },
+   {
+    "q": "micro(5)",
+    "a": [
+     "I was hoping we could have a chat about it."
+    ]
+   },
+   {
+    "q": "micro(6)",
+    "a": [
+     "Some of them have already left for the airport."
+    ]
+   },
+   {
+    "q": "micro(7)",
+    "a": [
+     "She must have been waiting for ages."
+    ]
+   },
+   {
+    "q": "micro(8)",
+    "a": [
+     "It's not as bad as it looks."
+    ]
+   },
+   {
+    "q": "micro(9)",
+    "a": [
+     "He can't have seen it, or he'd have said something.",
+     "He cannot have seen it, or he would have said something."
+    ]
+   },
+   {
+    "q": "micro(10)",
+    "a": [
+     "We've been meaning to get in touch with them for a while."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage1",
+  "title": "Passage 1 - A voicemail from your manager",
+  "instructions": "Listen to passage 1 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "Why is Laura calling?",
+    "options": [
+     "to tell you the client has rejected your timeline",
+     "to express doubts about the proposed schedule",
+     "to ask you to hand the Henderson project over to Daniel"
+    ],
+    "a": [
+     "b",
+     "to express doubts about the proposed schedule",
+     "b) to express doubts about the proposed schedule"
+    ]
+   },
+   {
+    "q": "What does Laura really think about the timeline?",
+    "options": [
+     "It is more cautious than she expected.",
+     "It is achievable only if Daniel joins the team.",
+     "It is too ambitious as it stands."
+    ],
+    "why": "'More optimistic than I'd expected' + 'I'm not saying it can't be done, but...' = polite doubt.",
+    "a": [
+     "c",
+     "It is too ambitious as it stands.",
+     "c) It is too ambitious as it stands."
+    ]
+   },
+   {
+    "q": "What does she suggest?",
+    "options": [
+     "letting Daniel negotiate the deadline with the client",
+     "allowing extra time before making a commitment to the client",
+     "committing to the client now and adjusting the plan later"
+    ],
+    "a": [
+     "b",
+     "allowing extra time before making a commitment to the client",
+     "b) allowing extra time before making a commitment to the client"
+    ]
+   },
+   {
+    "q": "What does she imply about the client?",
+    "options": [
+     "They were unhappy with Daniel's work last year.",
+     "They can be difficult to work with.",
+     "They are likely to demand a shorter deadline."
+    ],
+    "why": "'Let's just say they weren't the easiest people to work with' = understatement.",
+    "a": [
+     "b",
+     "They can be difficult to work with.",
+     "b) They can be difficult to work with."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage2",
+  "title": "Passage 2 - Remote work: a mixed picture",
+  "instructions": "Listen to passage 2 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "What is the speaker's main point?",
+    "options": [
+     "Remote work has been a disaster for most companies.",
+     "The value of remote work depends on the type of task.",
+     "Offices will soon disappear completely."
+    ],
+    "a": [
+     "b",
+     "The value of remote work depends on the type of task.",
+     "b) The value of remote work depends on the type of task."
+    ]
+   },
+   {
+    "q": "How does the speaker feel about extreme views on remote work?",
+    "options": [
+     "reluctant to give any opinion of their own",
+     "critical - the evidence doesn't support them",
+     "sympathetic to the view that remote work has been a disaster"
+    ],
+    "a": [
+     "b",
+     "critical - the evidence doesn't support them",
+     "b) critical - the evidence doesn't support them"
+    ]
+   },
+   {
+    "q": "Which activity does the speaker say suffers when people work remotely?",
+    "options": [
+     "meetings with clients",
+     "tasks that need deep concentration",
+     "training junior staff"
+    ],
+    "a": [
+     "c",
+     "training junior staff",
+     "c) training junior staff"
+    ]
+   },
+   {
+    "q": "What does the speaker recommend?",
+    "options": [
+     "letting each employee decide freely",
+     "organising the working week around the needs of different tasks",
+     "returning to the office full time"
+    ],
+    "a": [
+     "b",
+     "organising the working week around the needs of different tasks",
+     "b) organising the working week around the needs of different tasks"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage3",
+  "title": "Passage 3 - Why we forget (lecture)",
+  "instructions": "Listen to passage 3 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "What did Ebbinghaus use in his experiments?",
+    "options": [
+     "lists of nonsense syllables",
+     "photographs of faces",
+     "lists of foreign words"
+    ],
+    "a": [
+     "a",
+     "lists of nonsense syllables",
+     "a) lists of nonsense syllables"
+    ]
+   },
+   {
+    "q": "According to the speaker, when do we forget new information fastest?",
+    "options": [
+     "within the first day or so",
+     "after about a week",
+     "after about a month"
+    ],
+    "a": [
+     "a",
+     "within the first day or so",
+     "a) within the first day or so"
+    ]
+   },
+   {
+    "q": "What does the speaker say about cramming?",
+    "options": [
+     "It creates a false, short-lived feeling of having learned something.",
+     "It is the most efficient way to prepare for exams.",
+     "It works well as long as you review again the following week."
+    ],
+    "a": [
+     "a",
+     "It creates a false, short-lived feeling of having learned something.",
+     "a) It creates a false, short-lived feeling of having learned something."
+    ]
+   },
+   {
+    "q": "Why, according to the speaker, does spaced repetition work?",
+    "options": [
+     "It is easier and more relaxing than cramming.",
+     "The effort of recalling information strengthens the memory.",
+     "It lets you study more material in less time."
+    ],
+    "a": [
+     "b",
+     "The effort of recalling information strengthens the memory.",
+     "b) The effort of recalling information strengthens the memory."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage4",
+  "title": "Passage 4 - News report: the four-day week",
+  "instructions": "Listen to passage 4 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "What was the main finding of the trial?",
+    "options": [
+     "Productivity fell sharply in most companies.",
+     "Most companies kept the four-day week afterwards.",
+     "Most employees wanted to return to five days."
+    ],
+    "a": [
+     "b",
+     "Most companies kept the four-day week afterwards.",
+     "b) Most companies kept the four-day week afterwards."
+    ]
+   },
+   {
+    "q": "Why does the reporter mention the critics?",
+    "options": [
+     "to show that the results were fake",
+     "to point out that the companies may not be typical",
+     "to explain why the trial was cancelled"
+    ],
+    "a": [
+     "b",
+     "to point out that the companies may not be typical",
+     "b) to point out that the companies may not be typical"
+    ]
+   },
+   {
+    "q": "What is the reporter's attitude to the results?",
+    "options": [
+     "cautiously positive",
+     "convinced the model will work across the whole economy",
+     "broadly sceptical - the results are probably misleading"
+    ],
+    "a": [
+     "a",
+     "cautiously positive",
+     "a) cautiously positive"
+    ]
+   },
+   {
+    "q": "What does 'the jury is still out' mean here?",
+    "options": [
+     "The experts have rejected the idea.",
+     "No final conclusion has been reached yet.",
+     "The case is going to court."
+    ],
+    "a": [
+     "b",
+     "No final conclusion has been reached yet.",
+     "b) No final conclusion has been reached yet."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "l6_passage5",
+  "title": "Passage 5 - Planning the team away-day (irony and tone)",
+  "instructions": "Listen to passage 5 twice, then choose the best answer.",
+  "items": [
+   {
+    "q": "How does B feel about the paintballing plan?",
+    "options": [
+     "genuinely excited",
+     "unenthusiastic, although B doesn't say so directly",
+     "worried about getting hurt"
+    ],
+    "a": [
+     "b",
+     "unenthusiastic, although B doesn't say so directly",
+     "b) unenthusiastic, although B doesn't say so directly"
+    ]
+   },
+   {
+    "q": "What does B imply about the last away-day?",
+    "options": [
+     "It didn't achieve much.",
+     "It was too expensive.",
+     "It was cancelled at the last minute."
+    ],
+    "a": [
+     "a",
+     "It didn't achieve much.",
+     "a) It didn't achieve much."
+    ]
+   },
+   {
+    "q": "Why might B hesitate to make a suggestion to Karen?",
+    "options": [
+     "B could end up with extra work.",
+     "B doesn't know Karen well.",
+     "Karen doesn't like new ideas."
+    ],
+    "a": [
+     "a",
+     "B could end up with extra work.",
+     "a) B could end up with extra work."
+    ]
+   },
+   {
+    "q": "In B's first turn, 'Brilliant' is...",
+    "options": [
+     "ironic",
+     "a question",
+     "sincere"
+    ],
+    "a": [
+     "a",
+     "ironic",
+     "a) ironic"
+    ]
+   }
+  ]
+ }
+]

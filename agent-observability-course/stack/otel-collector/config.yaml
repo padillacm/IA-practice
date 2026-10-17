@@ -1,0 +1,69 @@
+# OpenTelemetry Collector (distribución contrib) · pipeline "gateway" del curso.
+# Validar:  docker compose --profile core run --rm --no-deps otel-collector validate --config=/etc/otelcol-contrib/config.yaml
+# (en el contenedor la ruta es /etc/otelcol-contrib/config.yaml; ver docker-compose.yml)
+
+receivers:
+  otlp:                       # recibe OTLP de las aplicaciones (SDK de OpenTelemetry)
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:             # SIEMPRE el primero: protege al Collector de quedarse sin memoria
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+  batch:                      # agrupa señales antes de exportar (menos peticiones, mejor compresión)
+    timeout: 1s
+    send_batch_size: 512
+  resource/lab:               # etiqueta de entorno común a toda la telemetría del laboratorio
+    attributes:
+      - key: deployment.environment.name
+        value: lab
+        action: upsert
+
+exporters:
+  otlp_grpc/tempo:            # trazas -> Tempo (OTLP/gRPC dentro de la red de Compose)
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  otlp_http/loki:             # logs -> Loki (endpoint OTLP nativo de Loki: añade /v1/logs)
+    endpoint: http://loki:3100/otlp
+  prometheus:                 # métricas -> endpoint que Prometheus raspa (perfil "metrics")
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true           # copia atributos de resource (service.name...) a labels
+    enable_open_metrics: true # necesario para exponer exemplars
+  debug:                      # imprime un resumen en los logs del Collector (útil al depurar)
+    verbosity: basic
+
+extensions:
+  health_check:               # GET :13133/ -> 200 si el Collector está sano
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/lab, batch]
+      exporters: [otlp_grpc/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/lab, batch]
+      exporters: [otlp_http/loki]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/lab, batch]
+      exporters: [prometheus]
+  telemetry:                  # métricas internas del propio Collector, expuestas en :8888
+    metrics:
+      level: normal
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888

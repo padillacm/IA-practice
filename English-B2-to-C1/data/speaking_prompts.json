@@ -1,0 +1,452 @@
+[
+ {
+  "kind": "long turn",
+  "prompt": "Talk about a decision that changed the direction of your life. What would be different now if you had decided otherwise?",
+  "hints": [
+   "mixed conditionals",
+   "Looking back, ...",
+   "If I hadn't..., I wouldn't be..."
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Describe a skill you learnt as an adult. How did you learn it, and what made it difficult?",
+  "hints": [
+   "a steep learning curve",
+   "It wasn't until... that...",
+   "get the hang of"
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Talk about a place that is important to you and explain why.",
+  "hints": [
+   "What I love most about it is...",
+   "vivid memories",
+   "it holds a special place"
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Describe a time when you had to deal with a difficult person. How did you handle it?",
+  "hints": [
+   "What I did was...",
+   "keep my cool / not lose my temper",
+   "In hindsight, I should have..."
+  ]
+ },
+ {
+  "kind": "long turn",
+  "prompt": "Talk about a book, film or series that changed the way you think about something.",
+  "hints": [
+   "It made me realise...",
+   "thought-provoking",
+   "What struck me most was..."
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Should social media platforms be legally responsible for the content their users post?",
+  "hints": [
+   "It could be argued that...",
+   "hold someone accountable",
+   "strike a balance"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Is it better to be a specialist or a generalist in today's job market?",
+  "hints": [
+   "On the one hand... on the other...",
+   "in the long run",
+   "That said, ..."
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Will artificial intelligence make work more meaningful or less meaningful?",
+  "hints": [
+   "I'd argue that...",
+   "far-reaching consequences",
+   "It's not so much... as..."
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Should university education be free for everyone?",
+  "hints": [
+   "There's a strong case for...",
+   "bear the cost",
+   "widen access"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Are cities becoming better or worse places to live?",
+  "hints": [
+   "By far the biggest problem is...",
+   "affordable housing",
+   "quality of life"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Is tourism doing more harm than good in popular destinations?",
+  "hints": [
+   "overtourism",
+   "do more harm than good",
+   "local residents are priced out"
+  ]
+ },
+ {
+  "kind": "opinion",
+  "prompt": "Should people be allowed to work fully remotely if they want to?",
+  "hints": [
+   "It depends largely on...",
+   "work-life balance",
+   "Having said that, ..."
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "Your company can fund only ONE: a gym for employees, a four-day week pilot, or a training budget. Argue for one and against the other two.",
+  "hints": [
+   "The last thing we need is...",
+   "value for money",
+   "I'm not sure I'd go that far"
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "A friend says learning languages is pointless now that translation apps exist. Respond.",
+  "hints": [
+   "I see where you're coming from, but...",
+   "get lost in translation",
+   "There's more to it than..."
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "Your city wants to ban cars from the centre. Present both sides, then give your view.",
+  "hints": [
+   "Supporters argue that... whereas critics...",
+   "On balance, ...",
+   "a knock-on effect (AmE: a ripple effect)"
+  ]
+ },
+ {
+  "kind": "discussion",
+  "prompt": "Should children be allowed to have smartphones before the age of 14?",
+  "hints": [
+   "There's growing evidence that...",
+   "screen time",
+   "There's no easy answer"
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell the story of a trip where things went wrong - and how it ended.",
+  "hints": [
+   "No sooner had we... than...",
+   "Little did we know...",
+   "as it turned out"
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell the story of the best or worst job you've ever had.",
+  "hints": [
+   "It was the first time I'd ever...",
+   "Looking back, ...",
+   "I must have..."
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell a story about a misunderstanding caused by language or culture.",
+  "hints": [
+   "What happened was...",
+   "I couldn't have been more embarrassed",
+   "to get the wrong end of the stick"
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Tell the story of how you met one of your closest friends.",
+  "hints": [
+   "We hit it off",
+   "I'd never have guessed that...",
+   "Had I not gone to..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Present your current project to a new colleague in 2 minutes: goal, status, next steps, risks.",
+  "hints": [
+   "We're on track to...",
+   "The main risk is...",
+   "keep you in the loop"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Politely push back on a deadline your manager has set.",
+  "hints": [
+   "I'm a bit concerned that...",
+   "Would it be possible to...?",
+   "realistic timeline"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Give feedback to a colleague whose work has had several mistakes recently.",
+  "hints": [
+   "I've noticed that...",
+   "It might be worth...",
+   "How can I help?"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Explain a complex process from your job to someone who knows nothing about it.",
+  "hints": [
+   "Basically, what happens is...",
+   "In other words, ...",
+   "The key thing to bear in mind is..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "You're in a job interview. Answer: 'What's your biggest weakness?'",
+  "hints": [
+   "I tend to...",
+   "I've been working on...",
+   "What I've learnt is..."
+  ]
+ },
+ {
+  "kind": "describe",
+  "prompt": "Describe a photograph or painting you like in detail, then speculate about the story behind it.",
+  "hints": [
+   "It looks as if...",
+   "They must have...",
+   "I'd imagine that..."
+  ]
+ },
+ {
+  "kind": "describe",
+  "prompt": "Describe how your city has changed over the last ten years.",
+  "hints": [
+   "There has been a sharp increase in...",
+   "is said to be",
+   "barely recognisable"
+  ]
+ },
+ {
+  "kind": "describe",
+  "prompt": "Describe your ideal working day in five years' time.",
+  "hints": [
+   "What I'd really like is...",
+   "Ideally, ...",
+   "strike a balance between"
+  ]
+ },
+ {
+  "kind": "mediation",
+  "prompt": "Listen to passage 3 (listen(3)) once, then explain the idea of spaced repetition to a friend who has an exam next week, in your own words (2 minutes).",
+  "hints": [
+   "The basic idea is that...",
+   "In practical terms, this means...",
+   "counter-intuitive"
+  ]
+ },
+ {
+  "kind": "mediation",
+  "prompt": "Listen to passage 4 (listen(4)) and summarise the four-day-week report for your manager in 60 seconds, then say whether your company should try it.",
+  "hints": [
+   "The headline finding was...",
+   "One caveat is that...",
+   "the jury is still out"
+  ]
+ },
+ {
+  "kind": "mediation",
+  "prompt": "Summarise the last podcast episode you listened to for a colleague who has no time to hear it (90 seconds).",
+  "hints": [
+   "It's essentially about...",
+   "The key takeaway is...",
+   "What I found most interesting was..."
+  ]
+ },
+ {
+  "kind": "abstract",
+  "prompt": "Is it ever right to break a rule? Build an argument using at least one concrete example.",
+  "hints": [
+   "It all hinges on...",
+   "a slippery slope",
+   "Where I'd draw the line is..."
+  ]
+ },
+ {
+  "kind": "abstract",
+  "prompt": "What would the world be like if nobody could lie?",
+  "hints": [
+   "Presumably, ...",
+   "it would do away with...",
+   "Were that the case, ..."
+  ]
+ },
+ {
+  "kind": "compare",
+  "prompt": "Compare how people in your country and in an English-speaking country you know deal with time, punctuality and deadlines.",
+  "hints": [
+   "whereas",
+   "tend to be more laid-back about",
+   "a far cry from"
+  ]
+ },
+ {
+  "kind": "negotiation",
+  "prompt": "You are selling your car; the buyer offers 20% less than you want. Negotiate and reach a deal.",
+  "hints": [
+   "meet you halfway",
+   "That's my final offer",
+   "I could stretch to..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Handle this question after a presentation: 'Aren't your figures a bit optimistic?'",
+  "hints": [
+   "That's a fair challenge",
+   "to put it into context",
+   "If anything, ..."
+  ]
+ },
+ {
+  "kind": "storytelling",
+  "prompt": "Retell the plot of a film you know well, from the point of view of a minor character.",
+  "hints": [
+   "Unbeknownst to...",
+   "It later emerged that...",
+   "had it not been for..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Give a 60-second stand-up update: what you did yesterday, what you're doing today, any blockers.",
+  "hints": [
+   "I'm on track with...",
+   "I'm blocked on...",
+   "I'll need input from..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Explain to a client that their project will be two weeks late, and propose a solution.",
+  "hints": [
+   "I'm afraid we've run into...",
+   "What we can do is...",
+   "to minimise the impact"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "A senior stakeholder proposes something you think is a mistake. Disagree respectfully on a video call.",
+  "hints": [
+   "I can see the logic, but...",
+   "My concern is that...",
+   "Could we look at...?"
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Make small talk for two minutes before an international call starts.",
+  "hints": [
+   "How's your week going?",
+   "Where are you based?",
+   "I hear it's been..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Say no to an extra task from your manager without sounding unhelpful.",
+  "hints": [
+   "I don't have the bandwidth...",
+   "What would you like me to deprioritise?",
+   "I could take it on from..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Admit a mistake you made that affected a colleague, and explain how you'll fix it.",
+  "hints": [
+   "I dropped the ball on...",
+   "To put it right, I'll...",
+   "Going forward, ..."
+  ]
+ },
+ {
+  "kind": "workplace",
+  "prompt": "Introduce yourself and your role at the start of a kick-off meeting with a new international team.",
+  "hints": [
+   "I'm based in...",
+   "I look after...",
+   "I'll be your main point of contact for..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Negotiate a deadline with a manager who keeps interrupting you. Hold the floor and reach an agreement.",
+  "hints": [
+   "Sorry, if I could just finish...",
+   "As I was saying, ...",
+   "Would it work if...?"
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Your partner strongly disagrees with you about remote work. Concede one point, defend another, and ask two follow-up questions.",
+  "hints": [
+   "That's a fair point, but...",
+   "I take your point, although...",
+   "What makes you say that?"
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Plan a weekend trip together. Your partner keeps changing the topic - bring it back each time.",
+  "hints": [
+   "Anyway, getting back to...",
+   "Coming back to the plan...",
+   "Fair enough, but..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Complain about a faulty product to a customer service agent who isn't very helpful.",
+  "hints": [
+   "I'm afraid that's not good enough",
+   "I'd like to speak to...",
+   "What I'd expect is..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Interview your partner about their job for 5 minutes. Use backchannels and follow-up questions.",
+  "hints": [
+   "Really? How come?",
+   "That must be...",
+   "So what you're saying is..."
+  ]
+ },
+ {
+  "kind": "interaction",
+  "prompt": "(With a partner or AI) Discuss and agree on the three most important skills for the next ten years.",
+  "hints": [
+   "I'd put ... at the top",
+   "Would you agree that...?",
+   "Let's go with..."
+  ]
+ }
+]

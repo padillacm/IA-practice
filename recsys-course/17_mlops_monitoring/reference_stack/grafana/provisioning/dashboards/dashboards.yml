@@ -1,0 +1,3 @@
+apiVersion: 1
+providers:
+  - {name: cinematch, folder: CineMatch, type: file, options: {path: /var/lib/grafana/dashboards}}

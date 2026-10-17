@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supportops"
+version = "0.1.0"
+description = "SupportOps: agente de soporte simulado, simulador de tráfico e inyector de fallos para el curso de observabilidad de agentes."
+readme = "supportops/README.md"
+requires-python = ">=3.10"
+dependencies = []            # el núcleo usa solo la librería estándar
+
+[project.optional-dependencies]
+viz = ["matplotlib>=3.7", "numpy>=1.24", "pandas>=2.0", "pyyaml", "jinja2"]   # jinja2: DataFrame.style (módulos 20, 21)
+nb = ["matplotlib>=3.7", "numpy>=1.24", "pandas>=2.0", "pyyaml", "jinja2", "ipykernel", "nbformat", "nbclient"]
+anthropic = ["anthropic>=0.40"]
+openai = ["openai>=1.50"]
+otel = ["opentelemetry-sdk>=1.39", "opentelemetry-exporter-otlp-proto-http>=1.39"]   # >=1.39: Logger.emit con argumentos nombrados (supportops.telemetry)
+mcp = ["mcp>=2,<3"]            # módulo 12 (servidor/cliente MCP; probado con 2.2.0 y 2.3.0) y supportops.mcp_orders
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["supportops", "supportops.llm"]
+
+[tool.setuptools.package-data]
+supportops = ["data/*.jsonl", "data/*.json", "README.md"]

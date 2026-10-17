@@ -1,0 +1,10 @@
+image:
+  repository: prom/prometheus
+  tag: v3.15.0
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
+  limits: {memory: 512Mi}
+retention: 2d
+# Se raspa la telemetría interna de las réplicas del gateway por DNS (Service headless: una A por pod)
+scrapeGatewayHost: otel-gateway-headless.observability.svc.cluster.local
+scrapeGatewayPort: 8888

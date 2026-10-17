@@ -1,0 +1,489 @@
+#%%md
+# P1 · Instrumentar el agente de soporte
+
+**Módulo 1 · Proyecto** — *tiempo estimado: 90 minutos* — *consumo: ~5 trazas en modo en línea*
+
+Los cinco notebooks anteriores enseñan piezas. Este las junta sobre una aplicación de
+verdad: **el agente de soporte del curso de LangGraph**, el mismo que allí se despliega
+en los notebooks 18 a 30.
+
+No es un ejercicio de laboratorio. El agente tiene un `ToolNode`, consulta los 400
+tickets etiquetados de verdad, y su código no se toca: **se instrumenta desde fuera**,
+que es la situación en la que te vas a encontrar siempre.
+
+Al terminar tendrás:
+
+1. El agente **auditado**: qué se traza solo y qué se pierde.
+2. Los tres agujeros tapados, con las decisiones justificadas.
+3. Una **política de privacidad** escrita, probada y aplicada.
+4. Un **cuadro de mando local** que responde, solo con la traza, cinco preguntas que
+   sin ella son adivinar.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import (init, online, cliente, traza_local, servicio_simulado,
+                         separador, agente_de_soporte, ModeloGuionizado)
+from langsmith import traceable
+
+init(silencioso=True)
+print("listo")
+
+#%%md
+## 1. La aplicación
+
+El agente vive en `../langgraph/despliegue/mi_agente/`. Su forma es la de cualquier
+agente de herramientas:
+
+```
+START -> pensar -> ¿pide herramientas?
+                     sí -> herramientas -> pensar (bucle)
+                     no -> END
+```
+
+`agente_de_soporte()` lo importa con un modelo guionizado, para que este notebook no
+necesite clave ni gaste dinero. El guion decide qué pide el modelo en cada turno.
+
+> **Detalle de importación que merece la pena conocer**, porque te va a pasar con
+> cualquier código ajeno: `grafo.py` escribe `from langchain.chat_models import
+> init_chat_model` al importarse, así que el nombre queda enlazado a la función real.
+> Parchear el módulo *después* no sirve de nada. Hay que hacerlo antes del primer
+> import, y por eso el ayudante existe.
+
+#%%py
+from langchain_core.messages import HumanMessage
+
+agente, modelo = agente_de_soporte([
+    ("contar_tickets", {"categoria": "facturacion", "prioridad": "alta"}),
+    "Hay 23 tickets de facturación con prioridad alta.",
+])
+
+with traza_local() as t:
+    resultado = agente.invoke(
+        {"messages": [HumanMessage("¿cuántos tickets de facturación urgentes hay?")]}
+    )
+
+print("respuesta:", resultado["messages"][-1].text)
+print()
+t.dibujar()
+
+#%%md
+## 2. Auditoría: qué sale gratis y qué no
+
+Antes de tocar nada, medir. Todo eso de arriba salió **sin escribir un solo decorador**:
+LangGraph se instrumenta solo (notebook 02).
+
+La pregunta es qué falta.
+
+#%%py
+separador("lo que la traza sabe hoy")
+
+tipos = {}
+for _, run in t.recorrer():
+    tipos[run.run_type] = tipos.get(run.run_type, 0) + 1
+print("runs por tipo:", tipos)
+
+raiz = t.principales[0]
+print("nombre de la raíz  :", raiz.name)
+print("metadatos de negocio:", {k: v for k, v in raiz.extra["metadata"].items()
+                                if not k.startswith(("ls_", "langgraph_", "LANG", "revision"))}
+      or "— ninguno —")
+print("etiquetas          :", raiz.tags or "— ninguna —")
+
+tokens = sum(
+    (run.outputs or {}).get("generations", [[{}]])[0][0]
+    .get("message", {}).get("kwargs", {}).get("usage_metadata", {}).get("total_tokens", 0)
+    for _, run in t.recorrer() if run.run_type == "llm"
+)
+print("tokens contabilizados:", tokens)
+
+#%%md
+El diagnóstico, y son los tres agujeros de siempre:
+
+| Lo que hay | Lo que falta |
+|---|---|
+| La jerarquía y los tiempos | **Metadatos de negocio**: qué cliente, qué plan, qué versión |
+| Los `run_type` correctos, con tokens | **Un nombre útil en la raíz**: se llama `LangGraph`, como las otras mil |
+| Las herramientas, con sus entradas | **El hilo**: sin `thread_id` cada turno es una isla |
+
+Y uno que la tabla no ve: **el agente manda los mensajes del usuario tal cual**, con lo
+que traigan dentro (notebook 05).
+
+#%%md
+## 3. Tapando los tres agujeros, sin tocar el agente
+
+La regla del notebook 02: todo esto se pone **en el punto de entrada**, una vez, y baja
+solo. Escribimos ese punto de entrada.
+
+Pero antes, una trampa que me costó una hora al escribir este proyecto y que no está en
+ninguna guía, porque solo aparece cuando juntas las dos herramientas:
+
+> **`langsmith_extra` NO funciona sobre `invoke()` de un grafo.** Es un mecanismo de
+> `@traceable`, y un grafo de LangGraph es un `Runnable`, que se instrumenta por el
+> camino de los *callbacks* (notebook 02, apartado 1). Ahí los metadatos, las etiquetas
+> y el nombre van en el **`config`**, con las claves `metadata`, `tags` y `run_name`.
+
+Y como ya sospecharás a estas alturas: **no da ningún error**. `invoke()` acepta el
+`langsmith_extra`, lo ignora, y la traza sale sin metadatos. Es la sexta trampa
+silenciosa del módulo, y la peor de todas, porque el código *parece* el del notebook 02.
+
+| Si instrumentas… | Los metadatos van en |
+|---|---|
+| Una función con `@traceable` | `langsmith_extra={"metadata": ..., "tags": ..., "name": ...}` |
+| Un `Runnable`: grafo, cadena, modelo | `config={"metadata": ..., "tags": ..., "run_name": ...}` |
+
+Ojo también al nombre de la clave: `name` en uno, **`run_name`** en el otro. Justo al
+revés de lo que uno recordaría.
+
+#%%py
+def atender(peticion: dict, *, version_prompt: str = "v3"):
+    """El único sitio del sistema que decide qué lleva la traza.
+
+    El agente no sabe que existe. Se puede cambiar la política entera aquí sin tocar
+    `mi_agente/`, que es exactamente lo que quieres cuando el código es de otro equipo.
+    """
+    return agente.invoke(
+        {"messages": [HumanMessage(peticion["mensaje"])]},
+        {
+            "configurable": {"thread_id": peticion["conversacion"]},  # -> hilo (nb 04)
+            "run_name": f"soporte:{peticion['id_ticket']}",           # -> legible (nb 02)
+            "tags": ["produccion", f"plan-{peticion['plan']}"],
+            "metadata": {
+                "cliente": peticion["cliente"],
+                "plan": peticion["plan"],
+                "categoria": peticion["categoria"],
+                "version_prompt": version_prompt,
+            },
+        },
+    )
+
+
+PETICION = {
+    "id_ticket": "TCK-0001", "cliente": "acme", "plan": "free",
+    "categoria": "facturacion", "conversacion": "conv-8891",
+    "mensaje": "¿cuántos tickets de facturación urgentes hay?",
+}
+
+modelo.turno = 0
+with traza_local() as t:
+    atender(PETICION)
+
+raiz = t.principales[0]
+print("nombre     :", raiz.name)
+print("etiquetas  :", raiz.tags)
+print("metadatos  :", {k: v for k, v in raiz.extra["metadata"].items()
+                       if k in {"cliente", "plan", "categoria", "version_prompt", "thread_id"}})
+print()
+print("y baja a todo el árbol:")
+for profundidad, run in t.recorrer():
+    meta = run.extra["metadata"]
+    print(f"  {'  ' * profundidad}{run.name:<22} cliente={meta.get('cliente')} "
+          f"hilo={meta.get('thread_id')}")
+
+#%%md
+Ahí está: el `thread_id` de LangGraph llega solo desde `configurable` (notebook 04), y
+los metadatos de negocio bajan desde la raíz a las herramientas.
+
+Con esto ya se puede preguntar «enséñame todo lo que le ha pasado al cliente acme con el
+prompt v3», que es la pregunta que no se podía hacer hace dos celdas.
+
+#%%md
+## 4. La política de privacidad, escrita y probada
+
+El agente recibe mensajes de personas. Vamos a ver qué sale, con el servicio simulado
+del notebook 03.
+
+#%%py
+import re
+from langsmith.anonymizer import DEFAULT_SECRET_RULES, StringNodeRule, create_anonymizer
+
+# Orden: de más específica a más general (notebook 05).
+REGLAS = list(DEFAULT_SECRET_RULES) + [
+    StringNodeRule(pattern=re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), replace="[correo]"),
+    StringNodeRule(pattern=re.compile(r"\bES\d{2}[ ]?(?:\d{4}[ ]?){5}\b"), replace="[iban]"),
+    StringNodeRule(pattern=re.compile(r"\b(?:\d[ -]*?){13,16}\b"), replace="[tarjeta]"),
+    StringNodeRule(pattern=re.compile(r"\b\d{8}[A-HJ-NP-TV-Z]\b"), replace="[dni]"),
+    StringNodeRule(pattern=re.compile(r"\b(?:\+34[ -]?)?[6-9]\d{8}\b"), replace="[telefono]"),
+]
+ANONIMIZADOR = create_anonymizer(REGLAS)
+
+# Una prueba por regla, con un ejemplo que DEBE cambiar. Es lo que pide el notebook 05,
+# y lo que hace que una política sea una política y no una intención.
+EJEMPLOS = {
+    "correo":   "ana.perez@acme.com",
+    "iban":     "ES91 2100 0418 4502 0005 1332",
+    "tarjeta":  "4111 1111 1111 1111",
+    "dni":      "12345678Z",
+    "telefono": "611223344",
+    "clave":    "sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGh",
+}
+for etiqueta, ejemplo in EJEMPLOS.items():
+    resultado = create_anonymizer(REGLAS)({"t": f"dato: {ejemplo}"})["t"]
+    estado = "ok" if ejemplo not in resultado else "NO LA CAZA"
+    print(f"  {etiqueta:<10} {estado:<12} {resultado}")
+
+#%%py
+MENSAJE_REAL = ("Soy Ana Pérez (DNI 12345678Z), tel 611223344. Me habéis cobrado dos "
+                "veces en la 4111 1111 1111 1111. Escribidme a ana.perez@acme.com")
+
+modelo.turno = 0
+with servicio_simulado(anonymizer=ANONIMIZADOR) as servicio:
+    with servicio.trazando():
+        atender({**PETICION, "mensaje": MENSAJE_REAL})
+    servicio.cliente.flush()
+
+separador("lo que llegó al servidor")
+for run in servicio.recibidos:
+    entradas = str(run.get("inputs", {}))
+    if "Ana" in entradas or "correo" in entradas:
+        print(f"  {run['name']}: {entradas[:180]}")
+
+#%%md
+El DNI, el teléfono, la tarjeta y el correo se quedaron en casa. El nombre no —ya
+sabemos por qué (notebook 05): un nombre propio no tiene forma reconocible.
+
+**Esa es la decisión que hay que tomar y dejar escrita**, no esconder:
+
+> Con reglas de patrones se tapa lo que tiene formato. Los nombres propios necesitan un
+> detector de entidades, que es caro y falible. Si tu regulación no admite que un nombre
+> propio llegue al servicio, la respuesta no es una expresión regular mejor: es **no
+> trazar** esas peticiones (notebook 05, apartado 4).
+
+#%%md
+## 5. El cuadro de mando: cinco preguntas que solo la traza contesta
+
+Aquí se junta todo. Vamos a atender varias peticiones —algunas con problemas— y a
+responder, únicamente desde las trazas, las preguntas que se hacen a las tres de la
+mañana.
+
+#%%py
+import time
+
+def montar_agente(guion):
+    """Un agente nuevo por escenario, para que los guiones no se pisen."""
+    return agente_de_soporte(guion)
+
+
+ESCENARIOS = [
+    # (etiqueta, guion del modelo, petición)
+    ("normal", [("contar_tickets", {"categoria": "facturacion"}), "Hay 87."],
+     {**PETICION, "id_ticket": "TCK-1", "cliente": "acme", "plan": "free"}),
+    ("normal", [("contar_tickets", {"categoria": "integraciones"}), "Hay 54."],
+     {**PETICION, "id_ticket": "TCK-2", "cliente": "acme", "plan": "free"}),
+    ("categoría inventada", [("contar_tickets", {"categoria": "no-existe"}), "No la encuentro."],
+     {**PETICION, "id_ticket": "TCK-3", "cliente": "globex", "plan": "pro"}),
+    ("ticket inexistente", [("detalle_ticket", {"id_ticket": "TCK-99999"}), "No aparece."],
+     {**PETICION, "id_ticket": "TCK-4", "cliente": "globex", "plan": "pro"}),
+    ("bucle largo", [("contar_tickets", {"categoria": "facturacion"}),
+                     ("contar_tickets", {"categoria": "integraciones"}),
+                     ("contar_tickets", {"categoria": "acceso_cuenta"}), "Ya lo tengo."],
+     {**PETICION, "id_ticket": "TCK-5", "cliente": "initech", "plan": "enterprise"}),
+]
+
+trazas = []
+for etiqueta, guion, peticion in ESCENARIOS:
+    agente_escenario, _ = montar_agente(guion)
+    with traza_local() as traza:
+        agente_escenario.invoke(
+            {"messages": [HumanMessage(peticion["mensaje"])]},
+            {
+                "configurable": {"thread_id": peticion["conversacion"]},
+                "run_name": f"soporte:{peticion['id_ticket']}",
+                "tags": ["produccion", f"plan-{peticion['plan']}"],
+                "metadata": {"cliente": peticion["cliente"], "plan": peticion["plan"],
+                             "categoria": peticion["categoria"], "version_prompt": "v3"},
+            },
+        )
+    trazas.append((etiqueta, traza))
+
+print(f"{len(trazas)} peticiones atendidas, todas con éxito de cara al usuario")
+
+#%%py
+def ms(run):
+    return (run.end_time - run.start_time).total_seconds() * 1000
+
+def tokens_de(traza):
+    total = 0
+    for _, run in traza.recorrer():
+        if run.run_type != "llm":
+            continue
+        try:
+            uso = (run.outputs["generations"][0][0]["message"]["kwargs"]["usage_metadata"])
+            total += uso.get("total_tokens", 0)
+        except (KeyError, IndexError, TypeError):
+            pass
+    return total
+
+
+def cuadro_de_mando(trazas):
+    filas = []
+    for etiqueta, traza in trazas:
+        raiz = traza.principales[0]
+        todos = [r for _, r in traza.recorrer()]
+        herramientas = [r for r in todos if r.run_type == "tool"]
+        con_error = [r.name for r in todos if r.error]
+        # Una herramienta que "funciona" pero devuelve un texto de disculpa es un fallo
+        # silencioso que ningún `error` recoge (notebook 01).
+        sin_datos = [r.name for r in herramientas
+                     if any(s in str(r.outputs).lower()
+                            for s in ("no existe", "no encuentro", "no aparece", "sin resultados"))]
+        filas.append({
+            "ticket": raiz.name,
+            "cliente": raiz.extra["metadata"].get("cliente"),
+            "plan": raiz.extra["metadata"].get("plan"),
+            "turnos_modelo": sum(1 for r in todos if r.run_type == "llm"),
+            "herramientas": len(herramientas),
+            "ms": round(ms(raiz)),
+            "tokens": tokens_de(traza),
+            "errores": con_error,
+            "sin_datos": sin_datos,
+        })
+    return filas
+
+
+filas = cuadro_de_mando(trazas)
+print(f"{'ticket':<16}{'cliente':<10}{'plan':<12}{'turnos':>7}{'herr.':>7}{'tokens':>8}  incidencias")
+print("-" * 84)
+for f in filas:
+    incidencias = ", ".join(f["errores"] + f["sin_datos"]) or "—"
+    print(f"{f['ticket']:<16}{f['cliente']:<10}{f['plan']:<12}"
+          f"{f['turnos_modelo']:>7}{f['herramientas']:>7}{f['tokens']:>8}  {incidencias}")
+
+#%%md
+Y ahora las cinco preguntas, contestadas solo con eso:
+
+#%%py
+separador("las cinco preguntas de las tres de la mañana")
+
+# 1. ¿A qué clientes les está yendo mal?
+malos = {f["cliente"] for f in filas if f["errores"] or f["sin_datos"]}
+print(f"1. clientes con incidencias : {malos or 'ninguno'}")
+
+# 2. ¿Cuánto me cuesta cada plan?
+por_plan: dict[str, list[int]] = {}
+for f in filas:
+    por_plan.setdefault(f["plan"], []).append(f["tokens"])
+print("2. tokens por plan          :", {p: sum(v) for p, v in por_plan.items()})
+
+# 3. ¿Hay peticiones que se van de vueltas?
+largas = [f["ticket"] for f in filas if f["turnos_modelo"] > 3]
+print(f"3. peticiones con bucle largo: {largas or 'ninguna'}")
+
+# 4. ¿Hay fallos que el usuario no ve?
+silenciosos = [(f["ticket"], f["sin_datos"]) for f in filas if f["sin_datos"]]
+print(f"4. fallos silenciosos        : {silenciosos or 'ninguno'}")
+
+# 5. ¿Dónde se va el tiempo?
+print("5. reparto del tiempo, en la petición más lenta:")
+lenta = max(trazas, key=lambda par: ms(par[1].principales[0]))[1]
+total = ms(lenta.principales[0])
+for profundidad, run in lenta.recorrer():
+    if profundidad <= 1:
+        print(f"     {'  ' * profundidad}{run.name:<24}{ms(run):7.1f} ms "
+              f"({100 * ms(run) / total:5.1f} %)")
+
+#%%md
+Las cinco respuestas salen de la traza y **ninguna del código**. Es lo que separa
+instrumentar de decorar.
+
+La número 4 es la que más rendimiento da y la que ningún panel trae de serie: dos
+peticiones en las que la herramienta se ejecutó sin error, devolvió un texto educado
+—«no existe esa categoría»— y el usuario recibió una respuesta perfectamente redactada
+que no le sirvió de nada.
+
+Para tu tasa de error eso es un 0 %. Para el cliente es un agente que no funciona.
+
+#%%md
+## 6. Llevarlo a tu cuenta
+
+Todo lo anterior corre en local. Esto es lo mismo contra el servicio de verdad. Es la
+única parte que no he podido ejecutar.
+
+#%%py
+@online("Atender cinco peticiones contra tu proyecto de LangSmith", trazas=5)
+def _():
+    from langsmith import Client
+    from langsmith.run_helpers import tracing_context
+
+    c = Client(anonymizer=ANONIMIZADOR)     # la política del apartado 4, aplicada
+    for etiqueta, guion, peticion in ESCENARIOS:
+        agente_escenario, _ = montar_agente(guion)
+        with tracing_context(enabled=True, client=c, project_name="curso-langsmith"):
+            agente_escenario.invoke(
+                {"messages": [HumanMessage(peticion["mensaje"])]},
+                {
+                    "configurable": {"thread_id": peticion["conversacion"]},
+                    "run_name": f"soporte:{peticion['id_ticket']}",
+                    "tags": ["produccion", f"plan-{peticion['plan']}"],
+                    "metadata": {"cliente": peticion["cliente"], "plan": peticion["plan"],
+                                 "version_prompt": "v3"},
+                },
+            )
+    c.flush()      # sin esto puedes perderlas (notebook 03)
+    print("  listo. En la interfaz, filtra por tag «produccion» y agrupa por cliente.")
+
+#%%md
+Cuando lo ejecutes, comprueba tres cosas en la interfaz. Son las que confirman que el
+módulo entero está bien aplicado:
+
+1. **Las trazas se llaman `soporte:TCK-...`** y no `LangGraph`.
+2. **La vista de conversación agrupa por `conv-8891`** — el `thread_id` llegó.
+3. **Ningún DNI, teléfono, tarjeta ni correo** en las entradas.
+
+Si falla alguna, vuelve al notebook correspondiente: 02, 04 o 05.
+
+#%%md
+## 7. Para llevarte
+
+Escribe tú, en tu propio repositorio, la versión de esto que se ajusta a tu caso. La
+plantilla es corta:
+
+```python
+# instrumentacion.py — el único fichero que decide qué se traza y qué sale
+CLIENTE = Client(anonymizer=ANONIMIZADOR, tracing_error_callback=metricas.fallo_de_traza)
+
+def punto_de_entrada(peticion):
+    if peticion.get("datos_sensibles"):
+        with tracing_context(enabled=False):
+            return app(peticion)
+    with tracing_context(enabled=True, client=CLIENTE):
+        return app(peticion, langsmith_extra={...})
+```
+
+Con tres propiedades, y las tres importan:
+
+- **El código de la aplicación no lo conoce.** Se puede cambiar la política sin tocarla.
+- **Las reglas de privacidad tienen pruebas.** Una por regla, con un ejemplo que debe
+  cambiar. Si no, no es una política.
+- **Hay un `flush()` antes de salir**, o un `wait_for_all_tracers()`. Si no, en cuanto lo
+  metas en un contenedor empezarás a perder trazas sin enterarte.
+
+#%%md
+## 8. Resumen del módulo 1
+
+Con este proyecto se cierra el módulo. Lo que ya sabes:
+
+- Una traza es un **árbol**, reconstruible desde una lista desordenada solo con
+  `dotted_order` (nb 01).
+- **LangChain y LangGraph se instrumentan solos**; nada más lo hace. Y los metadatos van
+  por caminos distintos según qué instrumentes: `langsmith_extra` para `@traceable`,
+  `config` para un `Runnable` (apartado 3 de este proyecto).
+- Las trazas son **best-effort**: se pierden y no te enteras. Alerta sobre el log **y**
+  `tracing_error_callback`, `flush()` antes de salir, y el muestreo es por traza
+  completa (nb 03).
+- El **hilo** se agrupa por el `thread_id` de la raíz, LangGraph lo propaga solo, y la
+  realimentación más útil no se pide: se deduce (nb 04).
+- Se manda **más de lo que crees**, incluidas tus variables de entorno. `hide_inputs`
+  acepta una función, y las reglas de fábrica protegen tus credenciales, no a tus
+  usuarios (nb 05).
+
+Y lo que este proyecto añade, que es la parte que no cabe en un notebook de teoría:
+**todo eso se pone en un solo sitio**, el punto de entrada, sin tocar la aplicación.
+
+---
+
+**Siguiente módulo:** datasets y experimentos. Ahora que las trazas están bien y son
+buscables, la pregunta cambia de «¿qué pasó?» a «¿está mejorando?» — y para eso hace
+falta medir sobre un conjunto, no mirar ejemplos sueltos.

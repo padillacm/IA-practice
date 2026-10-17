@@ -1,0 +1,11 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+faiss-cpu>=1.8
+lightgbm>=4.3
+numpy
+pandas
+pyarrow
+redis>=5.0
+confluent-kafka>=2.4
+prometheus-client>=0.20
+# feast[redis]   # descomenta si usas FEAST_REPO (añade ~200 MB a la imagen)

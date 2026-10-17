@@ -1,0 +1,15 @@
+# Árbol de notificación: qué contacto recibe qué y con qué frecuencia. Reemplaza la política por defecto de Grafana.
+apiVersion: 1
+policies:
+  - orgId: 1
+    receiver: supportops-oncall
+    group_by: [alertname, service]
+    group_wait: 10s          # espera para agrupar las primeras alertas de un grupo
+    group_interval: 1m       # mínimo entre notificaciones del mismo grupo
+    repeat_interval: 1h      # reenvío si la alerta sigue activa
+    routes:
+      - receiver: supportops-oncall
+        object_matchers:
+          - ["severity", "=", "page"]
+        group_wait: 0s       # lo que despierta a alguien sale ya
+        repeat_interval: 30m

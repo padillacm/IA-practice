@@ -1,0 +1,594 @@
+#%%md
+# 16 · Functional API: la otra forma de escribir grafos
+
+**Módulo 6 · Producción** — *tiempo estimado: 1 h*
+
+Todo el curso ha usado la **Graph API**: declaras un estado, nodos y aristas, compilas. Es
+explícita, se dibuja y se razona sobre ella.
+
+LangGraph ofrece una segunda forma, la **Functional API**: escribes una función de Python
+normal, con sus `if`, sus bucles y sus `try`, y decoras las partes que quieres que sean
+duraderas. Sin estado explícito, sin aristas, sin grafo que dibujar.
+
+No es una versión simplificada: **por debajo es el mismo runtime**, con la misma persistencia,
+los mismos `interrupt()` y el mismo streaming.
+
+Al terminar sabrás:
+
+1. `@entrypoint` y `@task`, y qué hace cada uno exactamente.
+2. Cómo se consigue paralelismo sin declarar ninguna arista.
+3. `previous` y `entrypoint.final`: el estado, sin esquema de estado.
+4. **Cuándo elegir cada API**, que es lo único que de verdad importa de este notebook.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m6")
+
+#%%md
+## 1. El mismo programa, dos veces
+
+Empecemos por la comparación directa. Un flujo de tres pasos: analizar un ticket, buscar
+casos parecidos y redactar una respuesta.
+
+#%%py
+import operator
+import time
+from typing import Annotated, TypedDict
+
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, StateGraph
+
+from utils.datos import tickets
+
+df = tickets()
+
+
+def analizar(texto: str) -> str:
+    time.sleep(0.05)
+    return "urgente" if any(p in texto.lower() for p in ("urgente", "caído", "parado")) else "normal"
+
+
+def buscar_similares(categoria: str) -> list[str]:
+    time.sleep(0.05)
+    return df[df.categoria == categoria].head(3).id_ticket.tolist()
+
+
+def redactar(analisis: str, similares: list[str]) -> str:
+    return f"Respuesta [{analisis}] basada en {len(similares)} casos previos: {', '.join(similares)}"
+
+
+# --- versión Graph API ---
+class EstadoTicket(TypedDict):
+    texto: str
+    categoria: str
+    analisis: str
+    similares: list[str]
+    respuesta: str
+
+
+grafo = (
+    StateGraph(EstadoTicket)
+    .add_node("analizar", lambda e: {"analisis": analizar(e["texto"])})
+    .add_node("buscar", lambda e: {"similares": buscar_similares(e["categoria"])})
+    .add_node("redactar", lambda e: {"respuesta": redactar(e["analisis"], e["similares"])},
+              defer=True)
+    .add_edge(START, "analizar").add_edge(START, "buscar")
+    .add_edge("analizar", "redactar").add_edge("buscar", "redactar")
+    .compile(checkpointer=InMemorySaver())
+)
+
+entrada = {"texto": "El panel está caído y estamos parados", "categoria": "rendimiento",
+           "analisis": "", "similares": [], "respuesta": ""}
+t0 = time.perf_counter()
+print("Graph API :", grafo.invoke(entrada, {"configurable": {"thread_id": "g1"}})["respuesta"])
+print(f"            ({time.perf_counter() - t0:.2f} s)")
+
+#%%py
+# --- versión Functional API ---
+from langgraph.func import entrypoint, task
+
+
+@task
+def analizar_t(texto: str) -> str:
+    return analizar(texto)
+
+
+@task
+def buscar_t(categoria: str) -> list[str]:
+    return buscar_similares(categoria)
+
+
+@entrypoint(checkpointer=InMemorySaver())
+def flujo_ticket(entrada: dict) -> str:
+    # Llamar a un @task devuelve un FUTURO, no el resultado: la ejecución arranca ya.
+    futuro_analisis = analizar_t(entrada["texto"])
+    futuro_similares = buscar_t(entrada["categoria"])
+    # Al pedir .result() esperamos. Como los dos arrancaron antes, van en PARALELO.
+    return redactar(futuro_analisis.result(), futuro_similares.result())
+
+
+t0 = time.perf_counter()
+print("Functional:", flujo_ticket.invoke(entrada, {"configurable": {"thread_id": "f1"}}))
+print(f"            ({time.perf_counter() - t0:.2f} s)")
+
+#%%md
+Mismo resultado, mismo tiempo, mismo paralelismo. Las diferencias en el código:
+
+| | Graph API | Functional API |
+|---|---|---|
+| Estado | un `TypedDict` explícito | variables locales de la función |
+| Flujo | aristas declaradas | `if`, `for`, `try` de Python |
+| Paralelismo | mismo super-paso | llamar antes de hacer `.result()` |
+| Sincronización | `defer=True` | `.result()` donde tú quieras |
+| Visualización | **diagrama completo** | no hay diagrama útil |
+| Curva de entrada | conceptos nuevos | **es Python** |
+
+#%%md
+## 2. Qué hacen exactamente `@task` y `@entrypoint`
+
+**`@task`** marca una unidad de trabajo cuyo resultado se **guarda en el checkpoint**. Dos
+consecuencias:
+
+1. Si el flujo se reanuda, las tareas ya completadas **no se vuelven a ejecutar**: se lee su
+   resultado guardado. Es la tolerancia a fallos del notebook 08, con otra sintaxis.
+2. Llamarla devuelve un futuro, así que la ejecución empieza en cuanto la llamas.
+
+**`@entrypoint`** convierte una función en un flujo duradero: acepta `checkpointer`, `store`,
+`retry_policy`, `cache_policy` y `context_schema`, y el objeto resultante tiene `invoke`,
+`stream`, `get_state`… igual que un grafo compilado. **Porque es uno.**
+
+#%%py
+EJECUCIONES = {"a": 0, "b": 0, "c": 0}
+FALLAR = {"activo": True}
+
+
+@task
+def paso(nombre: str) -> str:
+    EJECUCIONES[nombre] += 1
+    time.sleep(0.05)
+    if nombre == "c" and FALLAR["activo"]:
+        FALLAR["activo"] = False
+        raise ConnectionError("la API falló en el paso c")
+    return f"{nombre} hecho"
+
+
+@entrypoint(checkpointer=InMemorySaver())
+def tuberia(_: dict) -> list[str]:
+    a = paso("a").result()
+    b = paso("b").result()
+    c = paso("c").result()          # falla la primera vez
+    return [a, b, c]
+
+
+conf = {"configurable": {"thread_id": "reanudable"}}
+
+print("-- primer intento --")
+try:
+    tuberia.invoke({}, conf)
+except ConnectionError as exc:
+    print(f"   falló: {exc}")
+
+print("\n-- reanudación con invoke(None, conf) --")
+print("   resultado:", tuberia.invoke(None, conf))
+print("\nejecuciones por tarea:", EJECUCIONES)
+print("(a y b se ejecutaron UNA vez: su resultado estaba en el checkpoint)")
+
+#%%md
+Ese es el argumento fuerte de la Functional API: **tolerancia a fallos con la granularidad
+que tú decidas, sin diseñar un grafo**. Cada `@task` es un punto de guardado.
+
+#%%md
+## 3. Estado entre ejecuciones: `previous`
+
+Sin esquema de estado, ¿cómo se recuerda algo entre invocaciones del mismo hilo? Con el
+parámetro especial **`previous`**: recibe lo que devolvió la ejecución anterior.
+
+#%%py
+@entrypoint(checkpointer=InMemorySaver())
+def contador(nuevo: int, *, previous: int | None = None) -> int:
+    """`previous` es el valor devuelto la última vez en este mismo hilo."""
+    return (previous or 0) + nuevo
+
+
+conf_c = {"configurable": {"thread_id": "contador-1"}}
+print("acumulando:", [contador.invoke(n, conf_c) for n in (5, 10, 3)])
+print("otro hilo :", contador.invoke(5, {"configurable": {"thread_id": "contador-2"}}))
+
+#%%md
+### `entrypoint.final`: separar lo que devuelves de lo que guardas
+
+A veces lo que quieres devolver al usuario no es lo que quieres recordar. `entrypoint.final`
+separa las dos cosas.
+
+#%%py
+@entrypoint(checkpointer=InMemorySaver())
+def carrito(articulo: str, *, previous: list[str] | None = None):
+    """Devuelve un mensaje corto, pero guarda la lista completa."""
+    lista = (previous or []) + [articulo]
+    return entrypoint.final(
+        value=f"añadido {articulo!r}; el carrito tiene {len(lista)} artículos",   # lo que se devuelve
+        save=lista,                                                              # lo que se recuerda
+    )
+
+
+conf_k = {"configurable": {"thread_id": "carrito-1"}}
+for articulo in ("teclado", "ratón", "monitor"):
+    print(" ", carrito.invoke(articulo, conf_k))
+
+#%%md
+## 4. Todo lo demás sigue funcionando
+
+Persistencia, `interrupt()`, streaming, `store`, reintentos: es el mismo runtime. Estas son
+las mismas funcionalidades de los módulos anteriores, con otra sintaxis.
+
+#%%py
+from langgraph.types import Command, RetryPolicy, interrupt
+
+
+@entrypoint(checkpointer=InMemorySaver())
+def con_aprobacion(peticion: dict) -> str:
+    """Human-in-the-loop dentro de una función normal."""
+    if peticion["importe"] < 50:
+        return f"aprobado automáticamente: {peticion['importe']} €"
+
+    decision = interrupt({"pregunta": f"¿Apruebas {peticion['importe']} €?",
+                          "concepto": peticion["concepto"]})
+    if decision["decision"] != "aprobar":
+        return f"rechazado por {decision['quien']}"
+    return f"aprobado por {decision['quien']}: {peticion['importe']} €"
+
+
+print("  ", con_aprobacion.invoke({"importe": 20, "concepto": "material"},
+                                  {"configurable": {"thread_id": "ap-1"}}))
+
+conf_ap = {"configurable": {"thread_id": "ap-2"}}
+salida = con_aprobacion.invoke({"importe": 800, "concepto": "portátil"}, conf_ap)
+print("   pausado:", salida["__interrupt__"][0].value)
+print("  ", con_aprobacion.invoke(Command(resume={"decision": "aprobar", "quien": "ana"}), conf_ap))
+
+#%%py
+# Reintentos por tarea
+INTENTOS = {"n": 0}
+
+
+@task(retry_policy=RetryPolicy(max_attempts=4, initial_interval=0.02))
+def api_inestable(x: int) -> int:
+    INTENTOS["n"] += 1
+    if INTENTOS["n"] < 3:
+        raise ConnectionError("timeout")
+    return x * 10
+
+
+@entrypoint()
+def con_reintentos(x: int) -> int:
+    return api_inestable(x).result()
+
+
+print("con reintentos:", con_reintentos.invoke(4), f"tras {INTENTOS['n']} intentos")
+
+#%%py
+# Streaming: cada @task emite su resultado en cuanto termina
+separador("stream de un entrypoint")
+for evento in flujo_ticket.stream(entrada, {"configurable": {"thread_id": "stream-1"}}):
+    print("  ", evento)
+
+#%%md
+## 5. Lo que la Functional API hace mejor
+
+#%%md
+### 5.1 Bucles y condicionales que en un grafo serían aristas
+
+Un `for` con acumulación es natural en Python y aparatoso como grafo.
+
+#%%py
+modelo = llm()
+
+
+@task
+def resumir_uno(texto: str) -> str:
+    return modelo.invoke(f"Resume en una frase, en español: {texto[:400]}").text
+
+
+@entrypoint(checkpointer=InMemorySaver())
+def resumir_lote(textos: list[str]) -> dict:
+    """Map-reduce en tres líneas: lanzar todo, esperar todo, combinar."""
+    futuros = [resumir_uno(t) for t in textos]      # arrancan todos a la vez
+    resumenes = [f.result() for f in futuros]       # se espera a todos
+
+    combinado = modelo.invoke(
+        "Combina estos resúmenes en un párrafo de 3 frases, en español:\n\n"
+        + "\n".join(f"- {r}" for r in resumenes)
+    ).text
+    return {"individuales": resumenes, "combinado": combinado}
+
+
+mensajes = df[df.categoria == "integraciones"].head(4).mensaje.tolist()
+t0 = time.perf_counter()
+salida = resumir_lote.invoke(mensajes, {"configurable": {"thread_id": "lote-1"}})
+print(f"({time.perf_counter() - t0:.1f} s para {len(mensajes)} resúmenes en paralelo)\n")
+for r in salida["individuales"]:
+    print("  -", r)
+print("\ncombinado:", salida["combinado"])
+
+#%%md
+Compáralo mentalmente con la versión de grafo: haría falta `Send` para el abanico, un reducer
+acumulador para recoger y `defer=True` para el agregador. Aquí son tres líneas de Python
+normal. Cuando la topología es "haz N cosas y júntalas", esto gana.
+
+#%%md
+### 5.2 Manejo de errores con `try`
+
+En un grafo, recuperarse de un error es `error_handler` o un nodo aparte. Aquí es `try`.
+
+#%%py
+@task
+def fuente_principal(consulta: str) -> str:
+    raise ConnectionError("la fuente principal no responde")
+
+
+@task
+def fuente_respaldo(consulta: str) -> str:
+    return f"datos de respaldo para {consulta!r} (menos frescos)"
+
+
+@entrypoint()
+def con_respaldo(consulta: str) -> dict:
+    try:
+        return {"datos": fuente_principal(consulta).result(), "origen": "principal", "degradado": False}
+    except ConnectionError as exc:
+        return {"datos": fuente_respaldo(consulta).result(), "origen": "respaldo",
+                "degradado": True, "motivo": str(exc)}
+
+
+print(con_respaldo.invoke("ventas de mayo"))
+
+#%%md
+## 6. Lo que la Graph API hace mejor
+
+Y ahora el otro lado, que es igual de importante.
+
+#%%py
+separador("el grafo se dibuja; el entrypoint no")
+mostrar_grafo(grafo)
+
+#%%py
+print("\nlo que produce un entrypoint:")
+print(" ", [n for n in flujo_ticket.get_graph().nodes])
+print("\nUn único nodo. El flujo interno es código Python, y ningún diagrama lo puede mostrar.")
+
+#%%md
+Eso tiene tres consecuencias prácticas que pesan más de lo que parece:
+
+1. **No se puede revisar visualmente.** Un nodo huérfano o una rama muerta saltan a la vista
+   en un diagrama; en 200 líneas de Python, no.
+2. **LangGraph Studio no sirve de mucho.** No hay nodos que inspeccionar ni por los que
+   avanzar paso a paso.
+3. **No hay puntos de entrada intermedios.** En un grafo puedes reanudar desde cualquier nodo
+   o bifurcar en cualquier checkpoint (notebook 08). En un entrypoint reanudas el flujo, y
+   punto.
+
+Y una más, la que más duele en un equipo: **el estado es implícito**. En la Graph API, el
+`TypedDict` es un contrato que documenta qué maneja el sistema. En la Functional API hay que
+leer la función entera para saberlo.
+
+#%%md
+## 7. Cómo elegir
+
+| Elige **Graph API** si... | Elige **Functional API** si... |
+|---|---|
+| El flujo tiene ramas y ciclos que quieres ver | El flujo es lineal, o con bucles de Python |
+| Varias personas mantienen el sistema | Lo mantienes tú, o es un componente pequeño |
+| Quieres LangGraph Studio y diagramas | La visualización no te aporta |
+| Necesitas viaje en el tiempo y bifurcaciones | Te basta con reanudar |
+| El estado compartido es el eje | Los datos fluyen de una función a otra |
+| Sistemas multiagente | Un flujo de trabajo con pasos duraderos |
+| **Es el caso por defecto** | Migras código existente a durabilidad |
+
+**Se pueden mezclar.** Un `@task` puede invocar un grafo compilado, y un nodo de un grafo
+puede llamar a un entrypoint. Es lo que se hace en la práctica: la Graph API para la
+orquestación de alto nivel y la Functional API para los flujos internos.
+
+#%%py
+# Un entrypoint que usa un grafo compilado como una tarea más.
+@task
+def clasificar_con_grafo(texto: str, categoria: str) -> str:
+    return grafo.invoke({"texto": texto, "categoria": categoria, "analisis": "",
+                         "similares": [], "respuesta": ""},
+                        {"configurable": {"thread_id": f"anidado-{hash(texto) % 1000}"}})["respuesta"]
+
+
+@entrypoint(checkpointer=InMemorySaver())
+def hibrido(entradas: list[dict]) -> list[str]:
+    futuros = [clasificar_con_grafo(e["texto"], e["categoria"]) for e in entradas]
+    return [f.result() for f in futuros]
+
+
+lote = [{"texto": r.mensaje, "categoria": r.categoria} for r in df.head(3).itertuples()]
+for r in hibrido.invoke(lote, {"configurable": {"thread_id": "hib-1"}}):
+    print("  ", r)
+
+#%%md
+## 8. Ejercicios
+
+> **EJERCICIO 16.1 — Migrar un grafo a Functional API**
+>
+> Toma el ciclo de redacción y revisión del notebook 03 (escribir → revisar → escribir hasta
+> aprobar, con un tope de iteraciones) y reescríbelo con `@entrypoint` y `@task`.
+>
+> Compara las dos versiones: ¿cuál se lee mejor? ¿Cuál preferirías mantener?
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 16.1</b></summary>
+
+El ciclo con condición de salida es un <code>while</code>, y se lee mucho mejor que un
+<code>Command</code> con <code>goto</code> más una arista de vuelta. Para <b>este</b> patrón,
+la Functional API gana claramente.
+
+Ahora imagina que el revisor pudiera mandar el texto a tres redactores distintos según el tipo
+de problema. En la Graph API eso son tres aristas condicionales que se ven en el diagrama; en
+la Functional API es un <code>if/elif/else</code> que hay que leer. Ahí se invierte la
+preferencia.
+
+<b>La regla que se extrae</b>: cuanto más se parezca el flujo a un algoritmo, mejor encaja la
+Functional API; cuanto más se parezca a una máquina de estados, mejor la Graph API.
+</details>
+
+#%%py
+MAX_ITERACIONES = 3
+
+
+@task
+def escribir(tema: str, criticas: list[str]) -> str:
+    instruccion = f"Escribe un párrafo de 40 palabras en español sobre: {tema}."
+    if criticas:
+        instruccion += "\n\nCorrige estos problemas de la versión anterior:\n" + \
+                       "\n".join(f"- {c}" for c in criticas)
+    return modelo.invoke(instruccion).text
+
+
+@task
+def revisar(borrador: str) -> dict:
+    from pydantic import BaseModel, Field
+
+    class Revision(BaseModel):
+        """Revisión de un borrador."""
+        aprobado: bool = Field(description="True si el texto es claro, concreto y sin relleno")
+        problemas: list[str] = Field(description="Problemas concretos. Vacía si está aprobado.")
+
+    r = modelo.with_structured_output(Revision).invoke(
+        "Eres un editor exigente. Revisa este párrafo y señala problemas concretos "
+        f"(vaguedad, relleno, falta de concreción):\n\n{borrador}"
+    )
+    return {"aprobado": r.aprobado, "problemas": r.problemas}
+
+
+@entrypoint(checkpointer=InMemorySaver())
+def redactar_con_revision(tema: str) -> dict:
+    """El ciclo de revisión, como un while normal."""
+    criticas: list[str] = []
+    historial = []
+
+    for iteracion in range(1, MAX_ITERACIONES + 1):
+        borrador = escribir(tema, criticas).result()
+        revision = revisar(borrador).result()
+        historial.append({"iteracion": iteracion, "aprobado": revision["aprobado"],
+                          "problemas": revision["problemas"]})
+        if revision["aprobado"]:
+            return {"texto": borrador, "iteraciones": iteracion, "historial": historial,
+                    "aprobado": True}
+        criticas = revision["problemas"]
+
+    return {"texto": borrador, "iteraciones": MAX_ITERACIONES, "historial": historial,
+            "aprobado": False}
+
+
+salida = redactar_con_revision.invoke(
+    "por qué un reducer es la política de concurrencia de un grafo",
+    {"configurable": {"thread_id": "revision-1"}},
+)
+
+print(f"aprobado tras {salida['iteraciones']} iteración(es): {salida['aprobado']}\n")
+for h in salida["historial"]:
+    estado = "APROBADO" if h["aprobado"] else "rechazado"
+    print(f"  iteración {h['iteracion']}: {estado}")
+    for p in h["problemas"][:2]:
+        print(f"      - {p}")
+print(f"\ntexto final:\n{salida['texto']}")
+
+#%%md
+> **EJERCICIO 16.2 — Un flujo por lotes reanudable**
+>
+> Escribe un `@entrypoint` que procese una lista de 8 tickets, uno por uno, donde el
+> procesamiento del ticket número 5 falle la primera vez. Comprueba que al reanudar **solo se
+> reprocesa el 5 y los siguientes**, y que los cuatro primeros no se vuelven a ejecutar.
+>
+> Es el patrón de trabajo por lotes tolerante a fallos, y es donde la Functional API se gana
+> el sueldo.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 16.2</b></summary>
+
+Contar las ejecuciones es lo que demuestra el punto: los cuatro primeros aparecen una sola
+vez pese a las dos invocaciones. Si cada uno fuera una llamada a un LLM, acabas de ahorrar
+cuatro llamadas en cada reanudación.
+
+Y fíjate en lo que <b>no</b> ha hecho falta: ni estado explícito, ni <code>Send</code>, ni
+reducers, ni un nodo agregador. Un <code>for</code> y un decorador.
+</details>
+
+#%%py
+PROCESADOS = {}
+FALLO_PENDIENTE = {"activo": True}
+
+
+@task
+def procesar_ticket(id_ticket: str, asunto: str) -> str:
+    PROCESADOS[id_ticket] = PROCESADOS.get(id_ticket, 0) + 1
+    time.sleep(0.02)
+    if id_ticket.endswith("5") and FALLO_PENDIENTE["activo"]:
+        FALLO_PENDIENTE["activo"] = False
+        raise ConnectionError(f"fallo transitorio procesando {id_ticket}")
+    return f"{id_ticket}: {asunto[:38]}"
+
+
+@entrypoint(checkpointer=InMemorySaver())
+def procesar_lote(tickets: list[dict]) -> list[str]:
+    resultados = []
+    for t in tickets:
+        # Secuencial a propósito: queremos ver el punto exacto de reanudación.
+        resultados.append(procesar_ticket(t["id"], t["asunto"]).result())
+    return resultados
+
+
+lote = [{"id": f"TCK-000{i}", "asunto": r.asunto}
+        for i, r in enumerate(df.head(8).itertuples(), start=1)]
+conf_lote = {"configurable": {"thread_id": "lote-reanudable"}}
+
+print("-- primer intento --")
+try:
+    procesar_lote.invoke(lote, conf_lote)
+except ConnectionError as exc:
+    print(f"   falló: {exc}")
+    print(f"   procesados hasta ahora: {sorted(PROCESADOS)}")
+
+print("\n-- reanudación --")
+resultados = procesar_lote.invoke(None, conf_lote)
+print(f"   {len(resultados)} tickets procesados\n")
+
+print("ejecuciones REALES por ticket:")
+for id_ticket, veces in sorted(PROCESADOS.items()):
+    marca = "  <- el que falló y se reintentó" if veces > 1 else ""
+    print(f"   {id_ticket}: {veces}{marca}")
+print("\nLos cuatro primeros se ejecutaron una sola vez pese a las dos invocaciones.")
+
+#%%md
+## 9. Resumen
+
+- La Functional API es **el mismo runtime** con otra sintaxis: misma persistencia, mismo
+  `interrupt()`, mismo streaming.
+- `@task` marca una unidad de trabajo cuyo resultado se **guarda en el checkpoint**: al
+  reanudar no se repite. Llamarla devuelve un **futuro**, y de ahí sale el paralelismo.
+- `@entrypoint` convierte una función en un flujo duradero, con `invoke`, `stream` y
+  `get_state`.
+- `previous` da estado entre ejecuciones del mismo hilo; `entrypoint.final` separa lo que
+  devuelves de lo que guardas.
+- **Gana la Functional API** en flujos algorítmicos: bucles, map-reduce, `try/except`, lotes
+  reanudables.
+- **Gana la Graph API** en máquinas de estados: ramas visibles, multiagente, viaje en el
+  tiempo, Studio, y cuando el estado compartido es un contrato entre varias personas.
+- Se mezclan sin problema, y en la práctica se mezclan.
+
+**Siguiente:** [`17_evaluacion_y_observabilidad.ipynb`](17_evaluacion_y_observabilidad.ipynb)
+— probar grafos, trazarlos y medirlos de verdad.

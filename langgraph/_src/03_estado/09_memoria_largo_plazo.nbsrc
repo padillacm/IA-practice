@@ -1,0 +1,694 @@
+#%%md
+# 09 · Memoria de largo plazo: el `Store`
+
+**Módulo 3 · Estado duradero** — *tiempo estimado: 1 h 30 min*
+
+El checkpointer del notebook anterior da memoria **dentro de un hilo**. Es exactamente lo que
+quieres para una conversación... y exactamente lo que no quieres para un usuario.
+
+Si Ana te dice el martes "prefiero respuestas cortas" y el jueves abre una conversación
+nueva, el checkpointer no ayuda: es otro hilo, otro estado, otro mundo. Para eso está el
+**`Store`**: memoria que vive **entre** hilos, indexada por lo que tú decidas.
+
+Al terminar sabrás:
+
+1. Cuándo va algo al estado y cuándo al store, que es la decisión de diseño de este notebook.
+2. La API del `Store`: espacios de nombres, `put`/`get`/`search`/`delete`.
+3. Los **tres tipos de memoria** —semántica, episódica y procedimental— y cómo se modelan.
+4. Búsqueda semántica sobre las memorias.
+5. Escribir memoria **en caliente** o **en segundo plano**, y por qué importa.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m3")
+
+#%%md
+## 1. Checkpointer y Store: qué va dónde
+
+| | **Checkpointer** (corto plazo) | **Store** (largo plazo) |
+|---|---|---|
+| Alcance | un hilo | **todos** los hilos |
+| Se indexa por | `thread_id` | espacio de nombres que tú eliges |
+| Qué guarda | el estado completo, tras cada super-paso | lo que escribes explícitamente |
+| Quién escribe | LangGraph, automáticamente | **tú**, en un nodo o herramienta |
+| Ejemplos | los mensajes de esta conversación | "Ana prefiere respuestas cortas" |
+| Cuánto crece | con la conversación | con el usuario, sin límite natural |
+
+**La regla para decidir:** pregúntate *"¿esto seguiría siendo cierto en una conversación
+nueva?"*. Si la respuesta es sí, es memoria de largo plazo.
+
+- "El usuario acaba de preguntar por la factura de mayo" -> estado. Es de esta conversación.
+- "El usuario es contable y trabaja con facturas todo el rato" -> store. Es de la persona.
+
+La segunda diferencia, menos obvia y más importante: **el store no se limpia solo**. El
+checkpointer crece con la conversación y muere con ella; el store acumula para siempre.
+Escribir en él sin una política de qué se guarda y qué caduca es cómo se acaba con un agente
+que "recuerda" cosas falsas de hace seis meses.
+
+#%%md
+## 2. La API del `Store`
+
+Tres conceptos: **espacio de nombres** (una tupla), **clave** (una cadena) y **valor** (un
+dict serializable).
+
+#%%py
+from langgraph.store.memory import InMemoryStore
+
+store = InMemoryStore()
+
+# namespace = tupla jerárquica. Diséñala como diseñarías rutas de fichero.
+ns_ana = ("memorias", "usuario", "u-ana")
+ns_luis = ("memorias", "usuario", "u-luis")
+
+store.put(ns_ana, "preferencia_formato", {"texto": "prefiere respuestas cortas, máximo 3 frases",
+                                          "fuente": "conversación del 2026-03-04", "confianza": 0.9})
+store.put(ns_ana, "rol", {"texto": "es responsable de facturación en Acme", "confianza": 1.0})
+store.put(ns_luis, "rol", {"texto": "es desarrollador y consulta la API", "confianza": 1.0})
+
+item = store.get(ns_ana, "rol")
+print("get      :", item.value["texto"])
+print("metadatos:", f"creado {item.created_at:%Y-%m-%d %H:%M}, actualizado {item.updated_at:%H:%M:%S}")
+
+print("\nsearch en el espacio de Ana:")
+for i in store.search(ns_ana):
+    print(f"  {i.key:<22} {i.value['texto']}")
+
+print("\nsearch por prefijo (todos los usuarios):")
+for i in store.search(("memorias", "usuario")):
+    print(f"  {i.namespace[-1]:<20} {i.key:<22} {i.value['texto'][:40]}")
+
+print("\nespacios de nombres existentes:", store.list_namespaces(prefix=("memorias",)))
+
+#%%md
+### Diseñar los espacios de nombres
+
+El namespace es una tupla jerárquica y `search` acepta **prefijos**, así que la jerarquía
+determina qué consultas podrás hacer luego. Piénsalo antes, porque migrarlo después duele.
+
+```python
+("memorias", "usuario", user_id)                 # todo lo de un usuario
+("memorias", "usuario", user_id, "preferencias") # solo sus preferencias
+("memorias", "org", org_id, "glosario")          # compartido por toda la organización
+("episodios", "usuario", user_id)                # ejemplos de interacciones pasadas
+```
+
+Tres reglas:
+
+1. **Lo que más filtras, primero.** Si siempre consultas por usuario, `user_id` va pronto.
+2. **Aísla por inquilino desde el primer nivel.** En una aplicación multiempresa,
+   `("org", org_id, ...)` evita que una consulta mal escrita cruce datos entre clientes. Es
+   la misma advertencia que con `thread_id`, y aquí es peor porque el store se comparte.
+3. **Separa por tipo de memoria.** Preferencias y episodios se leen en momentos distintos;
+   mezclarlos te obliga a filtrar siempre.
+
+> **Una restricción que sorprende:** las etiquetas de un namespace **no pueden contener
+> puntos**, ni estar vacías, ni ser algo que no sea una cadena; y la primera no puede ser
+> `"langgraph"`. Lo comprueba `_validate_namespace` y lanza `InvalidNamespaceError`.
+>
+> El punto es el que muerde, porque el identificador más natural para un usuario es su correo
+> —`ana@acme.example`— y lleva punto. **Usa identificadores opacos** (`u-ana`, un UUID, la
+> clave primaria de tu base de datos), que además es lo correcto por otro motivo: los correos
+> cambian, y con ellos perderías la memoria asociada.
+
+#%%md
+## 3. Usar el store desde el grafo
+
+Se pasa en `compile(store=...)` y se lee con `runtime.store` (en un nodo) o
+`runtime.store` de `ToolRuntime` (en una herramienta).
+
+#%%py
+import operator
+from dataclasses import dataclass
+from typing import Annotated
+
+from langchain.messages import HumanMessage, SystemMessage
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.runtime import Runtime
+
+modelo = llm()
+
+
+@dataclass
+class ContextoUsuario:
+    id_usuario: str
+
+
+class EstadoAsistente(MessagesState):
+    memorias_usadas: Annotated[list[str], operator.add]
+
+
+def espacio(id_usuario: str) -> tuple[str, ...]:
+    return ("memorias", "usuario", id_usuario)
+
+
+def recordar(estado: EstadoAsistente, runtime: Runtime[ContextoUsuario]) -> dict:
+    """Lee las memorias del usuario y las inyecta como contexto para el modelo."""
+    memorias = runtime.store.search(espacio(runtime.context.id_usuario), limit=10)
+    if not memorias:
+        return {}
+    texto = "\n".join(f"- {m.value['texto']}" for m in memorias)
+    return {
+        "messages": [SystemMessage(f"[Lo que sabes de este usuario]\n{texto}")],
+        "memorias_usadas": [m.key for m in memorias],
+    }
+
+
+def responder(estado: EstadoAsistente) -> dict:
+    return {"messages": [modelo.invoke(estado["messages"])]}
+
+
+asistente = (
+    StateGraph(EstadoAsistente, context_schema=ContextoUsuario)
+    .add_sequence([("recordar", recordar), ("responder", responder)])
+    .add_edge(START, "recordar")
+    .compile(checkpointer=InMemorySaver(), store=store)
+)
+
+for usuario in ("u-ana", "u-luis"):
+    salida = asistente.invoke(
+        {"messages": [HumanMessage("¿Puedes ayudarme con un problema de la plataforma?")],
+         "memorias_usadas": []},
+        context=ContextoUsuario(id_usuario=usuario),
+        config={"configurable": {"thread_id": f"hilo-nuevo-{usuario}"}},
+    )
+    print(f"[{usuario}]  memorias aplicadas: {salida['memorias_usadas']}")
+    print(f"  {salida['messages'][-1].text[:220]}\n")
+
+#%%md
+Hilos **completamente nuevos**, y aun así el asistente sabe quién es cada uno. Eso es lo que
+el checkpointer no puede darte.
+
+#%%md
+## 4. Los tres tipos de memoria
+
+No toda la memoria es igual. Distinguirlos cambia dónde se guardan, cuándo se leen y cómo
+caducan.
+
+| Tipo | Qué guarda | Analogía humana | Cuándo se lee |
+|---|---|---|---|
+| **Semántica** | Hechos: "Ana es contable" | Lo que sabes | Casi siempre |
+| **Episódica** | Ejemplos: "así resolvimos aquel caso" | Lo que recuerdas | Al enfrentar algo parecido |
+| **Procedimental** | Reglas aprendidas: "con esta cuenta, escalar siempre" | Cómo lo haces | Al decidir |
+
+#%%py
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class Memoria(BaseModel):
+    """Un hecho memorable extraído de una conversación."""
+
+    tipo: Literal["semantica", "episodica", "procedimental"] = Field(
+        description="semantica = un hecho estable sobre el usuario o su empresa. "
+                    "episodica = un caso concreto que puede servir de ejemplo. "
+                    "procedimental = una regla de cómo tratar a este usuario."
+    )
+    clave: str = Field(description="Identificador corto y estable, en snake_case. "
+                                   "Si actualiza algo ya sabido, reutiliza la misma clave.")
+    texto: str = Field(description="El hecho, en una frase autocontenida y en tercera persona")
+    confianza: float = Field(ge=0, le=1, description="1.0 si el usuario lo dijo literalmente; "
+                                                     "menos si lo has deducido")
+
+
+class Extraccion(BaseModel):
+    """Lo memorable de un fragmento de conversación."""
+
+    memorias: list[Memoria] = Field(
+        description="Solo lo que seguiría siendo cierto dentro de un mes. "
+                    "Lista vacía si no hay nada que merezca recordarse."
+    )
+
+
+extractor = modelo.with_structured_output(Extraccion)
+
+conversacion_ejemplo = """
+USUARIO: Hola, soy Marta, llevo la parte de integraciones en Delta Labs.
+IA: Encantado, ¿en qué te ayudo?
+USUARIO: Nuestro webhook a delta-labs.example lleva 5 horas sin recibir eventos. Ya nos pasó
+         en enero y resultó ser que habíais rotado los certificados.
+IA: Lo reviso ahora mismo.
+USUARIO: Por cierto, no me mandéis capturas de pantalla, uso lector de pantalla.
+"""
+
+resultado = extractor.invoke(
+    "Extrae lo memorable de esta conversación de soporte. Ignora lo que solo sea válido hoy.\n"
+    + conversacion_ejemplo
+)
+
+for m in resultado.memorias:
+    print(f"  [{m.tipo:<14}] {m.clave:<26} conf={m.confianza:.1f}  {m.texto}")
+
+#%%md
+Fíjate en lo que ha separado el modelo si el ejemplo ha ido bien:
+
+- **Semántica**: quién es Marta y dónde trabaja. Estable.
+- **Episódica**: el incidente de enero con los certificados. Un ejemplo reutilizable.
+- **Procedimental**: no mandar capturas. Una **regla** que cambia cómo se le responde.
+
+Esa última es la más valiosa y la que casi nadie modela: no es un dato sobre el usuario, es
+una instrucción sobre cómo comportarse con él.
+
+#%%md
+## 5. Escribir memoria: en caliente o en segundo plano
+
+Dos estrategias, con un compromiso claro:
+
+| | **En caliente** (*hot path*) | **En segundo plano** |
+|---|---|---|
+| Cuándo | dentro del turno, antes de responder | después de responder, o cada N turnos |
+| Latencia para el usuario | **peor**: una llamada más antes de contestar | **ninguna** |
+| Disponibilidad | inmediata: el mismo turno ya la usa | con retraso |
+| Coste | una llamada por turno | una llamada por lote |
+| Cuándo elegirla | agentes con pocas interacciones y mucho valor por dato | chats de alto volumen |
+
+En LangGraph, "en segundo plano" no significa hilos ni colas: significa **otro nodo, después
+de responder al usuario**, o una ejecución aparte disparada por un evento. Vamos con esa,
+que es la que se usa en producción.
+
+#%%py
+def guardar_memorias(estado: EstadoAsistente, runtime: Runtime[ContextoUsuario]) -> dict:
+    """Se ejecuta DESPUÉS de responder: el usuario ya tiene su respuesta.
+
+    Solo mira los últimos mensajes: reextraer toda la conversación en cada turno es
+    caro y produce duplicados con matices distintos.
+    """
+    recientes = estado["messages"][-6:]
+    transcripcion = "\n".join(f"{m.type.upper()}: {m.text}" for m in recientes if m.text)
+    if not transcripcion.strip():
+        return {}
+
+    extraido = extractor.invoke(
+        "Extrae lo memorable de este fragmento de conversación. Solo hechos estables, "
+        "reglas de trato o casos reutilizables. Si no hay nada, devuelve la lista vacía.\n\n"
+        + transcripcion
+    )
+
+    ns = espacio(runtime.context.id_usuario)
+    guardadas = []
+    for m in extraido.memorias:
+        if m.confianza < 0.6:              # umbral: no ensuciamos la memoria con deducciones flojas
+            continue
+        # La MISMA clave sobrescribe: así se actualiza un hecho en vez de duplicarlo.
+        runtime.store.put(ns, m.clave, {"texto": m.texto, "tipo": m.tipo, "confianza": m.confianza})
+        guardadas.append(f"{m.tipo}:{m.clave}")
+
+    return {"memorias_usadas": guardadas}
+
+
+asistente_con_memoria = (
+    StateGraph(EstadoAsistente, context_schema=ContextoUsuario)
+    .add_sequence([("recordar", recordar), ("responder", responder), ("guardar", guardar_memorias)])
+    .add_edge(START, "recordar")
+    .compile(checkpointer=InMemorySaver(), store=store)
+)
+
+mostrar_grafo(asistente_con_memoria)
+
+#%%py
+CTX = ContextoUsuario(id_usuario="u-marta")
+ns_marta = espacio(CTX.id_usuario)
+
+turnos = [
+    "Hola, soy Marta y llevo las integraciones en Delta Labs.",
+    "Nuestro webhook lleva 5 horas sin recibir eventos. Ya nos pasó en enero por los certificados.",
+    "Una cosa: no me mandes capturas, uso lector de pantalla.",
+]
+
+for i, turno in enumerate(turnos, 1):
+    salida = asistente_con_memoria.invoke(
+        {"messages": [HumanMessage(turno)], "memorias_usadas": []},
+        context=CTX,
+        config={"configurable": {"thread_id": "marta-conversacion-1"}},
+    )
+    # OJO: 'memorias_usadas' tiene reducer acumulador y el hilo persiste, así que crece
+    # a lo largo de la conversación. Para ver lo de ESTE turno, miramos el store.
+    print(f"turno {i}: {turno[:60]}")
+    print(f"   memorias en el store tras este turno: {len(store.search(ns_marta))}\n")
+
+print("memoria acumulada de Marta:")
+for m in store.search(ns_marta):
+    print(f"  [{m.value['tipo']:<14}] {m.key:<28} {m.value['texto']}")
+
+#%%py
+# Y ahora lo que importa: una conversación NUEVA, otro hilo, días después.
+salida = asistente_con_memoria.invoke(
+    {"messages": [HumanMessage("Hola otra vez, tengo otro problema con la sincronización.")],
+     "memorias_usadas": []},
+    context=CTX,
+    config={"configurable": {"thread_id": "marta-conversacion-2-una-semana-despues"}},
+)
+mostrar_mensajes(salida, maximo=3)
+
+#%%md
+## 6. Búsqueda semántica en el store
+
+Con pocas memorias, `search` sin más las devuelve todas. Con cientos, meterlas todas en el
+contexto es caro e inútil: la mayoría no tienen nada que ver con lo que se está hablando.
+
+Un `InMemoryStore` con `index=` calcula un vector de cada memoria y `search(query=...)`
+devuelve **solo las relevantes**.
+
+#%%py
+from langchain.embeddings import init_embeddings
+
+store_semantico = InMemoryStore(
+    index={
+        "embed": init_embeddings("openai:text-embedding-3-small"),
+        "dims": 1536,
+        "fields": ["texto"],      # qué campos del valor se indexan
+    }
+)
+
+ns_demo = ("memorias", "usuario", "demo")
+MEMORIAS_DEMO = {
+    "rol": "Es responsable de facturación en Acme Corp.",
+    "formato": "Prefiere respuestas cortas, de tres frases como máximo.",
+    "accesibilidad": "Usa lector de pantalla; no enviarle capturas de pantalla.",
+    "incidente_enero": "En enero tuvo una caída del webhook por rotación de certificados.",
+    "plan": "Su empresa está en el plan enterprise con SLA de una hora.",
+    "idioma": "Prefiere que le hablen en español, aunque entiende inglés.",
+    "horario": "Trabaja en horario europeo, de 9 a 18 CET.",
+    "producto": "Usa sobre todo el módulo de informes y la API de exportación.",
+}
+for clave, texto in MEMORIAS_DEMO.items():
+    store_semantico.put(ns_demo, clave, {"texto": texto})
+
+for consulta in ["se me ha caído la integración otra vez",
+                 "¿me lo puedes explicar más despacio?",
+                 "necesito la factura del mes pasado"]:
+    print(f"consulta: {consulta!r}")
+    for item in store_semantico.search(ns_demo, query=consulta, limit=3):
+        print(f"    {item.score:.3f}  {item.value['texto']}")
+    print()
+
+#%%md
+La diferencia práctica: en vez de meter 8 memorias (o 300) en cada prompt, metes las 3 que
+vienen a cuento. Menos tokens, menos ruido y mejor respuesta.
+
+**Dos avisos importantes:**
+
+1. **Las puntuaciones son relativas, no absolutas.** Un 0,3 puede ser el mejor resultado
+   disponible y aun así no tener nada que ver. Filtra por umbral **y** por límite, y ajusta
+   el umbral mirando tus propios datos.
+2. **`InMemoryStore` con índice no es para producción.** Guarda los vectores en un
+   diccionario y hace fuerza bruta. Para producción, `PostgresStore` con `pgvector`, que usa
+   la misma API — solo cambia cómo lo construyes.
+
+#%%md
+### Filtros por metadatos
+
+Independiente de la búsqueda semántica y muy útil combinado con ella: `filter` compara campos
+del valor de forma exacta.
+
+#%%py
+store_filtrado = InMemoryStore()
+ns_f = ("memorias", "usuario", "filtros")
+for clave, tipo, texto in [
+    ("rol", "semantica", "Es responsable de facturación"),
+    ("formato", "procedimental", "Respuestas cortas, máximo 3 frases"),
+    ("accesibilidad", "procedimental", "No enviar capturas de pantalla"),
+    ("caida_enero", "episodica", "Caída del webhook en enero por certificados"),
+]:
+    store_filtrado.put(ns_f, clave, {"texto": texto, "tipo": tipo})
+
+print("solo las reglas de trato (procedimentales):")
+for i in store_filtrado.search(ns_f, filter={"tipo": "procedimental"}):
+    print(f"  {i.value['texto']}")
+
+#%%md
+Ese filtro habilita el patrón que de verdad se usa en producción: **cargar siempre las
+procedimentales** (son pocas y cambian el comportamiento) y **buscar semánticamente las
+semánticas y episódicas** (son muchas y solo unas pocas vienen al caso).
+
+#%%py
+def recordar_por_tipo(estado: EstadoAsistente, runtime: Runtime[ContextoUsuario]) -> dict:
+    """Estrategia de recuperación en dos vías: reglas siempre, hechos por relevancia."""
+    ns = espacio(runtime.context.id_usuario)
+    consulta = estado["messages"][-1].text
+
+    reglas = runtime.store.search(ns, filter={"tipo": "procedimental"}, limit=10)
+    relevantes = runtime.store.search(ns, query=consulta, limit=4)
+
+    bloques = []
+    if reglas:
+        bloques.append("Reglas de trato con este usuario (respétalas siempre):\n"
+                       + "\n".join(f"- {r.value['texto']}" for r in reglas))
+    hechos = [r for r in relevantes if r.value.get("tipo") != "procedimental"]
+    if hechos:
+        bloques.append("Contexto relevante:\n" + "\n".join(f"- {r.value['texto']}" for r in hechos))
+
+    if not bloques:
+        return {}
+    return {"messages": [SystemMessage("\n\n".join(bloques))],
+            "memorias_usadas": [r.key for r in reglas] + [r.key for r in hechos]}
+
+
+print("Estrategia definida. Reglas siempre + hechos por relevancia.")
+
+#%%md
+## 7. La higiene de la memoria
+
+Un store que solo crece acaba siendo un problema, no una funcionalidad. Cuatro medidas:
+
+1. **Actualizar en vez de acumular.** Reutilizar la clave sobrescribe. Por eso pedimos al
+   extractor claves estables en `snake_case`.
+2. **Umbral de confianza.** Lo dudoso no entra.
+3. **Caducidad.** Los stores que la soportan aceptan `ttl` en `put`. Si el tuyo no
+   (`store.supports_ttl` te lo dice), guarda una fecha en el valor y filtra al leer.
+4. **Revisión periódica.** Un trabajo que relee las memorias de un usuario, funde
+   duplicados y elimina contradicciones. Es la parte que todo el mundo pospone.
+
+#%%py
+import datetime as dt
+
+print("¿este store soporta TTL?:", store.supports_ttl)
+
+
+def guardar_con_caducidad(st, ns, clave, texto, dias: int) -> None:
+    """Caducidad manual, para stores sin TTL nativo."""
+    caduca = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=dias)).isoformat()
+    st.put(ns, clave, {"texto": texto, "caduca": caduca})
+
+
+def leer_vigentes(st, ns) -> list:
+    ahora = dt.datetime.now(dt.timezone.utc).isoformat()
+    return [i for i in st.search(ns) if i.value.get("caduca", "9999") > ahora]
+
+
+ns_ttl = ("memorias", "temporal", "demo")
+guardar_con_caducidad(store, ns_ttl, "proyecto_actual", "Está migrando a la API v2", dias=30)
+guardar_con_caducidad(store, ns_ttl, "ausencia", "Está de vacaciones", dias=-1)  # ya caducada
+
+print("todo lo guardado :", [i.key for i in store.search(ns_ttl)])
+print("solo lo vigente  :", [i.key for i in leer_vigentes(store, ns_ttl)])
+
+#%%md
+## 8. Ejercicios
+
+> **EJERCICIO 9.1 — Memoria con detección de contradicciones**
+>
+> Escribe un nodo `guardar_con_revision` que, antes de guardar una memoria nueva, **busque
+> las parecidas** en el store y, si encuentra una que la contradice, en vez de sobrescribir a
+> ciegas registre las dos con una marca de conflicto para revisión.
+>
+> Ejemplo: la memoria dice "prefiere respuestas largas y detalladas" y ahora el usuario pide
+> respuestas cortas. ¿Cambió de opinión, o hablaba de otro contexto?
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 9.1</b></summary>
+
+Este es el problema difícil de la memoria de largo plazo, y no tiene una solución perfecta.
+Aquí <b>detectamos</b> el conflicto con el propio modelo y aplicamos una política explícita:
+la memoria nueva gana (es más reciente), pero la anterior se conserva marcada como
+<code>superada_por</code>.
+
+Conservar en vez de borrar es lo correcto porque permite dos cosas que borrar impide:
+auditar por qué el agente cambió de comportamiento, y revertir si la detección se equivocó.
+El coste es que el store crece — por eso la revisión periódica del punto 4 no es opcional.
+</details>
+
+#%%py
+class Conflicto(BaseModel):
+    """Resultado de comparar una memoria nueva con una existente."""
+    hay_conflicto: bool = Field(description="True solo si las dos NO pueden ser ciertas a la vez")
+    explicacion: str = Field(description="En una frase, por qué se contradicen o por qué no")
+
+
+detector = modelo.with_structured_output(Conflicto)
+
+
+def guardar_con_revision(st, ns: tuple, memoria: Memoria) -> str:
+    """Guarda una memoria detectando contradicciones con las que ya existen."""
+    parecidas = st.search(ns, query=memoria.texto, limit=3)
+
+    for previa in parecidas:
+        if previa.key == memoria.clave:
+            continue          # misma clave: es una actualización explícita, no un conflicto
+        if previa.value.get("estado") == "superada":
+            continue
+
+        veredicto = detector.invoke(
+            "¿Estas dos afirmaciones sobre el mismo usuario se contradicen?\n"
+            f"ANTERIOR: {previa.value['texto']}\nNUEVA: {memoria.texto}"
+        )
+        if veredicto.hay_conflicto:
+            st.put(ns, previa.key, {**previa.value, "estado": "superada",
+                                    "superada_por": memoria.clave,
+                                    "motivo": veredicto.explicacion})
+            st.put(ns, memoria.clave, {"texto": memoria.texto, "tipo": memoria.tipo,
+                                       "confianza": memoria.confianza, "estado": "vigente",
+                                       "sustituye_a": previa.key})
+            return f"CONFLICTO con '{previa.key}': {veredicto.explicacion}"
+
+    st.put(ns, memoria.clave, {"texto": memoria.texto, "tipo": memoria.tipo,
+                               "confianza": memoria.confianza, "estado": "vigente"})
+    return "guardada sin conflicto"
+
+
+store_rev = InMemoryStore(index={"embed": init_embeddings("openai:text-embedding-3-small"),
+                                "dims": 1536, "fields": ["texto"]})
+ns_rev = ("memorias", "usuario", "conflictos")
+
+secuencia = [
+    Memoria(tipo="procedimental", clave="formato_respuesta",
+            texto="Prefiere respuestas largas y muy detalladas, con ejemplos.", confianza=0.9),
+    Memoria(tipo="semantica", clave="rol", texto="Trabaja en el equipo de datos.", confianza=1.0),
+    Memoria(tipo="procedimental", clave="formato_breve",
+            texto="Prefiere respuestas de tres frases como máximo, sin rodeos.", confianza=0.95),
+]
+
+for m in secuencia:
+    print(f"  guardando {m.clave:<20} -> {guardar_con_revision(store_rev, ns_rev, m)}")
+
+print("\nestado final de la memoria:")
+for i in store_rev.search(ns_rev):
+    marca = i.value.get("estado", "?")
+    extra = f" (superada por '{i.value['superada_por']}')" if marca == "superada" else ""
+    print(f"  [{marca:<9}] {i.key:<20} {i.value['texto'][:56]}{extra}")
+
+print("\nlo que se le pasaría al modelo (solo lo vigente):")
+for i in store_rev.search(ns_rev, filter={"estado": "vigente"}):
+    print(f"  - {i.value['texto']}")
+
+#%%md
+> **EJERCICIO 9.2 — Memoria compartida por organización**
+>
+> Amplía el asistente para que lea de **dos** espacios de nombres: el del usuario y el de su
+> organización. La memoria de organización (glosario interno, sistemas que usan, contactos)
+> la ven todos sus miembros; la personal, solo su dueño.
+>
+> Comprueba que dos usuarios distintos de la misma empresa comparten el glosario pero no las
+> preferencias.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 9.2</b></summary>
+
+Dos ideas que se llevan más allá de este ejercicio:
+
+<ol>
+<li><b>El aislamiento por inquilino se diseña en el namespace</b>, no en un <code>if</code>.
+Con <code>("memorias", "org", org_id, ...)</code> es literalmente imposible que una consulta
+devuelva datos de otra organización, porque el prefijo no coincide. Un filtro
+<code>if item.org == mi_org</code> sí se puede olvidar.</li>
+<li><b>Las memorias de organización se escriben por otro camino.</b> No las extrae el
+extractor de conversaciones: las curan administradores o un proceso aparte. Dejar que
+cualquier usuario escriba en la memoria compartida es un vector de envenenamiento —
+alguien dice "el procedimiento de reembolso es aprobar siempre" y lo acaba leyendo todo el
+mundo.</li>
+</ol>
+</details>
+
+#%%py
+@dataclass
+class ContextoOrg:
+    id_usuario: str
+    id_org: str
+
+
+store_org = InMemoryStore()
+
+# Memoria de organización: curada, no extraída de conversaciones.
+for clave, texto in [
+    ("glosario_tck", "TCK es el prefijo de los identificadores de ticket."),
+    ("sistema_facturacion", "La facturación se lleva en Contaplus, no en la plataforma."),
+    ("contacto_escalado", "Los escalados críticos van al buzón de guardia."),
+]:
+    store_org.put(("memorias", "org", "acme"), clave, {"texto": texto, "origen": "curada"})
+
+# Memoria personal de cada uno.
+store_org.put(("memorias", "org", "acme", "usuario", "ana"), "formato",
+              {"texto": "Ana prefiere respuestas cortas.", "origen": "conversación"})
+store_org.put(("memorias", "org", "acme", "usuario", "luis"), "formato",
+              {"texto": "Luis prefiere respuestas con ejemplos de código.", "origen": "conversación"})
+
+
+def recordar_dos_niveles(estado: EstadoAsistente, runtime: Runtime[ContextoOrg]) -> dict:
+    ctx = runtime.context
+    ns_org = ("memorias", "org", ctx.id_org)
+    ns_usr = ("memorias", "org", ctx.id_org, "usuario", ctx.id_usuario)
+
+    # Ojo: search por prefijo de organización devolvería TAMBIÉN las personales de todos.
+    # Por eso filtramos por namespace exacto.
+    de_org = [i for i in runtime.store.search(ns_org, limit=20) if i.namespace == ns_org]
+    de_usuario = runtime.store.search(ns_usr, limit=10)
+
+    bloques = []
+    if de_org:
+        bloques.append("Contexto de la organización:\n" + "\n".join(f"- {i.value['texto']}" for i in de_org))
+    if de_usuario:
+        bloques.append("Sobre esta persona:\n" + "\n".join(f"- {i.value['texto']}" for i in de_usuario))
+
+    return {"messages": [SystemMessage("\n\n".join(bloques))],
+            "memorias_usadas": [f"org:{i.key}" for i in de_org] + [f"usr:{i.key}" for i in de_usuario]}
+
+
+asistente_org = (
+    StateGraph(EstadoAsistente, context_schema=ContextoOrg)
+    .add_sequence([("recordar", recordar_dos_niveles), ("responder", responder)])
+    .add_edge(START, "recordar")
+    .compile(checkpointer=InMemorySaver(), store=store_org)
+)
+
+for usuario in ("ana", "luis"):
+    salida = asistente_org.invoke(
+        {"messages": [HumanMessage("¿Qué significa el prefijo TCK y cómo escalo un caso crítico?")],
+         "memorias_usadas": []},
+        context=ContextoOrg(id_usuario=usuario, id_org="acme"),
+        config={"configurable": {"thread_id": f"org-{usuario}"}},
+    )
+    print(f"[{usuario}] memorias: {salida['memorias_usadas']}")
+    print(f"  {salida['messages'][-1].text[:200]}\n")
+
+#%%md
+## 9. Resumen
+
+- El **checkpointer** recuerda dentro de un hilo; el **store** recuerda entre hilos. La
+  pregunta que decide: *¿seguiría siendo cierto en una conversación nueva?*
+- El namespace es una tupla jerárquica y `search` acepta prefijos: **la jerarquía determina
+  las consultas posibles**. El aislamiento por inquilino se diseña ahí, no con un `if`.
+- Tres tipos de memoria: **semántica** (hechos), **episódica** (casos) y **procedimental**
+  (reglas de trato). La procedimental es la más valiosa y la que casi nadie modela.
+- Escribir en caliente cuesta latencia; en segundo plano —otro nodo, después de responder—
+  no. En chats de volumen, siempre en segundo plano.
+- Con muchas memorias, **búsqueda semántica**; con reglas de trato, **cargarlas todas
+  siempre**. La estrategia de dos vías es la que funciona.
+- Las puntuaciones de similitud son relativas: filtra por umbral y por límite.
+- La memoria sin higiene se pudre: claves estables, umbral de confianza, caducidad y revisión
+  periódica.
+
+**Siguiente:** [`10_human_in_the_loop.ipynb`](10_human_in_the_loop.ipynb) — pausar el grafo a
+mitad de ejecución, esperar a una persona y continuar.

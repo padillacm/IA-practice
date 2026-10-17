@@ -1,0 +1,41 @@
+# Valores por defecto del chart supportops. Cada clave está documentada y validada por values.schema.json.
+replicaCount: 2
+
+image:
+  repository: supportops
+  tag: lab                         # imagen de laboratorio (se construye con 19_kubernetes_helm/k8s/image/Dockerfile y se carga en el clúster)
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+# Dónde envía OTLP el agente: el Service «otel-agent» del DaemonSet (values/otel-agent.yaml activa `service.enabled`; el chart lo crea con internalTrafficPolicy: Local, es decir, el tráfico va al agente de SU nodo).
+otlp:
+  endpoint: "http://otel-agent.observability.svc.cluster.local:4318"
+  serviceName: supportops-agent
+
+# Generador de tráfico sintético (el mismo de los módulos anteriores: semilla fija, fallos inyectados)
+traffic:
+  ratePerSecond: 4
+  seed: 42
+  faultProfile: default            # default | none
+
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {memory: 256Mi}
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
