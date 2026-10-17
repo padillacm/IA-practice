@@ -1,0 +1,798 @@
+[
+ {
+  "id": "s7_markers",
+  "title": "Choose the discourse marker",
+  "instructions": "Write the missing word(s) in each mini-dialogue.",
+  "items": [
+   {
+    "q": "The flat is expensive. ______ you, it's the only one near the station.",
+    "a": [
+     "mind"
+    ]
+   },
+   {
+    "q": "He can be quite rude. To be ______, he did apologise afterwards.",
+    "a": [
+     "fair"
+    ]
+   },
+   {
+    "q": "So, going ______ to what I was saying about the budget...",
+    "a": [
+     "back"
+    ]
+   },
+   {
+    "q": "As I ______, the deadline is fixed - we can't move it.",
+    "a": [
+     "say",
+     "said"
+    ]
+   },
+   {
+    "q": "A: 'The traffic this morning was awful.'  B: 'Tell me ______ it!'",
+    "a": [
+     "about"
+    ]
+   },
+   {
+    "q": "A: 'I'd rather not talk about it.'  B: 'Fair ______.'",
+    "a": [
+     "enough"
+    ]
+   },
+   {
+    "q": "A: 'I'm leaving the company.'  B: 'Really? How ______?'",
+    "a": [
+     "come"
+    ]
+   },
+   {
+    "q": "It's a great city to live in. Then ______, the winters are terrible.",
+    "a": [
+     "again"
+    ]
+   },
+   {
+    "q": "Anyway, that's ______ the point. What I wanted to ask was...",
+    "a": [
+     "beside",
+     "not"
+    ]
+   },
+   {
+    "q": "I know ______ you mean - I had exactly the same problem.",
+    "a": [
+     "what"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_upgrade",
+  "title": "Make it sound C1",
+  "type": "open",
+  "instructions": "Rewrite each B2-style sentence so that it sounds more nuanced, diplomatic or natural. Compare with the models.",
+  "items": [
+   {
+    "q": "I think that's wrong.",
+    "a": [
+     "I'm not sure that's quite right.",
+     "I'm not entirely convinced that's the case.",
+     "I see it a bit differently, actually."
+    ]
+   },
+   {
+    "q": "Your idea is bad.",
+    "a": [
+     "I like where you're going with this, but I'm not sure it'd work in practice.",
+     "I have a few reservations about that.",
+     "I can see a couple of potential issues with that."
+    ]
+   },
+   {
+    "q": "I agree.",
+    "a": [
+     "Exactly - that's what I was thinking.",
+     "Yes, I think that's right.",
+     "I couldn't agree more."
+    ]
+   },
+   {
+    "q": "Maybe it will rain.",
+    "a": [
+     "It might well rain.",
+     "I wouldn't be surprised if it rained.",
+     "I've got a feeling it's going to rain."
+    ]
+   },
+   {
+    "q": "I don't know the word... eh... the thing for opening wine.",
+    "a": [
+     "What do you call it... the thing you use to get the cork out of a wine bottle?",
+     "You know, the gadget with a spiral bit that you twist into the cork."
+    ]
+   },
+   {
+    "q": "You are late again. This is a problem.",
+    "a": [
+     "I've noticed you've been running late quite a lot recently - is everything OK?",
+     "I just wanted to mention timekeeping - it's started to affect the team. Is there anything getting in the way?"
+    ]
+   },
+   {
+    "q": "The report has many mistakes.",
+    "a": [
+     "The report needs another proofread - I've flagged quite a few errors.",
+     "I think the report could do with another pass before it goes out."
+    ]
+   },
+   {
+    "q": "I want a raise.",
+    "a": [
+     "Could we find some time to talk about my salary?",
+     "I'd like to discuss the possibility of a raise (BrE: pay rise), based on what I've delivered this year."
+    ]
+   },
+   {
+    "q": "Send me the report.",
+    "a": [
+     "Could you send me the report when you get a chance?",
+     "Would you mind sending over the report?"
+    ]
+   },
+   {
+    "q": "No, we can't do that.",
+    "a": [
+     "I'm afraid that's not something we can do at the moment.",
+     "Unfortunately, that won't be possible - but what we could do is..."
+    ]
+   },
+   {
+    "q": "I didn't finish the task.",
+    "a": [
+     "I'm running a bit behind on that - I'll have it to you by tomorrow morning.",
+     "That's taken longer than expected; can I get it to you by Thursday?"
+    ]
+   },
+   {
+    "q": "You didn't understand my email.",
+    "a": [
+     "I don't think I explained that very clearly - let me clarify.",
+     "Sorry, I think my email may have been a bit confusing."
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_diplomatic",
+  "title": "Choose the most natural professional response",
+  "instructions": "Choose the response a skilled C1 speaker would most likely use. Careful: some wrong options are typical Spanish-speaker calques.",
+  "items": [
+   {
+    "q": "A colleague proposes an unrealistic deadline.",
+    "options": [
+     "With the greatest respect, that's not realistic.",
+     "I'm afraid that deadline is simply impossible.",
+     "That might be a bit tight - could we walk through the timeline together?"
+    ],
+    "a": [
+     "c",
+     "That might be a bit tight - could we walk through the timeline together?",
+     "c) That might be a bit tight - could we walk through the timeline together?"
+    ]
+   },
+   {
+    "q": "Your manager asks your opinion on a plan you don't like.",
+    "options": [
+     "Honestly? I don't think it's a good plan.",
+     "I can see the logic behind it, but I do have a couple of concerns.",
+     "It's very interesting."
+    ],
+    "a": [
+     "b",
+     "I can see the logic behind it, but I do have a couple of concerns.",
+     "b) I can see the logic behind it, but I do have a couple of concerns."
+    ]
+   },
+   {
+    "q": "You didn't understand what someone said in a meeting.",
+    "options": [
+     "Can you repeat, please?",
+     "Sorry, I didn't quite catch that - could you say it again?",
+     "Sorry, what?"
+    ],
+    "a": [
+     "b",
+     "Sorry, I didn't quite catch that - could you say it again?",
+     "b) Sorry, I didn't quite catch that - could you say it again?"
+    ]
+   },
+   {
+    "q": "You need more time to answer a difficult question.",
+    "options": [
+     "Good question - give me a second to think about that.",
+     "Wait, wait...",
+     "I don't know, sorry."
+    ],
+    "a": [
+     "a",
+     "Good question - give me a second to think about that.",
+     "a) Good question - give me a second to think about that."
+    ]
+   },
+   {
+    "q": "You want to interrupt politely.",
+    "options": [
+     "Sorry, but I must interrupt you.",
+     "Excuse me, I want to say something.",
+     "Sorry to jump in - could I just add something here?"
+    ],
+    "a": [
+     "c",
+     "Sorry to jump in - could I just add something here?",
+     "c) Sorry to jump in - could I just add something here?"
+    ]
+   },
+   {
+    "q": "Someone makes a good point that changes your mind.",
+    "options": [
+     "Maybe. We'll see.",
+     "Actually, that's a fair point - I hadn't looked at it that way.",
+     "OK, you are right and I was wrong."
+    ],
+    "a": [
+     "b",
+     "Actually, that's a fair point - I hadn't looked at it that way.",
+     "b) Actually, that's a fair point - I hadn't looked at it that way."
+    ]
+   },
+   {
+    "q": "You need a file from a colleague by Friday (email).",
+    "options": [
+     "Send me the file on Friday, please.",
+     "Would you be able to send it over by Friday?",
+     "I need the file for Friday."
+    ],
+    "a": [
+     "b",
+     "Would you be able to send it over by Friday?",
+     "b) Would you be able to send it over by Friday?"
+    ]
+   },
+   {
+    "q": "You're asked to take on extra work you don't have time for.",
+    "options": [
+     "I'd love to help, but I don't have the bandwidth this week - could it wait until Monday?",
+     "Impossible, I have too much work.",
+     "No, I can't. I'm very busy."
+    ],
+    "a": [
+     "a",
+     "I'd love to help, but I don't have the bandwidth this week - could it wait until Monday?",
+     "a) I'd love to help, but I don't have the bandwidth this week - could it wait until Monday?"
+    ]
+   },
+   {
+    "q": "On a video call, the other person's audio drops out.",
+    "options": [
+     "I don't hear you.",
+     "Sorry, you cut out for a second - could you repeat the last bit?",
+     "Your connection is bad."
+    ],
+    "a": [
+     "b",
+     "Sorry, you cut out for a second - could you repeat the last bit?",
+     "b) Sorry, you cut out for a second - could you repeat the last bit?"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_ed_endings",
+  "title": "-ed endings",
+  "instructions": "How is the -ed ending pronounced? Write t, d or id. Say each word aloud before answering.",
+  "items": [
+   {
+    "q": "worked",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "played",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "wanted",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/",
+     "əd",
+     "/əd/"
+    ]
+   },
+   {
+    "q": "decided",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/",
+     "əd",
+     "/əd/"
+    ]
+   },
+   {
+    "q": "laughed",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "changed",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "stopped",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "needed",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/",
+     "əd",
+     "/əd/"
+    ]
+   },
+   {
+    "q": "watched",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "cleaned",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "finished",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "visited",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/",
+     "əd",
+     "/əd/"
+    ]
+   },
+   {
+    "q": "raised",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "missed",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   },
+   {
+    "q": "judged",
+    "a": [
+     "d",
+     "/d/"
+    ]
+   },
+   {
+    "q": "naked (adjective - an exception!)",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/",
+     "əd",
+     "/əd/"
+    ]
+   },
+   {
+    "q": "learned (adjective: 'a learned professor' = very educated)",
+    "a": [
+     "id",
+     "/id/",
+     "ɪd",
+     "/ɪd/",
+     "əd",
+     "/əd/"
+    ]
+   },
+   {
+    "q": "used (in 'I'm used to it')",
+    "a": [
+     "t",
+     "/t/"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_s_endings",
+  "title": "-s endings",
+  "instructions": "How is the -s ending pronounced? Write s, z or iz. Say it aloud first.",
+  "items": [
+   {
+    "q": "cats",
+    "a": [
+     "s",
+     "/s/"
+    ]
+   },
+   {
+    "q": "dogs",
+    "a": [
+     "z",
+     "/z/"
+    ]
+   },
+   {
+    "q": "watches",
+    "a": [
+     "iz",
+     "/iz/",
+     "ɪz",
+     "/ɪz/",
+     "əz",
+     "/əz/"
+    ]
+   },
+   {
+    "q": "plays",
+    "a": [
+     "z",
+     "/z/"
+    ]
+   },
+   {
+    "q": "laughs",
+    "a": [
+     "s",
+     "/s/"
+    ]
+   },
+   {
+    "q": "buses",
+    "a": [
+     "iz",
+     "/iz/",
+     "ɪz",
+     "/ɪz/",
+     "əz",
+     "/əz/"
+    ]
+   },
+   {
+    "q": "needs",
+    "a": [
+     "z",
+     "/z/"
+    ]
+   },
+   {
+    "q": "months",
+    "a": [
+     "s",
+     "/s/"
+    ]
+   },
+   {
+    "q": "changes",
+    "a": [
+     "iz",
+     "/iz/",
+     "ɪz",
+     "/ɪz/",
+     "əz",
+     "/əz/"
+    ]
+   },
+   {
+    "q": "Laura's (possessive)",
+    "a": [
+     "z",
+     "/z/"
+    ]
+   },
+   {
+    "q": "Mike's (possessive)",
+    "a": [
+     "s",
+     "/s/"
+    ]
+   },
+   {
+    "q": "rises",
+    "a": [
+     "iz",
+     "/iz/",
+     "ɪz",
+     "/ɪz/",
+     "əz",
+     "/əz/"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_word_stress",
+  "title": "Word stress",
+  "instructions": "Which syllable is stressed? Write the number (1 = first syllable). Check tricky ones in the Cambridge Dictionary and listen.",
+  "items": [
+   {
+    "q": "pho-to-graph",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "pho-to-gra-pher",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "pho-to-gra-phic",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "e-co-no-my",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "e-co-no-mic",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "de-ve-lop",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "com-for-ta-ble (usually said with 3 syllables: COMF-ta-ble)",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "ve-ge-ta-ble (usually 3 syllables: VEG-ta-ble)",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "de-ter-mine",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "ho-tel",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "in-te-res-ting (usually 3 syllables: IN-tres-ting)",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "ca-te-go-ry",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "a-na-ly-sis",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "tech-no-lo-gy",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "pre-sen-ta-tion",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "ad-van-tage",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "re-cord (noun: 'a world record')",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "re-cord (verb: 'to record a song')",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "in-crease (noun)",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "in-crease (verb)",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "de-mo-cra-cy",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "de-mo-cra-tic",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "in-dus-try",
+    "a": [
+     "1"
+    ]
+   },
+   {
+    "q": "ca-tas-tro-phe",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "ho-ri-zon",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "Eu-ro-pe-an",
+    "a": [
+     "3"
+    ]
+   },
+   {
+    "q": "e-ven-tu-al-ly",
+    "a": [
+     "2"
+    ]
+   },
+   {
+    "q": "par-ti-ci-pate",
+    "a": [
+     "2"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "s7_nuclear_stress",
+  "title": "Which word carries the main stress?",
+  "instructions": "Read the context, then write the ONE word that gets the main (nuclear) stress in B's reply.",
+  "items": [
+   {
+    "q": "A: Did you buy the red one?  B: 'No, I bought the blue one.'",
+    "a": [
+     "blue"
+    ]
+   },
+   {
+    "q": "A: Who sent the email?  B: 'Maria sent it.'",
+    "a": [
+     "maria"
+    ]
+   },
+   {
+    "q": "A: You didn't send it, did you?  B: 'I did send it.'",
+    "a": [
+     "did"
+    ]
+   },
+   {
+    "q": "A: Is the meeting on Monday?  B: 'No, it's on Tuesday.'",
+    "a": [
+     "tuesday"
+    ]
+   },
+   {
+    "q": "A: I love London.  B: 'I hate London.'",
+    "a": [
+     "hate"
+    ]
+   },
+   {
+    "q": "A: Where do you work?  B: 'I work in a bank.'",
+    "a": [
+     "bank"
+    ]
+   },
+   {
+    "q": "A: Coffee?  B: 'I'd prefer tea, actually.'",
+    "a": [
+     "tea"
+    ]
+   },
+   {
+    "q": "A: I thought you lived in Madrid.  B: 'I used to live in Madrid.'",
+    "a": [
+     "used"
+    ]
+   },
+   {
+    "q": "A: Is it your car?  B: 'No, it's my sister's car.'",
+    "a": [
+     "sister's",
+     "sister"
+    ]
+   },
+   {
+    "q": "A glass building for growing plants: a GREENhouse or a green HOUSE? Write the stressed word.",
+    "a": [
+     "green"
+    ]
+   }
+  ]
+ }
+]

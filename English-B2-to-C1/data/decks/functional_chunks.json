@@ -1,0 +1,172 @@
+[
+ {
+  "front": "disagree politely after acknowledging their view: 'I see where...'",
+  "back": "I see where you're coming from, but",
+  "example": "I see where you're coming from, but I think the cost is too high."
+ },
+ {
+  "front": "accept part of someone's argument (concession)",
+  "back": "That's a fair point",
+  "example": "That's a fair point - I hadn't considered the timing."
+ },
+ {
+  "front": "agree completely (strong)",
+  "back": "I couldn't agree more",
+  "example": "I couldn't agree more - it's long overdue."
+ },
+ {
+  "front": "partial agreement: 'That's true ...'",
+  "back": "That's true up to a point",
+  "example": "That's true up to a point, but it depends on the budget."
+ },
+ {
+  "front": "disagree softly: 'I'm not sure I'd ...'",
+  "back": "I'm not sure I'd go that far",
+  "example": "It's a risk, but I'm not sure I'd go that far."
+ },
+ {
+  "front": "offer a different view gently",
+  "back": "I see it slightly differently",
+  "example": "I see it slightly differently, actually."
+ },
+ {
+  "front": "buy time before answering a hard question",
+  "back": "Let me think about that for a second",
+  "example": "Good question - let me think about that for a second."
+ },
+ {
+  "front": "start answering when you need to organise your ideas",
+  "back": "Well, it depends",
+  "example": "Well, it depends on what you mean by 'success'."
+ },
+ {
+  "front": "rephrase when your first attempt wasn't clear",
+  "back": "Let me put it another way",
+  "example": "Let me put it another way: we're losing money on every sale."
+ },
+ {
+  "front": "explain a word you don't know",
+  "back": "It's the thing you use to...",
+  "example": "It's the thing you use to get the cork out of a bottle."
+ },
+ {
+  "front": "interrupt politely",
+  "back": "Sorry to jump in, but",
+  "example": "Sorry to jump in, but could I just add something?"
+ },
+ {
+  "front": "return to your point after an interruption",
+  "back": "As I was saying",
+  "example": "As I was saying, the deadline is fixed."
+ },
+ {
+  "front": "go back to an earlier topic",
+  "back": "Coming back to",
+  "example": "Coming back to what you said about pricing..."
+ },
+ {
+  "front": "ask someone to repeat (natural, not 'Can you repeat?')",
+  "back": "Sorry, I didn't quite catch that",
+  "example": "Sorry, I didn't quite catch that - could you say it again?"
+ },
+ {
+  "front": "check you've understood",
+  "back": "So, if I understand correctly",
+  "example": "So, if I understand correctly, you want it by Friday?"
+ },
+ {
+  "front": "hedge a claim (academic/work)",
+  "back": "It could be argued that",
+  "example": "It could be argued that the policy came too late."
+ },
+ {
+  "front": "hedge: say something is probably true",
+  "back": "It seems to me that",
+  "example": "It seems to me that we're rushing this."
+ },
+ {
+  "front": "introduce a tentative opinion",
+  "back": "I'm inclined to think that",
+  "example": "I'm inclined to think we should wait."
+ },
+ {
+  "front": "state your main opinion (neutral, spoken)",
+  "back": "As I see it",
+  "example": "As I see it, the real problem is communication."
+ },
+ {
+  "front": "speculate: 'I wouldn't be ...'",
+  "back": "I wouldn't be surprised if",
+  "example": "I wouldn't be surprised if they cancelled it."
+ },
+ {
+  "front": "speculate: it will almost certainly happen",
+  "back": "It's bound to",
+  "example": "It's bound to rain at the weekend."
+ },
+ {
+  "front": "add a contrasting point (spoken): 'Mind you' / 'Then ...'",
+  "back": "Then again",
+  "example": "It's expensive. Then again, it's the only one near the station."
+ },
+ {
+  "front": "be fair to someone after criticising them",
+  "back": "To be fair",
+  "example": "He's disorganised. To be fair, he did apologise."
+ },
+ {
+  "front": "introduce the most important point",
+  "back": "The thing is",
+  "example": "The thing is, we don't have the budget."
+ },
+ {
+  "front": "emphasise what matters most",
+  "back": "What really matters is",
+  "example": "What really matters is that the client is happy."
+ },
+ {
+  "front": "sum up at the end of a turn (spoken)",
+  "back": "So, all in all",
+  "example": "So, all in all, I think it's worth a try."
+ },
+ {
+  "front": "react with sympathy / agreement (backchannel): 'Tell me ...!'",
+  "back": "Tell me about it",
+  "example": "'This traffic is awful.' 'Tell me about it!'"
+ },
+ {
+  "front": "accept someone's reason (backchannel)",
+  "back": "Fair enough",
+  "example": "'I'd rather not say.' 'Fair enough.'"
+ },
+ {
+  "front": "ask for the reason, showing interest (informal)",
+  "back": "How come?",
+  "example": "'I'm leaving the company.' 'Really? How come?'"
+ },
+ {
+  "front": "make a polite request (email / meeting)",
+  "back": "Would you be able to",
+  "example": "Would you be able to send it over by Friday?"
+ },
+ {
+  "front": "say no politely at work",
+  "back": "I'm afraid that won't be possible",
+  "example": "I'm afraid that won't be possible this week, but what we could do is..."
+ },
+ {
+  "front": "admit a delay professionally",
+  "back": "I'm running a bit behind on that",
+  "example": "I'm running a bit behind on that - I'll have it to you by tomorrow."
+ },
+ {
+  "front": "sign off an email inviting questions",
+  "back": "Let me know if you have any questions",
+  "example": "Let me know if you have any questions."
+ },
+ {
+  "front": "introduce a small, possibly unwelcome point",
+  "back": "Just a heads-up",
+  "example": "Just a heads-up: the meeting's been moved to 3."
+ }
+]
