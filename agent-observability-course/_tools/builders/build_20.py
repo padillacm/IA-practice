@@ -162,6 +162,9 @@ def build_lesson() -> None:
     > ⚠️ **Honestidad sobre el laboratorio.** Todos los datos personales son **sintéticos** (catálogo de SupportOps) y los ataques son **simulados**: `InjectableLLM` es un modelo *deliberadamente vulnerable* (determinista, `mock`) que obedece órdenes
     > ocultas con una probabilidad fijada, para que conozcamos la verdad de cada incidente. No es un modelo real y **no demuestra** cuán vulnerable es un LLM concreto. Esto es ingeniería de telemetría, **no asesoría legal**: el alcance legal
     > detallado (GDPR, CCPA, sanidad…) queda fuera del curso y debe validarlo tu equipo de privacidad.
+
+    > 🧭 **Ruta núcleo vs ampliación** (lección de ≈ 84 celdas). **Núcleo (≈ 3 h en total con el proyecto):** mapa y medición de la PII (§1-2), redactor a mano y niveles de captura (§3-4), redacción en el Collector (§5 sin 5.1), prompt injection con detector y monitor de comportamiento (§6), auditoría (primera mitad de §7), 🏭/🧠/autoevaluación (§9-12).
+    > **Ampliación:** ataque a un seudónimo SHA-256 sobre el Collector (§5.1), retención por clase y derecho de supresión (segunda mitad de §7) y la demostración en vivo con alerta (§8, necesita el stack). El proyecto solo exige lo del núcleo.
     """)
 
     md("""
@@ -185,8 +188,8 @@ def build_lesson() -> None:
                "`memory_limiter` primero para proteger el proceso. La redacción debe ir **antes** de `batch` (y antes de cualquier exportador): se redacta cada registro una vez, y nada sin redactar debe salir del pipeline."))
     md(details("3 · (Módulo 12) ¿Qué hace `redact_args` en el servidor MCP de pedidos?",
                "Lista blanca por herramienta: solo los argumentos permitidos se registran en telemetría; el resto se sustituye por `<redacted>` y la PII de los valores se enmascara. Es **minimización en la fuente**."))
-    md(details("4 · (Módulo 16) ¿Qué intervalo deben tener los grupos de alertas de Grafana y cómo se enlaza una alerta con un panel?",
-               "Múltiplo de 10 s. El enlace va en `annotations.__dashboardUid__` y `__panelId__`."))
+    md(details("4 · (Módulo 16) Una alerta de «petición sospechosa de inyección»: ¿es de *página* o de *ticket*, y cómo evitas que despierte a la guardia por falsas alarmas? (Y recuerda: ¿qué intervalo deben tener los grupos de alertas de Grafana?)",
+               "Casi siempre **ticket** (revisión humana al día siguiente): detectar no es impedir y un detector léxico tiene falsos positivos; solo una campaña masiva sostenida justificaría página. Se evita el ruido con una ventana y un umbral calibrados sobre la línea base (como el burn rate multiventana del 16). El intervalo del grupo es múltiplo de 10 s y la alerta se enlaza al panel con `annotations.__dashboardUid__` y `__panelId__`."))
 
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_20 + """
@@ -288,7 +291,7 @@ plt.suptitle("PII encontrada por señal y escenario (los datos son sintéticos)"
     # 3 · Teoría y mecanismo a mano: detectar y redactar PII
 
     **Vocabulario mínimo.** *PII* (datos personales): permiten identificar a una persona (correo, teléfono, DNI, IBAN, nombre, IP en algunos contextos). *Cuasi-identificadores*: solos no identifican, juntos sí (código postal + fecha de nacimiento + género).
-    *Secretos* (claves de API, tokens): no son personales pero su fuga es peor. *Seudonimización*: sustituir el dato por un identificador estable (reversible con información adicional) frente a *anonimización*: irreversible. La seudonimización **sigue siendo dato personal** en muchos marcos legales; solo reduce el riesgo.
+    *Secretos* (claves de API, tokens): no son personales pero su fuga es peor. *HMAC*: un hash que mezcla el dato con una **clave secreta** (como firmar con una contraseña; sin la clave nadie puede recalcularlo). *Seudonimización*: sustituir el dato por un identificador estable (reversible con información adicional) frente a *anonimización*: irreversible. La seudonimización **sigue siendo dato personal** en muchos marcos legales; solo reduce el riesgo.
 
     **Principios de ingeniería** (los que usaremos): **minimización** (no captures lo que no necesitas), **limitación de la finalidad** (el contenido solo para depurar), **retención mínima**, **acceso por necesidad** y **defensa en profundidad** (varias capas, porque cada detector falla).
 
@@ -306,6 +309,9 @@ print("\\nLuhn: 4111111111111111 ->", P.luhn_ok("4111111111111111"), "· 4111111
       "· tarjeta SINTÉTICA del catálogo ->", P.luhn_ok(c["card_number"]), "(¡no cumple Luhn! por eso card_valid acepta también el prefijo de pruebas 4000 0000)")
 ''')
     md("""
+    **✏️ Ejemplo resuelto: Luhn a mano.** Es la suma de control de las tarjetas (un *checksum*, como el dígito de control del DNI). Para `4111 1111 1111 1111`: (1) recorre los dígitos **de derecha a izquierda**; (2) duplica uno de cada dos empezando por el segundo (si el doble pasa de 9, réstale 9); (3) suma todo; (4) válida si la suma es múltiplo de 10.
+    Aquí los siete `1` de las posiciones impares dan 7 × 2 = 14, el `4` de la izquierda (también impar) da 8, y los ocho `1` restantes suman 8: total **30** → válida. Cambia el último dígito a `2` y la suma será 31 → inválida. Es lo que comprueba la celda anterior y lo que implementarás en el proyecto.
+
     Tres detalles que parecen menores y no lo son:
 
     - **Prioridad**: la tarjeta se detecta *antes* que el teléfono (si no, `4000 0000 7929 7678` se partiría en dos «teléfonos»). El orden de `DETECTORS` es parte del diseño.
@@ -556,7 +562,7 @@ display(pd.DataFrame(rows))
 
     \[ \text{score}=1-\prod_i (1-w_i) \]
 
-    Dos señales débiles de 0,5 y 0,55 dan \(1-0{,}5\cdot0{,}45=0{,}775\): se refuerzan sin pasar de 1. Umbrales: `flag` ≥ 0,5 (alerta), `block` ≥ 0,85 (bloqueo). Es una **heurística barata**: se evalúa en microsegundos, no sustituye a un clasificador entrenado ni a la arquitectura.
+    Dos señales débiles de 0,5 y 0,55 dan \(1-0{,}5\cdot0{,}45=0{,}775\): se refuerzan sin pasar de 1. Umbrales: `flag` ≥ 0,5 (alerta), `block` ≥ 0,85 (bloqueo). Elegir el umbral es elegir un punto de la curva ROC de cualquier clasificador de ML: con un presupuesto de falsos positivos (FPR) fijado, buscas el umbral más bajo que lo respeta para maximizar el recall. Es una **heurística barata**: se evalúa en microsegundos, no sustituye a un clasificador entrenado ni a la arquitectura.
     """)
     code(SEC_RUN)
     code('''
@@ -958,6 +964,7 @@ except NotImplementedError as e:
 
     **TODO 2.** `pseudonym(value: str, key: bytes) -> str`: HMAC-SHA256 del valor **normalizado** (sin espacios y en minúsculas) con `key`; devuelve los **8 primeros hex**. Lo usarás para contar clientes distintos sin conocer sus correos.
     """)
+    md(hint(1, "El módulo `hmac` de la biblioteca estándar ya está importado: `hmac.new(clave, mensaje_en_bytes, hashlib.sha256).hexdigest()`. Normaliza primero (quita **todos** los espacios, p. ej. con `re.sub(r\"\\s+\", \"\", value)`, y pasa a minúsculas) y codifica a bytes con `.encode()`."))
     code('''
 def pseudonym(value: str, key: bytes) -> str:
     # TODO 2
@@ -1024,6 +1031,8 @@ except NotImplementedError as e:
     **TODO 5.** `flag_refund_without_lookup(spans) -> set[str]`: devuelve los `trace_id` donde hay un span `execute_tool issue_refund` **sin** un `execute_tool get_order` (sin error) anterior **en la misma traza** (ordena por `start_unix_nano`).
     `spans` son los dicts de `SEC["spans"]` (esquema `SPAN_SCHEMA`: `trace_id`, `name`, `start_unix_nano`, `status`, `attributes`).
     """)
+    md(hint(1, "Es una consulta estructural «A no ocurre antes de B dentro de la misma traza» (la lección §6, 👀 de la traza secuestrada). Agrupa los spans por `trace_id` (`collections.defaultdict(list)`) y ordena cada grupo por `start_unix_nano`."))
+    md(hint(2, "Recorre cada traza en orden con una bandera `vio_get_order = False`: al ver `execute_tool get_order` **sin error** pon la bandera a `True`; al ver `execute_tool issue_refund` con la bandera aún en `False`, añade el `trace_id` al conjunto."))
     code('''
 def flag_refund_without_lookup(spans) -> set:
     # TODO 5
@@ -1041,6 +1050,8 @@ except NotImplementedError as e:
     **TODO 6.** `alert_fires(per_minute, window, threshold) -> list[bool]`: para cada minuto `i`, `True` si la **suma** de `per_minute[max(0, i−window+1) : i+1]` es **mayor que** `threshold` (equivale a `sum(increase(...[window])) > threshold` de PromQL).
     Con tu función y la serie `BASE_PLUS_CAMPAIGN` (ruido de fondo + una campaña que empieza en el minuto 20) elige `window` y `threshold` que no den falsas alarmas antes de la campaña y disparen en ≤ 3 min tras su inicio.
     """)
+    md(hint(1, "Es la misma lógica de «ventana + umbral» del módulo 16, pero sobre un conteo: suma de las últimas `window` observaciones comparada con `threshold`. Para elegir los parámetros, **mira primero la línea base**: ¿cuál es la suma máxima de `BASE[:20]` en ventanas de 2, 3 o 5 min?"))
+    md(hint(2, "Una ventana más larga suaviza el ruido pero retrasa la detección. Prueba `window` ∈ {2, 3, 5} y fija `threshold` justo por encima de la suma máxima de la línea base en esa ventana; comprueba que el primer disparo cae en los 3 minutos siguientes a `CAMPAIGN_START`."))
     code('''
 rng_ = np.random.default_rng(SEED)
 BASE = rng_.poisson(0.4, 45)                          # ~0,4 sospechosas/min de fondo (falsos positivos y curiosos)
@@ -1065,6 +1076,8 @@ except NotImplementedError as e:
     **TODO 7.** Clase `AuditLog(key: bytes)` con `append(actor, action, resource) -> dict` y `verify() -> tuple[bool, int | None]`. Cada entrada es un dict con `seq`, `actor`, `action`, `resource`, `prev` (hash de la anterior; `"0"*64` para la primera) y `hash` = HMAC-SHA256 con `key` del JSON canónico
     (`json.dumps(..., sort_keys=True)`) de `seq, actor, action, resource, prev`. `verify()` devuelve `(True, None)` o `(False, índice de la primera entrada inválida)` y debe detectar: modificación, borrado y reordenación.
     """)
+    md(hint(1, "Es la cadena de hashes de la lección §7: en `append`, `prev` es el `hash` de la última entrada (o `\"0\"*64`) y `hash` se calcula con HMAC sobre el JSON canónico del resto de campos. Escribe una función auxiliar `_h(entrada_sin_hash)` y úsala en ambos métodos."))
+    md(hint(2, "`verify()` recorre las entradas con su índice `i`: recalcula el hash esperado y comprueba que `entry['hash']` coincide, que `entry['prev']` es el hash de la entrada anterior (o ceros) y que `entry['seq'] == i`. En el primer fallo devuelve `(False, i)`. El `seq` es lo que detecta un borrado en el medio."))
     code('''
 class AuditLog:
     def __init__(self, key: bytes):
