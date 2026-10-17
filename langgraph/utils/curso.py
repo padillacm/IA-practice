@@ -34,7 +34,7 @@ VERSIONES_MINIMAS = {
 
 #: Modelo por defecto. Barato, rápido y con tool-calling fiable: suficiente para
 #: todo el curso. Súbelo a un modelo mayor solo en los proyectos si quieres.
-MODELO_POR_DEFECTO = os.environ.get("LANGGRAPH_CURSO_MODELO", "gpt-4o-mini")
+MODELO_POR_DEFECTO = os.environ.get("LANGGRAPH_CURSO_MODELO", "gpt-6-luna")
 
 
 def ruta_datos(nombre: str) -> pathlib.Path:
@@ -137,11 +137,26 @@ def init(*, trazas: bool = True, proyecto: str = "curso-langgraph", silencioso: 
 # --------------------------------------------------------------------------------------
 
 
+#: Modelos de razonamiento que solo aceptan su `temperature` por defecto (1) y
+#: rechazan la API con `unsupported_value` si se les fija cualquier otro valor.
+_MODELOS_SIN_TEMPERATURA = ("o1", "o3", "o4", "gpt-5", "gpt-6")
+
+
+def _es_modelo_razonamiento(modelo: str) -> bool:
+    nombre = modelo.split(":")[-1]  # quita el prefijo "openai:" si viene con él
+    return nombre.startswith(_MODELOS_SIN_TEMPERATURA)
+
+
 def llm(modelo: str | None = None, *, temperatura: float = 0.0, **kwargs: Any):
     """Devuelve un `ChatOpenAI` configurado con los valores del curso.
 
     `temperatura=0` por defecto: en un grafo con enrutado, el no-determinismo del
-    modelo se propaga a las aristas y hace irreproducible el ejercicio.
+    modelo se propaga a las aristas y hace irreproducible el ejercicio. Los modelos
+    de razonamiento (o1/o3/o4, gpt-5, gpt-6) no soportan fijar `temperature` - la
+    API responde 400 `unsupported_value` - así que para esos se omite y en su lugar
+    se fija `reasoning_effort="none"`: con Chat Completions el tool-calling
+    (bind_tools/ToolNode, que usa casi todo el curso) solo funciona con razonamiento
+    desactivado.
     """
     if not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError(
@@ -152,7 +167,13 @@ def llm(modelo: str | None = None, *, temperatura: float = 0.0, **kwargs: Any):
         )
     from langchain_openai import ChatOpenAI
 
-    return ChatOpenAI(model=modelo or MODELO_POR_DEFECTO, temperature=temperatura, **kwargs)
+    modelo = modelo or MODELO_POR_DEFECTO
+    if _es_modelo_razonamiento(modelo):
+        kwargs.setdefault("reasoning_effort", "none")
+    elif "temperature" not in kwargs:
+        kwargs["temperature"] = temperatura
+
+    return ChatOpenAI(model=modelo, **kwargs)
 
 
 # --------------------------------------------------------------------------------------
@@ -176,8 +197,16 @@ def mostrar_grafo(grafo: Any, *, xray: bool | int = False, png: bool = True) -> 
         try:
             from IPython.display import Image, display
 
-            display(Image(dibujable.draw_mermaid_png()))
-            return None
+            try:
+                display(Image(dibujable.draw_mermaid_png(max_retries=3, retry_delay=1.0)))
+                return None
+            except Exception:
+                import base64
+                fuente = dibujable.draw_mermaid()
+                encoded = base64.b64encode(fuente.encode("utf-8")).decode("ascii")
+                url = f"https://mermaid.ink/img/{encoded}?type=png"
+                display(Image(url=url))
+                return None
         except Exception as exc:  # red caída, mermaid.ink no disponible, sin IPython...
             print(f"[aviso] no se pudo renderizar el PNG ({type(exc).__name__}); muestro Mermaid en texto\n")
 
