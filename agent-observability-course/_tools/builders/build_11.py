@@ -37,7 +37,7 @@ def build_lesson() -> None:
     | | |
     |---|---|
     | **Nivel** | 🟠 Avanzado |
-    | **Duración estimada** | ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min) |
+    | **Duración estimada** | ≈ 5 h (lección ≈ 3 h núcleo, +1 h de ampliación opcional; proyecto ≈ 1 h 45 min) |
     | **Servicios de Compose** | Opcional: `--profile core` (Collector + Tempo + Loki + Grafana) y `metrics` (Prometheus) para la sección 10. Sin Docker todo funciona igual en **modo degradado** (la telemetría se queda en memoria; mismo esquema) |
     | **RAM aproximada** | < 600 MB sin stack · ≈ 1,2 GB con `core` + `metrics` |
     | **Prerrequisitos** | Módulos 02 (contexto y `traceparent`), 03 (SDK, `OTelInstrumentor`), 04 (GenAI semconv), 07-10 (TraceQL, LogQL, métricas, Grafana) |
@@ -59,6 +59,13 @@ def build_lesson() -> None:
     8. **Operar** el sistema en Grafana: panel de agentes, TraceQL de huérfanos y de cascadas.
     """)
 
+    md("""
+    > 🧭 **Ruta núcleo vs ampliación (la lección tiene ~90 celdas: hazla en dos sesiones).**
+    > - **Sesión A (≈ 1 h 30 min):** secciones 1, 2, 3, 4 y 7 → qué cambia al pasar de un agente a un equipo, el modelo de datos, propagar el `traceparent` a mano y ver qué pasa cuando se pierde (trazas huérfanas).
+    > - **Sesión B (≈ 1 h 30 min):** secciones 8 y 9 → colas (padre-hijo o *span link*) y fallos en cascada (reintentos, timeouts, trabajo zombi). Después, el proyecto: sus TODOs 1-6 salen de A y B.
+    > - **Ampliación opcional (≈ 1 h):** 5 (camino crítico y paralelismo), 6 (delegar vs transferir vs no dividir), 10 (Grafana), 11 (service graph) y 12 (*baggage*).
+    """)
+
     md("## 🔁 Conexión con módulos anteriores")
     md(details("1 · (Módulo 02/03) ¿Qué lleva la cabecera `traceparent` y por qué sin ella un servicio abre una traza nueva?",
                "`versión-trace_id-parent_id-flags` (`00-<32 hex>-<16 hex>-<2 hex>`). El receptor crea su span con ese `trace_id` y como padre ese `parent_id`; si no hay cabecera (o es inválida) no hay contexto remoto y el SDK crea un **span raíz con `trace_id` nuevo**: la petición queda partida en trazas sin relación."))
@@ -66,6 +73,9 @@ def build_lesson() -> None:
                "Abre el span `invoke_agent <nombre>` con el reloj simulado. Su padre es el **contexto OpenTelemetry actual** (contextvars) en ese momento: si hay un span activo, será su hijo; si no, será raíz. En multi-agente eso significa que **quien llama debe dejar su span activo y el contexto remoto debe estar adjunto** antes de ejecutar al subagente."))
     md(details("3 · (Módulo 04) ¿Cuándo es `invoke_agent` de tipo CLIENT y cuándo INTERNAL?",
                "CLIENT cuando el agente es un **servicio remoto** (se le llama por red); INTERNAL cuando corre en el mismo proceso. La spec GenAI (estado *Development*) solo define el lado cliente: el lado servidor de un agente remoto lo decide cada implementación."))
+
+    md(details("4 · (Módulo 08, aplicación) Tienes el `trace_id` de una petición multi-agente. ¿Qué consulta LogQL reúne los logs del orquestador y de los cuatro especialistas? ¿Qué verías si la propagación del contexto estuviera rota en uno de los saltos?",
+               "`{deployment_environment_name=\"lab\"} | trace_id=\"<id>\"` (metadato, sin parsear, sobre todos los streams del entorno). Si un salto pierde el `traceparent`, el especialista abre **otra** traza con **otro** `trace_id`: la consulta devuelve solo los logs de la mitad de la petición y el resto queda «huérfano». Es exactamente el síntoma que aprenderás a medir en la sección 7."))
 
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_11 + '''
@@ -795,7 +805,7 @@ print("¿llegó el email a algún span?", any("customer.email" in r["attributes"
     - **Todos los servicios** (los 4 que participan) tienen ahora el atributo `supportops.customer.tier` también en los spans `chat` y `execute_tool` que no lo traían: podrías filtrar latencia **por tier en cualquier servicio** sin tocar su código.
     - El email **no** está en ningún span (lista blanca) pero **sí** viajó en la cabecera `baggage` a todos los saltos: el filtro de atributos no protege la cabecera. Quien reciba la petición (incluido un tercero) lo lee.
     """))
-    md(box("warn", "Cuidado", """
+    md(box("warn", "", """
     El baggage es **dato propagado, no verificado**: un cliente hostil puede enviar la cabecera con el valor que quiera (por ejemplo `tier=premium`). Úsalo para analítica de baja cardinalidad, nunca para decisiones de seguridad ni de facturación, y **nunca** con PII ni secretos. El procesador de arriba además respeta el atributo que el servicio ya fijó (no pisa la fuente de verdad).
     """))
 
@@ -811,7 +821,7 @@ print("¿llegó el email a algún span?", any("customer.email" in r["attributes"
     - **Escala**: en multi-agente el número de spans por petición se multiplica por el nº de agentes; presupuesta cardinalidad y volumen (módulo 18) y **muestrea por traza completa**, nunca por servicio.
     """)
 
-    md(box("elite", "Secretos de la élite", """
+    md(box("elite", "", """
     1. **La spec solo define el lado *cliente* de un agente remoto.** `invoke_agent` es CLIENT (remoto) o INTERNAL (en proceso), pero no dice cómo se llama el span del lado servidor. Decide una convención (aquí: el span propio de la ejecución, INTERNAL, hijo del CLIENT) y documéntala; si no, cada equipo dibuja el árbol distinto y las consultas TraceQL no se comparten. *Fuente: spec GenAI de agentes (estado Development).*
     2. **Cada llamada de inferencia se cuenta una sola vez en el árbol.** Si tu orquestador acumula en su span los tokens de sus hijos, sumar spans doblará el coste. La spec lo dice explícitamente al definir `gen_ai.invoke_agent.inference_calls`. Cuenta en las hojas `chat` (sección 6).
     3. **Un timeout del llamador no cancela al llamado.** Sin cancelación o *deadline* propagado el subagente sigue gastando tokens tras el abandono (nuestro `zombie_s`); y el reintento paga de nuevo. La fuga es invisible en la métrica del llamador y se ve en la traza como un hijo que termina **después** que su padre CLIENT.
@@ -825,7 +835,7 @@ print("¿llegó el email a algún span?", any("customer.email" in r["attributes"
     11. **La topología cambia cuánto se propaga un error, y tu telemetría debe medirlo.** En el estudio de Kim et al., con agentes independientes los errores se amplificaron 17,2× y con un orquestador central 4,4× (el orquestador actúa de «cuello de validación»). Para tu sistema, la versión medible es: para cada traza con un fallo en una hoja, ¿cuántos spans ascendentes acabaron también en error? (consulta estructural de TraceQL con `>>`). Si tu orquestador absorbe fallos sin validarlos (error de la raíz oculto, módulo 02), sale 0 y tu panel es ciego. *Fuente: arXiv:2512.08296 (preprint; ver aviso de versiones arriba).*
     """))
 
-    md(box("warn", "⚠️ Errores comunes", """
+    md(box("warn", "Errores comunes", """
     - **Ejecutar herramientas o subagentes en un `ThreadPool`/`Process` sin llevar el contexto**: no hay error, hay trazas partidas (sección 3.1).
     - **Reintentar en cada capa** (orquestador, agente, SDK del LLM, cliente HTTP): `(r+1)^d`. Decide **un** nivel responsable.
     - **Timeout del llamador ≤ tiempo de peor caso del llamado**: toda llamada «lenta» fallará aunque el llamado funcione.

@@ -3,7 +3,7 @@ Agente: Revisor pedagógico P2 · Módulos: 08–15 · Informe: agent-observabil
 - [x] 08_loki_logql (pistas TODO 3 y 4a, 🔁 Q4 aplicación, 👀 en proyecto)
 - [x] 09_metricas (ruta en 2 sesiones, pistas TODO 6, 🔁 Q4, 👀 proyecto)
 - [x] 10_grafana (ruta corregida: variables/alerta sí son núcleo; pistas TODO 4 y 6; 🔁 Q4 TraceQL)
-- [ ] 11_multiagente
+- [x] 11_multiagente (ruta A/B alineada con el proyecto, 🔁 Q4 LogQL, cabeceras de cajas)
 - [ ] 12_mcp_tools
 - [ ] 13_costes_finops
 - [ ] 14_evaluacion_online
