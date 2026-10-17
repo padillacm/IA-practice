@@ -257,13 +257,13 @@ def build_lesson() -> None:
     | | |
     |---|---|
     | **Nivel** | 🔴 Experto |
-    | **Duración estimada** | ≈ 5 h (ruta núcleo ≈ 3 h 30: §1-6, §8 y §11) |
+    | **Duración estimada** | ≈ 5 h (ruta núcleo ≈ 3 h 30: §1-8 y §12) |
     | **Servicios de Compose** | Ninguno del stack del curso. Con **Docker** el notebook lanza contenedores efímeros (Collector contrib 0.162, Loki, Tempo, Prometheus) en puertos aleatorios: no choca con `docker compose` |
     | **RAM aproximada** | ≈ 1 GB mientras corre un contenedor de laboratorio (se destruyen al terminar cada experimento) |
     | **Modo sin Docker** | Todo el muestreo (simulador, sesgo, costes, cardinalidad analítica) corre en cualquier sitio, Colab incluido; lo medido con contenedores reales viene **pregrabado** |
     | **Prerrequisitos** | Módulos 05 (Collector), 07-09 (backends y métricas), 13 (coste del agente) y 16 (SLOs) |
 
-    > 🧭 **Ruta núcleo vs ampliación.** Núcleo: volumen y presupuesto (§1), head vs tail (§2-5), Collector real (§6), sesgo (§7) y política final (§12). Ampliación: cardinalidad (§8), multi-tenant y límites (§9), retención/tiering (§10), coste (§11).
+    > 🧭 **Ruta núcleo vs ampliación.** Núcleo: volumen y presupuesto (§1), head vs tail (§2-5), Collector real (§6), sesgo (§7), cardinalidad (§8) y política final (§12). Ampliación: multi-tenant y límites (§9), retención/tiering (§10), coste (§11). Con la ruta núcleo haz los pasos 1-7 del proyecto; los pasos 8 (retención) y 9 (tenants) piden las secciones 10 y 9.
     """)
 
     md("""
@@ -286,7 +286,9 @@ def build_lesson() -> None:
            details("2. (Módulo 09) ¿Por qué `ticket_id` no puede ser una etiqueta de métrica?",
                    "Cada valor distinto crea una serie nueva: la memoria de Prometheus crece con el nº de series activas. En este módulo lo **medimos** con un Prometheus real."),
            details("3. (Módulo 13/16) ¿Qué condiciones del SLO de coste y de latencia usamos para decir que un ticket es «interesante»?",
-                   "Coste por ticket > 0,0005 USD y latencia > 5 s (más los errores). Son exactamente los criterios de las políticas `latency` y `ottl_condition` de este módulo.")))
+                   "Coste por ticket > 0,0005 USD y latencia > 5 s (más los errores). Son exactamente los criterios de las políticas `latency` y `ottl_condition` de este módulo."),
+           details("4. (Módulo 16) Tu alerta de burn rate calcula la tasa de error a partir de `span_metrics`. Si esas métricas se calculan sobre trazas ya muestreadas por cola, ¿qué le pasa a la alerta y por qué?",
+                   "Dispara con falsos positivos (la muestra conserva casi todos los errores y poco de lo normal, así que el burn sale inflado): una alerta que despierta por un artefacto del muestreo. Por eso, en este módulo, las métricas RED se calculan **antes** de muestrear (§6-7).")))
 
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_18)
@@ -545,6 +547,11 @@ display(pd.DataFrame(nt).rename(columns={"n_kept": "trazas conservadas", "recall
 
     Si construyes métricas RED **a partir de los spans que sobreviven** (un `span_metrics` *después* del muestreo, o contando trazas en Tempo), lo que ves es la **muestra**, no la población. Con tail sampling por errores la tasa de errores sale inflada; con head sampling, las latencias son insesgadas pero ruidosas.
     Dos remedios: **(a)** calcular las métricas **antes** de muestrear (el conector `span_metrics` en `traces/in`, como en §6) o **(b)** ponderar cada traza por `1/π`.
+
+    **✏️ Ejemplo resuelto a mano (antes del código).** Población de 1 000 trazas con 30 errores. Política: conservar **todos** los errores (π = 1) y el 10 % de las 970 normales (π = 0,1 → ≈ 97 trazas).
+    - *Sin pesos*: la muestra tiene 30 + 97 = 127 trazas y 30 errores → **23,6 %** de error (¡la realidad es 3 %!).
+    - *Con pesos* $w=1/\\pi$: $\\hat N = 30\\cdot1 + 97\\cdot10 = 1\\,000$ trazas y 30 errores (peso 1) → 30 / 1 000 = **3 %**. Recuperaste la población con la muestra.
+    Es el mismo truco que reponderar una muestra estratificada en una encuesta, o corregir el *class imbalance* de un dataset al evaluar: lo que cuentas en la muestra no es la tasa de la población si el muestreo depende de la etiqueta.
     """)
     code('''
 truth = S.estimate_metrics(CORPUS.traces)
@@ -1090,7 +1097,7 @@ except NotImplementedError as e:
 ''', ["Una traza «interesante» (error, lenta o cara) se conserva siempre (π = 1); las demás con probabilidad `baseline_pct/100`.", "`keep_all = lambda t: t.error or t.slow or t.costly`; `w = S.inclusion_weights(kept, keep_all, baseline_pct/100)`."])
 
     todo(6, "La configuración del Collector (TODO)",
-         "Escribe `collector_yaml(policies, num_traces)`: la configuración completa (con `span_metrics` **antes** del muestreo, `forward`, `tail_sampling` con `decision_wait: 30s`). Con Docker, la rúbrica la valida con `otelcol-contrib validate`.",
+         "**Antes de ejecutar nada, predice** en un comentario las tres piezas que debe contener tu YAML (qué canalización calcula las métricas, cómo se unen las dos y dónde vive el muestreo) y comprueba después si acertaste. Escribe `collector_yaml(policies, num_traces)`: la configuración completa (con `span_metrics` **antes** del muestreo, `forward`, `tail_sampling` con `decision_wait: 30s`). Con Docker, la rúbrica la valida con `otelcol-contrib validate`.",
          '''
 def collector_yaml(policies, num_traces):
     # TODO: S.collector_config(policies, decision_wait="30s", num_traces=num_traces)
