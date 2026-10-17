@@ -194,17 +194,25 @@ def build_lesson() -> None:
     8. **Decidir** con una matriz ponderada y un análisis de sensibilidad, y defender la recomendación para tres perfiles de equipo.
     """)
 
+    md(box("route", "Ruta núcleo vs ampliación", """
+        Este módulo tiene ≈ 75 celdas y ≈ 4 h 30 min: haz **dos sesiones**.
+
+        - **Núcleo (imprescindible):** §1-2 (qué es auto-instrumentar y el parche a mano), §3.1-3.3 (forma de las trazas, atributos, atribución de fallos y tokens), §3.4 (privacidad por defecto), §4.1 y 4.3 (híbrido y `SpanProcessor.on_start`), §6 (la matriz de decisión) y el proyecto.
+        - **Ampliación:** §2.2 (ecosistema y cadencia de versiones), §3.5 (trampas de operación: doble instrumentación, reintentos ocultos, *streaming*), §4.2 y 4.4 (decoradores y por qué no redactar en `on_end`), §5 (huella y coste).
+        - **Idea que no puedes saltarte:** sin un span padre del lado del agente, la auto-instrumentación produce trazas huérfanas (66 trazas para 24 tickets). Todo lo demás son consecuencias.
+        """))
+
     md("""
     ## 🔁 Conexión con módulos anteriores
     """)
-    md(details("1 · (Módulo 03) ¿Qué pasa con un span si lo creas con `start_as_current_span` y dentro llamas a otra función que también crea un span?",
-               "El segundo span toma como padre el span *actual* del contexto (`contextvars`) y hereda su `trace_id`: forman un árbol dentro de la misma traza. Sin un span actual, cada span nuevo abre **una traza nueva** (lo veremos con las librerías automáticas)."))
-    md(details("2 · (Módulo 04) ¿Qué operaciones GenAI modela SupportOps y qué *kind* tiene cada una?",
-               "`invoke_agent` (INTERNAL, el ticket), `chat` (CLIENT, cada llamada al LLM) y `execute_tool` (INTERNAL, cada herramienta). Una librería de cliente solo puede conocer `chat`; las otras dos son semántica de **tu** aplicación."))
-    md(details("3 · (Módulo 04) ¿Por qué `gen_ai.input.messages` / `gen_ai.output.messages` son un riesgo y qué dice la spec sobre capturarlos por defecto?",
-               "Contienen el prompt y la respuesta íntegros (datos personales incluidos). La spec indica que las instrumentaciones **no deberían** capturar contenido por defecto y que debe activarlo el usuario de forma explícita (p. ej. `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`)."))
-    md(details("4 · (Módulo 01) ¿Qué tres *context managers* ofrece el `Instrumentor` de SupportOps?",
-               "`agent_run(ctx)`, `llm_call(ctx, info)` y `tool_call(ctx, info)` (más `log(...)`). La instrumentación manual es rellenar estos *hooks*."))
+    md(details("1 · (Módulo 03, Predicción) Una librería de auto-instrumentación parchea `openai.create()` y la activas en tu agente, que **no abre ningún span propio**. Cada ticket hace 2-3 llamadas al LLM. ¿Cuántas trazas esperas para 24 tickets y qué raíz tiene cada una?",
+               "Un span solo hereda traza si hay un span *actual* en el contexto (`contextvars`). Sin padre del lado del agente, **cada llamada `create()` abre su propia traza** con un único span `chat` como raíz: del orden de 2-3 trazas por ticket (≈ 66 para 24 tickets, como medirás), sin ticket ni herramientas."))
+    md(details("2 · (Módulo 04, Transferencia) Un compañero afirma que «OpenLIT ya cumple la spec GenAI». ¿Cómo lo compruebas con lo que construiste en el módulo 04 y qué tres tipos de hallazgo buscarías?",
+               "Pasas sus spans por el **linter** del módulo 04 y miras: atributos desconocidos o deprecados (`UNK`), requeridos que faltan (`REQ`) y valores fuera del enum, como `finish_reasons` (`FINISH`/`ENUM`); más `PRIV` si capturan contenido. Una afirmación de conformidad es una hipótesis que se mide, no se cree."))
+    md(details("3 · (Módulo 04, Diagnóstico) Al revisar Tempo encuentras correos de clientes dentro de `gen_ai.input.messages`. ¿Qué dice la spec sobre capturar contenido por defecto y qué dos puntos de control tienes (SDK/librería y Collector)?",
+               "La spec indica que las instrumentaciones **no deberían** capturar contenido por defecto: debe ser opt-in (p. ej. `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`). Controles: apagar la captura en la propia librería (interruptor documentado) y, como red de seguridad, redactar o eliminar el atributo en el Collector (módulo 05/20), porque una política central cubre también lo que añada otro equipo."))
+    md(details("4 · (Módulo 01, Transferencia) Quieres que el span `chat` lo ponga una librería pero conservar la traza por ticket con herramientas. De los tres *hooks* del `Instrumentor` (`agent_run`, `llm_call`, `tool_call`), ¿cuáles mantienes y cuál dejas vacío? ¿Por qué?",
+               "Mantienes `agent_run` (raíz `invoke_agent`, semántica de **tu** dominio) y `tool_call`; dejas **vacío `llm_call`**, porque ese span ya lo crea la librería y, al haber un span actual (`invoke_agent`), se cuelga de él. Es el patrón **híbrido** que medirás en este módulo."))
 
     code(boot("viz,otel"))
     code(PIP_LIBS)
@@ -409,6 +417,8 @@ print("Fallos de herramienta/bucle inyectados:", dict(collections.Counter(r["inj
     ## 3.1 · Experimento 1 — ¿qué forma tienen las trazas?
 
     Definimos unas métricas de análisis (las reutilizarás en el proyecto) y miramos el **mismo ticket** en tres estrategias. Un ticket del agente debería ser **una traza** con `invoke_agent` en la raíz.
+
+    > 🤔 **Predice antes de ejecutar.** En el lote hay 24 tickets. ¿Cuántas **trazas** habrá con solo la librería (sin spans manuales)? ¿Y con el híbrido? ¿Y qué atributo crees que faltará en los `chat` de la librería para saber a qué ticket pertenecen? Apunta tus tres respuestas y compáralas con la tabla.
     """)
     code(HELPERS)
     code('''
@@ -829,12 +839,15 @@ display(RANK)
                "Pesa mucho la **neutralidad (semconv estándar)** y el **esfuerzo/uniformidad entre lenguajes**: la instrumentación oficial de OpenTelemetry (y sus equivalentes en Java/JS) o OpenLLMetry (que existe en JS) con exportación OTLP; Datadog acepta GenAI semconv (v1.37+). Una librería con plataforma propia (OpenLIT) aporta menos si ya tienes plataforma. Sigue valiendo el híbrido: los spans de agente/herramienta son de tu dominio."))
     md(details("5 · (Diagnóstico) Tras actualizar `openlit` de 1.44 a 1.45, un panel de «tokens por modelo» se queda vacío. ¿Qué dos causas son más probables y qué prueba lo habría evitado?",
                "(1) Cambió el nombre/ubicación de un atributo (p. ej. de métrica a atributo de span, o de `gen_ai.usage.*`); (2) cambió un valor por defecto (captura de contenido, instrumentadores activados). Una **prueba de contrato** que ejecute el agente con `mock` y verifique la presencia de los atributos que usan tus paneles (y la ausencia de PII) bloquea la actualización en CI."))
-    md(details("6 · ¿Por qué un `SpanProcessor.on_end` no sirve para redactar PII y qué alternativa recomendarías en producción?",
+    md(details("6 · (Diagnóstico) ¿Por qué un `SpanProcessor.on_end` no sirve para redactar PII y qué alternativa recomendarías en producción?",
                "Porque en el SDK de Python recibe un `ReadableSpan` inmutable (`set_attribute` no existe). Alternativas: no capturar contenido, redactar al construir el atributo, o —lo más recomendable— `redaction`/`transform` en el Collector (módulo 20), que aplica una política única a todos los servicios."))
     md(details("7 · (Transferencia) Un proveedor LLM sin SDK de Python (HTTP directo con `httpx`) no está soportado por ninguna librería. ¿Qué haces?",
                "Instrumentar a mano: un *hook* `llm_call` (como `OTelInstrumentor`) que abra el span `chat` con los atributos de la spec. Es exactamente la situación en que lo manual gana; además `httpx`/`requests` pueden instrumentarse automáticamente para tener el span HTTP hijo."))
-    md(details("8 · ¿Qué ves en la columna «híbrido» del heatmap de atributos que faltaba y cómo lo arreglarías sin tocar la librería?",
+    md(details("8 · (Diagnóstico) ¿Qué ves en la columna «híbrido» del heatmap de atributos que faltaba y cómo lo arreglarías sin tocar la librería?",
                "Faltan `supportops.ticket.id`, `gen_ai.conversation.id`, `supportops.step/attempt` en el span `chat` (están en el padre). Un `SpanProcessor.on_start` que copie el ticket del `ContextVar` (sección 4.3) los añade a todos los spans, incluidos los de la librería."))
+
+    md(details("9 · (Cálculo) Tienes tres criterios con puntuaciones 1-5 para dos opciones — Manual: contexto 5, privacidad 5, esfuerzo 1; Oficial: contexto 2, privacidad 4, esfuerzo 4 — y pesos del perfil «SupportOps»: [5, 5, 2]. ¿Qué opción gana y qué tendría que pasar con los pesos para que gane la otra?",
+               "Puntuación ponderada = Σ(peso·nota)/Σpesos con Σ=12. Manual: (5·5 + 5·5 + 2·1)/12 = 52/12 ≈ **4,33**. Oficial: (5·2 + 5·4 + 2·4)/12 = 38/12 ≈ **3,17**. Gana el manual. Para que ganara el oficial el esfuerzo tendría que pesar mucho más que contexto y privacidad (p. ej. [1, 1, 10]: manual 20/12 ≈ 1,67 frente a oficial 46/12 ≈ 3,83): es lo que hace el análisis de sensibilidad con pesos aleatorios — preguntar cuánto de robusto es el ganador."))
 
     md("""
     ## Referencias
@@ -1066,6 +1079,8 @@ except NotImplementedError as e:
 
     **TODO 6a.** `weighted_scores(SC, w)` → `pd.Series` con la puntuación ponderada (pesos normalizados) ordenada de mayor a menor. **TODO 6b.** `win_rates(SC, n=20000, seed=42)` → `dict` {opción: fracción de vectores de pesos aleatorios `Dirichlet(1,…,1)` en que gana} (usa `np.random.default_rng(seed)`; igual que la lección). **TODO 6c.** Rellena `DECISION[perfil] = (opción, justificación)` con **al menos dos cifras medidas** en cada justificación.
     """)
+    md(hint(1, "6a: `w = np.asarray(w, float); w = w / w.sum()` y `(SC.values @ w)` da un vector por opción; devuélvelo como `pd.Series(..., index=SC.index).sort_values(ascending=False)`. 6b: genera `W = rng.dirichlet(np.ones(SC.shape[1]), size=n)`; la puntuación de todas las opciones para todos los vectores es `SC.values @ W.T` (opciones × n)."))
+    md(hint(2, "6b (continuación): el ganador de cada vector es `np.argmax(S, axis=0)`; cuenta con `np.bincount(ganadores, minlength=len(SC))/n` y construye el diccionario `{opción: fracción}`. 6c: elige la opción con `weighted_scores(SC, pesos).index[0]` y cita cifras de `SC`/`weighted_scores` en la justificación (≥ 2 números)."))
     code('''
 OPTS7 = ["manual", "openlit", "openllmetry", "official", "hybrid_official", "hybrid_openllmetry", "openllmetry_decorated"]
 PKGS = {"manual": 0, "openlit": 34, "openllmetry": 61, "official": 5, "hybrid_official": 5, "hybrid_openllmetry": 61, "openllmetry_decorated": 61}

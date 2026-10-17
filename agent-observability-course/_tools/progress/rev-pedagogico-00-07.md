@@ -6,7 +6,7 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - [x] 03_otel_sdk_python
 - [x] 04_genai_semconv
 - [x] 05_collector
-- [ ] 06_autoinstrumentacion
+- [x] 06_autoinstrumentacion
 - [ ] 07_tempo_traceql
 - [ ] check_course.py OK + informe final
 
@@ -21,3 +21,4 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - 03: conexión aplicada, 🧭 ruta núcleo, predicción cola Batch, autoeval +2 (endpoint OTLP, coste CPU), 👀 en proyecto tras la cascada. Solo markdown cambiado (sin re-ejecutar).
 - 04: conexión aplicada (sampler, kind, doble conteo), ejemplo a mano (span con 3 desviaciones, verificado con el linter real) antes de la tabla de reglas, autoeval +1 (spec vigente), Pista 3 en TODO migrate. Solo markdown.
 - 05: conexión Q1 como cálculo, gloss DaemonSet/sidecar, predicción 4.4, autoeval +1 (conservación), plan en 3 iteraciones en TODO 1. Solo markdown (el builder re-verificó la solución con Docker: OK).
+- 06: conexión con predicción/transferencia, 🧭 ruta núcleo (74 celdas), predicción antes de exp. 1, autoeval +1 (cálculo matriz) y etiquetas, 2 pistas en TODO 6a/6b. Solo markdown.
