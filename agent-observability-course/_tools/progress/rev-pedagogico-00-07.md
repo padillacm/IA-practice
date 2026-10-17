@@ -8,7 +8,7 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - [x] 05_collector
 - [x] 06_autoinstrumentacion
 - [x] 07_tempo_traceql
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (qué archivo/celda, decisiones tomadas)
@@ -24,3 +24,4 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - 06: conexión con predicción/transferencia, 🧭 ruta núcleo (74 celdas), predicción antes de exp. 1, autoeval +1 (cálculo matriz) y etiquetas, 2 pistas en TODO 6a/6b. Solo markdown.
 - 07: conexión aplicada (4), ejemplo a mano de 4 spans, predicción 2.2, 🧭 ruta núcleo, autoeval +2 (ajuste de consulta, manual de diagnóstico), proyecto: ejemplo resuelto Q0, pistas METRICS, 👀 timeline. Consultas verificadas con traceql_mini; proyecto ejecutado con nbclient OK.
 - Pendiente: informe REVISION_PEDAGOGICA_1.md + check_course.py
+- Informe escrito: _tools/REVISION_PEDAGOGICA_1.md; check_course.py: Todo OK.
