@@ -1,7 +1,7 @@
 # Progreso: rev-pedagogico-08-15
 Agente: Revisor pedagógico P2 · Módulos: 08–15 · Informe: agent-observability-course/_tools/REVISION_PEDAGOGICA_2.md
 - [x] 08_loki_logql (pistas TODO 3 y 4a, 🔁 Q4 aplicación, 👀 en proyecto)
-- [ ] 09_metricas
+- [x] 09_metricas (ruta en 2 sesiones, pistas TODO 6, 🔁 Q4, 👀 proyecto)
 - [ ] 10_grafana
 - [ ] 11_multiagente
 - [ ] 12_mcp_tools

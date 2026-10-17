@@ -113,7 +113,10 @@ def build_lesson() -> None:
     | **Prerrequisitos** | Módulo 02 (contador/histograma a mano, cardinalidad), 03-04 (SDK y GenAI semconv; `setup_telemetry`) y 05 (el pipeline de métricas del Collector) |
     | **Hilo conductor** | SupportOps pasa de «tener trazas» a «tener números»: tasa, errores, latencia, tokens y **coste** por minuto, con *exemplars* que saltan a la traza |
 
-    > 🗺️ **Ruta núcleo vs ampliación.** Núcleo (≈ 2 h): secciones 1, 3, 5, 7 y 8. Ampliación (≈ 1 h): el `rate()`/`histogram_quantile()` a mano (2), nombres (4), exemplars en profundidad (6), histogramas nativos (9) y Mimir (10). El proyecto usa lo del núcleo.
+    > 🧭 **Ruta núcleo vs ampliación (la lección tiene ~100 celdas: hazla en dos sesiones).**
+    > - **Sesión A (≈ 1 h 30 min):** secciones 1, **2.2** (el error de elegir mal los *buckets*: lo necesitas en el TODO 2), 3 y 5 → qué es una métrica, qué instrumento elegir y cómo se calcula el coste.
+    > - **Sesión B (≈ 1 h 30 min):** secciones 4 (solo la tabla de traducción de nombres: el TODO 6 la usa), 6, 7 y 8 → exemplars, PromQL en vivo y cardinalidad. Después, el proyecto.
+    > - **Ampliación opcional (≈ 1 h):** 2.1 (`rate()` a mano), 3.4 (*cumulative* vs *delta*), 9 (histogramas nativos) y 10 (Mimir). Ninguna entra en la rúbrica.
     """)
 
     md("""
@@ -141,6 +144,9 @@ def build_lesson() -> None:
                "Cada valor distinto de una etiqueta crea una **serie temporal nueva** que se guarda y consulta para siempre. En un span, un atributo con muchos valores solo cuesta bytes de esa traza. Con 200 clientes × 5 estados × 15 buckets ya son 15 000 series; con `ticket_id` sería ilimitado."))
     md(details("3 · (Módulo 04) ¿En qué estado de estabilidad están las convenciones semánticas GenAI y qué implica para tus nombres de métrica?",
                "Estado **Development** (inestable): los nombres pueden cambiar (de hecho, las métricas de tokens han pasado de un histograma a *counters* + histogramas por operación). Conviene centralizar los nombres en un único módulo y fijar la versión de la spec que sigues."))
+
+    md(details("4 · (Módulo 08, transferencia) En el módulo anterior calculaste los 5xx por ruta con `sum by (route) (rate({...} | logfmt | status >= 500 [1m]))`. Si tuvieras que alertar sobre ellos 24/7, ¿por qué convertirías ese número en una métrica?",
+               "Una métrica es una **serie ya agregada** (barata de evaluar cada 15 s y con meses de histórico), mientras que la consulta de logs reescanea líneas en cada evaluación y su coste crece con el volumen. Los logs sirven para el **detalle** (qué petición concreta); la métrica, para el **síntoma agregado** y la alerta. Es el mismo reparto «métricas detectan, trazas y logs explican» del módulo 02."))
 
     code(boot("viz,otel"))
     code(SETUP + '''
@@ -1586,6 +1592,9 @@ TOTAL_BUDGET = 0   # TODO 5c: suma de DECLARED
     | `tokens_per_request` | tokens de entrada por petición (cociente de dos tasas) |
     | `slowest_tool` | herramienta con mayor duración **media** (`topk(1, …)` de `sum/count` por `tool`) |
     """)
+    md(hint(1, "Cada consulta tiene **una forma fija**: contador → `sum(rate(<serie>_total[1m]))`; cociente → una `sum(rate())` entre otra; percentil → `histogram_quantile(q, sum by (le) (rate(<serie>_bucket[1m])))`; media → `rate(..._sum)` entre `rate(..._count)`. Escribe primero la pregunta en palabras («¿qué dividido entre qué?») y luego busca el nombre exacto de cada serie imprimiendo `sorted(VALID)`."))
+    md(hint(2, "Reglas de traducción (sección 4): los puntos pasan a `_`; el tipo añade sufijo (`_total` en contadores, `_bucket`/`_sum`/`_count` en histogramas); la unidad `s` se escribe `_seconds`; una unidad entre llaves como `{request}` o `{token}` **se descarta**, pero `USD` se **conserva** (`..._USD_total`). Para filtrar por estado: `{status=~\"error|max_steps\"}`. `topk(1, A / B)` necesita que A y B estén agregados `by (tool)`."))
+
     code('''
 VALID = set()
 for _n, _u, _k, _m in [("proj09.agent.requests", "{request}", "sum", True), ("proj09.agent.duration", "s", "histogram", True), ("proj09.llm.input_tokens", "{token}", "sum", True),
@@ -1874,6 +1883,10 @@ axes[1].set_xticks([0, 1]); axes[1].set_xticklabels(["p50", "p95"]); axes[1].set
 axes[2].barh(list(DECLARED), list(DECLARED.values()), color=viz.PALETTE["metrics"]); axes[2].set_title(f"Presupuesto de series ({TOTAL_BUDGET} en total)"); axes[2].set_xlabel("series máx. en Prometheus")
 plt.tight_layout(); plt.show()
 ''')
+    md(observe("""
+    - **Panel izquierdo y central:** las barras verdes (tus límites) deberían quedar **por debajo** de las naranjas (los de la spec) en p95/p99: ahí está el valor de poner los *buckets* donde está la masa. Si no, tus límites están demasiado repartidos o dejan un cubo enorme alrededor del p95.
+    - **Panel derecho:** qué instrumentos dominan el presupuesto de series. Los histogramas multiplican por `n_bounds + 3`: añadir un atributo a un histograma cuesta mucho más que a un contador.
+    """))
     nb.save(out)
 
 
