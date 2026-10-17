@@ -246,12 +246,12 @@ def build_lesson() -> None:
     md("""
     ## 🔁 Conexión con módulos anteriores
     """)
-    md(details("1 · (Módulo 03) ¿Qué atributos deben pasarse **al crear** el span y por qué?",
-               "Los que un *sampler* podría necesitar (operación, agente, modelo, herramienta…): el sampler solo ve lo que se da en `start_span(attributes=...)`; un `set_attribute` posterior es invisible para él. La spec GenAI marca varios atributos como *sampling relevant*."))
-    md(details("2 · (Módulo 03) ¿`SpanKind` de la llamada al LLM y de una herramienta Python local?",
-               "El LLM es una llamada a otro sistema que espera respuesta → `CLIENT`. Una función local es `INTERNAL`. El agente en el mismo proceso, `INTERNAL`."))
-    md(details("3 · (Módulo 03) ¿Por qué el span `invoke_agent` lleva los tokens totales si cada `chat` ya lleva los suyos?",
-               "Porque la raíz resume el trabajo del agente (útil para coste por petición sin recorrer el árbol). Pero ojo: **sumar tokens de todos los spans cuenta cada token dos veces** (lo calcularás en esta lección)."))
+    md(details("1 · (Módulo 03, Diagnóstico) Quieres muestrear al 100 % las llamadas `chat` al modelo caro, pero tu regla no filtra nada: se muestrea todo o nada al azar. El modelo se escribe con `span.set_attribute(\"gen_ai.request.model\", ...)` justo después de crear el span. ¿Qué falla y cómo lo arreglas?",
+               "El *sampler* decide **al crear el span** y solo ve lo que se pasa en `start_span(attributes=...)`; un `set_attribute` posterior es invisible para él, así que no puede distinguir el modelo. Arreglo: pasar `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.tool.name`… en `attributes=` al crear (la spec GenAI los marca como *sampling relevant*). Para decidir por el resultado haría falta *tail sampling* (módulo 18)."))
+    md(details("2 · (Módulo 03, Cálculo) Asigna `SpanKind` a: la llamada HTTP al LLM, una función Python local `get_order`, el agente que corre en tu mismo proceso y un servidor MCP remoto que recibe tu llamada. ¿Qué dos lados participan en la última y qué hace cada uno con la cabecera `traceparent`?",
+               "LLM: `CLIENT`. Función local: `INTERNAL`. Agente en proceso: `INTERNAL`. En la llamada al servidor MCP remoto, tu agente es `CLIENT` (hace `inject` de `traceparent`) y el servidor es `SERVER` (hace `extract` y crea su span como hijo). Esta lección fija qué `kind` espera la spec para cada operación GenAI."))
+    md(details("3 · (Módulo 03, Transferencia) `invoke_agent` lleva los tokens totales del ticket y cada `chat` los suyos. Si un panel suma `input_tokens` de todos los spans, ¿cuántas veces cuenta cada token y por qué? (Lo medirás en la sección 7.)",
+               "**Dos veces**: el span raíz repite el total que ya está en sus hijos `chat`. Los tableros de coste deben agregar solo los spans `chat` (o solo la raíz). Es un ejemplo de que un atributo correcto puede dar un número equivocado según cómo se agregue."))
 
     code(boot("viz,otel") + '''
 import subprocess, sys
@@ -465,6 +465,23 @@ plt.tight_layout(); plt.show()
     # 4 · A mano: un linter de atributos GenAI
 
     Para convertir la spec en algo **automatizable**, construimos un linter: una función que recibe un span (dict con el esquema `SPAN_SCHEMA`) y devuelve **hallazgos** con severidad. Es la herramienta que pondrías en CI y en el Collector (módulo 05/20) para vigilar que lo que emiten los servicios sigue la convención.
+
+    **Antes de automatizar, hazlo a mano con un span diminuto.** Este span lo emite un equipo con un tutorial antiguo. Lee la tabla de §3 y busca **tres desviaciones** antes de abrir la respuesta:
+
+    ```python
+    {"name": "chat gpt-4o ORD-00017", "kind": "CLIENT", "status": "OK",
+     "attributes": {"gen_ai.operation.name": "chat", "gen_ai.system": "openai", "gen_ai.usage.prompt_tokens": 120}}
+    ```
+
+    <details>
+    <summary>Ver las tres desviaciones</summary>
+
+    1. **`gen_ai.system` ya no existe**: ahora es `gen_ai.provider.name` (y es *Required* en `chat`). El linter lo ve como `UNK` (con sugerencia) **y** `REQ` (falta el requerido).
+    2. **`gen_ai.usage.prompt_tokens` es un nombre obsoleto**: debe ser `gen_ai.usage.input_tokens` (`UNK`).
+    3. **El nombre lleva un id de pedido** (`ORD-00017`): la plantilla es `{operación} {modelo}`; un id en el nombre dispara la cardinalidad (`CARD`, aviso). El `kind` `CLIENT` sí es correcto para una llamada al LLM.
+
+    Ese razonamiento, repetido en miles de spans, es lo que automatiza el linter. Cada línea de la tabla siguiente corresponde a una comprobación que acabas de hacer con la cabeza.
+    </details>
 
     | Regla | Severidad | Qué comprueba |
     |---|---|---|
@@ -766,7 +783,9 @@ print(f"p95 con buckets GenAI : {p_from_hist(lat, GENAI):6.2f} s")
                "Sí: para un agente **remoto** el tipo correcto es `invoke_agent` **CLIENT** (`gen_ai.invoke_agent.client`), con `gen_ai.provider.name` requerido. Hay que parametrizar el linter (`local_agent=False`) o decidir el tipo por una propiedad del servicio, no asumir siempre agente local."))
     md(details("6 · (Transferencia) Diseña la política de contenido de SupportOps en producción: ¿qué patrón, qué se redacta, quién puede leer, cuánto se retiene y qué haces con los tickets que fallan?",
                "Patrón 3: el span solo lleva metadatos y una referencia; el contenido (redactado: correos, teléfonos, tarjetas) va a un almacén con **acceso restringido por rol** y retención corta (p. ej. días), y se guarda solo para un porcentaje de tickets **más todos los que fallan o tienen baja calidad** (para depurar). Alertas si aparece PII en claro en spans (regla `PRIV` + detector). Auditoría de accesos al almacén. (Módulo 20.)"))
-    md(details("7 · (Transferencia) Adoptas una librería de autoinstrumentación (módulo 06) que emite `gen_ai.*` con nombres de la versión 1.37, pero tu Collector y tus paneles esperan los nombres actuales. Plan en tres pasos.",
+    md(details("7 · (Diagnóstico) Un tutorial de 2025 te dice que consultes la spec en `semantic-conventions/docs/gen-ai` y que uses `gen_ai.system`. ¿Cómo compruebas si sigue vigente antes de copiar nada, y qué haces para que tu equipo no dependa de la memoria de nadie?",
+               "Verifica la spec **vigente** en su repositorio actual (`open-telemetry/semantic-conventions-genai`: la ruta antigua solo conserva un aviso de «Moved»), lee el estado (*Development* = puede cambiar) y contrasta el nombre con el `registry.yaml`: `gen_ai.system` aparece como renombrado a `gen_ai.provider.name`. Para no depender de memoria: instantánea fechada de la spec en el repo, mapa de renombres versionado, linter en CI y doble emisión en las migraciones."))
+    md(details("8 · (Transferencia) Adoptas una librería de autoinstrumentación (módulo 06) que emite `gen_ai.*` con nombres de la versión 1.37, pero tu Collector y tus paneles esperan los nombres actuales. Plan en tres pasos.",
                "(1) Ejecutar el linter sobre sus spans y obtener la lista real de desvíos (`UNK`, `TYPE`, `SCOPE`). (2) Traducir en el **Collector** (procesador de transformación) o en un `SpanProcessor` propio con el mapa de renombres, con doble emisión si hay consumidores antiguos. (3) Fijar la versión de la librería, añadir el linter a CI y planificar la retirada del mapa cuando la librería actualice."))
 
     md("""
@@ -1118,6 +1137,7 @@ except NotImplementedError as e:
     """)
     md(hint(1, "Empieza por `r = copy.deepcopy(rec)` y modifica `r['attributes']` en sitio. Itera sobre `list(a)` si vas a borrar claves mientras recorres."))
     md(hint(2, "Puedes escribir primero el TODO 6b (`normalize_finish`) y llamarlo desde aquí. Para la idempotencia, cada paso debe ser un no-op cuando el span ya cumple (p. ej. `if old in a`)."))
+    md(hint(3, "Arranque (pasos 1-3 de la lista): `r = copy.deepcopy(rec); a = r[\"attributes\"]`; `for old, new in RENAMES.items(): if old in a and \"(aprox.)\" not in new: a[new] = a.pop(old)`; si existe `tool`, muévelo a `gen_ai.tool.name`; recorre `list(a)` y, si `REG[k][\"type\"] == \"int\"` y el valor es una cadena de dígitos, conviértelo con `int`. Los pasos 4-10 son del mismo estilo: comprobar una condición y corregirla solo si no se cumple."))
     code('''
 def migrate(rec):
     # TODO 5

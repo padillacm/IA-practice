@@ -4,7 +4,7 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - [x] 01_agente_base
 - [x] 02_tres_pilares
 - [x] 03_otel_sdk_python
-- [ ] 04_genai_semconv
+- [x] 04_genai_semconv
 - [ ] 05_collector
 - [ ] 06_autoinstrumentacion
 - [ ] 07_tempo_traceql
@@ -19,3 +19,4 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - 02: conexión 00/01 reescrita a diagnóstico/cálculo; predicción §6; autoeval +2 (correlación, resource/scope/atributo); proyecto: plan TODO3, predicción TODO4, 👀 tras viz de la solución. Proyecto ejecutado OK con nbclient (sin errores, rúbrica).
 - runnb.py (scratchpad) ejecuta un notebook con nbclient.
 - 03: conexión aplicada, 🧭 ruta núcleo, predicción cola Batch, autoeval +2 (endpoint OTLP, coste CPU), 👀 en proyecto tras la cascada. Solo markdown cambiado (sin re-ejecutar).
+- 04: conexión aplicada (sampler, kind, doble conteo), ejemplo a mano (span con 3 desviaciones, verificado con el linter real) antes de la tabla de reglas, autoeval +1 (spec vigente), Pista 3 en TODO migrate. Solo markdown.
