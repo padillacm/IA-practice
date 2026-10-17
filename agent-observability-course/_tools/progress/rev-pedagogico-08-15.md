@@ -8,7 +8,7 @@ Agente: Revisor pedagógico P2 · Módulos: 08–15 · Informe: agent-observabil
 - [x] 13_costes_finops (ejemplo resuelto a mano 1.1 antes de la fórmula, predicción, 🔁 Q4)
 - [x] 14_evaluacion_online (pistas TODO 3-6, 🔁 Q4 cálculo coste de evaluar)
 - [x] 15_calidad_regresion (pistas TODO 2,3,5,6; 🔁 Q4 transferencia versión)
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final (REVISION_PEDAGOGICA_2.md)
 
 ## Notas para retomar
 - (qué archivo/celda, decisiones tomadas)

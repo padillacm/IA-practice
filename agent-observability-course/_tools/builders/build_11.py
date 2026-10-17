@@ -1355,7 +1355,7 @@ display(run_rubric())
 def build_readme() -> None:
     readme = '''# Módulo 11 · Observabilidad de sistemas multi-agente
 
-🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+🟠 **Avanzado** · ≈ 5 h (lección ≈ 3 h 15 min + proyecto ≈ 1 h 45 min; ruta en dos sesiones)
 
 SupportOps pasa de **un agente** a un **orquestador + 4 especialistas** (`orders`, `billing`, `knowledge`, `escalation`).
 Cada agente es un *servicio* con su propio `service.name` y `TelemetryHandle`; el reto es ver **una petición de extremo a

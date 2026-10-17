@@ -726,7 +726,7 @@ def build_project() -> None:
 
     ## Datos
 
-    El lote pregrabado `recorded/logs_seed42.json.gz`: **660 líneas** en 4 streams (`supportops-agent-json`, `llm-gateway-access`, `orders-api-access`, `kb-search-access`) del mismo lote que usaste en el módulo 07, con `trace_id` como *structured metadata*, y la verdad de campo `RES`. La corrección usa `logql_mini` (validado contra Loki 3.7 en la lección). Con el stack, una celda final verifica tus consultas en Loki real.
+    El lote pregrabado `recorded/logs_seed42.json.gz`: **660 líneas** en 4 streams (`supportops-agent-json`, `llm-gateway-access`, `orders-api-access`, `kb-search-access`) del mismo lote que usaste en el módulo 07, con `trace_id` como *structured metadata*, y la verdad de terreno (*ground truth*) `RES`. La corrección usa `logql_mini` (validado contra Loki 3.7 en la lección). Con el stack, una celda final verifica tus consultas en Loki real.
 
     ## Entregables y criterios de evaluación (rúbrica)
 

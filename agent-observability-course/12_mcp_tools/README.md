@@ -1,6 +1,6 @@
 # Módulo 12 · Trazas a través de servidores MCP y herramientas remotas
 
-🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+🟠 **Avanzado** · ≈ 5 h (lección ≈ 3 h 15 min + proyecto ≈ 1 h 45 min; ruta en dos sesiones)
 
 Las herramientas de pedidos de SupportOps pasan de funciones locales a un **servidor MCP** (SDK oficial de Python, `mcp` 2.x) que corre
 como **proceso aparte**. El reto: seguir una llamada a través de la frontera de proceso, entender qué emite ya el SDK, distinguir los
