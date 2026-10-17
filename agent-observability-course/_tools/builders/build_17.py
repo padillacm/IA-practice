@@ -141,7 +141,7 @@ def build_lesson() -> None:
     | **Servicios de Compose** | `profiling` (Pyroscope). Para la sección 9 (traza ↔ perfil) además `core`: `docker compose --profile core --profile profiling up -d` |
     | **RAM aproximada** | Pyroscope ≈ 0,06 GB en reposo (arranca en ≈ 60-90 s); con `core` ≈ 0,5 GB |
     | **Modo sin Docker** | Las secciones 1-6 (muestreador a mano, pprof, flamegraphs, GIL, CPU vs wall) y los experimentos de CPU corren en cualquier sitio (Colab incluido). Lo que necesita Pyroscope tiene datos pregrabados |
-    | **Prerrequisitos** | Módulos 03 (spans), 07 (Tempo), 09 (cardinalidad) y 16 (SLOs) |
+    | **Prerrequisitos** | Módulos 03 (spans), 07 (Tempo), 09 (cardinalidad), 13 (bucles de herramientas y coste) y 16 (SLOs; solo para la reflexión final) |
 
     > 🧭 **Ruta núcleo vs ampliación.** Núcleo: intuición, flamegraph a mano, muestreador a mano, Pyroscope, caza del cuello de botella y arreglo (§1-3, §6-8). Ampliación: pprof por dentro (§5), GIL (§4), traza↔perfil con OTel (§9), coste del profiling continuo (§10).
     """)
@@ -170,7 +170,11 @@ def build_lesson() -> None:
            details("2. (Módulo 08) ¿Cómo se correlacionaban logs y trazas? ¿Qué identificador compartían?",
                    "Con `trace_id`/`span_id` en cada log (structured metadata en Loki). Hoy repetimos el truco: el **`span_id` viaja también en cada muestra del perfil**."),
            details("3. (Módulo 09) ¿Por qué `ticket_id` no puede ser una etiqueta de métrica y qué implica para las etiquetas de un perfil?",
-                   "Cada combinación de etiquetas es una serie nueva (cardinalidad). En perfiles pasa igual con las etiquetas de servicio: `service_name`, `version`, `region` sí; ids de petición no. El `span_id` es la excepción que Pyroscope trata aparte (§9).")))
+                   "Cada combinación de etiquetas es una serie nueva (cardinalidad). En perfiles pasa igual con las etiquetas de servicio: `service_name`, `version`, `region` sí; ids de petición no. El `span_id` es la excepción que Pyroscope trata aparte (§9)."),
+           details("4. (Módulo 13) Un bucle de herramientas es un incidente aunque «funcione». ¿Qué recurso, además de los tokens, crees que consume de más cada vuelta del bucle en tu propio servicio?",
+                   "CPU y memoria del agente: cada vuelta vuelve a serializar el contexto, contar tokens y escanear el prompt antes de llamar al LLM. En §7.3 lo mediremos: el coste de CPU crece linealmente con las llamadas al LLM."),
+           details("5. (Módulo 16) Quieres un SLO sobre «CPU por ticket». ¿Cuál sería el evento bueno y el evento válido, y por qué un perfil no sirve como SLI pero sí para explicar su incumplimiento?",
+                   "Válido: ticket procesado; bueno: CPU del ticket ≤ umbral (ms). Un perfil es una agregación estadística sin noción de petición: no da el cociente bueno/válido; sí te dice **qué función** explica que el SLI se degrade.")))
 
     code(boot("viz,otel"))
     code(SETUP_17 + IMPORTS + IMPORTS_17)
@@ -231,6 +235,8 @@ plt.show()
 
     ($N$ = nº de muestras; $p$ = fracción real de tiempo; $\\hat p$ = estimación). Con $f=100$ Hz durante 1 s, $N=100$ y si $p=0{,}5$ el error es ±10 puntos: **un perfil corto engaña, uno agregado de miles de muestras no**. De ahí el «continuo»:
     agregar perfiles de muchas réplicas y minutos.
+
+    > 💡 **Intuición (ML).** Es el mismo razonamiento que estimar la *accuracy* de un modelo con un subconjunto de test: $\\hat p$ es la tasa observada, el error baja con $1/\\sqrt N$ y el intervalo de confianza te dice cuántas muestras necesitas antes de creerte una diferencia.
     """)
 
     code('''
@@ -391,6 +397,8 @@ plt.tight_layout(); plt.show()
     # ------------------------------------------------------------------------------------------------ 5
     md("""
     ## 5 · pprof por dentro: el idioma común de los perfiladores
+
+    > 💡 **Intuición.** *Protobuf* es «JSON binario con esquema»: cada campo tiene un número fijo y un tipo, así que el mensaje es pequeño y no repite nombres de campo. pprof lo usa como un `DataFrame` normalizado (tablas de cadenas, funciones y ubicaciones unidas por ids) en vez de repetir el texto de cada pila.
 
     **pprof** (`perftools.profiles.Profile`, un mensaje *protobuf* creado por Google) es el formato que entienden Go, Pyroscope, Parca y las herramientas de Google. Es compacto porque **deduplica**: una tabla de cadenas, una tabla de funciones, una de ubicaciones
     y las muestras solo guardan *ids*. Lo escribimos a mano (sin librería de protobuf) con `encode_pprof` y lo leemos con `decode_pprof`.
@@ -962,7 +970,7 @@ def build_project() -> None:
     | **Duración estimada** | ≈ 2 h |
     | **Servicios de Compose** | `profiling` (Pyroscope) para los pasos 6-7 (opcionales: sin él se usan datos pregrabados). Nada más |
     | **RAM aproximada** | < 0,5 GB |
-    | **Prerrequisitos** | Lección `17_profiling_pyroscope`; módulos 03 y 16 |
+    | **Prerrequisitos** | Lección `17_profiling_pyroscope`; módulos 03, 13 y 16 |
     | **Conexión** | Misma ruta caliente de la lección (`HotPathInstrumentor`). Aquí **tú** escribes el diagnóstico y el arreglo; el SLO de coste del módulo 16 es lo que justifica el trabajo |
 
     ## Contexto de negocio
