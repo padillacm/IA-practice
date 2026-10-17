@@ -1626,7 +1626,7 @@ except NotImplementedError as e:
 
     todo(3, "Seguridad (TODO)",
          "Escribe `security_findings(manifests)` → lista de textos (uno por hallazgo) para cada contenedor de Deployment/StatefulSet/DaemonSet que **(a)** no tenga `resources.limits.memory`, **(b)** no tenga `runAsNonRoot: true` (a nivel de pod **o** de contenedor) o **(c)** no tenga `securityContext.readOnlyRootFilesystem: true`. "
-         "Formato: `\"Deployment/nombre/contenedor: motivo\"`.",
+         "Formato: `\"Deployment/nombre/contenedor: motivo\"`. (El manifiesto anotado de la §0 de la lección muestra dónde viven `resources.limits` y `securityContext`.)",
          '''
 def security_findings(manifests):
     # TODO: recorre manifests; pod = m["spec"]["template"]["spec"]; contenedores en pod["containers"]
