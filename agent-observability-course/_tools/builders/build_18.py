@@ -531,7 +531,7 @@ if DOCKER:
     for n in (200, 50_000):
         rr = S.run_collector_experiment(CORPUS, pols2, decision_wait="5s", num_traces=n)
         nt.append({"num_traces": n, "n_kept": rr["n_kept"], "recall_error_pct": rr["coverage"].get("recall_error_pct"),
-                   "dropped_too_early": rr["internal"].get("otelcol_processor_tail_sampling_sampling_trace_dropped_too_early"), "on_memory": rr["internal"].get("otelcol_processor_tail_sampling_sampling_traces_on_memory")})
+                   "dropped_too_early": rr["internal"].get("otelcol_processor_tail_sampling_sampling_trace_dropped_too_early", 0.0), "on_memory": rr["internal"].get("otelcol_processor_tail_sampling_sampling_traces_on_memory", 0.0)})
 display(pd.DataFrame(nt).rename(columns={"n_kept": "trazas conservadas", "recall_error_pct": "% errores conservados", "dropped_too_early": "descartadas antes de decidir", "on_memory": "en memoria al final"}).round(1))
 ''')
     md(observe("""

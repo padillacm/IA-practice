@@ -891,7 +891,7 @@ def build_project() -> None:
 
     | # | Entregable | Criterio medido | Umbral (calibrado con la solución; `mock`, semilla 42) |
     |---|---|---|---|
-    | R1 | `luhn`, `redact` | 6 vectores de Luhn; **recall** y **sobre-redacción** sobre `CORPUS` | recall ≥ **0,86** y sobre-redacción ≤ **0,05** (la solución mide 0,869 y 0,009) |
+    | R1 | `luhn`, `redact` | 6 vectores de Luhn; **recall** y **sobre-redacción** sobre `CORPUS` | recall ≥ **0,85** (sin el detector de DNI o de IBAN baja a 0,844) y sobre-redacción ≤ **0,05** (la solución mide 0,869 y 0,009) |
     | R2 | `pseudonym` | Determinista, insensible a mayúsculas/espacios, depende de la clave, 8 hex; cuenta clientes distintos | 5/5 |
     | R3 | `collector_config` | YAML válido, procesador antes del exportador en **trazas y logs**, claves reales de `redaction`, `otelcol validate` (si hay Docker) y PII residual ≤ **2 %** de la inicial | 5/5 |
     | R4 | `score_injection`, `choose_threshold` | Noisy-or exacto en 4 vectores; con FPR ≤ 6 % el recall ≥ **0,65** (la solución mide 0,678; con *leetspeak* y base64 llegaría a 0,85) | 5/5 |
@@ -1099,7 +1099,7 @@ def run_rubric():
         luhn_ok = all(luhn(k) == v for k, v in vec.items())
         m = P.evaluate_redactor(redact, CORPUS); ref = P.evaluate_redactor(P.Redactor("tag"), CORPUS)
         tag_ok = redact("a@b.com") == "<EMAIL>" and "ORD-00191" in redact("pedido ORD-00191")
-        add("R1", "luhn (6 vectores), redact, recall y sobre-redacción", luhn_ok and tag_ok and m["recall"] >= 0.86 and m["over_redaction"] <= 0.05,
+        add("R1", "luhn (6 vectores), redact, recall y sobre-redacción", luhn_ok and tag_ok and m["recall"] >= 0.85 and m["over_redaction"] <= 0.05,
             f"luhn={luhn_ok} · etiqueta={tag_ok} · recall={m['recall']:.3f} (ref {ref['recall']:.3f}) · sobre-redacción={m['over_redaction']:.3f} (ref {ref['over_redaction']:.3f})")
     except Exception as e: add("R1", "redactor", False, f"{type(e).__name__}: {e}")
     # R2

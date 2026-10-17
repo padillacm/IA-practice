@@ -792,6 +792,50 @@ def validate_collector_config(config: str, image: str = COLLECTOR_IMAGE) -> tupl
         shutil.rmtree(d, ignore_errors=True)
 
 
+def _host_port(name: str, port: int, timeout_s: float = 15.0) -> int:
+    """Puerto de host que Docker asignó a ``port/tcp`` del contenedor ``name``. Reintenta con plazo: justo tras ``docker run -d`` la tabla de puertos puede
+    estar aún vacía (carrera observada en R3); si el contenedor ya murió, falla enseguida con sus logs."""
+    t0, last = time.time(), ""
+    while time.time() - t0 < timeout_s:
+        r = subprocess.run(["docker", "port", name, f"{port}/tcp"], capture_output=True, text=True)
+        for ln in r.stdout.splitlines():
+            m = re.search(r":(\d+)\s*$", ln.strip())
+            if m:
+                return int(m.group(1))
+        last = (r.stderr or r.stdout).strip()
+        if subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True).stdout.strip() == "false":
+            break
+        time.sleep(0.3)
+    logs = subprocess.run(["docker", "logs", "--tail", "20", name], capture_output=True, text=True)
+    raise RuntimeError(f"Docker no publicó el puerto {port} de {name}: {last}\n{(logs.stdout + logs.stderr)[-600:]}")
+
+
+def _docker_run(args: Sequence[str], attempts: int = 3) -> None:
+    """``docker run -d`` con reintentos (p. ej. «port is already allocated» o el daemon ocupado tras otro laboratorio). ``args`` sin el ``run -d``."""
+    err = ""
+    for k in range(attempts):
+        r = subprocess.run(["docker", "run", "-d", *args], capture_output=True, text=True)
+        if r.returncode == 0:
+            return
+        err = r.stderr[:500]
+        name = args[args.index("--name") + 1] if "--name" in args else ""
+        if name:
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+        time.sleep(1.5 * (k + 1))
+    raise RuntimeError(err)
+
+
+def _http_retry(opener: Any, url: str, *, tries: int = 4, timeout: float = 5.0) -> bytes:
+    for k in range(tries):
+        try:
+            return opener.open(url, timeout=timeout).read()
+        except (urllib.error.URLError, ConnectionError, TimeoutError, OSError):
+            if k == tries - 1:
+                raise
+            time.sleep(0.5 * (k + 1))
+    raise RuntimeError("inalcanzable")
+
+
 class SamplingLab:
     """Collector contrib 0.162 en un contenedor efímero con puertos aleatorios (no choca con el stack). ``with SamplingLab(cfg) as lab:``
     ``lab.send(spans)`` (OTLP/HTTP protobuf), ``lab.kept_trace_ids()``, ``lab.internal()`` (métricas otelcol_*), ``lab.red_metrics()`` (span_metrics)."""
@@ -810,19 +854,31 @@ class SamplingLab:
     def __enter__(self) -> "SamplingLab":
         cmd = ["docker", "run", "-d", "--name", self.name, "-p", "127.0.0.1::4318", "-p", "127.0.0.1::8888", "-p", "127.0.0.1::8889",
                "-v", f"{self.dir / 'config.yaml'}:/etc/otelcol-contrib/config.yaml:ro", "-v", f"{self.dir / 'out'}:/out", self.image, "--config=/etc/otelcol-contrib/config.yaml"]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode:
-            raise RuntimeError(r.stderr[:500])
-        for p in (4318, 8888, 8889):
-            self.port[p] = int(subprocess.run(["docker", "port", self.name, f"{p}/tcp"], capture_output=True, text=True).stdout.split(":")[-1])
-        for _ in range(80):
-            if "Everything is ready" in self.logs() or self.exited():
+        _docker_run(cmd[3:])
+        try:
+            for p in (4318, 8888, 8889):
+                self.port[p] = _host_port(self.name, p)
+        except Exception:
+            self.__exit__()
+            raise
+        ready = False
+        # listo = el log lo dice Y el receptor OTLP responde a una petición vacía (con plazo; no se continúa a ciegas)
+        t0 = time.time()
+        while time.time() - t0 < 40:
+            if self.exited():
                 break
+            if "Everything is ready" in self.logs():
+                try:
+                    self._opener.open(urllib.request.Request(f"http://127.0.0.1:{self.port[4318]}/v1/traces", data=b"", headers={"Content-Type": "application/x-protobuf"}), timeout=3).read()
+                    ready = True
+                    break
+                except Exception:      # noqa: BLE001 - el puerto publicado aún no reenvía: se reintenta
+                    pass
             time.sleep(0.25)
-        if self.exited():
+        if self.exited() or not ready:
             msg = self.logs()[-1200:]
             self.__exit__()
-            raise RuntimeError("el Collector no arrancó:\n" + msg)
+            raise RuntimeError("el Collector no arrancó (o no abrió OTLP en 40 s):\n" + msg)
         return self
 
     def exited(self) -> bool:
@@ -843,7 +899,14 @@ class SamplingLab:
             chunk = [s for tid in ids[i:i + batch_traces] for s in by_trace[tid]]
             body = spans_to_otlp(chunk).SerializeToString()
             req = urllib.request.Request(f"http://127.0.0.1:{self.port[4318]}/v1/traces", data=body, headers={"Content-Type": "application/x-protobuf"})
-            self._opener.open(req, timeout=20).read()
+            for k in range(4):
+                try:
+                    self._opener.open(req, timeout=20).read()
+                    break
+                except (urllib.error.URLError, ConnectionError, TimeoutError):
+                    if k == 3 or self.exited():
+                        raise
+                    time.sleep(0.5 * (k + 1))
             n += 1
             if pause_s:
                 time.sleep(pause_s)
@@ -883,7 +946,7 @@ class SamplingLab:
         return last
 
     def _scrape(self, port: int) -> str:
-        return self._opener.open(f"http://127.0.0.1:{self.port[port]}/metrics", timeout=5).read().decode()
+        return _http_retry(self._opener, f"http://127.0.0.1:{self.port[port]}/metrics").decode()
 
     def internal(self) -> dict[str, float]:
         out: dict[str, float] = {}
@@ -1029,10 +1092,12 @@ class BackendLab:
             ports, health = [9090], "/-/ready"
         else:
             raise ValueError(k)
-        r = subprocess.run(["docker", "run", "-d", "--name", self.name, *cmd], capture_output=True, text=True)
-        if r.returncode:
-            raise RuntimeError(r.stderr[:500])
-        mapped = {p: int(subprocess.run(["docker", "port", self.name, f"{p}/tcp"], capture_output=True, text=True).stdout.splitlines()[0].split(":")[-1]) for p in ports}
+        _docker_run(["--name", self.name, *cmd])
+        try:
+            mapped = {p: _host_port(self.name, p) for p in ports}
+        except Exception:
+            self.__exit__()
+            raise
         self.url = f"http://127.0.0.1:{mapped[ports[0]]}"
         if k == "tempo":
             self.extra_url = f"http://127.0.0.1:{mapped[4318]}"
@@ -1054,11 +1119,17 @@ class BackendLab:
 
     def _req(self, url: str, data: bytes | None = None, headers: Mapping[str, str] | None = None) -> tuple[int, bytes]:
         req = urllib.request.Request(url, data=data, headers=dict(headers or {}))
-        try:
-            with self._op.open(req, timeout=30) as r:
-                return r.status, r.read()
-        except urllib.error.HTTPError as e:
-            return e.code, e.read()
+        for k in range(3):
+            try:
+                with self._op.open(req, timeout=30) as r:
+                    return r.status, r.read()
+            except urllib.error.HTTPError as e:
+                return e.code, e.read()
+            except (urllib.error.URLError, ConnectionError, TimeoutError):    # el puerto publicado puede tardar en reenviar: se reintenta (no afecta a los códigos 4xx/5xx)
+                if k == 2:
+                    raise
+                time.sleep(1.0 * (k + 1))
+        raise RuntimeError("inalcanzable")
 
     def metrics(self, prefix: str = "") -> dict[str, float]:
         _, body = self._req(self.url + "/metrics")
@@ -1115,7 +1186,13 @@ def storm_experiment(n_series: int, *, bounded: bool, interval_s: float = 2.0, s
         def stat() -> tuple[float, float]:
             m = prom.metrics()
             return m.get("prometheus_tsdb_head_series", 0.0), m.get("process_resident_memory_bytes", 0.0)
-        s0, r0 = stat()
+        prev = -1.0
+        for _ in range(8):                # el RSS del arranque aún se mueve: se espera a que se estabilice (±1 MB entre lecturas a 2 s) antes de medir la línea base
+            s0, r0 = stat()
+            if abs(r0 - prev) < 1e6:
+                break
+            prev = r0
+            time.sleep(2)
         views = [View(instrument_name="supportops.requests", attribute_keys={"intent"})] if bounded else []
         reader = PeriodicExportingMetricReader(OTLPMetricExporter(endpoint=prom.url + "/api/v1/otlp/v1/metrics"), export_interval_millis=int(interval_s * 1000))
         mp = MeterProvider(resource=Resource.create({"service.name": "storm-lab"}), metric_readers=[reader], views=views)
@@ -1134,8 +1211,20 @@ def storm_experiment(n_series: int, *, bounded: bool, interval_s: float = 2.0, s
 # 8c. Experimentos reutilizables (los usan la lección, el proyecto y el grabador de datos pregrabados)
 # =====================================================================================================================
 def run_collector_experiment(corpus: Corpus, policies: Sequence[Policy], *, decision_wait: str = "2s", num_traces: int = 50_000, settle_s: float = 40.0,
-                             spans: Sequence[Mapping[str, Any]] | None = None, **cfg_kw: Any) -> dict[str, Any]:
-    """Envía el corpus al Collector real con ``tail_sampling`` y devuelve lo conservado, las métricas internas del procesador y el RED calculado antes del muestreo."""
+                             spans: Sequence[Mapping[str, Any]] | None = None, attempts: int = 3, **cfg_kw: Any) -> dict[str, Any]:
+    """Envía el corpus al Collector real con ``tail_sampling`` y devuelve lo conservado, las métricas internas del procesador y el RED calculado antes del muestreo.
+    Robusto: si el Collector no cae pero no conservó nada (arranque lento, envío perdido) repite hasta ``attempts`` veces; el resultado lleva ``attempts_used``."""
+    res: dict[str, Any] = {}
+    for k in range(1, max(1, attempts) + 1):
+        res = _run_collector_once(corpus, policies, decision_wait=decision_wait, num_traces=num_traces, settle_s=settle_s, spans=spans, **cfg_kw)
+        res["attempts_used"] = k
+        if res["crashed"] or res["n_kept"] > 0:
+            break
+    return res
+
+
+def _run_collector_once(corpus: Corpus, policies: Sequence[Policy], *, decision_wait: str, num_traces: int, settle_s: float,
+                        spans: Sequence[Mapping[str, Any]] | None, **cfg_kw: Any) -> dict[str, Any]:
     sp = list(spans) if spans is not None else [s for t in corpus.traces for s in t.spans]
     cfg = collector_config(policies, decision_wait=decision_wait, num_traces=num_traces, **cfg_kw)
     with SamplingLab(cfg) as lab:
@@ -1144,7 +1233,13 @@ def run_collector_experiment(corpus: Corpus, policies: Sequence[Policy], *, deci
         time.sleep(1.0)
         crashed = lab.exited()
         ids = lab.kept_trace_ids()
-        internal = {} if crashed else lab.internal()
+        internal = {}
+        if not crashed:
+            for _ in range(10):        # las métricas internas del procesador pueden tardar en aparecer en /metrics: se sondea (≤ 10 s) en vez de leer una vez
+                internal = lab.internal()
+                if "otelcol_processor_tail_sampling_sampling_traces_on_memory" in internal:
+                    break
+                time.sleep(1.0)
         per_policy = {}
         if not crashed:
             for name, val in lab.internal_labeled("otelcol_processor_tail_sampling_count_traces_sampled"):
