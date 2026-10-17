@@ -58,6 +58,25 @@ def build_lesson() -> None:
     - **Nunca** pongas API keys en un notebook. Este curso usa por defecto un LLM *simulado* (`LLM_PROVIDER=mock`): determinista, gratis y sin red.
     """)
 
+    md("""
+    ## 🔤 Glosario mínimo (para empezar sin saber nada del tema)
+
+    Estas palabras aparecerán en la primera sección; no hace falta memorizarlas, vuelve aquí si alguna te frena. Todas se desarrollan después (entre paréntesis, dónde).
+
+    | Palabra | En una frase | Analogía |
+    |---|---|---|
+    | **LLM** | Modelo de lenguaje: recibe texto y devuelve texto (lo llamas por API) | Una función `texto -> texto` cara y no determinista |
+    | **Token** | Trozo de texto (≈ ¾ de palabra) que el LLM lee/escribe; **se factura por token** | Los «bytes» de una llamada a un LLM |
+    | **Agente** | Programa que repite «el LLM decide → se ejecuta una *herramienta* (*tool call*) → se vuelve a preguntar al LLM» hasta terminar (módulo 01) | Un `while` cuyo cuerpo lo decide el modelo |
+    | **Telemetría** | Los datos que tu programa emite sobre sí mismo mientras corre (trazas, métricas, logs) | `print`/`logging` con estructura y estándar |
+    | **Span / traza (*trace*)** | Un *span* es un paso con inicio y duración; una *traza* es el árbol de spans de una petición (módulo 02-03) | El resultado de `cProfile` de **una** petición, como árbol |
+    | **Percentil (p50, p95, p99)** | «El 95 % de las peticiones tarda *menos* que esto». p50 = mediana | `np.percentile(lat, 95)` |
+    | **SLI / SLO** | Indicador que mides (p. ej. % de peticiones correctas) / objetivo que te comprometes a cumplir (≥ 99 %) (módulo 16) | Métrica de validación / umbral de aceptación de un modelo |
+    | **OTLP** | Formato y protocolo estándar de OpenTelemetry para enviar telemetría | «El JSON/gRPC común» entre tu app y el Collector |
+    | **Backend** (de observabilidad) | Base de datos donde se guarda y consulta la telemetría (Tempo, Loki, Prometheus) | El almacén de features de tu pipeline |
+    | **Dashboard** | Pantalla de gráficos sobre esos datos (Grafana) | Un notebook de exploración siempre encendido |
+    """)
+
     code(boot("viz"))
     code(IMPORTS + '''
 STACK = check_stack("core")        # ¿qué servicios están arriba? si no: comando exacto de Compose y modo degradado
@@ -177,7 +196,9 @@ print(f"coste máx / mediana = {c.max()/np.median(c):.1f}×")
     md("""
     ### Grieta 4 · «200 OK» ya no significa «éxito»
 
-    Un monitor clásico cuenta como fallo lo que termina en error (excepción, `5xx`, *timeout*). Pero un agente puede devolver una respuesta **fluida, rápida y completamente inventada**,
+        > 🤔 **Predice antes de ejecutar.** Del tráfico sintético, ¿qué porcentaje de peticiones crees que acaba con una respuesta incorrecta o insegura **sin** dar ningún error (1 %, 5 %, 15 %)? Anota tu número y compáralo con el gráfico: calibrar tu intuición es parte del oficio.
+
+Un monitor clásico cuenta como fallo lo que termina en error (excepción, `5xx`, *timeout*). Pero un agente puede devolver una respuesta **fluida, rápida y completamente inventada**,
     o filtrar datos personales de otro cliente… con estado `ok`. Comparemos lo que ve el monitoreo clásico con la realidad (en SupportOps conocemos la verdad de terreno porque *nosotros* inyectamos los fallos).
     """)
     code('''
@@ -658,7 +679,7 @@ plt.show()
     md(observe("""
     - La barra larga es el span **raíz** (`invoke_agent hola`, 300 ms); el span hijo (`chat mock-small`, 200 ms) está **anidado** dentro: empieza después y termina antes. La relación padre→hijo viaja en `parentSpanId`.
     - Esta cascada (*waterfall*) es la vista principal de Tempo/Grafana: de un vistazo ves *dónde se fue el tiempo*.
-    - Y el `trace_id` que pusimos también en el **log** y en... la métrica no (las métricas no llevan traza; luego veremos *exemplars*, módulo 09). Ese identificador común es el hilo que une las señales.
+    - El mismo `trace_id` está también en el **log**; la métrica no lo lleva (un contador agrega muchas peticiones; luego veremos *exemplars*, módulo 09). Ese identificador común es el hilo que une las señales: sin él, tres sistemas separados no se pueden cruzar.
     """))
 
     code('''
@@ -714,7 +735,7 @@ plt.tight_layout(); plt.show()
     - **Trade-off real:** el stack de observabilidad es *otra carga de producción* (CPU, RAM, disco, coste). Lo medimos aquí en miniatura; en el módulo 18 lo dimensionas con presupuesto.
     """)
 
-    md(box("elite", "Secretos de la élite · Entorno y arranque", """
+    md(box("elite", "Entorno y arranque", """
     1. **«Listo» ≠ «arrancado».** Un contenedor `Up` no acepta escrituras hasta que su *readiness* pasa (Loki ≈ 17 s, Pyroscope ≈ 1 min aquí). Las pruebas de humo deben esperar a `/ready` con *timeout* explícito, no a `sleep 30`.
     2. **Un `200` del Collector solo prueba que *aceptó* el dato.** La verificación de verdad es **de extremo a extremo**: una traza *canario* que viaja app → Collector → Tempo y se busca por su `trace_id`. Es lo que hacen los equipos para detectar «pérdida silenciosa de telemetría».
     3. **Fija versiones y lee las notas de versión.** Este stack usa Tempo 3.x, que **eliminó** `ingester` y `compactor` de la configuración (ahora `live_store` y `backend_scheduler`); un `tempo.yaml` copiado de un tutorial de 2024 no arranca. En el Collector contrib 0.162 los exporters se llaman `otlp_grpc`/`otlp_http`. «Latest» en producción es una bomba de relojería.
@@ -768,7 +789,10 @@ plt.tight_layout(); plt.show()
         ("7 · (Transferencia) Un pipeline batch",
          """Tienes un pipeline nocturno de embeddings + RAG (sin interacción de usuario). ¿Cuáles de las cinco grietas siguen aplicando? ¿Qué cambia en cómo lo monitorizas?""",
          """Siguen: coste variable (tokens), calidad (documentos recuperados irrelevantes) y fallos parciales (un lote de documentos falla en silencio). Cambia que no hay latencia interactiva: priorizas **throughput, duración total, tasa de reintentos y coste por lote**, y alertas de «no ha terminado a la hora esperada» (*dead man's switch*)."""),
-        ("8 · (Recuerdo) ¿Por qué un Collector?",
+        ("8 · (Diagnóstico) Si Grafana se cae…",
+         """Grafana se cae durante una hora (el contenedor está parado) pero la app y el resto del stack siguen. Mirando el diagrama del stack: ¿se pierden trazas, logs o métricas de esa hora? ¿Qué dejas de poder hacer? ¿Y si lo que se cae es el Collector?""",
+         """Con Grafana caído **no se pierde telemetría**: las flechas de escritura van app → Collector → Tempo/Loki/Prometheus, y Grafana solo *lee* (flechas discontinuas). Pierdes la vista (dashboards, Explore, alertas de Grafana), no los datos; al volver verás la hora completa. Si cae el **Collector**, la app pierde su único punto de salida: los datos se acumulan en el buffer del SDK (módulo 03) hasta agotarlo y luego se descartan; por eso se vigila el Collector y se despliega con réplicas (módulo 05/19)."""),
+        ("9 · (Recuerdo) ¿Por qué un Collector?",
          """Cita tres beneficios de enviar la telemetría al Collector en lugar de directamente al backend.""",
          """Reintentos y *buffering* si el backend cae; punto único de salida y de procesado (redacción de PII, etiquetas, muestreo) sin tocar aplicaciones; independencia del backend (cambiar Tempo/Loki/Prometheus por otro sin redesplegar)."""),
     ]
