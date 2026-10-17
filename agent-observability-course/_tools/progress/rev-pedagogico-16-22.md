@@ -3,7 +3,7 @@ Agente: Revisor pedagógico P3 · Módulos: 16–22 + GUIA_DE_ESTUDIO.md · Info
 - [x] 16_slos_alertas_incidentes
 - [x] 17_profiling_pyroscope
 - [x] 18_escala_muestreo_coste
-- [ ] 19_kubernetes_helm
+- [x] 19_kubernetes_helm
 - [ ] 20_privacidad_seguridad
 - [ ] 21_elite_playbook
 - [ ] 22_capstone
@@ -15,3 +15,4 @@ Agente: Revisor pedagógico P3 · Módulos: 16–22 + GUIA_DE_ESTUDIO.md · Info
 - Hallazgos para informe: ver REVISION_PEDAGOGICA_3.md (se escribe al final; apuntar aquí cada hallazgo).
 - 17: prereq +13, intuición ML (muestreo=accuracy en test), protobuf glosado, 🔁 +2 (13 y 16). Proyecto ya bien andamiado, sin cambios.
 - 18: 🧭 header vs caja incoherentes -> unificado (núcleo §1-8,§12); ejemplo resuelto 1/π en §7; 🔁 +Q16; predicción previa en Paso 6 (TODO trivial, doc: wrapper de collector_config).
+- 19: GRAN HALLAZGO: no se enseñaba Kubernetes (alumno parte de cero) -> añadida §0 'Kubernetes mínimo' (tabla Compose->K8s, manifiesto anotado, Helm~Jinja/Hydra); 🧭 header vs caja unificado; prereq 00 y sin 17; 🔁 +Q módulo 00.

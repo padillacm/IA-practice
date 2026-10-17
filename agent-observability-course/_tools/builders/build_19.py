@@ -804,13 +804,13 @@ def build_lesson() -> None:
     | | |
     |---|---|
     | **Nivel** | 🔴 Experto |
-    | **Duración estimada** | ≈ 5 h (ruta núcleo ≈ 3 h 30: §1-4, §6, §8-9 y §12) |
+    | **Duración estimada** | ≈ 5 h (ruta núcleo ≈ 3 h 30: §0-6, §8 y §9) |
     | **Servicios de Compose** | Ninguno del stack. Necesita `helm` (4.x) y, para los experimentos con contenedores, **Docker**. Un clúster con kind/k3d es lo ideal en TU máquina (ver «Honestidad» en §3) |
     | **RAM aproximada** | ≈ 1-2 GB mientras corre un experimento (API server de k3s + Tempo/Loki/Prometheus/Collector en contenedores efímeros) |
     | **Modo sin helm/Docker** | Se ejecuta con los resultados pregrabados (medidos al construir el módulo); la parte conceptual, `deep_merge` y el HPA corren en cualquier sitio |
-    | **Prerrequisitos** | Módulos 05 (Collector), 17-18 (profiling, muestreo: aquí se despliega el Collector de dos capas del 18) y 16 (SLOs) |
+    | **Prerrequisitos** | Módulos 00 (Docker y Compose), 05 (Collector), 18 (muestreo: aquí se despliega su Collector de dos capas) y 16 (SLOs, solo para el presupuesto de error de la propia plataforma). Kubernetes **no** se asume: la §0 lo explica |
 
-    > 🧭 **Ruta núcleo vs ampliación.** Núcleo: topología y Helm (§1-2), render y validación (§4-6), flujo real de telemetría (§8) y afinidad (§9). Ampliación: API server real (§7), autoscaling (§10), Operator (§11), GitOps (§12).
+    > 🧭 **Ruta núcleo vs ampliación.** Núcleo: Kubernetes mínimo (§0), topología y Helm (§1-2), render y validación (§4-6), flujo real de telemetría (§8) y afinidad (§9). Ampliación: API server real (§7), autoscaling (§10), Operator (§11), GitOps y CI (§12). Si solo haces el núcleo, en el proyecto salta los pasos 6 (HPA) y 7 (Operator).
     """)
 
     md("""
@@ -828,15 +828,61 @@ def build_lesson() -> None:
     md(mdj("""
     ## 🔁 Conexión con módulos anteriores
     """,
-           details("1. (Módulo 05/18) ¿Por qué el `tail_sampling` obliga a que todos los spans de una traza lleguen a la misma réplica?",
+           details("1. (Módulo 00) En `docker compose`, ¿cómo encuentra el Collector al Tempo, y qué crees que cambia cuando hay 3 réplicas de Tempo en vez de un contenedor?",
+                   "Por el **nombre del servicio** en la red de Compose (`tempo:4317`). Con réplicas hace falta un nombre estable que reparta entre ellas: en Kubernetes es un **Service** (§0), y para repartir por `traceID` uno *headless* (§9)."),
+           details("2. (Módulo 05/18) ¿Por qué el `tail_sampling` obliga a que todos los spans de una traza lleguen a la misma réplica?",
                    "Porque decide sobre la traza **completa** que guarda en memoria; si una réplica solo ve trozos decide con información parcial (p. ej. no ve el span en error o la duración total). En el módulo 18 lo vimos en el simulador; aquí lo **medimos** con dos réplicas reales."),
-           details("2. (Módulo 00/10) ¿Qué ventaja tiene que los dashboards y datasources sean archivos en el repositorio?",
+           details("3. (Módulo 00/10) ¿Qué ventaja tiene que los dashboards y datasources sean archivos en el repositorio?",
                    "Son reproducibles, revisables y versionados (diff en un PR). Helm lleva la misma idea al despliegue: `values.yaml` es la fuente de verdad y `helm template` es determinista."),
-           details("3. (Módulo 16) ¿Qué es el presupuesto de error y por qué importa al actualizar un Collector?",
+           details("4. (Módulo 16) ¿Qué es el presupuesto de error y por qué importa al actualizar un Collector?",
                    "Cada actualización puede perder telemetría o romper trazas; el despliegue gradual (PDB, `maxUnavailable`, ventana de estabilización del HPA) es cómo se protege el SLO de la propia plataforma.")))
 
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_19 + PLAN_CELL)
+
+    md("""
+    ## 0 · Kubernetes mínimo (léelo aunque creas saberlo)
+
+    El curso no te pide experiencia previa con Kubernetes (K8s), así que aquí van los **10 conceptos** que usa el resto del módulo, siempre contra lo que ya conoces de `docker compose` (módulo 00):
+
+    | Concepto K8s | Qué es | Equivalente que ya conoces |
+    |---|---|---|
+    | **Pod** | La unidad mínima que se despliega: uno o más contenedores que comparten red y ciclo de vida | un *service* de Compose con su(s) contenedor(es), pero efímero: si muere, se sustituye por otro |
+    | **Deployment** | «Quiero **N réplicas** de este pod y actualízalas poco a poco cuando cambie la plantilla» | `docker compose up --scale app=N` + *rolling update* |
+    | **Service** | Un **nombre DNS estable** (`tempo.observability.svc.cluster.local`) que reparte tráfico entre los pods que cumplan un selector de etiquetas | el nombre del servicio en la red de Compose (`tempo:3200`), pero con balanceo de carga |
+    | **Service *headless*** | Un Service sin balanceo: el DNS devuelve **una IP por pod** (lo necesita el `load_balancing` de §9) | consultar a mano todas las IPs de las réplicas |
+    | **ConfigMap / Secret** | Ficheros o variables de configuración (no secretos / secretos) que se montan en el pod | `volumes: ./tempo.yaml:/etc/tempo.yaml` y `.env` de Compose |
+    | **Namespace** | Un «directorio» lógico para aislar recursos y permisos (`observability`, `supportops`) | un proyecto de Compose (`-p`) |
+    | **DaemonSet** | Un pod **por nodo** (agentes de telemetría) | un contenedor «sidecar de máquina» |
+    | **StatefulSet** | Pods con identidad y disco estable (bases de datos, Tempo, Loki) | un servicio de Compose con un volumen con nombre |
+    | **HPA / PDB** | HPA = autoescalado por métrica; PDB = «nunca dejes menos de X pods disponibles al actualizar» | un autoscaler de backend; una regla de on-call para despliegues |
+    | **CRD + Operator** | Un CRD añade **tipos nuevos** a la API (`OpenTelemetryCollector`); un *operator* es el controlador que los convierte en Deployments, Services, etc. | un ORM: declaras un modelo y el sistema genera las tablas |
+
+    **La idea de fondo es declarativa**: describes el estado deseado en YAML y un bucle de control (*controller*) compara continuamente lo deseado con lo real y corrige la diferencia. Es el mismo patrón de un termostato, de un `terraform apply` o de un job que reconcilia una tabla con otra.
+    Un manifiesto mínimo, línea a línea:
+
+    ```yaml
+    apiVersion: apps/v1          # familia de la API y versión
+    kind: Deployment             # el tipo de objeto
+    metadata: {name: otel-gateway, namespace: observability}
+    spec:
+      replicas: 2                # estado deseado: 2 pods
+      selector: {matchLabels: {app: otel-gateway}}   # qué pods gestiona este Deployment
+      template:                  # la plantilla del pod
+        metadata: {labels: {app: otel-gateway}}      # etiquetas (las usará un Service para encontrarlos)
+        spec:
+          containers:
+            - name: collector
+              image: otel/opentelemetry-collector-contrib:0.162.0   # versión FIJADA, nunca `latest`
+              resources:
+                requests: {cpu: 200m, memory: 256Mi}    # lo que el scheduler reserva
+                limits:   {memory: 512Mi}               # tope: si lo supera, el pod se mata (OOM)
+              securityContext: {runAsNonRoot: true, readOnlyRootFilesystem: true}   # endurecimiento que revisaremos en el proyecto
+    ```
+
+    **Helm** resuelve el problema siguiente: escribir ese YAML a mano para 7 componentes y 3 entornos no escala. Un **chart** es un paquete de plantillas (tipo Jinja2) y los **values** son sus parámetros (como un fichero de configuración de experimento en ML con Hydra); una **release** es una instalación con nombre y revisión.
+    Si no tienes clúster, no pasa nada: casi todo el módulo es leer, renderizar y validar YAML con código Python que ya sabes escribir. Cuando veas `kubectl`, piensa «cliente de la API REST de Kubernetes».
+    """)
 
     # ------------------------------------------------------------------------------------------------ 1
     md("""
@@ -1497,7 +1543,7 @@ def build_project() -> None:
     | **Duración estimada** | ≈ 2 h 30 min |
     | **Servicios de Compose** | Ninguno. Necesita `helm` y, para R1/R4/R7, Docker (contenedores efímeros y un API server k3s). Sin ellos, esas comprobaciones se omiten y el resto puntúa |
     | **RAM aproximada** | ≈ 1-2 GB durante la rúbrica |
-    | **Prerrequisitos** | Lección `19_kubernetes_helm`; proyecto 18 (la política de muestreo) y módulo 05 |
+    | **Prerrequisitos** | Lección `19_kubernetes_helm` (incluida su §0 «Kubernetes mínimo»); proyecto 18 (la política de muestreo) y módulo 05 |
     | **Conexión** | Despliega como código la plataforma completa de los módulos 05-18 (Collector de dos capas con la política de muestreo, Tempo, Loki, Prometheus, Grafana) y el agente SupportOps; es el «Despliegue» del capstone |
 
     ## Contexto de negocio
