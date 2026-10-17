@@ -3,7 +3,7 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - [x] 00_entorno
 - [x] 01_agente_base
 - [x] 02_tres_pilares
-- [ ] 03_otel_sdk_python
+- [x] 03_otel_sdk_python
 - [ ] 04_genai_semconv
 - [ ] 05_collector
 - [ ] 06_autoinstrumentacion
@@ -18,3 +18,4 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - 01: conexión con 00 reescrita (diagnóstico/transferencia), 🧭 ruta núcleo, ejemplo a mano de tokens antes de fórmula, ejemplo resuelto de Rule en proyecto (antes no se enseñaba), autoeval +2 preguntas.
 - 02: conexión 00/01 reescrita a diagnóstico/cálculo; predicción §6; autoeval +2 (correlación, resource/scope/atributo); proyecto: plan TODO3, predicción TODO4, 👀 tras viz de la solución. Proyecto ejecutado OK con nbclient (sin errores, rúbrica).
 - runnb.py (scratchpad) ejecuta un notebook con nbclient.
+- 03: conexión aplicada, 🧭 ruta núcleo, predicción cola Batch, autoeval +2 (endpoint OTLP, coste CPU), 👀 en proyecto tras la cascada. Solo markdown cambiado (sin re-ejecutar).

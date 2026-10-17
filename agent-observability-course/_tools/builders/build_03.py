@@ -61,15 +61,23 @@ def build_lesson() -> None:
     8. **Evitar** las trampas del SDK (proveedor global de un solo uso, límites de atributos, muestreo y atributos tardíos, fork).
     """)
 
+    md(box("route", "Ruta núcleo vs ampliación", """
+        Este módulo tiene ≈ 75 celdas y ≈ 4 h 30 min: ábrelo en **dos sesiones**.
+
+        - **Núcleo (≈ 2 h de lección + proyecto; imprescindible para 04-07):** §1 (API vs SDK), §3 (tracer a mano), §4.1-4.3 (SDK, contexto, hilos y propagación HTTP), §5 (exportar por OTLP), §6 (SupportOps v1) y el proyecto.
+        - **Ampliación (≈ 1 h, vuelve cuando lo necesites):** §3.1-3.2 (exportador y `traceparent` a mano), §4.4 (cola del Batch y su fórmula), §4.5 (samplers, se retoma en el módulo 18), §7.1 (microbenchmark) y los secretos 🧠 7-9.
+        - **Si te atascas con `contextvars`:** el único concepto nuevo para un programador de Python es que el «span activo» vive en un `ContextVar` y los hilos nuevos lo pierden (§4.2); vuelve a esa celda antes de seguir.
+        """))
+
     md("""
     ## 🔁 Conexión con módulos anteriores
     """)
-    md(details("1 · (Módulo 02) ¿Qué cuatro campos tiene la cabecera `traceparent` y cuál de ellos decide si la traza se muestrea?",
-               "`versión-trace_id-parent_id-flags` (p. ej. `00-<32 hex>-<16 hex>-01`). El campo `flags`: el bit `0x01` = *sampled* (y, en Trace Context Level 2, `0x02` = *random-trace-id*). El `parent_id` es el span del **emisor**, que se convierte en el padre del primer span del receptor."))
-    md(details("2 · (Módulo 02) ¿Qué diferencia hay entre *resource* y *instrumentation scope*?",
-               "El *resource* describe **quién** emite (`service.name`, `service.version`, instancia…): es igual para todo el proceso. El *scope* describe **qué librería/código** generó el dato (nombre y versión del tracer) y puede haber varios en el mismo proceso."))
-    md(details("3 · (Módulo 01) ¿Por qué las trazas de SupportOps duran milisegundos aunque el agente «tarde» varios segundos?",
-               "Porque la latencia es **simulada** (`SimClock`): el agente avanza un reloj virtual en vez de dormir. Por eso usaremos `start_time`/`end_time` simulados para que las trazas sean deterministas (o `SUPPORTOPS_REAL_SLEEP_SCALE` para duraciones de pared)."))
+    md(details("1 · (Módulo 02, Cálculo) Un cliente envía `traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01`. ¿Qué `trace_id` y qué `parent_span_id` tendrá el primer span del receptor? ¿Qué cambia si el último byte es `00`?",
+               "`trace_id` = `4bf92f3577b34da6a3ce929d0e0e4736` (el mismo: así se une la traza) y `parent_span_id` = `00f067aa0ba902b7` (el span **emisor** se convierte en padre). El último byte son *flags*: `01` = muestreada; con `00` el receptor sigue creando spans con el mismo `trace_id`, pero un `ParentBased` heredaría «no muestrear» y no los exportaría."))
+    md(details("2 · (Módulo 02, Diagnóstico) En Tempo ves dos trazas por petición: una con el agente y otra con solo el servidor de pedidos, sin padre. ¿Qué paso del contexto falta y en qué lado puede estar el fallo? (En §4.3 lo reproducirás.)",
+               "Falta la **propagación**: el cliente no hace `inject` de `traceparent` en las cabeceras salientes, o el servidor no hace `extract` antes de crear su span (o un proxy/cola elimina la cabecera). Ninguno da error: solo ves dos trazas incompletas."))
+    md(details("3 · (Módulo 01, Transferencia) ¿Por qué se instrumenta el agente a través del `Instrumentor` (tres *context managers*) y no con llamadas a OpenTelemetry dentro de cada herramienta? Da dos ventajas.",
+               "(1) El agente **no depende** de OpenTelemetry: sin instrumentor es un no-op, y se puede cambiar de SDK/backend sin tocar la lógica. (2) Hay **un solo sitio** donde decidir nombres de span, atributos de muestreo y manejo de errores, en vez de repetirlos en cada herramienta (y olvidarlos en la siguiente). Además, el reloj simulado se inyecta ahí, lo que hace deterministas las trazas del laboratorio."))
 
     code(boot("viz,otel"))
     code(IMPORTS + OTEL_IMPORTS + '''
@@ -491,6 +499,8 @@ print({k: {a: round(b, 3) for a, b in v.items()} for k, v in R.items()})
     Ejemplo: $B=512$, $d=0.2$ s ⇒ $\\lambda_{\\max}=2560$ spans/s; con $\\lambda=3000$ y $Q=2048$ la cola aguanta $2048/440\\approx 4{,}7$ s.
 
     Lo comprobamos con una cola pequeña ($Q=64$, lotes de 64, 20 ms por lote) frente a una grande ($Q=2048$), enviando 1000 spans numerados de golpe:
+
+    > 🤔 **Predice antes de ejecutar.** Con $Q=64$ y 1000 spans en ráfaga, ¿qué perderás: los **primeros**, los **últimos** o spans repartidos al azar? ¿Y con $Q=2048$? Apunta tu respuesta; la celda siguiente imprime *qué números de span sobrevivieron*.
     """)
     code('''
 def burst(queue, n=1000):
@@ -902,6 +912,10 @@ for k, v in res.items():
                "Con `--preload` el módulo se importa en el proceso maestro y los hilos de fondo (Batch, lector periódico de métricas) no sobreviven bien al `fork`. Solución: inicializar la telemetría **después del fork**, en el hook `post_fork` de Gunicorn (o en el evento de arranque de cada worker); un `Resource` con `service.instance.id` distinto por worker; exportar por OTLP/HTTP a un Collector local; y `shutdown()` en el hook de salida del worker."))
     md(details("7 · (Transferencia) Tu agente llama a un servidor MCP remoto de pedidos por HTTP. ¿Qué `SpanKind` usarías en cada lado, qué debe hacer cada lado con el contexto y qué verías si el servidor no hiciera `extract`?",
                "Agente: span `CLIENT` (p. ej. `execute_tool get_order`) y `propagate.inject` en las cabeceras de la petición. Servidor: `extract` de las cabeceras y span `SERVER` como hijo. Sin `extract` el servidor crea **otra traza**: dos trazas incompletas, sin errores visibles; el agente vería la latencia de la llamada pero no su desglose interno. (Módulo 12.)"))
+    md(details("8 · (Diagnóstico) Configuras `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318/v1/traces`; el Collector registra peticiones a `/v1/traces/v1/traces` con 404 y no llega ninguna traza. ¿Qué cambias y qué otra variable permitiría esa URL completa?",
+               "La variable genérica `OTEL_EXPORTER_OTLP_ENDPOINT` espera la **URL base** (`http://localhost:4318`): el SDK añade `/v1/traces` (de ahí la ruta duplicada y el 404). Si quieres escribir la ruta completa, usa la variable *específica de señal* `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, que no se modifica. Revisa también que el puerto corresponde al protocolo: 4318 = HTTP, 4317 = gRPC."))
+    md(details("9 · (Cálculo) Mides ≈ 0,2 ms de CPU por span exportado. SupportOps produce 215 spans/s en un único proceso. ¿Qué fracción de un núcleo consume la instrumentación y qué conclusión sacas frente a una llamada típica al LLM?",
+               "215 spans/s × 0,2 ms = 43 ms de CPU por segundo ≈ **4 % de un núcleo**. Frente a una llamada a un LLM (cientos de ms a segundos de *espera*, no de CPU), instrumentar es barato; lo costoso es lo que se **envía y almacena** (módulo 18). Los valores absolutos dependen de tu CPU: lo que se conserva es la proporción medida en §7.1."))
 
     md("""
     ---
@@ -1132,6 +1146,11 @@ if spans:
 else:
     print("Aún no hay spans: completa los TODO.")
 ''')
+    md(observe("""
+        - Debe verse **una raíz** `invoke_agent …` con barras hijas `chat …` y `execute_tool …` **debajo y dentro** de su intervalo, no solapadas entre sí (el agente es secuencial).
+        - Una barra **roja** hija con la raíz en verde es un fallo *recuperado* (p. ej. reintento tras un 5xx): la raíz no se marca. Si la raíz sí es roja, el agente se rindió (`error`/`max_steps`).
+        - Barras sueltas sin padre o una traza de un solo span indican que el span no se activó con `use_span` (TODO 2) o que la raíz y los hijos usan tracers de proveedores distintos.
+        """))
 
     # -------------------------------------------------------------------------------------------- paso 3
     md("""
