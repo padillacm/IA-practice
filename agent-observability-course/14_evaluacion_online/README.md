@@ -1,6 +1,6 @@
 # Módulo 14 · Evaluación online de agentes de IA
 
-🔴 **Experto** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
 
 > ⚠️ El agente y el «juez» son **simulados y deterministas** (`mock`, semilla 42): el juez es un conjunto de reglas con errores realistas
 > (falsos negativos/positivos, sesgo de verbosidad y de posición) para poder **medirlos contra la verdad**. Las cifras cambian con un juez real; el método no.

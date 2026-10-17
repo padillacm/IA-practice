@@ -1,6 +1,6 @@
 # Módulo 15 · Calidad y regresión de agentes
 
-🔴 **Experto** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
 
 > ⚠️ Las versiones de prompt (`v1`, `v2` «regresión silenciosa», `v2.1` hotfix) son **simuladas** sobre el `mock` (`PromptVariantLLM`): reproducen el patrón de una regresión real con el *ground truth* en los datos.
 > Las cifras cambian con modelos reales; el método no.

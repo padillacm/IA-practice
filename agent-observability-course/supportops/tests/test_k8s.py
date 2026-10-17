@@ -43,7 +43,12 @@ def test_quantities_and_requests():
 
 def test_chart_refs_and_versions():
     assert K.CHARTS["otel-collector"].app_version == "0.162.0" and K.CHARTS["tempo"].app_version == "3.1.0" and K.CHARTS["loki"].app_version == "3.7.8"
-    assert K.chart_ref("supportops").endswith("charts/supportops") and K.chart_ref("tempo") in ("grafana-community/tempo",) or "tempo" in K.chart_ref("tempo")
+    assert K.chart_ref("supportops").endswith("charts/supportops")
+    try:
+        ref = K.chart_ref("tempo")
+    except RuntimeError:
+        pytest.skip("chart de Tempo no disponible (sin repositorio Helm ni COURSE_CHARTS_DIR)")
+    assert "tempo" in ref
 
 
 needs_helm = pytest.mark.skipif(K._which("helm", "HELM") is None, reason="helm no instalado")

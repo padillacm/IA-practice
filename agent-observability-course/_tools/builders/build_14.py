@@ -47,7 +47,7 @@ def build_lesson() -> None:
 
     | | |
     |---|---|
-    | **Nivel** | 🔴 Experto |
+    | **Nivel** | 🟠 Avanzado |
     | **Duración estimada** | ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min) |
     | **Servicios de Compose** | Opcional: `--profile core --profile metrics` (sección 8 y paso final). Sin Docker todo funciona en **modo degradado** (telemetría en memoria, mismo esquema). Funciona en Colab |
     | **RAM aproximada** | < 500 MB sin stack · ≈ 1,2 GB con `core` + `metrics` |
@@ -667,7 +667,7 @@ def build_project() -> None:
 
     | | |
     |---|---|
-    | **Nivel** | 🔴 Experto |
+    | **Nivel** | 🟠 Avanzado |
     | **Duración estimada** | ≈ 1 h 45 min |
     | **Servicios de Compose** | Ninguno (se evalúa en memoria). Opcional: `core` + `metrics` para ver tu panel (paso final) |
     | **RAM aproximada** | < 500 MB |
@@ -1159,7 +1159,7 @@ def build_dashboard() -> None:
 def build_readme() -> None:
     readme = """# Módulo 14 · Evaluación online de agentes de IA
 
-🔴 **Experto** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
 
 > ⚠️ El agente y el «juez» son **simulados y deterministas** (`mock`, semilla 42): el juez es un conjunto de reglas con errores realistas
 > (falsos negativos/positivos, sesgo de verbosidad y de posición) para poder **medirlos contra la verdad**. Las cifras cambian con un juez real; el método no.
