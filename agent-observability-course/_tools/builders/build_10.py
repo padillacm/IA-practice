@@ -258,7 +258,10 @@ def build_lesson() -> None:
     | **Prerrequisitos** | Módulo 07 (TraceQL), 08 (LogQL y `trace_id` como *structured metadata*) y 09 (métricas, PromQL, exemplars); `setup_telemetry` (módulo 03) |
     | **Hilo conductor** | Todo lo que SupportOps emite (trazas, logs, métricas) se convierte en **una pantalla** que un on-call entiende a las 3 de la mañana: «Salud del agente» |
 
-    > 🗺️ **Ruta núcleo vs ampliación.** Núcleo (≈ 2 h): secciones 1, 2, 5, 6 y 7. Ampliación (≈ 1 h): variables y `$__rate_interval` (4), alertas (8) y el ecosistema «como código» (3).
+    > 🧭 **Ruta núcleo vs ampliación (dos sesiones).** El proyecto usa variables (4), paneles (5), enlaces (6) y una alerta (8), así que no son «ampliación».
+    > - **Sesión A (≈ 1 h 30 min):** secciones 1, 2, 3 y 4 → qué es un dashboard, su JSON, cómo se genera por código y qué son las variables.
+    > - **Sesión B (≈ 1 h 30 min):** secciones 5, 6, 7 y 8 → paneles por señal, navegación entre señales, el dashboard final y una alerta. Después, el proyecto.
+    > - **Ampliación opcional:** 2.1 (detalles de *provisioning*), 6.2 (correlaciones como código) y la sección 🏭.
     """)
 
     md("""
@@ -285,6 +288,9 @@ def build_lesson() -> None:
                "No: es *structured metadata*. Se filtra **después** del selector de streams: `{service_name=\"supportops-agent\"} | trace_id=\"<id>\"`. Si fuera etiqueta de índice crearía un stream por traza (cardinalidad explosiva)."))
     md(details("3 · (Módulo 09) Un exemplar no aparece en Grafana. Cita tres comprobaciones.",
                "Que haya tráfico reciente; que la medición se registrara dentro de un span *sampled*; que el Collector exponga OpenMetrics (`enable_open_metrics`) y Prometheus guarde exemplars (`exemplar-storage`); que el datasource tenga `exemplarTraceIdDestinations` y la consulta del panel `exemplar: true`; que la traza exista en Tempo."))
+
+    md(details("4 · (Módulo 07, aplicación) Escribe la consulta TraceQL que lista los `invoke_agent` de más de 4 s del servicio `supportops-agent`. ¿Por qué esa consulta será un panel de tipo tabla de trazas y no una serie temporal?",
+               "`{ resource.service.name = \"supportops-agent\" && name =~ \"invoke_agent.*\" && duration > 4s }`. Devuelve **trazas concretas** (identificadores, duración), no un número que evoluciona: sirve para el «¿qué petición?» (fila 3 del dashboard). Para una serie temporal usarías una métrica (módulo 09) o una función de métricas de TraceQL."))
 
     code(boot("viz,otel"))
     code(SETUP + '''
@@ -1135,6 +1141,9 @@ def trend_row(d: dk.Dashboard) -> dk.Dashboard:
     - **«Latencia media por herramienta»**: `sum by (gen_ai_tool_name) (rate(gen_ai_execute_tool_duration_seconds_sum{...}[…])) / sum by (gen_ai_tool_name) (rate(gen_ai_execute_tool_duration_seconds_count{...}[…]))`.
     - **«Pasos por ticket (p90)»**: dos consultas, `histogram_quantile(0.9, sum by (le) (rate(gen_ai_invoke_agent_tool_calls_bucket{...}[…])))` y la de `gen_ai_invoke_agent_inference_calls_bucket`.
     """)
+    md(hint(1, "Es el mismo molde que el TODO 3: `d.add(dk.timeseries(...), dk.timeseries(...), dk.timeseries(...))` con `w=8` en cada una (3 × 8 = 24 columnas, una fila completa). En el primer panel cambia solo la métrica y la agrupación `by (le, gen_ai_request_model)`: la agrupación por modelo es lo que produce una línea por modelo. La leyenda `{{gen_ai_request_model}}` es una plantilla de Grafana, no de Python."))
+    md(hint(2, "Las consultas van en **f-strings** para reutilizar `SVC` y `RATE`, así que las llaves de PromQL se duplican: el selector es `{{{SVC}}}` dentro del f-string y la leyenda `\"{{gen_ai_tool_name}}\"` va en una cadena normal (sin `f`). El tercer panel lleva dos `dk.prom(...)` con `ref=\"A\"` y `ref=\"B\"`."))
+
     code('''
 def where_row(d: dk.Dashboard) -> dk.Dashboard:
     d.row("2 · ¿Dónde se va el tiempo?")
@@ -1166,6 +1175,9 @@ def why_row(d: dk.Dashboard) -> dk.Dashboard:
 
     `finish(d)` añade **dos** enlaces de dashboard con `d.dash_link(...)`: uno **por *tags*** al dashboard de métricas GenAI (`tags=["metricas"]`) y otro a **Explore** (`url="/explore"`, `keep_time=True`, `include_vars=False`).
     """)
+    md(hint(1, "`d.dash_link(titulo, url, ...)` añade un enlace de dashboard. Para el primero no hay URL fija: se enlaza **por etiquetas**, es decir, a todos los dashboards con ese *tag* (pasa `url` vacía y `tags=[...]`). Para el segundo la URL es la ruta relativa `/explore`."))
+    md(hint(2, "Primero: `d.dash_link(\"Métricas GenAI (módulo 09)\", \"\", tags=[\"metricas\"], as_dropdown=False)`. Segundo: añade `keep_time=True` (conserva el rango de tiempo al saltar) e `include_vars=False` (no arrastra variables que Explore no entiende) y un `icon`. Devuelve `d`."))
+
     code('''
 def finish(d: dk.Dashboard) -> dk.Dashboard:
     # TODO 6
@@ -1467,6 +1479,10 @@ names = [p["title"][:26] for p in panels(Dsol)]; nq = [len(p["targets"]) for p i
 axes[1].barh(names, nq, color=viz.PALETTE["traces"]); axes[1].invert_yaxis(); axes[1].set_xlabel("consultas (targets)"); axes[1].set_title("Consultas por panel")
 plt.tight_layout(); plt.show()
 ''')
+    md(observe("""
+    - **Mapa de la izquierda:** de arriba abajo, tu dashboard se lee como una investigación: síntomas (¿estoy bien?) → tendencia → «¿dónde se va el tiempo?» → «¿qué petición concreta?». Si un on-call tuviera que bajar y subir para entenderlo, la disposición falla.
+    - **Barras de la derecha:** los paneles con más consultas (percentiles p50/p95/p99, pasos por ticket) son los más caros de refrescar; en un dashboard con muchos usuarios cada consulta se multiplica.
+    """))
     nb.save(out)
 
 
