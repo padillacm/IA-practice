@@ -232,12 +232,15 @@ def build_lesson() -> None:
     | **Duración estimada** | ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min) |
     | **Servicios de Compose** | Opcional: `--profile core --profile metrics` (sección 9, ≈ 3 min en vivo). Docker para validar dos configuraciones del Collector (sección 5). Sin Docker, todo funciona en **modo degradado** |
     | **RAM aproximada** | < 600 MB sin stack · ≈ 1,2 GB con `core` + `metrics` |
-    | **Prerrequisitos** | Todos los módulos anteriores (00-20). Es la síntesis: no hay herramientas nuevas, hay **criterio** |
+    | **Prerrequisitos** | Es la síntesis: no hay herramientas nuevas, hay **criterio**. Los que de verdad se usan: 03 (propagación de contexto), 09 (cardinalidad), 11 (reintentos y multi-agente), 13 (bucles de herramientas), 15 (regresión silenciosa), 16 (SLOs y postmortems), 18 (muestreo y series) y 20 (monitor de comportamiento). El resto (00-02, 04-08, 10, 12, 14, 17, 19) aporta contexto |
     | **Hilo conductor** | SupportOps ya tiene instrumentación, backends, SLOs, calidad, coste, escala y privacidad. Hoy aprendes a **usarlos bajo presión**: cinco incidentes reales de la familia que más duele, un método y una cultura |
 
     > ⚠️ **Honestidad sobre el laboratorio.** Los incidentes salen de **simulaciones deterministas** del agente de SupportOps (`mock`, semilla fija): reproducen la *forma* de cada fallo (cascada de reintentos, bucle de herramientas, regresión silenciosa, tormenta de cardinalidad, trazas partidas)
     > con telemetría real del SDK de OpenTelemetry, pero **no son sistemas reales**: el número de tickets por minuto es bajo (≈ 4) y el ruido, por tanto, alto, y los valores de memoria/duración de *scrape* del caso D son un modelo simple. Los ejemplos resueltos de esta lección son **variantes
     > distintas** de los del proyecto (otro agente afectado, otras ventanas, otra etiqueta) para que la mesa de incidentes siga siendo un examen.
+
+    > 🧭 **Ruta núcleo vs ampliación** (la lección tiene ≈ 78 celdas; el compendio de la §10 es de **consulta**, no de lectura lineal). **Núcleo (≈ 3 h 30 con el proyecto):** el método y las dos herramientas (§1), los cinco casos resueltos (§2-6) y la tabla síntoma → primera sospecha (§7.1), más autoevaluación.
+    > **Ampliación:** antipatrones (§7.2), cultura y cuestionario de madurez (§8), la sala de guerra en vivo con el stack (§9) y el compendio de secretos (§10, consúltalo con `compendio(...)` cuando lo necesites). Sigue el orden **ejemplo resuelto (lección) → mesa de incidentes (proyecto)**: el proyecto repite el método con otras variantes.
     """)
 
     md("""
@@ -265,6 +268,8 @@ def build_lesson() -> None:
                "Porque a menudo significa que el agente **dejó** de hacer algo caro: llamar a herramientas. Una alucinación no llama herramientas y es más rápida y barata."))
     md(details("4 · (Módulo 18) ¿Dónde está el coste de las métricas y qué etiqueta nunca debe aparecer?",
                "En el número de series (≈ 1-3 KB de RAM por serie, medido); nunca `ticket_id`, `customer_id` ni `trace_id` como etiqueta."))
+    md(details("5 · (Módulo 03) Un servicio recibe la cabecera `Traceparent` (con mayúscula) dentro de un `dict` y llama a `extract()`. ¿Qué pasa y qué síntoma verías en el service graph y en «trazas por ticket»?",
+               "Los `dict` distinguen mayúsculas y la propagación espera `traceparent`: `extract` no encuentra contexto y crea una traza **nueva**, sin ningún error. En el service graph desaparecen las aristas y «trazas por ticket» sube por encima de 1: es exactamente el caso E de esta lección."))
 
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_21)
@@ -314,6 +319,9 @@ plt.show()
 
     1. **`find_window(x)`**: con ~4 tickets por minuto, cada minuto es ruidoso. En vez de buscar un salto con umbrales, busca la **ventana** cuya media más se distingue del resto (estadístico t). Detecta saltos («desde el minuto 35») y ventanas («del 25 al 40»).
     2. **`bubble_up(df, malos, columnas)`**: para cada atributo y valor calcula su cuota entre los casos malos y entre los buenos; el cociente (*lift*) apunta a lo que distingue a unos de otros. Es la idea de «BubbleUp» de Honeycomb, a mano.
+
+    > 🧪 **Cómo usar los cinco casos (predice → mira → compara).** Es un ejemplo resuelto que se va desvaneciendo: antes de ejecutar cada caso, **escribe en una línea** (1) qué familia de causas sugiere la alerta y (2) qué consulta la refutaría. Después mira los datos y compara tu hipótesis con la del texto.
+    > En el proyecto los incidentes son **variantes** (otro agente, otra ventana, otra etiqueta): el método es el mismo, y ahí tendrás que hacerlo tú. Si te aciertan las predicciones de los cinco casos, ya piensas como la guardia.
     """)
 
     # ------------------------------------------------------------------------------------------------------------- 2
@@ -865,7 +873,7 @@ def build_project() -> None:
     | **Duración estimada** | ≈ 1 h 45 min |
     | **Servicios de Compose** | Ninguno (todo en memoria) |
     | **RAM aproximada** | < 600 MB |
-    | **Prerrequisitos** | Lección `21_elite_playbook` y los módulos 11, 13, 15, 16, 18 y 20 |
+    | **Prerrequisitos** | Lección `21_elite_playbook` (sus cinco casos resueltos son el ejemplo de lo que aquí haces solo) y los módulos 03, 09, 11, 13, 15, 16, 18 y 20 |
     | **Conexión** | Es el examen del curso: los cinco incidentes son las familias de fallo que viste en cada bloque. La telemetría de cada caso es real (SDK de OpenTelemetry, agente SupportOps); la **verdad** está en el módulo `supportops.incidents` (no la leas antes de terminar) |
 
     ## Contexto de negocio
@@ -944,6 +952,8 @@ except NotImplementedError as e:
 
     Para cada caso escribe `diagnose_x(bundle) -> dict` con las claves `cause`, `start_min`, `end_min`, `culprit`, `evidence` (dict con las claves que lista `I.evidence_keys(caso)`) y `mitigation`.
     **Las pistas son graduadas y plegadas: ábrelas solo si te atascas.** Ninguna da la causa; orientan el método.
+    **Protocolo de la mesa (≈ 15 min por incidente):** (1) lee la alerta y escribe **una hipótesis** de familia de causas y **la consulta que la refutaría**; (2) delimita **cuándo** empieza (`find_window` sobre la métrica que se movió); (3) compara poblaciones (`bubble_up`, o la forma de la traza); (4) comprueba **mecanismo**, no cercanía temporal con el registro de cambios (hay 3-4 cambios plausibles en cada caso); (5) elige causa y mitigación del catálogo y da **una cifra de evidencia**; (6) solo entonces ejecuta `run(...)`.
+    Orden sugerido si quieres ir de menos a más difícil: **B, D, A, E, C** (C exige reparar en que lo que mejora también es síntoma). Tras cada incidente, compara con el caso análogo de la lección: ¿qué cambió en la *forma* de la evidencia?
     Material útil ya hecho: `I.trace_table(spans, t0)` (una fila por traza), `I.minute_table`, `span_frame(b)` (celda siguiente), `find_window` y `bubble_up`.
     """)
     code('''
