@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">ESTADÍSTICA DE EVALUACIÓN: LAS 3 FUENTES DE RUIDO Y PUERTA DE CI (MÓDULO 09)</text>
+  <text x="48" y="69" class="subtitle">Cuándo una diferencia entre dos experimentos es una regresión real y cuándo es puro azar muestral</text>
+
+  <!-- Panel 1: Las 3 Fuentes de Ruido -->
+  <rect x="28" y="98" width="400" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Las 3 Fuentes de Varianza en un Score</text>
+
+  <rect x="46" y="144" width="364" height="118" class="card-blue"/>
+  <text x="62" y="166" class="card-title" fill="#1d4ed8">Fuente 1 · Varianza de Muestreo (σ_caso)</text>
+  <text x="62" y="186" class="mono" font-size="11.5" fill="#1e40af">SE = sqrt( p * (1 - p) / n )</text>
+  <text x="62" y="206" class="small-text">Tu dataset de <tspan class="mono">n</tspan> casos es una muestra finita. Con</text>
+  <text x="62" y="222" class="small-text"><tspan class="mono">n=25</tspan> y <tspan class="mono">p=0.80</tspan>, el intervalo al 95% (<tspan class="mono">±1.96·SE</tspan>) mide</text>
+  <text x="62" y="238" class="small-text" fill="#b91c1c" font-weight="700">±15.7 puntos porcentuales (de 64% a 96%).</text>
+  <text x="62" y="254" class="small-text">¡Solo baja aumentando <tspan class="mono">n</tspan> o haciendo test pareado!</text>
+
+  <rect x="46" y="274" width="364" height="106" class="card-purple"/>
+  <text x="62" y="296" class="card-title" fill="#5b21b6">Fuente 2 · No-Determinismo del Agente (σ_modelo)</text>
+  <text x="62" y="316" class="small-text">Incluso con <tspan class="mono">temperature=0</tspan>, el batching en GPU (MoE)</text>
+  <text x="62" y="332" class="small-text">y las herramientas externas producen variaciones entre</text>
+  <text x="62" y="348" class="small-text">corridas del mismo caso.</text>
+  <text x="62" y="368" class="mono" font-size="10.5" fill="#4c1d95">Se reduce con: num_repetitions = 3 o 5</text>
+
+  <rect x="46" y="392" width="364" height="106" class="card-amber"/>
+  <text x="62" y="414" class="card-title" fill="#b45309">Fuente 3 · Ruido del Juez LLM (σ_juez)</text>
+  <text x="62" y="434" class="small-text">Un juez ambiguo puede cambiar de opinión en el 5–10%</text>
+  <text x="62" y="450" class="small-text">de los casos borde ante exactamente el mismo texto.</text>
+  <text x="62" y="470" class="mono" font-size="10.5" fill="#78350f">Se reduce con: rúbrica binaria + temperature=0</text>
+
+  <rect x="46" y="510" width="364" height="116" class="card-red"/>
+  <text x="62" y="532" class="card-title" fill="#b91c1c">Para Qué NO Sirve num_repetitions</text>
+  <text x="62" y="552" class="small-text">Repetir <tspan class="mono">num_repetitions=10</tspan> sobre un dataset diminuto de</text>
+  <text x="62" y="568" class="small-text"><tspan class="mono">n=15</tspan> casos promedia <tspan class="mono">σ_modelo</tspan>, pero <tspan font-weight="700">NO reduce</tspan> la</text>
+  <text x="62" y="584" class="small-text">incertidumbre sobre casos nuevos (<tspan class="mono">σ_caso</tspan>). Es mejor</text>
+  <text x="62" y="600" class="small-text">tener <tspan class="mono">100 casos × 1 vez</tspan> que <tspan class="mono">10 casos × 10 veces</tspan>.</text>
+
+  <!-- Panel 2: Ley de Sensibilidad (1/sqrt(n)) y Comparación Pareada -->
+  <rect x="444" y="98" width="416" height="544" class="panel"/>
+  <text x="462" y="126" class="panel-title">2. Mínima Diferencia Detectable (MDE) vs n</text>
+
+  <!-- Visual Chart of Confidence Bands -->
+  <rect x="462" y="144" width="380" height="196" rx="8" fill="#0f172a"/>
+  <text x="478" y="168" class="mono" font-size="11" fill="#94a3b8">Banda de Ruido (±1.96·SE para p≈0.80)</text>
+
+  <text x="478" y="198" class="mono" font-size="11" fill="#e2e8f0">n = 20  |</text>
+  <rect x="548" y="185" width="220" height="16" rx="4" fill="#ef4444" class="anim-pulse"/>
+  <text x="776" y="198" class="mono" font-size="11" fill="#fca5a5">±17.5%</text>
+
+  <text x="478" y="228" class="mono" font-size="11" fill="#e2e8f0">n = 50  |</text>
+  <rect x="548" y="215" width="140" height="16" rx="4" fill="#f59e0b"/>
+  <text x="696" y="228" class="mono" font-size="11" fill="#fde047">±11.1%</text>
+
+  <text x="478" y="258" class="mono" font-size="11" fill="#e2e8f0">n = 100 |</text>
+  <rect x="548" y="245" width="98" height="16" rx="4" fill="#38bdf8"/>
+  <text x="654" y="258" class="mono" font-size="11" fill="#7dd3fc">±7.8%</text>
+
+  <text x="478" y="288" class="mono" font-size="11" fill="#e2e8f0">n = 400 |</text>
+  <rect x="548" y="275" width="49" height="16" rx="4" fill="#10b981" class="anim-pulse"/>
+  <text x="606" y="288" class="mono" font-size="11" fill="#6ee7b7">±3.9%</text>
+
+  <text x="478" y="322" class="mono" font-size="10.5" fill="#cbd5e1">Para reducir el ruido a la mitad necesitas 4× más casos.</text>
+
+  <!-- El Superpoder: Comparación Pareada por Ejemplo -->
+  <rect x="462" y="354" width="380" height="272" class="card-green"/>
+  <text x="478" y="376" class="card-title" fill="#047857">El Multiplicador Estadístico: Test Pareado por Caso</text>
+  <text x="478" y="398" class="body-text">Como A (Baseline) y B (Candidato) corren sobre los</text>
+  <text x="478" y="416" class="body-text"><tspan font-weight="700">mismos ejemplos exactos</tspan> (<tspan class="mono">example_id</tspan>), la dificultad de</text>
+  <text x="478" y="434" class="body-text">cada pregunta se cancela al restar caso por caso:</text>
+  <rect x="478" y="448" width="348" height="62" rx="6" fill="#ffffff" stroke="#10b981"/>
+  <text x="492" y="470" class="mono" font-size="11.5" fill="#065f46">d_i = score_B(i) - score_A(i)   ∈ {-1, 0, +1}</text>
+  <text x="492" y="494" class="mono" font-size="11.5" fill="#065f46">SE_pareado = std(d) / sqrt(n)  ≪  SE_independiente</text>
+  <text x="478" y="532" class="small-text">• Solo importan los <tspan font-weight="700">casos discordantes</tspan> (Test de McNemar):</text>
+  <text x="478" y="550" class="small-text">  <tspan class="mono">n_mejoras</tspan> (A=0, B=1) vs <tspan class="mono">n_regresiones</tspan> (A=1, B=0).</text>
+  <text x="478" y="572" class="small-text">• Si <tspan class="mono">85</tspan> casos empatan, <tspan class="mono">12</tspan> empeoran y <tspan class="mono">3</tspan> mejoran, el test</text>
+  <text x="478" y="590" class="small-text">  pareado detecta la regresión con <tspan class="mono">p &lt; 0.02</tspan> aunque las</text>
+  <text x="478" y="608" class="small-text">  medias globales (88% vs 79%) parezcan solaparse.</text>
+
+  <!-- Panel 3: La Puerta de Regresión en CI -->
+  <rect x="876" y="98" width="376" height="544" class="panel"/>
+  <text x="894" y="126" class="panel-title">3. Puerta de Regresión en CI (Decision Rule)</text>
+
+  <rect x="894" y="144" width="340" height="196" class="card-blue"/>
+  <text x="910" y="166" class="card-title" fill="#1d4ed8">Regla de No-Inferioridad Pareada</text>
+  <text x="910" y="188" class="mono" font-size="11" fill="#1e40af">Δ = mean(d_i) = mean(B - A)</text>
+  <text x="910" y="208" class="mono" font-size="11" fill="#1e40af">IC_95 = [Δ - 1.96·SE_d,  Δ + 1.96·SE_d]</text>
+  <text x="910" y="234" class="small-text">• <tspan font-weight="700" fill="#b91c1c">BLOQUEAR (Regresión Real):</tspan></text>
+  <text x="910" y="250" class="small-text">  El límite superior <tspan class="mono">Δ + 1.96·SE_d &lt; 0</tspan> o</text>
+  <text x="910" y="266" class="small-text">  <tspan class="mono">Δ &lt; -tolerancia_maxima</tspan>.</text>
+  <text x="910" y="290" class="small-text">• <tspan font-weight="700" fill="#047857">APROBAR (Mejora o Equivalente):</tspan></text>
+  <text x="910" y="306" class="small-text">  <tspan class="mono">Δ - 1.96·SE_d &gt;= -margen_no_inferioridad</tspan></text>
+  <text x="910" y="322" class="small-text">  y 0 regresiones en casos críticos (<tspan class="mono">must_pass</tspan>).</text>
+
+  <rect x="894" y="354" width="340" height="136" class="card-purple"/>
+  <text x="910" y="376" class="card-title" fill="#5b21b6">evaluate_comparative (Pairwise A vs B)</text>
+  <text x="910" y="398" class="small-text">Cuando no hay una única respuesta correcta</text>
+  <text x="910" y="414" class="small-text">(resúmenes, redacción creativa), el juez recibe</text>
+  <text x="910" y="430" class="small-text">las dos salidas a la vez y vota preferencia.</text>
+  <text x="910" y="452" class="mono" font-size="10.5" fill="#4c1d95">Siempre aleatoriza el orden (A,B) / (B,A)</text>
+  <text x="910" y="470" class="small-text">para neutralizar el sesgo de posición.</text>
+
+  <rect x="894" y="504" width="340" height="122" class="card-red"/>
+  <text x="910" y="526" class="card-title" fill="#b91c1c">Lo que Invalida Cualquier Comparación</text>
+  <text x="910" y="546" class="small-text">Comparar el Experimento B (corrido hoy sobre el</text>
+  <text x="910" y="562" class="small-text">dataset con 120 casos difíciles) contra el</text>
+  <text x="910" y="578" class="small-text">Experimento A del mes pasado (corrido sobre 80</text>
+  <text x="910" y="594" class="small-text">casos fáciles). <tspan font-weight="700">Misma versión de dataset siempre.</tspan></text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Compara siempre sobre el mismo dataset versionado y calcula el error estándar pareado por example_id (d_i = B_i - A_i).</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 02 · Notebook 09</text>
+</svg>

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">LA PIRÁMIDE DE PRUEBAS DE UN AGENTE LANGGRAPH Y OBSERVABILIDAD (17)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Nivel 1 (Nodos Puros) → Nivel 2 (Grafo con `GenericFakeChatModel`) → Nivel 3 (Evals End-to-End en LangSmith)</text>
+
+  <!-- Left Panel: The 3-Level Testing Pyramid -->
+  <rect x="20" y="90" width="535" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="535" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#1e40af;">1. Pirámide de Pruebas: Qué corre en cada commit vs. antes de Release</text>
+
+  <!-- Top of Pyramid: Level 3 -->
+  <rect x="120" y="146" width="335" height="106" rx="8" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="287" y="170" text-anchor="middle" class="card-title" style="fill:#92400e;">Nivel 3 · Evaluación End-to-End (LLM Real)</text>
+  <text x="287" y="192" text-anchor="middle" class="body" style="font-size:11.5px;">Dataset dorado (20–100 casos) + Jueces / Rúbricas</text>
+  <text x="287" y="212" text-anchor="middle" class="mono" style="font-size:11px;fill:#b45309;">Coste: $$$ | Tiempo: minutos | En PR / Pre-Release</text>
+  <text x="287" y="232" text-anchor="middle" class="body" style="font-size:11px;">Mide calidad semántica y regresión de prompts</text>
+
+  <!-- Middle of Pyramid: Level 2 -->
+  <rect x="78" y="264" width="419" height="122" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="287" y="288" text-anchor="middle" class="card-title" style="fill:#5b21b6;">Nivel 2 · Test de Grafo Determinista (`GenericFakeChatModel`)</text>
+  <text x="287" y="310" text-anchor="middle" class="body" style="font-size:11.5px;">Inyecta respuestas pregrabadas (incluyendo `tool_calls`) para verificar</text>
+  <text x="287" y="328" text-anchor="middle" class="body" style="font-size:11.5px;">aristas condicionales, bucles, `interrupt()` y persistencia en `InMemorySaver`.</text>
+  <text x="287" y="352" text-anchor="middle" class="mono" style="font-size:11px;fill:#6d28d9;">Coste: $0.00 | Tiempo: &lt; 100 ms | En cada commit de CI</text>
+  <text x="287" y="370" text-anchor="middle" class="body" style="font-size:11px;">100% reproducible sin claves de API</text>
+
+  <!-- Base of Pyramid: Level 1 -->
+  <rect x="36" y="398" width="503" height="140" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="287" y="422" text-anchor="middle" class="card-title" style="fill:#065f46;">Nivel 1 · Tests Unitarios de Nodos, Reducers y Routers (Funciones Puras)</text>
+  <text x="287" y="444" text-anchor="middle" class="body" style="font-size:12px;">Un nodo es `f(state, runtime) -&gt; dict`: llámalo directamente en `pytest`</text>
+  <text x="287" y="464" text-anchor="middle" class="body" style="font-size:12px;">sin siquiera compilar el grafo para probar bordes, parsers y validaciones.</text>
+  <text x="287" y="490" text-anchor="middle" class="mono" style="font-size:11.5px;fill:#047857;">assert mi_router({"intentos": 3, "ok": False}) == "escalar_humano"</text>
+  <text x="287" y="514" text-anchor="middle" class="mono" style="font-size:11px;fill:#15803d;">Coste: $0.00 | Tiempo: &lt; 5 ms | Cientos de tests por segundo</text>
+
+  <!-- Right Panel: How LangGraph Spans Map to LangSmith / OpenTelemetry -->
+  <rect x="570" y="90" width="530" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#ede9fe"/>
+  <text x="586" y="114" class="panel-title" style="fill:#5b21b6;">2. Anatomía de una Traza de LangGraph en Producción</text>
+
+  <rect x="586" y="140" width="498" height="185" rx="8" fill="#0f172a"/>
+  <text x="602" y="164" class="mono" style="fill:#38bdf8;">▼ LangGraph (Run raíz — metadata: thread_id, assistant_id)</text>
+  <text x="602" y="190" class="mono" style="fill:#c084fc;">  ├─ ▼ nodo_triaje (chain)             [180 ms]</text>
+  <text x="602" y="212" class="mono" style="fill:#4ade80;">  │    └─ ChatModel (llm)              [172 ms | 410 tok | $0.0002]</text>
+  <text x="602" y="236" class="mono" style="fill:#fbbf24;">  ├─ ▼ tools (chain)                   [340 ms]</text>
+  <text x="602" y="258" class="mono" style="fill:#f472b6;">  │    └─ buscar_pedido (tool)         [335 ms | args={id: "P-9"}]</text>
+  <text x="602" y="282" class="mono" style="fill:#c084fc;">  └─ ▼ nodo_redactor (chain)           [620 ms]</text>
+  <text x="602" y="304" class="mono" style="fill:#4ade80;">       └─ ChatModel (llm)              [610 ms | 890 tok | $0.0018]</text>
+
+  <!-- 4 Production KPIs to Watch -->
+  <rect x="586" y="340" width="498" height="198" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="602" y="364" class="card-title">Las 4 Señales Específicas de un Grafo que Debes Vigilar:</text>
+  <text x="602" y="390" class="body">1. <tspan style="font-weight:700;fill:#dc2626;">Distribución de Super-Pasos por Invocación:</tspan> si el p95 sube de 4 a 18 pasos,</text>
+  <text x="602" y="408" class="body">   hay un bucle entre nodos aunque ningún paso lance excepción.</text>
+  <text x="602" y="432" class="body">2. <tspan style="font-weight:700;fill:#b45309;">Tasa de Hilos Pausados Abandonados (`interrupt`):</tspan> aprobaciones que nadie</text>
+  <text x="602" y="450" class="body">   responde y acumulan estado en Postgres.</text>
+  <text x="602" y="474" class="body">3. <tspan style="font-weight:700;fill:#1d4ed8;">Frecuencia de Ruta por Arista Condicional:</tspan> detecta *drift* cuando una rama</text>
+  <text x="602" y="492" class="body">   de contingencia o fallback empieza a activarse el triple de lo normal.</text>
+  <text x="602" y="516" class="body">4. <tspan style="font-weight:700;fill:#047857;">Tamaño del Checkpoint Serializado (KB por paso):</tspan> alerta si crece sin cota.</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Pasa siempre config={"metadata": {"tenant_id": ..., "env": "prod"}, "tags": ["v2"]} para filtrar trazas al instante.</text>
+</svg>

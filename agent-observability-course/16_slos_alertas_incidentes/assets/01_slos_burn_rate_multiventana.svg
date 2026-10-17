@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">SLOs, PRESUPUESTO DE ERROR Y ALERTAS MULTI-VENTANA POR BURN RATE (MÓDULO 16)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">De «me parece que va mal» a «estamos quemando el presupuesto 14.4× más rápido de lo sostenible» (Estándar Google SRE)</text>
+
+  <!-- Left Panel: 4 Agent SLIs & Error Budget Math -->
+  <rect x="20" y="90" width="530" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="530" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#1e40af;">1. Los 4 SLIs de un Agente y la Matemática del Burn Rate</text>
+
+  <rect x="36" y="140" width="498" height="156" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="50" y="162" class="card-title">Un Agente necesita 4 Contratos (SLOs), no solo Disponibilidad HTTP:</text>
+  <text x="50" y="186" class="body">1. <tspan style="font-weight:700;fill:#1d4ed8;">Disponibilidad Funcional:</tspan> <tspan class="mono">status == "ok"</tspan> (sin excepción ni <tspan class="mono">max_steps</tspan>) ≥ <tspan style="font-weight:700;">99.0%</tspan></text>
+  <text x="50" y="210" class="body">2. <tspan style="font-weight:700;fill:#047857;">Latencia Interactiva:</tspan> <tspan class="mono">duration_ms ≤ 3000 ms</tspan> ≥ <tspan style="font-weight:700;">95.0%</tspan> de los tickets</text>
+  <text x="50" y="234" class="body">3. <tspan style="font-weight:700;fill:#7c3aed;">Calidad Semántica:</tspan> <tspan class="mono">groundedness_pass == true</tspan> ≥ <tspan style="font-weight:700;">92.0%</tspan> (evaluación online)</text>
+  <text x="50" y="258" class="body">4. <tspan style="font-weight:700;fill:#b45309;">Coste Acotado:</tspan> <tspan class="mono">cost_usd ≤ $0.03</tspan> ≥ <tspan style="font-weight:700;">98.0%</tspan> de las invocaciones</text>
+  <text x="50" y="282" class="mono" style="font-size:11.5px;fill:#475569;">Fórmula universal de SLI:  SLI = (Eventos Buenos) / (Eventos Válidos)</text>
+
+  <!-- Burn Rate Formula Box -->
+  <rect x="36" y="308" width="498" height="122" rx="8" fill="#0f172a"/>
+  <text x="52" y="332" class="mono" style="fill:#38bdf8;"># Si SLO = 99.0% en 30 días (720 h) → Presupuesto = 1.0% de fallos:</text>
+  <text x="52" y="358" class="mono" style="fill:#4ade80;font-size:13.5px;">burn_rate = tasa_error_observada / (1 - SLO)</text>
+  <text x="52" y="384" class="mono" style="fill:#fbbf24;">• burn_rate =  1.0×  →  Agota el presupuesto justo en 30 días (720 h)</text>
+  <text x="52" y="404" class="mono" style="fill:#f87171;">• burn_rate = 14.4×  →  Agota el 2% en 1 hora (100% en 50 horas)</text>
+
+  <!-- Error Budget Policy -->
+  <rect x="36" y="442" width="498" height="98" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="50" y="464" class="card-title" style="fill:#b45309;">Política de Presupuesto de Error (Gobernanza de Releases):</text>
+  <text x="50" y="486" class="body">• <tspan style="font-weight:700;fill:#15803d;">Presupuesto &gt; 50%:</tspan> Despliegues rápidos de nuevos prompts y modelos.</text>
+  <text x="50" y="506" class="body">• <tspan style="font-weight:700;fill:#b45309;">Presupuesto &lt; 25%:</tspan> Canarios obligatorios al 5% durante 24h.</text>
+  <text x="50" y="526" class="body">• <tspan style="font-weight:700;fill:#dc2626;">Presupuesto = 0% (Agotado):</tspan> Congelación de features; solo fiabilidad/evals.</text>
+
+  <!-- Right Panel: Multi-Window Multi-Burn-Rate (MWMBR) -->
+  <rect x="570" y="90" width="530" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#fee2e2"/>
+  <text x="586" y="114" class="panel-title" style="fill:#991b1b;">2. Alertas Multi-Ventana y Multi-Burn-Rate (Por qué 1 ventana falla)</text>
+
+  <text x="586" y="146" class="body">• <tspan style="font-weight:700;">Ventana Larga (1h / 6h):</tspan> Evita despertar al ingeniero por un hipo de 2 minutos.</text>
+  <text x="586" y="168" class="body">• <tspan style="font-weight:700;">Ventana Corta (5m / 30m):</tspan> Confirma que el fuego <tspan style="font-weight:700;fill:#dc2626;">sigue activo ahora mismo</tspan> (cierre rápido).</text>
+
+  <!-- Tier 1: Page Fast Burn -->
+  <rect x="586" y="186" width="498" height="86" rx="8" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
+  <rect x="600" y="198" width="145" height="24" rx="5" fill="#dc2626"/>
+  <text x="672" y="214" text-anchor="middle" class="badge">SEVERIDAD: PAGE (1)</text>
+  <text x="758" y="214" class="card-title" style="fill:#991b1b;">Quema Rápida: 2% del presupuesto en 1 hora</text>
+  <text x="600" y="240" class="mono" style="fill:#b91c1c;">burn_rate(1h) &gt; 14.4   AND   burn_rate(5m) &gt; 14.4</text>
+  <text x="600" y="260" class="body" style="font-size:12px;">Despierta a la guardia inmediatamente (PagerDuty / Teléfono).</text>
+
+  <!-- Tier 2: Page Medium Burn -->
+  <rect x="586" y="284" width="498" height="86" rx="8" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+  <rect x="600" y="296" width="145" height="24" rx="5" fill="#ea580c"/>
+  <text x="672" y="312" text-anchor="middle" class="badge">SEVERIDAD: PAGE (2)</text>
+  <text x="758" y="312" class="card-title" style="fill:#9a3412;">Quema Media: 5% del presupuesto en 6 horas</text>
+  <text x="600" y="338" class="mono" style="fill:#c2410c;">burn_rate(6h) &gt; 6.0    AND   burn_rate(30m) &gt; 6.0</text>
+  <text x="600" y="358" class="body" style="font-size:12px;">Captura degradaciones graves que quedan justo debajo de 14.4×.</text>
+
+  <!-- Tier 3: Ticket Slow Burn -->
+  <rect x="586" y="382" width="498" height="86" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="600" y="394" width="145" height="24" rx="5" fill="#2563eb"/>
+  <text x="672" y="410" text-anchor="middle" class="badge">SEVERIDAD: TICKET</text>
+  <text x="758" y="410" class="card-title" style="fill:#1e40af;">Quema Lenta: 10% del presupuesto en 3 días</text>
+  <text x="600" y="436" class="mono" style="fill:#1d4ed8;">burn_rate(3d) &gt; 1.0    AND   burn_rate(6h) &gt; 1.0</text>
+  <text x="600" y="456" class="body" style="font-size:12px;">No despierta a nadie de noche; abre tarea en horario laboral.</text>
+
+  <!-- Low Volume Guard for Quality SLI -->
+  <rect x="586" y="480" width="498" height="60" rx="8" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="600" y="502" class="card-title" style="fill:#166534;">Guarda para Señales Muestreadas (Calidad Online con poco volumen):</text>
+  <text x="600" y="522" class="body" style="font-size:12px;">Añade <tspan class="mono" style="fill:#15803d;">AND sum(increase(eval_total[1h])) &gt;= 30</tspan> (o límite inferior de Wilson).</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Regla SRE: Toda alerta que despierta a un humano debe enlazar a un Runbook accionable en menos de 5 minutos.</text>
+</svg>

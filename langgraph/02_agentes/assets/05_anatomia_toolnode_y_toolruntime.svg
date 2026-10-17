@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arr05" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arr05g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">HERRAMIENTAS, TOOLNODE, TOOLRUNTIME Y COMMAND EN LANGGRAPH 1.x (05)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">El contrato de llamada a herramientas, inyección invisible de estado/contexto y actualización directa desde una herramienta</text>
+
+  <!-- Top Section: The 4-Step Tool Call Cycle -->
+  <rect x="20" y="90" width="1080" height="190" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="38" y="116" class="panel-title">1. El Ciclo Completo de `bind_tools` + `ToolNode` + `tools_condition`</text>
+
+  <rect x="38" y="132" width="235" height="128" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="155" y="156" text-anchor="middle" class="card-title" style="fill:#1e40af;">1. LLM (`bind_tools`)</text>
+  <text x="155" y="178" text-anchor="middle" class="body" style="font-size:11.5px;">NO ejecuta la función Python;</text>
+  <text x="155" y="196" text-anchor="middle" class="body" style="font-size:11.5px;">emite un `AIMessage` con:</text>
+  <text x="155" y="218" text-anchor="middle" class="mono" style="font-size:11px;fill:#1d4ed8;">tool_calls=[{"name": "buscar",</text>
+  <text x="155" y="236" text-anchor="middle" class="mono" style="font-size:11px;fill:#1d4ed8;">  "args": {...}, "id": "call_1"}]</text>
+
+  <line x1="273" y1="196" x2="305" y2="196" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arr05)"/>
+
+  <rect x="310" y="132" width="215" height="128" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="417" y="156" text-anchor="middle" class="card-title" style="fill:#5b21b6;">2. `tools_condition`</text>
+  <text x="417" y="180" text-anchor="middle" class="body" style="font-size:11.5px;">Inspecciona el último mensaje:</text>
+  <text x="417" y="204" text-anchor="middle" class="mono" style="font-size:11px;fill:#6d28d9;">• Si hay tool_calls → "tools"</text>
+  <text x="417" y="226" text-anchor="middle" class="mono" style="font-size:11px;fill:#15803d;">• Si está vacío     → END</text>
+
+  <line x1="525" y1="196" x2="557" y2="196" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arr05)"/>
+
+  <rect x="562" y="132" width="255" height="128" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="689" y="156" text-anchor="middle" class="card-title" style="fill:#065f46;">3. `ToolNode` (Paralelo)</text>
+  <text x="689" y="178" text-anchor="middle" class="body" style="font-size:11.5px;">Ejecuta todas las llamadas pedidas</text>
+  <text x="689" y="196" text-anchor="middle" class="body" style="font-size:11.5px;">y empaqueta cada salida en un:</text>
+  <text x="689" y="218" text-anchor="middle" class="mono" style="font-size:11px;fill:#047857;">ToolMessage(content=...,</text>
+  <text x="689" y="236" text-anchor="middle" class="mono" style="font-size:11px;fill:#047857;">  tool_call_id="call_1")</text>
+
+  <line x1="817" y1="196" x2="849" y2="196" stroke="#059669" stroke-width="2.5" marker-end="url(#arr05g)"/>
+
+  <rect x="854" y="132" width="228" height="128" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+  <text x="968" y="156" text-anchor="middle" class="card-title" style="fill:#92400e;">4. `handle_tool_errors`</text>
+  <text x="968" y="178" text-anchor="middle" class="body" style="font-size:11.5px;">Si la herramienta falla, NO tumba</text>
+  <text x="968" y="196" text-anchor="middle" class="body" style="font-size:11.5px;">el grafo: devuelve un `ToolMessage`</text>
+  <text x="968" y="216" text-anchor="middle" class="body" style="font-size:11.5px;">con el error para que el LLM</text>
+  <text x="968" y="234" text-anchor="middle" class="body" style="font-size:11.5px;">corrija sus argumentos.</text>
+
+  <!-- Bottom Left: ToolRuntime (Hidden from LLM Schema, Injected by LangGraph) -->
+  <rect x="20" y="295" width="535" height="260" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="295" width="535" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="319" class="panel-title" style="fill:#1e40af;">2. `ToolRuntime`: Leer Estado y Contexto sin Exponerlos al LLM</text>
+
+  <text x="36" y="348" class="body">Nunca le pidas al LLM que pase el `user_id` por argumento (puede alucinarlo o ser</text>
+  <text x="36" y="368" class="body">víctima de *prompt injection*). Inyéctalo desde `ToolRuntime`:</text>
+
+  <rect x="36" y="382" width="503" height="156" rx="8" fill="#0f172a"/>
+  <text x="52" y="404" class="mono" style="fill:#38bdf8;">@tool</text>
+  <text x="52" y="424" class="mono" style="fill:#4ade80;">def consultar_saldo(moneda: str, runtime: ToolRuntime) -&gt; str:</text>
+  <text x="52" y="444" class="mono" style="fill:#94a3b8;">    # Docstring: Consulta el saldo. El LLM SOLO ve 'moneda'.</text>
+  <text x="52" y="468" class="mono" style="fill:#fbbf24;">    user_id = runtime.context.user_id     # Contexto inmutable seguro</text>
+  <text x="52" y="488" class="mono" style="fill:#f8fafc;">    mensajes = runtime.state["messages"]  # Estado actual del grafo</text>
+  <text x="52" y="508" class="mono" style="fill:#c084fc;">    store    = runtime.store              # Memoria de largo plazo</text>
+  <text x="52" y="528" class="mono" style="fill:#38bdf8;">    call_id  = runtime.tool_call_id       # ID obligatorio para Command</text>
+
+  <!-- Bottom Right: Returning Command from a Tool -->
+  <rect x="570" y="295" width="530" height="260" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="295" width="530" height="38" rx="12" fill="#ede9fe"/>
+  <text x="586" y="319" class="panel-title" style="fill:#5b21b6;">3. Herramientas que Modifican el Estado: Devolver `Command`</text>
+
+  <text x="586" y="348" class="body">Cuando una herramienta necesita actualizar un canal tipado del estado (ej. guardar</text>
+  <text x="586" y="368" class="body">`cliente_verificado=True`) además de responder al LLM:</text>
+
+  <rect x="586" y="382" width="498" height="156" rx="8" fill="#0f172a"/>
+  <text x="602" y="404" class="mono" style="fill:#c084fc;">@tool</text>
+  <text x="602" y="424" class="mono" style="fill:#4ade80;">def verificar_pin(pin: str, runtime: ToolRuntime) -&gt; Command:</text>
+  <text x="602" y="446" class="mono" style="fill:#f8fafc;">    return Command(update={</text>
+  <text x="602" y="466" class="mono" style="fill:#fbbf24;">        "verificado": True,   # Actualiza canal del State directamente</text>
+  <text x="602" y="486" class="mono" style="fill:#38bdf8;">        "messages": [ToolMessage(</text>
+  <text x="602" y="506" class="mono" style="fill:#38bdf8;">            content="PIN correcto", tool_call_id=runtime.tool_call_id</text>
+  <text x="602" y="524" class="mono" style="fill:#38bdf8;">        )]                    # ¡Obligatorio incluir el ToolMessage!</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">El docstring de @tool NO es comentario para humanos: es el prompt de instrucciones que lee el LLM para decidir si llama a la función.</text>
+</svg>

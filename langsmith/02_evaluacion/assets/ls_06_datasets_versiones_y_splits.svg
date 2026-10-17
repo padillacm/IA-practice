@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">DATASETS EN LANGSMITH: DISEÑO, TIPOS, VERSIONES Y SPLITS (MÓDULO 06)</text>
+  <text x="48" y="69" class="subtitle">Cómo construir un conjunto de prueba que discrimine de verdad, congelar versiones (as_of) y curar desde producción</text>
+
+  <!-- Panel 1: Anatomía de un Ejemplo y Tamaño Mínimo -->
+  <rect x="28" y="98" width="400" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Anatomía de un Example que Discrimina</text>
+
+  <rect x="46" y="144" width="364" height="148" class="card-blue"/>
+  <text x="62" y="166" class="card-title" fill="#1d4ed8">Las 3 Piezas de cada Ejemplo</text>
+  <text x="62" y="188" class="mono" font-size="11" fill="#1e40af">inputs:   {"ticket": "...", "cliente": {...}}</text>
+  <text x="62" y="208" class="mono" font-size="11" fill="#047857">outputs:  {"accion_esperada": "reembolso", ...}</text>
+  <text x="62" y="228" class="mono" font-size="11" fill="#5b21b6">metadata: {"categoria": "facturacion", "dificultad": "borde"}</text>
+  <text x="62" y="252" class="small-text">• <tspan class="mono">outputs</tspan> (reference_outputs) define los hechos</text>
+  <text x="62" y="268" class="small-text">  innegociables, no una prosa exacta palabra por palabra.</text>
+
+  <rect x="46" y="304" width="364" height="156" class="card-amber"/>
+  <text x="62" y="326" class="card-title" fill="#b45309">Composición Estratificada (Qué Incluir)</text>
+  <text x="62" y="348" class="small-text">Un dataset donde todos los modelos sacan 100% no mide nada.</text>
+  <text x="62" y="370" class="body-text">• <tspan font-weight="700">~50% Casos Típicos (Happy Path):</tspan> volumen real</text>
+  <text x="62" y="390" class="body-text">• <tspan font-weight="700">~30% Casos Borde (Edge Cases):</tspan> pedidos ambiguos,</text>
+  <text x="62" y="408" class="small-text">  datos incompletos, políticas con excepciones temporales</text>
+  <text x="62" y="428" class="body-text">• <tspan font-weight="700">~20% Casos Adversarios / Trampa:</tspan> prompt injection,</text>
+  <text x="62" y="446" class="small-text">  peticiones fuera de dominio, intentos de sacar PII</text>
+
+  <rect x="46" y="472" width="364" height="154" class="card-slate"/>
+  <text x="62" y="494" class="card-title">¿Cuántos Casos Necesitas? (Regla de Escalado)</text>
+  <text x="62" y="516" class="small-text">• <tspan font-weight="700">Día 1 (Humo):</tspan> 20–30 casos reales hechos a mano</text>
+  <text x="62" y="536" class="small-text">• <tspan font-weight="700">Iteración Semanal:</tspan> 50–100 casos estratificados</text>
+  <text x="62" y="556" class="small-text">• <tspan font-weight="700">Puerta de Producción:</tspan> 150–300+ casos con splits</text>
+  <text x="62" y="582" class="small-text" fill="#b91c1c" font-weight="700">Anti-patrón:</text>
+  <text x="62" y="598" class="small-text">Generar 500 casos sintéticos con el mismo LLM que vas a</text>
+  <text x="62" y="614" class="small-text">evaluar (mide autocomplacencia, no fallos reales).</text>
+
+  <!-- Panel 2: Tipos, Splits y Versionado -->
+  <rect x="444" y="98" width="400" height="544" class="panel"/>
+  <text x="462" y="126" class="panel-title">2. Tipos de Esquema, Versiones y Splits</text>
+
+  <rect x="462" y="144" width="364" height="114" class="card-purple"/>
+  <text x="478" y="166" class="card-title" fill="#5b21b6">Los 3 Data Types en LangSmith</text>
+  <text x="478" y="188" class="small-text">1. <tspan class="mono" font-weight="700">kv (Default recomendado):</tspan> dicts libres de entrada/salida.</text>
+  <text x="478" y="206" class="small-text">   Ideal para agentes, RAG y funciones <tspan class="mono">@traceable</tspan>.</text>
+  <text x="478" y="224" class="small-text">2. <tspan class="mono" font-weight="700">chat:</tspan> lista de mensajes OpenAI (para Playground).</text>
+  <text x="478" y="242" class="small-text">3. <tspan class="mono" font-weight="700">llm:</tspan> string plano <tspan class="mono">prompt → completion</tspan> (legacy).</text>
+
+  <rect x="462" y="270" width="364" height="168" class="card-green"/>
+  <text x="478" y="292" class="card-title" fill="#047857">Splits: Protegerte del Sobreajuste de Prompts</text>
+  <text x="478" y="314" class="mono" font-size="11" fill="#065f46">splits = ["dev", "holdout", "smoke"]</text>
+  <text x="478" y="336" class="small-text">• <tspan class="mono" font-weight="700">smoke (15 casos):</tspan> corre en cada commit (&lt;20 seg).</text>
+  <text x="478" y="356" class="small-text">• <tspan class="mono" font-weight="700">dev (70%):</tspan> donde miras los fallos y ajustas el prompt.</text>
+  <text x="478" y="376" class="small-text">• <tspan class="mono" font-weight="700">holdout (30%):</tspan> reserva ciega para validar antes de</text>
+  <text x="478" y="392" class="small-text">  desplegar que no sobreajustaste el prompt a <tspan class="mono">dev</tspan>.</text>
+  <text x="478" y="416" class="mono" font-size="10.5" fill="#047857">evaluate(agente, data=client.list_examples(..., splits=["holdout"]))</text>
+
+  <rect x="462" y="450" width="364" height="176" class="card-blue"/>
+  <text x="478" y="472" class="card-title" fill="#1d4ed8">Versionado Inmutable (as_of y Etiquetas)</text>
+  <text x="478" y="494" class="small-text">Cada <tspan class="mono">create/update/delete_example</tspan> genera una nueva</text>
+  <text x="478" y="510" class="small-text">versión temporal del dataset.</text>
+  <text x="478" y="532" class="mono" font-size="10.5" fill="#1e40af">client.update_dataset_tag(dataset_id=..., as_of=ts, tag="v1.2")</text>
+  <text x="478" y="554" class="mono" font-size="10.5" fill="#1e40af">client.diff_dataset_versions(dataset_id, "v1.1", "v1.2")</text>
+  <text x="478" y="578" class="small-text">Permite reproducir exactamente el experimento del mes</text>
+  <text x="478" y="594" class="small-text">pasado aunque hoy el dataset tenga 80 casos nuevos.</text>
+
+  <!-- Panel 3: El Bucle Producción -> Dataset y su Trampa -->
+  <rect x="860" y="98" width="392" height="544" class="panel"/>
+  <text x="878" y="126" class="panel-title">3. De Traza de Producción a Caso de Prueba</text>
+
+  <rect x="878" y="144" width="356" height="222" class="card-slate"/>
+  <text x="894" y="166" class="card-title">El Flujo de Curación Continua</text>
+  <rect x="896" y="182" width="320" height="40" rx="6" fill="#fef2f2" stroke="#ef4444"/>
+  <text x="910" y="206" class="small-text" fill="#b91c1c">1. Traza falla en prod (👎 usuario o juez bajo)</text>
+  <line x1="1056" y1="222" x2="1056" y2="242" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="896" y="242" width="320" height="44" rx="6" fill="#fffbeb" stroke="#f59e0b"/>
+  <text x="910" y="262" class="small-text" fill="#b45309">2. Humano revisa y escribe <tspan class="mono">correction</tspan></text>
+  <text x="910" y="278" class="small-text" fill="#b45309">   (¡NO copies <tspan class="mono">run.outputs</tspan> roto como verdad!)</text>
+  <line x1="1056" y1="286" x2="1056" y2="306" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="896" y="306" width="320" height="44" rx="6" fill="#f0fdf4" stroke="#10b981"/>
+  <text x="910" y="326" class="small-text" fill="#047857">3. <tspan class="mono">create_example(inputs=..., outputs=correction,</tspan></text>
+  <text x="910" y="342" class="small-text" fill="#047857">   <tspan class="mono">source_run_id=run.id)</tspan> + tag de versión</text>
+
+  <rect x="878" y="380" width="356" height="246" class="card-red"/>
+  <text x="894" y="402" class="card-title" fill="#b91c1c">Las 3 Trampas al Promocionar Trazas a Datasets</text>
+  <text x="894" y="426" class="small-text" font-weight="700">1. Contaminar con la salida errónea:</text>
+  <text x="894" y="442" class="small-text">   Llamar a <tspan class="mono">create_example_from_run(run)</tspan> en un fallo</text>
+  <text x="894" y="458" class="small-text">   copia <tspan class="mono">run.outputs</tspan> (la alucinación) como respuesta</text>
+  <text x="894" y="474" class="small-text">   esperada si no sobreescribes <tspan class="mono">outputs</tspan>.</text>
+  <text x="894" y="498" class="small-text" font-weight="700">2. Fuga de PII al Dataset (Retención 400+ días):</text>
+  <text x="894" y="514" class="small-text">   Los datasets viven mucho más que las trazas base;</text>
+  <text x="894" y="530" class="small-text">   sanitiza siempre antes de insertar.</text>
+  <text x="894" y="554" class="small-text" font-weight="700">3. Estado efímero dependiente del reloj:</text>
+  <text x="894" y="570" class="small-text">   Si el input depende de «hoy» o de una fila SQL que</text>
+  <text x="894" y="586" class="small-text">   cambiará mañana, congela el contexto en <tspan class="mono">inputs</tspan>.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Congela versiones con tags (as_of), separa dev de holdout y exige siempre corrección humana antes de añadir un fallo al dataset.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 02 · Notebook 06</text>
+</svg>

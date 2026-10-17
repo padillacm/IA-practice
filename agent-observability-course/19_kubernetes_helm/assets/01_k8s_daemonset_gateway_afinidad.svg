@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arr19" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arr19p" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">KUBERNETES + HELM: PATRÓN DAEMONSET → GATEWAY CON AFINIDAD POR TRACEID (MÓDULO 19)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Por qué escalar el Collector Gateway con un Service estándar rompe el Tail Sampling, y cómo solucionarlo con routing_key: traceID</text>
+
+  <!-- Top Architecture Flow: K8s Nodes (DaemonSet) -> LoadBalancing Exporter -> Gateway Pool -> Backends -->
+  <rect x="20" y="90" width="1080" height="310" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="38" y="116" class="panel-title">1. Topología de Producción en Kubernetes: Agente Local (DaemonSet) + Pool Central (Gateway)</text>
+
+  <!-- Node 1 & Node 2 (Left) -->
+  <rect x="38" y="132" width="330" height="120" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="52" y="154" class="card-title" style="fill:#1e40af;">Nodo K8s 1 (Pod SupportOps + DaemonSet)</text>
+  <text x="52" y="176" class="mono" style="font-size:11.5px;fill:#1d4ed8;">1. Pod Agente → OTLP a hostIP:4317</text>
+  <text x="52" y="196" class="mono" style="font-size:11.5px;fill:#047857;">2. OTel DaemonSet: k8sattributes</text>
+  <text x="52" y="216" class="body" style="font-size:11.5px;">Enriquece <tspan class="mono">k8s.pod.name, k8s.node.name</tspan></text>
+  <text x="52" y="234" class="mono" style="font-size:11.5px;fill:#7c3aed;">3. Exporter: loadbalancing (traceID)</text>
+
+  <rect x="38" y="264" width="330" height="120" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="52" y="286" class="card-title" style="fill:#1e40af;">Nodo K8s 2 (Pod MCP Server + DaemonSet)</text>
+  <text x="52" y="308" class="mono" style="font-size:11.5px;fill:#1d4ed8;">1. Pod MCP → OTLP a hostIP:4317</text>
+  <text x="52" y="328" class="mono" style="font-size:11.5px;fill:#047857;">2. OTel DaemonSet: k8sattributes</text>
+  <text x="52" y="348" class="body" style="font-size:11.5px;">Mismo <tspan class="mono">trace_id = 4bf9...</tspan> en otro nodo</text>
+  <text x="52" y="366" class="mono" style="font-size:11.5px;fill:#7c3aed;">3. Exporter: loadbalancing (traceID)</text>
+
+  <!-- Center Routing Box (Consistent Hashing) -->
+  <rect x="405" y="175" width="245" height="155" rx="10" fill="#0f172a"/>
+  <text x="527" y="200" text-anchor="middle" class="card-title" style="fill:#38bdf8;">Consistent Hashing por traceID</text>
+  <text x="420" y="224" class="mono" style="fill:#4ade80;font-size:11px;">exporters:</text>
+  <text x="420" y="242" class="mono" style="fill:#4ade80;font-size:11px;">  loadbalancing:</text>
+  <text x="420" y="260" class="mono" style="fill:#fbbf24;font-size:11px;">    routing_key: "traceID"</text>
+  <text x="420" y="278" class="mono" style="fill:#e2e8f0;font-size:11px;">    resolver: dns (headless)</text>
+  <text x="420" y="306" class="body" style="fill:#cbd5e1;font-size:11px;">Ambos nodos envían los spans de</text>
+  <text x="420" y="322" class="body" style="fill:#cbd5e1;font-size:11px;"><tspan class="mono" style="fill:#4ade80;">4bf9...</tspan> a la <tspan style="font-weight:700;fill:#ffffff;">Réplica Gateway #2</tspan></text>
+
+  <line x1="368" y1="192" x2="403" y2="230" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arr19p)"/>
+  <line x1="368" y1="324" x2="403" y2="275" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arr19p)"/>
+
+  <!-- Gateway Pool (Center-Right) -->
+  <rect x="685" y="132" width="225" height="76" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="797" y="156" text-anchor="middle" class="card-title" style="fill:#475569;">Gateway Réplica #1</text>
+  <text x="797" y="176" text-anchor="middle" class="mono" style="font-size:11px;fill:#64748b;">tail_sampling + redaction</text>
+  <text x="797" y="194" text-anchor="middle" class="body" style="font-size:11px;">Recibe otras trazas</text>
+
+  <rect x="685" y="218" width="225" height="82" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2.5"/>
+  <text x="797" y="240" text-anchor="middle" class="card-title" style="fill:#5b21b6;">🎯 Gateway Réplica #2</text>
+  <text x="797" y="260" text-anchor="middle" class="mono" style="font-size:11px;fill:#6d28d9;">Ve el 100% de spans de 4bf9...</text>
+  <text x="797" y="278" text-anchor="middle" class="mono" style="font-size:11px;fill:#15803d;">spanmetrics + tail_sampling</text>
+
+  <rect x="685" y="310" width="225" height="74" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="797" y="334" text-anchor="middle" class="card-title" style="fill:#475569;">Gateway Réplica #3</text>
+  <text x="797" y="354" text-anchor="middle" class="mono" style="font-size:11px;fill:#64748b;">Escala con HPA (CPU/Cola)</text>
+
+  <line x1="650" y1="255" x2="682" y2="255" stroke="#7c3aed" stroke-width="3" marker-end="url(#arr19p)"/>
+
+  <!-- Backends (Far Right) -->
+  <rect x="935" y="145" width="145" height="225" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <text x="1007" y="172" text-anchor="middle" class="card-title" style="fill:#065f46;">Backends LGTM</text>
+  <rect x="950" y="188" width="115" height="36" rx="5" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1007" y="210" text-anchor="middle" class="mono" style="fill:#047857;">Tempo 3</text>
+  <rect x="950" y="236" width="115" height="36" rx="5" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1007" y="258" text-anchor="middle" class="mono" style="fill:#047857;">Loki 3</text>
+  <rect x="950" y="284" width="115" height="36" rx="5" fill="#ffffff" stroke="#6ee7b7"/>
+  <text x="1007" y="306" text-anchor="middle" class="mono" style="fill:#047857;">Prometheus</text>
+  <line x1="910" y1="255" x2="933" y2="255" stroke="#2563eb" stroke-width="2" marker-end="url(#arr19)"/>
+
+  <!-- Bottom Left: Memory Budget Formula (Avoiding OOMKilled) -->
+  <rect x="20" y="415" width="535" height="195" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="415" width="535" height="36" rx="12" fill="#fee2e2"/>
+  <text x="36" y="438" class="panel-title" style="fill:#991b1b;">2. Presupuesto de Memoria: Evitar el OOMKilled del Collector</text>
+
+  <text x="36" y="468" class="body">Si <tspan class="mono">memory_limiter</tspan> se configura por encima del límite de cgroup de K8s, el kernel</text>
+  <text x="36" y="488" class="body">mata el pod (<tspan class="mono" style="fill:#dc2626;">OOMKilled / Exit 137</tspan>) y pierdes todo el buffer de Tail Sampling:</text>
+  <rect x="36" y="502" width="503" height="92" rx="8" fill="#0f172a"/>
+  <text x="52" y="526" class="mono" style="fill:#38bdf8;">resources.limits.memory = 1000 MiB   # Límite duro del contenedor K8s</text>
+  <text x="52" y="548" class="mono" style="fill:#4ade80;">GOMEMLIMIT              =  800 MiB   # 80% → Fuerza GC de Go antes del OOM</text>
+  <text x="52" y="570" class="mono" style="fill:#fbbf24;">memory_limiter.limit    =  750 MiB   # 75% → Rechaza con HTTP 429/503 limpio</text>
+
+  <!-- Bottom Right: Helm Layering + CI Validation Pipeline -->
+  <rect x="570" y="415" width="530" height="195" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="415" width="530" height="36" rx="12" fill="#dcfce7"/>
+  <text x="586" y="438" class="panel-title" style="fill:#166534;">3. Capas de Values en Helm y Validación con Binarios en CI</text>
+
+  <text x="586" y="468" class="body">• <tspan style="font-weight:700;">Fusión de Helm:</tspan> Los diccionarios (<tspan class="mono">maps</tspan>) se fusionan recursivamente, pero las</text>
+  <text x="586" y="488" class="body">  <tspan style="font-weight:700;fill:#dc2626;">listas se reemplazan enteras</tspan> (<tspan class="mono">values-base.yaml</tspan> + <tspan class="mono">values-prod.yaml</tspan>).</text>
+  <text x="586" y="514" class="card-title" style="fill:#166534;">Pipeline GitOps Antes de Desplegar (Cero sorpresas en el clúster):</text>
+  <rect x="586" y="526" width="498" height="68" rx="8" fill="#f8fafc" stroke="#86efac" stroke-width="1.5"/>
+  <text x="600" y="548" class="mono" style="fill:#15803d;">1. helm lint &amp;&amp; helm template → kubeconform (Esquemas K8s)</text>
+  <text x="600" y="568" class="mono" style="fill:#1d4ed8;">2. otelcol validate --config=rendered-collector.yaml</text>
+  <text x="600" y="586" class="mono" style="fill:#7c3aed;">3. promtool check rules alerts.yaml &amp;&amp; tempo/loki -verify-config</text>
+</svg>

@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">DEFENSA EN PROFUNDIDAD: QUÉ NO DEBE SALIR EN TUS TRAZAS (MÓDULO 05)</text>
+  <text x="48" y="69" class="subtitle">Comparativa de las 3 barreras de privacidad en el SDK antes de que el paquete HTTP abandone tu servidor</text>
+
+  <!-- Top Warning: What gets sent by default -->
+  <rect x="28" y="98" width="1224" height="104" class="card-red"/>
+  <text x="46" y="122" class="card-title" fill="#b91c1c">Lo que @traceable Envía por Defecto en Texto Claro (Si No Haces Nada)</text>
+  <text x="46" y="144" class="body-text">Todo argumento posicional/keyword (<tspan class="mono">inputs</tspan>), el valor de retorno (<tspan class="mono">outputs</tspan>), el <tspan class="mono">traceback</tspan> completo de cualquier excepción (incluyendo</text>
+  <text x="46" y="162" class="body-text">variables locales en el mensaje de error) y las llamadas internas a herramientas y al LLM. <tspan font-weight="700" fill="#b91c1c">La redacción debe ocurrir en el cliente Python.</tspan></text>
+  <text x="46" y="186" class="mono" font-size="11" fill="#7f1d1d">Peligro: hide_inputs=True en la función padre NO oculta los inputs de las funciones hijas decoradas.</text>
+
+  <!-- 3 Columns for the 3 Tools -->
+  <rect x="28" y="216" width="394" height="426" class="panel"/>
+  <text x="46" y="244" class="panel-title">Herramienta 1: hide_inputs / process_inputs</text>
+  <rect x="46" y="258" width="358" height="114" class="card-amber"/>
+  <text x="60" y="278" class="card-title" fill="#b45309">La Trampa del Booleano</text>
+  <text x="60" y="298" class="small-text">• <tspan class="mono">Client(hide_inputs=True)</tspan> reemplaza TODO el</text>
+  <text x="60" y="314" class="small-text">  diccionario por <tspan class="mono">{"inputs": "[REDACTED]"}</tspan>.</text>
+  <text x="60" y="332" class="small-text" fill="#b91c1c">• Pierdes la pregunta del usuario, los chunks</text>
+  <text x="60" y="348" class="small-text" fill="#b91c1c">  del retriever y la capacidad de depurar.</text>
+
+  <rect x="46" y="384" width="358" height="132" class="card-green"/>
+  <text x="60" y="404" class="card-title" fill="#047857">Uso Correcto: Función Transformadora</text>
+  <text x="60" y="424" class="mono" font-size="10.5" fill="#065f46">@traceable(process_inputs=limpiar_dict)</text>
+  <text x="60" y="444" class="small-text">• <tspan class="mono">process_inputs</tspan> / <tspan class="mono">process_outputs</tspan> a nivel de</text>
+  <text x="60" y="460" class="small-text">  decorador filtra claves conocidas (<tspan class="mono">password, cvv,</tspan></text>
+  <text x="60" y="476" class="small-text">  <tspan class="mono">api_key</tspan>) conservando el resto del payload.</text>
+  <text x="60" y="496" class="small-text" fill="#047857">• ¡Nunca mutes el dict original in-place! Usa copia.</text>
+
+  <rect x="46" y="528" width="358" height="98" class="card-slate"/>
+  <text x="60" y="548" class="card-title">Límite de la Herramienta 1</text>
+  <text x="60" y="568" class="small-text">Solo limpia el nodo donde la declaras (o global</text>
+  <text x="60" y="584" class="small-text">en <tspan class="mono">Client</tspan>), y no busca patrones dentro de texto</text>
+  <text x="60" y="600" class="small-text">libre a menos que recorras cada string.</text>
+
+  <!-- Column 2: Anonymizer -->
+  <rect x="442" y="216" width="396" height="426" class="panel"/>
+  <text x="460" y="244" class="panel-title">Herramienta 2: create_anonymizer (Regex)</text>
+  <rect x="460" y="258" width="360" height="128" class="card-blue"/>
+  <text x="474" y="278" class="card-title" fill="#1d4ed8">Recorrido Profundo de Todo el Árbol</text>
+  <text x="474" y="298" class="mono" font-size="10.5" fill="#1e40af">anon = create_anonymizer([</text>
+  <text x="474" y="314" class="mono" font-size="10.5" fill="#1e40af">  {"pattern": r"\b\d{8}[A-Z]\b", "replace": "&lt;DNI&gt;"},</text>
+  <text x="474" y="330" class="mono" font-size="10.5" fill="#1e40af">])</text>
+  <text x="474" y="346" class="mono" font-size="10.5" fill="#1e40af">client = Client(anonymizer=anon)</text>
+  <text x="474" y="368" class="small-text">Aplica las reglas recursivamente sobre <tspan class="mono">inputs</tspan> y</text>
+  <text x="474" y="382" class="small-text"><tspan class="mono">outputs</tspan> de TODOS los runs (raíz e hijos).</text>
+
+  <rect x="460" y="398" width="360" height="118" class="card-amber"/>
+  <text x="474" y="418" class="card-title" fill="#b45309">Lo que Trae de Fábrica vs España / LATAM</text>
+  <text x="474" y="438" class="small-text">• Las reglas por defecto están pensadas para EE. UU.</text>
+  <text x="474" y="454" class="small-text">  (SSN, teléfonos US). <tspan font-weight="700" fill="#b91c1c">NO detectan DNI/NIE, IBAN</tspan></text>
+  <text x="474" y="470" class="small-text" fill="#b91c1c">  español ni teléfonos +34 / +52 / +57.</text>
+  <text x="474" y="490" class="small-text">• Añade siempre reglas explícitas para IBAN, DNI,</text>
+  <text x="474" y="506" class="small-text">  tarjetas Luhn, emails y tokens Bearer/sk-.</text>
+
+  <rect x="460" y="528" width="360" height="98" class="card-purple"/>
+  <text x="474" y="548" class="card-title" fill="#5b21b6">Patrón de Seudonimización Reversible (HMAC)</text>
+  <text x="474" y="568" class="small-text">En vez de sustituir todos los emails por <tspan class="mono">&lt;EMAIL&gt;</tspan>,</text>
+  <text x="474" y="584" class="small-text">usa una función que genere <tspan class="mono">&lt;EMAIL:a94f1c&gt;</tspan> con</text>
+  <text x="474" y="600" class="small-text"><tspan class="mono">hmac.new(secret, val)</tspan>: permite correlacionar sin exponer.</text>
+
+  <!-- Column 3: No trazar + El Agujero que Dejan -->
+  <rect x="858" y="216" width="394" height="426" class="panel"/>
+  <text x="876" y="244" class="panel-title">Herramienta 3: No Trazar + El Agujero</text>
+
+  <rect x="876" y="258" width="358" height="106" class="card-slate"/>
+  <text x="890" y="278" class="card-title">Apagado Quirúrgico por Bloque</text>
+  <text x="890" y="298" class="mono" font-size="10.5" fill="#0f172a">with tracing_context(enabled=False):</text>
+  <text x="890" y="314" class="mono" font-size="10.5" fill="#0f172a">     cobro = pasarela_pago(tarjeta, cvv)</text>
+  <text x="890" y="336" class="small-text">Ideal para pasos PCI-DSS / secretos criptográficos</text>
+  <text x="890" y="352" class="small-text">donde ni siquiera el metadato debe salir del host.</text>
+
+  <rect x="876" y="376" width="358" height="250" class="card-red"/>
+  <text x="890" y="398" class="card-title" fill="#b91c1c">¡El Agujero que Dejan las Dos Primeras!</text>
+  <text x="890" y="420" class="small-text">Ni <tspan class="mono">hide_inputs</tspan> ni <tspan class="mono">create_anonymizer</tspan> limpian todos</text>
+  <text x="890" y="436" class="small-text">los campos de un <tspan class="mono">Run</tspan>. Vigila estos 3 vectores:</text>
+  <text x="890" y="460" class="small-text" font-weight="700">1. <tspan class="mono">run.error</tspan> (Tracebacks de Excepciones):</text>
+  <text x="890" y="476" class="small-text">   Si haces <tspan class="mono">raise ValueError(f"DNI inválido: {dni}")</tspan>,</text>
+  <text x="890" y="492" class="small-text">   el string del error viaja en <tspan class="mono">run.error</tspan> sin pasar</text>
+  <text x="890" y="508" class="small-text">   por <tspan class="mono">hide_inputs/hide_outputs</tspan>.</text>
+  <text x="890" y="530" class="small-text" font-weight="700">2. <tspan class="mono">extra["metadata"]</tspan> y <tspan class="mono">tags</tspan>:</text>
+  <text x="890" y="546" class="small-text">   Si metes <tspan class="mono">user_email</tspan> en metadata, salta <tspan class="mono">hide_inputs</tspan>.</text>
+  <text x="890" y="568" class="small-text" font-weight="700">3. Nombres libres en prosa:</text>
+  <text x="890" y="584" class="small-text">   «Soy María Gómez de Calle Mayor 14» no matchea regex</text>
+  <text x="890" y="600" class="small-text">   fijas; combina con NER local (Presidio) si aplica.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Combina eliminación de claves sensibles en diccionarios + create_anonymizer() con regex locales + sanitización de excepciones.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 01 · Notebook 05</text>
+</svg>

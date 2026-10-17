@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">EXPERIMENTOS CON EVALUATE(): ARQUITECTURA Y LA TRAMPA DEL FALSO 100% (MÓDULO 07)</text>
+  <text x="48" y="69" class="subtitle">Cómo ejecuta LangSmith tu sistema sobre un dataset y por qué un evaluador roto o un target con excepciones infla la media</text>
+
+  <!-- Top Panel: Execution Pipeline of evaluate() -->
+  <rect x="28" y="98" width="1224" height="196" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. El Ciclo Interno de evaluate(target, data, evaluators, summary_evaluators, ...)</text>
+
+  <rect x="46" y="144" width="256" height="134" class="card-blue"/>
+  <text x="62" y="166" class="card-title" fill="#1d4ed8">1. Dataset (Examples)</text>
+  <text x="62" y="188" class="mono" font-size="11" fill="#1e40af">example.inputs</text>
+  <text x="62" y="206" class="mono" font-size="11" fill="#047857">example.outputs (ref)</text>
+  <text x="62" y="228" class="small-text">Se fija la versión del</text>
+  <text x="62" y="244" class="small-text">dataset al iniciar el run.</text>
+
+  <line x1="302" y1="210" x2="342" y2="210" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrow-blue)"/>
+
+  <rect x="346" y="144" width="286" height="134" class="card-purple"/>
+  <text x="362" y="166" class="card-title" fill="#5b21b6">2. Target (Tu Agente / Cadena)</text>
+  <text x="362" y="188" class="mono" font-size="11" fill="#4c1d95">def target(inputs: dict) -&gt; dict:</text>
+  <text x="362" y="210" class="small-text">• Corre con <tspan class="mono">max_concurrency=N</tspan></text>
+  <text x="362" y="228" class="small-text">• Repite <tspan class="mono">num_repetitions=K</tspan> veces</text>
+  <text x="362" y="246" class="small-text">• Genera 1 traza completa por caso</text>
+  <text x="362" y="264" class="small-text">  dentro del proyecto experimento.</text>
+
+  <line x1="632" y1="210" x2="672" y2="210" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arrow-purple)"/>
+
+  <rect x="676" y="144" width="280" height="134" class="card-green"/>
+  <text x="692" y="166" class="card-title" fill="#047857">3. Evaluators (Por Ejemplo)</text>
+  <text x="692" y="188" class="mono" font-size="10.5" fill="#065f46">fn(inputs, outputs, reference_outputs)</text>
+  <text x="692" y="210" class="small-text">• O firma clásica <tspan class="mono">(run, example)</tspan></text>
+  <text x="692" y="228" class="small-text">• Devuelve <tspan class="mono">{"key": ..., "score": ...}</tspan></text>
+  <text x="692" y="246" class="small-text">• Puede devolver lista de métricas</text>
+  <text x="692" y="264" class="small-text">  en una sola pasada.</text>
+
+  <line x1="956" y1="210" x2="996" y2="210" stroke="#059669" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+
+  <rect x="1000" y="144" width="234" height="134" class="card-amber"/>
+  <text x="1016" y="166" class="card-title" fill="#b45309">4. Summary Evaluators</text>
+  <text x="1016" y="188" class="mono" font-size="10.5" fill="#78350f">fn(runs, examples)</text>
+  <text x="1016" y="210" class="small-text">Para métricas globales que</text>
+  <text x="1016" y="228" class="small-text"><tspan font-weight="700">NO son medias</tspan>:</text>
+  <text x="1016" y="246" class="small-text">• F1-score, Precision/Recall</text>
+  <text x="1016" y="264" class="small-text">• Latencia p95 / Presupuesto</text>
+
+  <!-- Bottom Left: El Fallo Más Caro (El 100% que no lo es) -->
+  <rect x="28" y="310" width="610" height="332" class="panel"/>
+  <text x="46" y="338" class="panel-title">2. El Fallo Más Caro: Cómo Obtener 1.00 (100%) con el 80% Roto</text>
+
+  <rect x="46" y="354" width="574" height="134" class="card-red"/>
+  <text x="62" y="376" class="card-title" fill="#b91c1c">Anatomía de la Ilusión Óptica en las Medias</text>
+  <text x="62" y="398" class="small-text">Supón 10 casos en el dataset: 2 casos fáciles funcionan (<tspan class="mono">score=1.0</tspan>) y en los otros 8 casos</text>
+  <text x="62" y="416" class="small-text">tu agente lanza <tspan class="mono">TimeoutError</tspan> (o tu evaluador falla con <tspan class="mono">KeyError</tspan> al leer <tspan class="mono">outputs["texto"]</tspan>).</text>
+  <text x="62" y="438" class="mono" font-size="11.5" fill="#7f1d1d">Scores emitidos: [1.0, 1.0, None, None, None, None, None, None, None, None]</text>
+  <text x="62" y="460" class="body-text" fill="#b91c1c" font-weight="700">Media sobre no-nulos = (1.0 + 1.0) / 2 = 1.00 (¡100% de éxito aparente!)</text>
+  <text x="62" y="478" class="small-text">Una CI ingenua que solo compruebe <tspan class="mono">mean_score &gt;= 0.85</tspan> dará luz verde al despliegue roto.</text>
+
+  <rect x="46" y="500" width="574" height="128" class="card-green"/>
+  <text x="62" y="522" class="card-title" fill="#047857">Las 3 Guardas Obligatorias en todo Experimento</text>
+  <text x="62" y="544" class="small-text">1. <tspan font-weight="700">En el Evaluador:</tspan> Si <tspan class="mono">not outputs</tspan> o falta la clave esperada, devuelve <tspan class="mono">{"score": 0.0}</tspan></text>
+  <text x="62" y="560" class="small-text">   explícito (nunca dejes que el evaluador reviente con <tspan class="mono">KeyError</tspan> y devuelva <tspan class="mono">None</tspan>).</text>
+  <text x="62" y="580" class="small-text">2. <tspan font-weight="700">En la Puerta CI:</tspan> Verifica <tspan class="mono">n_evaluados == len(dataset)</tspan> y <tspan class="mono">n_errores_target == 0</tspan>.</text>
+  <text x="62" y="600" class="small-text">3. <tspan font-weight="700">Media Conservadora:</tspan> Imputa todo <tspan class="mono">None</tspan> como <tspan class="mono">0.0</tspan> al dividir entre <tspan class="mono">N_total</tspan>.</text>
+
+  <!-- Bottom Right: Parámetros Críticos de evaluate() -->
+  <rect x="654" y="310" width="598" height="332" class="panel"/>
+  <text x="672" y="338" class="panel-title">3. Parámetros Críticos de evaluate() y sus Trampas</text>
+
+  <rect x="672" y="354" width="562" height="84" class="card-amber"/>
+  <text x="688" y="376" class="card-title" fill="#b45309">blocking=False: El que Parece Gratis y Rompe tu Script</text>
+  <text x="688" y="396" class="small-text">Con <tspan class="mono">blocking=False</tspan>, el cálculo y envío de scores sigue corriendo en segundo plano.</text>
+  <text x="688" y="414" class="small-text">Si lees <tspan class="mono">resultados</tspan> en la línea siguiente o el job de CI termina, leerás scores vacíos (<tspan class="mono">None</tspan>).</text>
+  <text x="688" y="430" class="mono" font-size="10.5" fill="#047857">En scripts de CI usa siempre blocking=True (el valor por defecto).</text>
+
+  <rect x="672" y="450" width="562" height="84" class="card-blue"/>
+  <text x="688" y="472" class="card-title" fill="#1d4ed8">max_concurrency vs Rate Limits (HTTP 429)</text>
+  <text x="688" y="492" class="small-text">Subir <tspan class="mono">max_concurrency=20</tspan> multiplica por 2 las llamadas al LLM si además usas un</text>
+  <text x="688" y="508" class="small-text">Juez LLM. Si el proveedor devuelve 429, tus tiempos <tspan class="mono">p95</tspan> medirán los backoff de</text>
+  <text x="688" y="524" class="small-text">reintento y no la velocidad real del agente. Calibra entre <tspan class="mono">4 y 8</tspan>.</text>
+
+  <rect x="672" y="546" width="562" height="82" class="card-purple"/>
+  <text x="688" y="568" class="card-title" fill="#5b21b6">metadata del Experimento (Trazabilidad Git)</text>
+  <text x="688" y="588" class="mono" font-size="10.5" fill="#4c1d95">metadata={"git_sha": "a81f2c", "prompt_tag": "v2.4", "modelo": "gpt-4o-mini"}</text>
+  <text x="688" y="608" class="small-text">Sin <tspan class="mono">git_sha</tspan> ni versión del prompt en <tspan class="mono">metadata</tspan>, en 3 días no sabrás qué</text>
+  <text x="688" y="622" class="small-text">cambio produjo la mejora entre <tspan class="mono">experimento-martes-2</tspan> y <tspan class="mono">experimento-jueves-1</tspan>.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Un evaluador jamás debe lanzar excepciones: ante un output vacío o malformado debe devolver score=0.0 explícitamente.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 02 · Notebook 07</text>
+</svg>

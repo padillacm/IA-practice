@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 19 · MASTERCLASS</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">ELITE PLAYBOOK: COMPRESIÓN DE EMBEDDINGS, MONOLITH Y TRIAJE 03:12 AM</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">Ingeniería a escala (QR Trick, INT8 por fila, Cuckoo Hash en tiempo real) y árbol de diagnóstico «Offline ↑, Online ↓»</text>
+
+
+  <!-- Left Panel: Embedding Compression at Scale & Monolith Real-Time Streaming -->
+  <rect x="24" y="108" width="604" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="568" height="32" rx="8" fill="#eff6ff"/>
+  <text x="326" y="147" text-anchor="middle" fill="#1d4ed8" font-size="14.5" font-weight="800">1. Tablas de Embeddings a Escala (TB) y Entrenamiento Streaming (Monolith)</text>
+
+  <!-- 5 Compression Techniques -->
+  <rect x="44" y="172" width="564" height="232" rx="10" fill="#0f172a"/>
+  <text x="64" y="196" fill="#38bdf8" font-size="13" font-weight="700">5 Técnicas para Comprimir 10⁸ IDs sin Perder NDCG:</text>
+  <text x="64" y="220" fill="#e2e8f0" font-size="11.5" class="mono">1. Hashing Trick      : h(id) % B  → ¡Mide colisiones PONDERADAS por tráfico!</text>
+  <text x="64" y="242" fill="#34d399" font-size="11.5" font-weight="700" class="mono">2. Quotient-Remainder : e(i) = E_Q[i // M] ⊙ E_R[i % M]  (2·√N filas, 0 colisiones) ★</text>
+  <text x="64" y="264" fill="#fbbf24" font-size="11.5" class="mono">3. Mixed-Dimension    : Head items → d=128 | Mid → d=32 | Tail → d=8 + proyección</text>
+  <text x="64" y="286" fill="#a78bfa" font-size="11.5" class="mono">4. Low-Rank Factoriz. : E = U · V^T  con rango r ≪ d  (ahorra cuando d es grande)</text>
+  <text x="64" y="308" fill="#38bdf8" font-size="11.5" font-weight="700" class="mono">5. Cuantización INT8  : Por FILA (scale_i, zero_i propios) → 4x menos RAM, ~0% pérdida</text>
+  <line x1="64" y1="324" x2="588" y2="324" stroke="#334155" stroke-width="1"/>
+  <text x="64" y="346" fill="#f87171" font-size="11.5" font-weight="700">¡Trampa de Cuantización Por Tabla!</text>
+  <text x="64" y="364" fill="#cbd5e1" font-size="11">Los ítems populares tienen norma ||e_i|| mucho mayor que los de cola; si usas una sola</text>
+  <text x="64" y="382" fill="#cbd5e1" font-size="11">escala global para toda la matriz, aplastas a cero todos los vectores de la Long-Tail.</text>
+
+  <!-- Monolith Real-time Streaming -->
+  <rect x="44" y="418" width="564" height="212" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.8"/>
+  <text x="62" y="442" fill="#5b21b6" font-size="13.5" font-weight="800">Monolith (ByteDance, 2022): Cómo Aprender de Tendencias en &lt; 1 Minuto</text>
+  <text x="62" y="464" fill="#334155" font-size="11.5">• <tspan font-weight="700">Tablas Cuckoo Hash sin colisiones:</tspan> no mezclan un ítem viral con uno desconocido.</text>
+  <text x="62" y="484" fill="#334155" font-size="11.5">• <tspan font-weight="700">Filtro Probabilístico de Frecuencia + TTL:</tspan> un ID nuevo solo entra en la tabla de</text>
+  <text x="62" y="502" fill="#475569" font-size="11.5">  embeddings tras superar k=5 apariciones, y se purga si lleva 14 días inactivo.</text>
+  <text x="62" y="522" fill="#334155" font-size="11.5">• <tspan font-weight="700">Sincronización Incremental:</tspan> envía deltas de embeddings dispersos cada 60 s a los</text>
+  <text x="62" y="540" fill="#475569" font-size="11.5">  servidores de inferencia, y pesos densos MLP cada hora.</text>
+  <text x="62" y="562" fill="#dc2626" font-size="11.5" font-weight="700">• Prevención de Catastrophic Forgetting en Streaming:</text>
+  <text x="62" y="580" fill="#475569" font-size="11.5">  Mezcla 70% eventos en vivo + 30% buffer de experiencia histórica (Replay Buffer) +</text>
+  <text x="62" y="598" fill="#475569" font-size="11.5">  regularización L2 anclada al último checkpoint estable <tspan class="mono">λ ||θ - θ_{anchor}||^2</tspan>.</text>
+
+  <!-- Right Panel: 03:12 AM Pager Duty Triage Tree (6 Production Bugs) -->
+  <rect x="644" y="108" width="612" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="662" y="126" width="576" height="32" rx="8" fill="#fef2f2"/>
+  <text x="950" y="147" text-anchor="middle" fill="#b91c1c" font-size="14.5" font-weight="800">2. Pager Duty 03:12 AM: Los 6 Bugs de «Offline ↑, Online ↓» (Proyecto 19)</text>
+
+  <text x="664" y="176" fill="#334155" font-size="12">Orden estricto de triaje (del chequeo más rápido y frecuente al más profundo):</text>
+
+  <!-- Bug 1 -->
+  <rect x="664" y="188" width="572" height="66" rx="8" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="680" y="208" fill="#9f1239" font-size="12.5" font-weight="800">🚨 Bug 1 · Artefacto / Signo Invertido en Serving (5 min)</text>
+  <text x="680" y="226" fill="#475569" font-size="11.5">¿Sirves el checkpoint correcto? ¿Usaste <tspan class="mono">argsort(scores)</tspan> ascendente en vez de <tspan class="mono">argsort(-scores)</tspan></text>
+  <text x="680" y="242" fill="#dc2626" font-size="11" font-weight="700">o un mapeo `item_idx → movie_id` desplazado respecto al índice FAISS?</text>
+
+  <!-- Bug 2 -->
+  <rect x="664" y="262" width="572" height="66" rx="8" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="680" y="282" fill="#9a3412" font-size="12.5" font-weight="800">🚨 Bug 2 · Training-Serving Skew en Features (15 min)</text>
+  <text x="680" y="300" fill="#475569" font-size="11.5">En entrenamiento la columna era <tspan class="mono">log1p(views)</tspan> o minutos; en producción pasa cruda o en segundos.</text>
+  <text x="680" y="316" fill="#c2410c" font-size="11" font-weight="700">Diagnóstico: Compara media/std del vector x_online vs x_train (Paridad por fila).</text>
+
+  <!-- Bug 3 -->
+  <rect x="664" y="336" width="572" height="66" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="680" y="356" fill="#1e40af" font-size="12.5" font-weight="800">🚨 Bug 3 · Evaluación Offline Deshonesta / Split con Fuga (20 min)</text>
+  <text x="680" y="374" fill="#475569" font-size="11.5">El «+18% NDCG offline» venía de un split aleatorio o de no excluir vistos en train.</text>
+  <text x="680" y="390" fill="#1d4ed8" font-size="11" font-weight="700">Diagnóstico: Re-evalúa con corte temporal estricto y enmascarado de vistos.</text>
+
+  <!-- Bug 4 -->
+  <rect x="664" y="410" width="572" height="66" rx="8" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="680" y="430" fill="#5b21b6" font-size="12.5" font-weight="800">🚨 Bug 4 · Contadores Ciegos a la Entidad o Con Fuga del Futuro (30 min)</text>
+  <text x="680" y="448" fill="#475569" font-size="11.5">Un <tspan class="mono">groupby('user_id')</tspan> donde debía ir <tspan class="mono">groupby('item_id')</tspan>, o un <tspan class="mono">cumsum()</tspan> sin restar el evento actual.</text>
+  <text x="680" y="464" fill="#6d28d9" font-size="11" font-weight="700">Diagnóstico: Feature importance anormalmente concentrada (&gt;80%) en una sola columna.</text>
+
+  <!-- Bug 5 -->
+  <rect x="664" y="484" width="572" height="66" rx="8" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="680" y="504" fill="#065f46" font-size="12.5" font-weight="800">🚨 Bug 5 · Label Delay (Conversiones Tardías tratadas como Negativos)</text>
+  <text x="680" y="522" fill="#475569" font-size="11.5">El usuario tarda 3 horas en terminar la película; si entrenas con eventos de hace 10 min</text>
+  <text x="680" y="538" fill="#047857" font-size="11" font-weight="700">etiquetados como y=0, enseñas al modelo que todo lo reciente es malo (usa ventana de maduración).</text>
+
+  <!-- Bug 6 -->
+  <rect x="664" y="558" width="572" height="72" rx="8" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+  <text x="680" y="578" fill="#38bdf8" font-size="12.5" font-weight="800">🚨 Bug 6 · Candidate-Set Mismatch (Paradoja de Berkson entre Etapas)</text>
+  <text x="680" y="596" fill="#e2e8f0" font-size="11.5">Entrenaste el Ranker solo con las impresiones ganadoras Top-10, pero en serving debe puntuar</text>
+  <text x="680" y="614" fill="#34d399" font-size="11" font-weight="700">los 500 candidatos crudos del Retriever → incluye negativos del Retriever al entrenar el Ranker.</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">En el Proyecto 19 diagnosticarás y repararás estos 6 bugs reales sobre CineMatch v2 hasta restaurar el NDCG y el CTR en producción.</text>
+</svg>

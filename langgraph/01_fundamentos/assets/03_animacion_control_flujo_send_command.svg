@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 600" width="100%">
+  <defs>
+    <style>
+      
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+
+      @keyframes flowDash {
+        0% { stroke-dashoffset: 120; }
+        100% { stroke-dashoffset: 0; }
+      }
+      @keyframes workerPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.03); }
+      }
+      .anim-edge {
+        stroke-dasharray: 8 5;
+        animation: flowDash 1.8s linear infinite;
+      }
+      .worker-box {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: workerPulse 2.4s ease-in-out infinite;
+      }
+    </style>
+    <marker id="arr03" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arr03g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="600" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#1e1b4b"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">CONTROL DE FLUJO DINÁMICO: COMMAND, SEND (MAP-REDUCE) Y CICLOS (03 · ANIMACIÓN)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#c7d2fe;">Cuándo usar conditional_edges vs Command(update, goto), y cómo Send(nodo, arg) lanza N trabajadores en paralelo</text>
+
+  <!-- Left Panel: conditional_edges vs Command -->
+  <rect x="20" y="90" width="530" height="435" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="530" height="38" rx="12" fill="#ede9fe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#5b21b6;">1. `add_conditional_edges` vs. `Command(update, goto)`</text>
+
+  <rect x="36" y="140" width="498" height="162" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="52" y="164" class="card-title" style="fill:#1e40af;">A. Arista Condicional Clásica (Separación Nodo / Router)</text>
+  <text x="52" y="186" class="body">• El nodo calcula y escribe en el estado; una función router aparte lee el estado y</text>
+  <text x="52" y="204" class="body">  decide el siguiente nodo. Ideal cuando el grafo debe ser 100% declarativo.</text>
+  <rect x="52" y="218" width="466" height="68" rx="6" fill="#0f172a"/>
+  <text x="66" y="240" class="mono" style="fill:#38bdf8;">def router(state: State) -&gt; Literal["reintentar", "fin"]:</text>
+  <text x="66" y="260" class="mono" style="fill:#4ade80;">    return "fin" if state["score"] &gt;= 0.8 else "reintentar"</text>
+  <text x="66" y="278" class="mono" style="fill:#94a3b8;font-size:11px;">builder.add_conditional_edges("evaluar", router)</text>
+
+  <rect x="36" y="314" width="498" height="196" rx="8" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="52" y="338" class="card-title" style="fill:#5b21b6;">B. `Command` (Actualiza el Estado y Enruta en un solo paso)</text>
+  <text x="52" y="360" class="body">• Evita guardar banderas temporales en el estado solo para que el router las lea:</text>
+  <rect x="52" y="374" width="466" height="86" rx="6" fill="#0f172a"/>
+  <text x="66" y="396" class="mono" style="fill:#c084fc;">def triaje(state: State) -&gt; Command[Literal["soporte", "ventas", END]]:</text>
+  <text x="66" y="416" class="mono" style="fill:#4ade80;">    return Command(</text>
+  <text x="66" y="434" class="mono" style="fill:#fbbf24;">        update={"categoria": "urgente", "intentos": 1},</text>
+  <text x="66" y="450" class="mono" style="fill:#38bdf8;">        goto="soporte"   # ¡El type hint dibuja las aristas en el grafo!</text>
+  <text x="52" y="484" class="body" style="font-size:12px;fill:#4c1d95;">💡 Sin la anotación <tspan class="mono">Command[Literal[...]]</tspan>, el grafo no sabrá qué aristas existen al compilar.</text>
+
+  <!-- Right Panel: Animated Map-Reduce with Send() -->
+  <rect x="570" y="90" width="530" height="435" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#dcfce7"/>
+  <text x="586" y="114" class="panel-title" style="fill:#166534;">2. `Send(nodo, estado_local)`: Map-Reduce Dinámico en Paralelo</text>
+
+  <text x="586" y="144" class="body">Cuando no sabes en tiempo de compilación cuántos objetos habrá (ej. N sub-preguntas):</text>
+
+  <!-- Planner Node -->
+  <rect x="586" y="195" width="122" height="76" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="647" y="222" text-anchor="middle" class="card-title" style="fill:#1d4ed8;">Planificador</text>
+  <text x="647" y="242" text-anchor="middle" class="mono" style="font-size:10.5px;">genera 3 temas</text>
+  <text x="647" y="258" text-anchor="middle" class="mono" style="font-size:10.5px;fill:#2563eb;">[Send(...) × 3]</text>
+
+  <!-- Fan-out animated edges -->
+  <line x1="708" y1="215" x2="760" y2="175" stroke="#7c3aed" stroke-width="2.5" class="anim-edge" marker-end="url(#arr03)"/>
+  <line x1="708" y1="233" x2="760" y2="233" stroke="#7c3aed" stroke-width="2.5" class="anim-edge" marker-end="url(#arr03)"/>
+  <line x1="708" y1="251" x2="760" y2="291" stroke="#7c3aed" stroke-width="2.5" class="anim-edge" marker-end="url(#arr03)"/>
+
+  <!-- 3 Parallel Worker Instances -->
+  <rect x="766" y="150" width="166" height="44" rx="6" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2" class="worker-box"/>
+  <text x="849" y="170" text-anchor="middle" class="mono" style="fill:#5b21b6;font-size:11.5px;">analizar(tema="SQL")</text>
+  <text x="849" y="186" text-anchor="middle" class="body" style="font-size:10.5px;">Estado privado aislado</text>
+
+  <rect x="766" y="211" width="166" height="44" rx="6" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2" class="worker-box"/>
+  <text x="849" y="231" text-anchor="middle" class="mono" style="fill:#5b21b6;font-size:11.5px;">analizar(tema="API")</text>
+  <text x="849" y="247" text-anchor="middle" class="body" style="font-size:10.5px;">Estado privado aislado</text>
+
+  <rect x="766" y="272" width="166" height="44" rx="6" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2" class="worker-box"/>
+  <text x="849" y="292" text-anchor="middle" class="mono" style="fill:#5b21b6;font-size:11.5px;">analizar(tema="Auth")</text>
+  <text x="849" y="308" text-anchor="middle" class="body" style="font-size:10.5px;">Estado privado aislado</text>
+
+  <!-- Fan-in animated edges -->
+  <line x1="932" y1="172" x2="972" y2="215" stroke="#059669" stroke-width="2.5" class="anim-edge" marker-end="url(#arr03g)"/>
+  <line x1="932" y1="233" x2="972" y2="233" stroke="#059669" stroke-width="2.5" class="anim-edge" marker-end="url(#arr03g)"/>
+  <line x1="932" y1="294" x2="972" y2="251" stroke="#059669" stroke-width="2.5" class="anim-edge" marker-end="url(#arr03g)"/>
+
+  <!-- Reduce Node -->
+  <rect x="976" y="195" width="108" height="76" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="1030" y="220" text-anchor="middle" class="card-title" style="fill:#065f46;">Sintetizar</text>
+  <text x="1030" y="240" text-anchor="middle" class="mono" style="font-size:10px;fill:#047857;">operator.add</text>
+  <text x="1030" y="256" text-anchor="middle" class="body" style="font-size:10.5px;">Une las 3 salidas</text>
+
+  <!-- Recursion Limit Box -->
+  <rect x="586" y="336" width="498" height="174" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="602" y="360" class="card-title" style="fill:#92400e;">3. Ciclos y el Freno de Emergencia: `recursion_limit` vs. `RemainingSteps`</text>
+  <text x="602" y="384" class="body">• Por defecto, LangGraph aborta con <tspan class="mono" style="fill:#dc2626;">GraphRecursionError</tspan> tras <tspan style="font-weight:700;">25 super-pasos</tspan>.</text>
+  <text x="602" y="406" class="body">• Pero lanzar una excepción deja al usuario sin respuesta. En producción, usa el canal</text>
+  <text x="602" y="426" class="body">  gestionado <tspan class="mono" style="fill:#b45309;">restantes: RemainingSteps</tspan> para salir limpiamente antes del límite:</text>
+  <rect x="602" y="438" width="466" height="58" rx="6" fill="#0f172a"/>
+  <text x="616" y="460" class="mono" style="fill:#fbbf24;">if state["restantes"] &lt;= 2:</text>
+  <text x="616" y="480" class="mono" style="fill:#4ade80;">    return Command(update={"nota": "Resumen parcial"}, goto="sintetizar")</text>
+
+  <!-- Footer -->
+  <rect x="20" y="540" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="567" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Cada instancia creada con Send() recibe su propio payload privado, pero escribe su salida en el canal compartido del grafo padre.</text>
+</svg>

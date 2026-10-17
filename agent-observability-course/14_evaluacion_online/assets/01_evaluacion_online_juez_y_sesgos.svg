@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arr14" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arr14p" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">EVALUACIÓN ONLINE EN PRODUCCIÓN: ARQUITECTURA ASÍNCRONA Y CALIBRACIÓN (MÓDULO 14)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Cómo detectar el «dashboard verde que miente» sin añadir ni 1 ms de latencia al usuario y corrigiendo el sesgo del Juez LLM</text>
+
+  <!-- Top Section: Async Pipeline with Span Link -->
+  <rect x="20" y="90" width="1080" height="225" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="38" y="116" class="panel-title">1. Pipeline de Evaluación Online Fuera del Camino Crítico (0 ms añadidos al usuario)</text>
+
+  <!-- Hot Path -->
+  <rect x="38" y="132" width="320" height="82" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="198" y="154" text-anchor="middle" class="card-title" style="fill:#1e40af;">Camino Crítico (Usuario ↔ Agente)</text>
+  <text x="198" y="176" text-anchor="middle" class="mono" style="fill:#1d4ed8;">Span: invoke_agent (trace_id=T1)</text>
+  <text x="198" y="196" text-anchor="middle" class="body" style="font-size:12px;fill:#1e3a8a;">Responde en 650 ms → HTTP 200 OK</text>
+
+  <line x1="358" y1="173" x2="420" y2="173" stroke="#7c3aed" stroke-width="2.5" stroke-dasharray="6 4" marker-end="url(#arr14p)"/>
+  <text x="389" y="163" text-anchor="middle" class="mono" style="font-size:11px;fill:#6d28d9;">Cola Async</text>
+
+  <!-- Async Sampler + Fast Rules -->
+  <rect x="425" y="132" width="305" height="82" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="577" y="154" text-anchor="middle" class="card-title" style="fill:#5b21b6;">1º Reglas Deterministas + Muestreador</text>
+  <text x="577" y="176" text-anchor="middle" class="body" style="font-size:12px;">• Reglas gratis (PII, regex, longitud): <tspan style="font-weight:700;">100%</tspan></text>
+  <text x="577" y="196" text-anchor="middle" class="body" style="font-size:12px;">• Muestreo estratificado (VIP / Sospechosos / Base)</text>
+
+  <line x1="730" y1="173" x2="778" y2="173" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arr14p)"/>
+
+  <!-- LLM Judge + OTel Event -->
+  <rect x="784" y="132" width="298" height="82" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <text x="933" y="154" text-anchor="middle" class="card-title" style="fill:#065f46;">2º Juez LLM + Señal OpenTelemetry</text>
+  <text x="933" y="176" text-anchor="middle" class="mono" style="font-size:11.5px;fill:#047857;">Evento: gen_ai.evaluation.result</text>
+  <text x="933" y="196" text-anchor="middle" class="body" style="font-size:12px;">Con <tspan class="mono">SpanLink(T1)</tspan> + métrica Prometheus</text>
+
+  <!-- Callout bar inside top panel -->
+  <rect x="38" y="228" width="1044" height="72" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="54" y="250" class="card-title" style="fill:#0f172a;">Las 4 Dimensiones que un Dashboard Clásico NO ve:</text>
+  <text x="54" y="272" class="body">1. <tspan style="font-weight:700;fill:#1d4ed8;">Groundedness (Fidelidad):</tspan> ¿Cada cifra/hecho sale de las herramientas o se lo inventó?   2. <tspan style="font-weight:700;fill:#047857;">Relevance:</tspan> ¿Respondió a la pregunta real del cliente?</text>
+  <text x="54" y="290" class="body">3. <tspan style="font-weight:700;fill:#7c3aed;">Tool Trajectory:</tspan> ¿Llamó a las herramientas obligatorias antes de contestar?   4. <tspan style="font-weight:700;fill:#dc2626;">Safety / Policy:</tspan> ¿Prometió reembolsos prohibidos o filtró PII?</text>
+
+  <!-- Bottom Left: Rogan-Gladen Calibration -->
+  <rect x="20" y="330" width="535" height="280" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="330" width="535" height="38" rx="12" fill="#fef3c7"/>
+  <text x="36" y="354" class="panel-title" style="fill:#92400e;">2. Calibrar al Juez: Corrección de Rogan-Gladen</text>
+
+  <text x="36" y="384" class="body">Un juez imperfecto distorsiona la tasa real de respuestas buenas (<tspan class="mono">p</tspan>).</text>
+  <text x="36" y="404" class="body">Mide contra un Golden Set humano su sensibilidad (<tspan class="mono">TPR</tspan>) y especificidad (<tspan class="mono">TNR</tspan>):</text>
+
+  <rect x="36" y="418" width="503" height="62" rx="8" fill="#0f172a"/>
+  <text x="287" y="444" text-anchor="middle" class="mono" style="fill:#fbbf24;font-size:14px;">p_real = ( p_observada + TNR - 1 ) / ( TPR + TNR - 1 )</text>
+  <text x="287" y="468" text-anchor="middle" class="body" style="fill:#cbd5e1;font-size:12px;">Donde p_observada es el % de "pass" que reporta el Juez en producción</text>
+
+  <text x="36" y="504" class="card-title" style="fill:#b45309;">Sesgos Clásicos del Juez LLM y su Antídoto:</text>
+  <text x="36" y="526" class="body">• <tspan style="font-weight:700;">Sesgo de Verbosidad:</tspan> Premia textos largos aunque inventen datos → exige rúbrica atómica de hechos verificables.</text>
+  <text x="36" y="562" class="body">• <tspan style="font-weight:700;">Sesgo de Posición (A vs B):</tspan> Favorece la opción A → evalúa <tspan class="mono">(A,B)</tspan> y <tspan class="mono">(B,A)</tspan> y exige acuerdo en ambos sentidos.</text>
+
+  <!-- Bottom Right: Stratified Sampling & Horvitz-Thompson -->
+  <rect x="570" y="330" width="530" height="280" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="330" width="530" height="38" rx="12" fill="#dcfce7"/>
+  <text x="586" y="354" class="panel-title" style="fill:#166534;">3. Muestreo Estratificado sin Sesgar la Media Global</text>
+
+  <text x="586" y="384" class="body">Evaluar el 100% con LLM es caro, pero si muestreas más los casos sospechosos,</text>
+  <text x="586" y="404" class="body">la media simple se hunde artificialmente. Usa <tspan style="font-weight:700;fill:#166534;">Horvitz-Thompson (IPW)</tspan>:</text>
+
+  <!-- Strata Table -->
+  <rect x="586" y="418" width="498" height="96" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="602" y="440" class="mono" style="fill:#0f172a;">Estrato 1 (Sospechosos / Thumbs-down):  π₁ = 100% (1.00) → peso w₁ = 1</text>
+  <text x="602" y="464" class="mono" style="fill:#1d4ed8;">Estrato 2 (Clientes VIP / Reembolsos):  π₂ =  50% (0.50) → peso w₂ = 2</text>
+  <text x="602" y="488" class="mono" style="fill:#047857;">Estrato 3 (Tráfico normal OK):          π₃ =   5% (0.05) → peso w₃ = 20</text>
+
+  <rect x="586" y="526" width="498" height="68" rx="8" fill="#0f172a"/>
+  <text x="835" y="550" text-anchor="middle" class="mono" style="fill:#4ade80;font-size:13.5px;">Calidad_Global = [ Σ (score_i / π_i) ] / [ Σ (1 / π_i) ]</text>
+  <text x="835" y="574" text-anchor="middle" class="body" style="fill:#cbd5e1;font-size:12px;">Cazas el 100% de los fallos críticos con una fracción del coste y métrica insesgada</text>
+</svg>

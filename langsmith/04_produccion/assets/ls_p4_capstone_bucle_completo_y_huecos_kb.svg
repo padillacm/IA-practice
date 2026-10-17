@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">PROYECTO P4 (CAPSTONE): EL BUCLE COMPLETO Y HUECOS DE COBERTURA</text>
+  <text x="48" y="69" class="subtitle">De una regresión silenciosa en producción hasta el despliegue verificado, y cómo descubrir lo que tu base de conocimiento ignora</text>
+
+  <!-- Top Half: The 7 Stages of the Capstone Incident Loop -->
+  <rect x="28" y="98" width="1224" height="252" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Anatomía Completa del Incidente Resuelto en 7 Pasos (El Bucle de Ingeniería en Acción)</text>
+
+  <!-- 7 Connected Cards -->
+  <rect x="44" y="146" width="156" height="184" class="card-red"/>
+  <text x="56" y="168" class="card-title" fill="#b91c1c">1. Señal Oculta</text>
+  <text x="56" y="188" class="small-text">• Error HTTP: <tspan class="mono">0%</tspan></text>
+  <text x="56" y="206" class="small-text">• Media global: <tspan class="mono">0.87</tspan></text>
+  <text x="56" y="226" class="small-text" fill="#b91c1c" font-weight="700">• Alerta por segmento:</text>
+  <text x="56" y="242" class="small-text">  <tspan class="mono">cat="suscripcion"</tspan></text>
+  <text x="56" y="258" class="small-text">  cae a <tspan class="mono">0.38</tspan> con</text>
+  <text x="56" y="274" class="small-text">  pico de 👎.</text>
+
+  <line x1="200" y1="238" x2="216" y2="238" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="218" y="146" width="156" height="184" class="card-amber"/>
+  <text x="230" y="168" class="card-title" fill="#b45309">2. Cortafuegos</text>
+  <text x="230" y="188" class="small-text">Filtra las trazas</text>
+  <text x="230" y="204" class="small-text">fallidas, pasa por</text>
+  <text x="230" y="220" class="small-text"><tspan font-weight="700">sanitización PII</tspan>,</text>
+  <text x="230" y="236" class="small-text">deduplica por</text>
+  <text x="230" y="252" class="small-text">similitud y envía</text>
+  <text x="230" y="268" class="small-text">11 casos únicos a</text>
+  <text x="230" y="284" class="small-text">la Cola Humana.</text>
+
+  <line x1="374" y1="238" x2="390" y2="238" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="392" y="146" width="156" height="184" class="card-purple"/>
+  <text x="404" y="168" class="card-title" fill="#5b21b6">3. Anotación (11)</text>
+  <text x="404" y="188" class="small-text">El humano etiqueta</text>
+  <text x="404" y="204" class="small-text">los 11 casos y</text>
+  <text x="404" y="220" class="small-text">rellena el campo</text>
+  <text x="404" y="236" class="mono" font-size="10.5" fill="#4c1d95">correction</text>
+  <text x="404" y="254" class="small-text">(causa raíz: cobro</text>
+  <text x="404" y="270" class="small-text">prorrateado anual</text>
+  <text x="404" y="286" class="small-text">mal explicado).</text>
+
+  <line x1="548" y1="238" x2="564" y2="238" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="566" y="146" width="156" height="184" class="card-blue"/>
+  <text x="578" y="168" class="card-title" fill="#1d4ed8">4. Dataset v2</text>
+  <text x="578" y="188" class="small-text">Promociona los</text>
+  <text x="578" y="204" class="small-text">11 casos corregidos</text>
+  <text x="578" y="220" class="small-text">repartidos entre</text>
+  <text x="578" y="236" class="mono" font-size="10.5" fill="#1e40af">dev (6) / holdout (5)</text>
+  <text x="578" y="254" class="small-text">y congela el tag</text>
+  <text x="578" y="270" class="mono" font-size="10.5" fill="#1e40af">golden:v2.1</text>
+  <text x="578" y="286" class="small-text">para medir antes.</text>
+
+  <line x1="722" y1="238" x2="738" y2="238" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="740" y="146" width="156" height="184" class="card-slate"/>
+  <text x="752" y="168" class="card-title">5. El Arreglo</text>
+  <text x="752" y="188" class="small-text">Se actualiza el</text>
+  <text x="752" y="204" class="small-text">documento en la</text>
+  <text x="752" y="220" class="small-text">KB y se ajusta el</text>
+  <text x="752" y="236" class="small-text">prompt en el Hub</text>
+  <text x="752" y="252" class="mono" font-size="10.5" fill="#0f172a">commit: c4 (staging)</text>
+  <text x="752" y="270" class="small-text">usando solo los</text>
+  <text x="752" y="286" class="small-text">6 casos de <tspan class="mono">dev</tspan>.</text>
+
+  <line x1="896" y1="238" x2="912" y2="238" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <rect x="914" y="146" width="156" height="184" class="card-green"/>
+  <text x="926" y="168" class="card-title" fill="#047857">6. Puerta CI</text>
+  <text x="926" y="188" class="small-text">Corre <tspan class="mono">evaluate()</tspan></text>
+  <text x="926" y="204" class="small-text">sobre <tspan class="mono">golden:v2.1</tspan>:</text>
+  <text x="926" y="224" class="small-text">• Nuevos casos:</text>
+  <text x="926" y="240" class="mono" font-size="10.5" fill="#065f46">18% → 91%</text>
+  <text x="926" y="258" class="small-text">• Regresiones en</text>
+  <text x="926" y="274" class="small-text">  casos antiguos: <tspan font-weight="700">0</tspan>.</text>
+
+  <line x1="1070" y1="238" x2="1086" y2="238" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <rect x="1088" y="146" width="146" height="184" class="card-green"/>
+  <text x="1100" y="168" class="card-title" fill="#047857">7. Despliegue</text>
+  <text x="1100" y="188" class="small-text">Se mueve el tag</text>
+  <text x="1100" y="206" class="mono" font-size="10.5" fill="#065f46">:production → c4</text>
+  <text x="1100" y="226" class="small-text">y se verifica en</text>
+  <text x="1100" y="242" class="small-text">el panel online la</text>
+  <text x="1100" y="258" class="small-text">recuperación del</text>
+  <text x="1100" y="274" class="small-text">segmento.</text>
+
+  <!-- Bottom Half: Lo que este bucle NO encuentra (Knowledge Base Coverage Gaps) -->
+  <rect x="28" y="366" width="1224" height="276" class="panel"/>
+  <text x="46" y="394" class="panel-title">2. El Punto Ciego del Bucle Estándar: Cuando el Agente Dice «No lo Sé» Correctamente (Hueco en la KB)</text>
+
+  <rect x="46" y="412" width="576" height="214" class="card-amber"/>
+  <text x="62" y="434" class="card-title" fill="#b45309">Por Qué el Juez de Fidelidad Le Da un 1.00 a un Problema de Negocio</text>
+  <text x="62" y="456" class="body-text">Imagina que 200 usuarios preguntan por la nueva tarifa estudiantil que</text>
+  <text x="62" y="474" class="body-text">acaba de salir, pero nadie subió ese artículo al <tspan class="mono">retriever</tspan> (Base de Conocimiento):</text>
+  <text x="62" y="498" class="small-text">• El <tspan class="mono">retriever</tspan> devuelve 0 documentos relevantes (o documentos de otra tarifa).</text>
+  <text x="62" y="518" class="small-text">• El agente obedece fielmente tu instrucción: <tspan font-style="italic">«No dispongo de esa información,</tspan></text>
+  <text x="62" y="534" class="small-text"><tspan font-style="italic">  te paso con un agente humano»</tspan>.</text>
+  <text x="62" y="556" class="small-text" fill="#b91c1c" font-weight="700">• El Juez de Fidelidad dice: score = 1.0 (¡No alucinó nada!). Error HTTP = 0.</text>
+  <text x="62" y="574" class="small-text" fill="#b91c1c">• Sin embargo, el 100% de esos tickets terminan escalados a soporte humano.</text>
+
+  <rect x="644" y="412" width="590" height="214" class="card-blue"/>
+  <text x="660" y="434" class="card-title" fill="#1d4ed8">La Señal Específica que Caza Huecos de Cobertura Documental</text>
+  <text x="660" y="456" class="body-text">Añade un evaluador en línea dedicado a <tspan font-weight="700">Suficiencia del Contexto / Abstención</tspan>:</text>
+  <rect x="660" y="472" width="556" height="72" rx="6" fill="#0f172a"/>
+  <text x="676" y="494" class="mono" font-size="11" fill="#38bdf8">1. Span hijo retriever: max_similarity_score &lt; 0.65 o docs == []</text>
+  <text x="676" y="514" class="mono" font-size="11" fill="#4ade80">2. Raíz del agente: abstencion_o_escalado == 1 (detector léxico/juez)</text>
+  <text x="676" y="534" class="mono" font-size="11" fill="#fde047">3. Agrupar por tema (Issues) las preguntas con contexto insuficiente</text>
+  <text x="660" y="564" class="small-text">Así distingues instantáneamente:</text>
+  <text x="660" y="582" class="small-text">• <tspan font-weight="700" fill="#b91c1c">Contexto Suficiente + Respuesta Mala</tspan> → Fallo del Prompt / Modelo.</text>
+  <text x="660" y="600" class="small-text">• <tspan font-weight="700" fill="#1d4ed8">Contexto Insuficiente + Abstención Fiel</tspan> → Falta documentación en la KB.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Un sistema RAG en producción necesita dos señales separadas: Fidelidad (¿alucinó el LLM?) y Cobertura (¿tenía la KB la respuesta?).</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 04 · Proyecto P4 (Capstone)</text>
+</svg>

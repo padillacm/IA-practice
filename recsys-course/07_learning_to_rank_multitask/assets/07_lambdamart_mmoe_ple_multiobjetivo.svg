@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 07 · LTR &amp; MTL</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">LEARNING TO RANK (LAMBDAMART) Y RANKING MULTI-TAREA (MMoE vs PLE)</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">Cómo ponderar pares por |ΔNDCG| en LambdaMART y cómo resolver la transferencia negativa entre objetivos con PLE</text>
+
+
+  <!-- Left Panel: Pointwise vs Pairwise vs LambdaMART -->
+  <rect x="24" y="108" width="596" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="560" height="32" rx="8" fill="#eff6ff"/>
+  <text x="322" y="147" text-anchor="middle" fill="#1d4ed8" font-size="14.5" font-weight="800">1. De Pointwise a Listwise: El Secreto de LambdaMART</text>
+
+  <!-- 3 Paradigms -->
+  <rect x="44" y="172" width="556" height="122" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="62" y="194" fill="#0f172a" font-size="13" font-weight="800">Las 3 Familias de Learning to Rank (Por Grupo / Sesión q):</text>
+  <text x="62" y="216" fill="#475569" font-size="11.5">• <tspan font-weight="700" fill="#64748b">Pointwise (MSE / BCE):</tspan> Predice cada ítem aislado; gasta capacidad en el fondo de la lista.</text>
+  <text x="62" y="238" fill="#475569" font-size="11.5">• <tspan font-weight="700" fill="#2563eb">Pairwise (RankNet / BPR):</tspan> Minimiza inversiones de pares (y_i &gt; y_j), pero trata igual</text>
+  <text x="62" y="256" fill="#475569" font-size="11.5">  equivocarse entre las posiciones #1 y #2 que entre las posiciones #89 y #90.</text>
+  <text x="62" y="278" fill="#059669" font-size="11.5" font-weight="700">• Listwise (LambdaRank / LambdaMART): Escala el empuje del par por el salto exacto |ΔNDCG|.</text>
+
+  <!-- LambdaMART Formula -->
+  <rect x="44" y="308" width="556" height="184" rx="10" fill="#0f172a"/>
+  <text x="64" y="334" fill="#38bdf8" font-size="13" font-weight="700">Anatomía del Pseudo-Gradiente λ_{ij} (Burges, 2010):</text>
+  <text x="64" y="362" fill="#e2e8f0" font-size="12" class="mono">Para cada par (i, j) en la misma sesión q con relevancia y_i &gt; y_j:</text>
+  <rect x="64" y="376" width="516" height="44" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="322" y="403" text-anchor="middle" fill="#34d399" font-size="13" class="mono">λ_{ij} = [ -σ / (1 + exp(σ · (s_i - s_j))) ]  ×  | ΔNDCG(i ↔ j) |</text>
+  <text x="64" y="442" fill="#fbbf24" font-size="11.5">• <tspan class="mono">Factor 1 (RankNet):</tspan> Fuerza logística suave según el margen actual (s_i - s_j).</text>
+  <text x="64" y="462" fill="#a78bfa" font-size="11.5">• <tspan class="mono">Factor 2 (|ΔNDCG|):</tspan> Cuánto cambiaría el NDCG@K de la lista si intercambiamos</text>
+  <text x="64" y="478" fill="#a78bfa" font-size="11.5">  las posiciones actuales de i y j. ¡Focaliza los árboles GBDT en la cima Top-K!</text>
+
+  <!-- Position Bias Debiasing PAL -->
+  <rect x="44" y="506" width="556" height="124" rx="10" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="62" y="530" fill="#9a3412" font-size="13" font-weight="800">Desacoplar el Sesgo de Posición en Ranking (PAL / Feature pos):</text>
+  <text x="62" y="552" fill="#475569" font-size="11.5">• En entrenamiento: <tspan class="mono" font-weight="700" fill="#c2410c">logit_total = f_relevancia(u, i) + g_posicion(pos_mostrada)</tspan></text>
+  <text x="62" y="572" fill="#475569" font-size="11.5">• En inferencia (serving): evalúas <tspan font-weight="700" fill="#059669">todos los candidatos fijando pos = 1 (o descartando g)</tspan>.</text>
+  <text x="62" y="594" fill="#9a3412" font-size="11.5" font-weight="700">• Evita que el modelo crea que una película es buena solo porque estuvo en el slot #1.</text>
+
+  <!-- Right Panel: Multi-Task Learning (Shared-Bottom vs MMoE vs PLE) -->
+  <rect x="636" y="108" width="620" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="654" y="126" width="584" height="32" rx="8" fill="#f5f3ff"/>
+  <text x="946" y="147" text-anchor="middle" fill="#6d28d9" font-size="14.5" font-weight="800">2. Ranking Multi-Objetivo: Shared-Bottom → MMoE → PLE (Proyecto 07)</text>
+
+  <!-- Seesaw Problem -->
+  <rect x="654" y="170" width="584" height="78" rx="10" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="672" y="192" fill="#991b1b" font-size="13" font-weight="800">El Fenómeno del Balancín (Seesaw / Negative Transfer):</text>
+  <text x="672" y="212" fill="#475569" font-size="11.5">Optimizar solo <tspan font-weight="700">P(click)</tspan> llena la Home de <tspan font-weight="700" fill="#dc2626">clickbait</tspan> (miniaturas engañosas que el usuario cierra</text>
+  <text x="672" y="230" fill="#475569" font-size="11.5">a los 20 segundos). Pero en un <tspan font-weight="700">Shared-Bottom</tspan>, los gradientes de CTR y Completitud chocan.</text>
+
+  <!-- MMoE vs PLE architecture boxes -->
+  <rect x="654" y="260" width="282" height="214" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.8"/>
+  <text x="795" y="284" text-anchor="middle" fill="#1e40af" font-size="13" font-weight="800">A. MMoE (Ma et al., Google 2018)</text>
+  <text x="670" y="306" fill="#334155" font-size="11.5">• K expertos MLP compartidos E_1..E_K.</text>
+  <text x="670" y="326" fill="#334155" font-size="11.5">• Cada tarea t tiene su propio Gate:</text>
+  <rect x="670" y="336" width="250" height="32" rx="6" fill="#0f172a"/>
+  <text x="795" y="357" text-anchor="middle" fill="#38bdf8" font-size="11" class="mono">g_t(x) = Softmax(W_t · x)</text>
+  <text x="670" y="388" fill="#475569" font-size="11.5">• Combina: <tspan class="mono">h_t = Σ_k g_{t,k}(x) E_k(x)</tspan></text>
+  <text x="670" y="410" fill="#1e40af" font-size="11.5" font-weight="700">• Permite que tareas poco correlacionadas</text>
+  <text x="670" y="428" fill="#1e40af" font-size="11.5" font-weight="700">  elijan subconjuntos distintos de expertos.</text>
+  <text x="670" y="452" fill="#dc2626" font-size="11">• Aún sufre colapso si 1 tarea domina todos los E_k.</text>
+
+  <rect x="952" y="260" width="286" height="214" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="1095" y="284" text-anchor="middle" fill="#065f46" font-size="13" font-weight="800">B. PLE (Tencent, Best Paper RecSys'20)</text>
+  <text x="968" y="306" fill="#334155" font-size="11.5">• Separa explícitamente los expertos en:</text>
+  <text x="976" y="326" fill="#047857" font-size="11.5" font-weight="700">1. Expertos Exclusivos de Tarea t (E_t)</text>
+  <text x="976" y="344" fill="#059669" font-size="11.5" font-weight="700">2. Expertos Compartidos (E_shared)</text>
+  <rect x="968" y="354" width="254" height="32" rx="6" fill="#0f172a"/>
+  <text x="1095" y="375" text-anchor="middle" fill="#34d399" font-size="11" class="mono">h_t = Gate_t( [E_t(x) || E_shared(x)] )</text>
+  <text x="968" y="406" fill="#065f46" font-size="11.5">• La torre de Completitud nunca recibe gradientes</text>
+  <text x="968" y="424" fill="#065f46" font-size="11.5">  en sus expertos exclusivos por culpa del CTR.</text>
+  <text x="968" y="450" fill="#059669" font-size="11.5" font-weight="700">★ Elimina el Seesaw y gana en todas las tareas.</text>
+
+  <!-- Multi-objective Combination Formula -->
+  <rect x="654" y="488" width="584" height="142" rx="10" fill="#0f172a"/>
+  <text x="674" y="512" fill="#38bdf8" font-size="13" font-weight="700">3. Función de Utilidad Multi-Objetivo en Serving (Frontera de Pareto):</text>
+  <rect x="674" y="524" width="544" height="38" rx="6" fill="#1e293b" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="946" y="548" text-anchor="middle" fill="#f8fafc" font-size="12.5" class="mono">Score(u,i) = p̂(click)^{w_c} · p̂(complete | click)^{w_w} · (1 + α·r̂_{like}) · (1 - p̂_{dislike})^{w_d}</text>
+  <text x="674" y="584" fill="#cbd5e1" font-size="11.5">• <tspan font-weight="700" fill="#34d399">ESMM (Entire Space Multi-Task):</tspan> <tspan class="mono">P(click &amp; complete) = P(click) × P(complete | click)</tspan></text>
+  <text x="674" y="604" fill="#cbd5e1" font-size="11.5">  corrige el sesgo de selección (solo ves si completó en los ítems donde hubo clic).</text>
+  <text x="674" y="620" fill="#fbbf24" font-size="11.5">• Los pesos (w_c, w_w, w_d) se eligen en la frontera de Pareto según KPIs de retención.</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">En el Proyecto 07, PLE supera a Shared-Bottom y MMoE evitando que la tarea abundante (CTR) degrade la tarea escasa (Completitud / Rating).</text>
+</svg>

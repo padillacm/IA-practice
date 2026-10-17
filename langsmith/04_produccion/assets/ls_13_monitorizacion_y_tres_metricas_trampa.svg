@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">MONITORIZACIÓN EN PRODUCCIÓN Y LAS 3 MÉTRICAS TRAMPA (MÓDULO 13)</text>
+  <text x="48" y="69" class="subtitle">Las 4 familias de señales operativas, de dónde sale el cálculo de coste y por qué las medias globales ocultan desastres</text>
+
+  <!-- Panel 1: Las 4 Familias y el Precio de los Tokens -->
+  <rect x="28" y="98" width="410" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Las 4 Familias de Señales en Producción</text>
+
+  <rect x="46" y="144" width="374" height="184" class="card-blue"/>
+  <text x="62" y="166" class="card-title" fill="#1d4ed8">Qué Mirar Cada Mañana en el Cuadro de Mando</text>
+  <text x="62" y="188" class="small-text">1. <tspan font-weight="700">Volumen y Caudal:</tspan> trazas/min por categoría y canal</text>
+  <text x="62" y="204" class="small-text">   (caída brusca a 0 = tubería o servicio roto).</text>
+  <text x="62" y="224" class="small-text">2. <tspan font-weight="700">Latencia y TTFT:</tspan> percentiles <tspan class="mono">p50, p95, p99</tspan> y</text>
+  <text x="62" y="240" class="small-text">   Time-To-First-Token en streaming.</text>
+  <text x="62" y="260" class="small-text">3. <tspan font-weight="700">Coste y Tokens:</tspan> prompt vs completion vs caché</text>
+  <text x="62" y="276" class="small-text">   (<tspan class="mono">total_cost, prompt_tokens, completion_tokens</tspan>).</text>
+  <text x="62" y="296" class="small-text">4. <tspan font-weight="700">Calidad (Feedback):</tspan> scores de jueces online + 👍/👎</text>
+  <text x="62" y="312" class="small-text">   agrupados por versión del prompt (<tspan class="mono">metadata</tspan>).</text>
+
+  <rect x="46" y="342" width="374" height="284" class="card-amber"/>
+  <text x="62" y="364" class="card-title" fill="#b45309">2. La Trampa del Coste: De Dónde Sale run.total_cost</text>
+  <text x="62" y="386" class="small-text">LangSmith NO adivina los tokens contando caracteres:</text>
+  <text x="62" y="406" class="small-text">• Lee <tspan class="mono">usage_metadata</tspan> del nodo <tspan class="mono">run_type="llm"</tspan> y</text>
+  <text x="62" y="422" class="small-text">  cruza el string <tspan class="mono">ls_model_name</tspan> contra su tabla de</text>
+  <text x="62" y="438" class="small-text">  precios (Settings → Model Price Map).</text>
+  <text x="62" y="462" class="small-text" fill="#b91c1c" font-weight="700">Cuándo run.total_cost da $0.00 (Falso Gratis):</text>
+  <text x="62" y="480" class="small-text">1. Usaste un nombre de despliegue Azure/Bedrock o</text>
+  <text x="62" y="496" class="small-text">   modelo propio (<tspan class="mono">mi-empresa-gpt4-prod</tspan>) que no hace</text>
+  <text x="62" y="512" class="small-text">   match en la tabla de precios → registra una regex</text>
+  <text x="62" y="528" class="small-text">   en el Model Price Map o inyecta <tspan class="mono">ls_model_name</tspan>.</text>
+  <text x="62" y="548" class="small-text">2. Decoraste la llamada con <tspan class="mono">run_type="chain"</tspan> en vez</text>
+  <text x="62" y="564" class="small-text">   de <tspan class="mono">"llm"</tspan> o no devolviste <tspan class="mono">usage_metadata</tspan>.</text>
+  <text x="62" y="588" class="mono" font-size="10.5" fill="#065f46">La raíz acumula automáticamente el total_cost de sus hijos.</text>
+
+  <!-- Panel 2: Las 3 Métricas Trampa -->
+  <rect x="454" y="98" width="798" height="544" class="panel"/>
+  <text x="472" y="126" class="panel-title">3. Las 3 Métricas Trampa que Engañan a los Equipos en Producción</text>
+
+  <!-- Trap 1 -->
+  <rect x="472" y="144" width="762" height="148" class="card-red"/>
+  <text x="490" y="168" class="card-title" fill="#b91c1c">Trampa 1 · La Media Global del Juez (Oculta el Hundimiento de una Categoría)</text>
+  <text x="490" y="190" class="body-text">El tráfico real es heterogéneo: 85% son consultas simples de seguimiento (score 0.98) y 15% son</text>
+  <text x="490" y="208" class="body-text">reclamaciones de facturación. Si un despliegue rompe por completo facturación (cae de 0.90 a 0.20):</text>
+  <text x="490" y="232" class="mono" font-size="11.5" fill="#7f1d1d">Media Global Antes = 0.968   →   Media Global Después = 0.863  (Parece «todo bien &gt; 0.85»)</text>
+  <text x="490" y="256" class="small-text" fill="#047857" font-weight="700">Regla: Monitoriza siempre % de fallos (score == 0) segmentado por metadata["categoria"] y versión.</text>
+
+  <!-- Trap 2 -->
+  <rect x="472" y="306" width="762" height="148" class="card-purple"/>
+  <text x="490" y="330" class="card-title" fill="#5b21b6">Trampa 2 · La Tasa de Error Basada Solo en Excepciones de la Raíz (root.error != None)</text>
+  <text x="490" y="352" class="body-text">Un agente bien programado captura los errores de sus herramientas y responde con una disculpa educada</text>
+  <text x="490" y="370" class="body-text">(«Lo siento, no pude consultar tu pedido ahora mismo») o peores aún: alucina el dato que faltaba.</text>
+  <text x="490" y="394" class="mono" font-size="11.5" fill="#4c1d95">Error Rate de Raíces = 0.0%   |   Error Rate de Spans Hijos (tool/retriever) = 34.0%</text>
+  <text x="490" y="418" class="small-text" fill="#047857" font-weight="700">Regla: Alerta por separado sobre errores en spans hijos (is_root=false AND error!=null) y sobre respuestas de disculpa.</text>
+
+  <!-- Trap 3 -->
+  <rect x="472" y="468" width="762" height="158" class="card-green"/>
+  <text x="490" y="492" class="card-title" fill="#047857">Trampa 3 · La Latencia Media (mean_latency) frente a Bucles de Agente en el p95 / p99</text>
+  <text x="490" y="514" class="body-text">Cuando un 5% de los tickets entra en un bucle de reintentos de herramientas (6 pasos de LLM en vez de 1),</text>
+  <text x="490" y="532" class="body-text">la latencia media apenas sube de <tspan class="mono">1.4 s</tspan> a <tspan class="mono">1.9 s</tspan>, pero esos usuarios esperan <tspan class="mono">18 segundos</tspan> y consumen</text>
+  <text x="490" y="550" class="body-text"><tspan font-weight="700">el 40% del presupuesto diario de tokens</tspan>.</text>
+  <text x="490" y="574" class="mono" font-size="11.5" fill="#065f46">Vigilancia Correcta: Latencia p95 + Distribución de nº de pasos LLM por traza + Alerta con histeresis y volumen mínimo.</text>
+  <text x="490" y="598" class="small-text">Una alerta buena exige: <tspan class="mono">ventana &gt;= 15 min</tspan>, <tspan class="mono">n_trazas &gt;= 30</tspan> (evita falsas alarmas a las 4 AM con 2 tickets) y enlace directo al filtro.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Desconfía de las medias globales: segmenta por categoría, vigila errores en spans hijos y alerta sobre p95 con volumen mínimo.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 04 · Notebook 13</text>
+</svg>

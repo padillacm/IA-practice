@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">RETENCIÓN, COSTE OCULTO DE EXTENDED TRACES Y CUMPLIMIENTO GDPR (MÓDULO 17)</text>
+  <text x="48" y="69" class="subtitle">Cómo funcionan las dos retenciones (14 vs 400 días), qué dispara el auto-upgrade de precio y cómo ejecutar el derecho al olvido</text>
+
+  <!-- Panel 1: Las Dos Retenciones y la Trampa del Auto-Upgrade -->
+  <rect x="28" y="98" width="416" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Base (14 días) vs Extended (400 días)</text>
+
+  <rect x="46" y="144" width="380" height="112" class="card-blue"/>
+  <text x="62" y="166" class="card-title" fill="#1d4ed8">Trazas Base (Short-Term · ~14 días)</text>
+  <text x="62" y="188" class="small-text">• Precio bajo (~$0.50 / 1,000 trazas).</text>
+  <text x="62" y="206" class="small-text">• Pensadas para depuración operativa inmediata.</text>
+  <text x="62" y="224" class="small-text">• Al vencer el TTL de 14 días, el payload (<tspan class="mono">inputs/outputs</tspan>)</text>
+  <text x="62" y="240" class="small-text">  se purga automáticamente.</text>
+
+  <rect x="46" y="268" width="380" height="186" class="card-red"/>
+  <text x="62" y="290" class="card-title" fill="#b91c1c">La Trampa del Auto-Upgrade a Extended (400 días)</text>
+  <text x="62" y="312" class="small-text">Una traza Base pasa automáticamente a <tspan font-weight="700">Extended (~10× más</tspan></text>
+  <text x="62" y="328" class="small-text"><tspan font-weight="700">cara, ~$4.50 / 1k trazas y 400 días de vida)</tspan> cuando</text>
+  <text x="62" y="344" class="small-text">ocurre CUALQUIERA de estas 3 cosas:</text>
+  <text x="62" y="368" class="small-text" fill="#b91c1c" font-weight="700">1. Recibe cualquier Feedback (<tspan class="mono">create_feedback</tspan> / 👍 / Juez).</text>
+  <text x="62" y="388" class="small-text" fill="#b91c1c" font-weight="700">2. La toca una Regla de Automatización en línea.</text>
+  <text x="62" y="408" class="small-text" fill="#b91c1c" font-weight="700">3. Un humano la etiqueta en una Cola de Anotación.</text>
+  <text x="62" y="432" class="small-text">¡Si mandas un <tspan class="mono">create_feedback</tspan> automático al 100% de tus</text>
+  <text x="62" y="446" class="small-text">trazas, conviertes el 100% de tu factura a tarifa Extended!</text>
+
+  <rect x="46" y="466" width="380" height="160" class="card-amber"/>
+  <text x="62" y="488" class="card-title" fill="#b45309">La Doble Implicación Legal del TTL de 400 Días</text>
+  <text x="62" y="510" class="small-text">Además del coste por 10×, cualquier traza que reciba</text>
+  <text x="62" y="526" class="small-text">feedback deja de borrarse a los 14 días y permanece</text>
+  <text x="62" y="542" class="small-text"><tspan font-weight="700">más de un año</tspan> almacenada. No confíes en «se borra</text>
+  <text x="62" y="558" class="small-text">solo en dos semanas» como estrategia de privacidad</text>
+  <text x="62" y="574" class="small-text">si tienes feedback o evaluadores online activos.</text>
+
+  <!-- Panel 2: Qué se puede borrar y cómo cumplir GDPR (Derecho al Olvido) -->
+  <rect x="460" y="98" width="416" height="544" class="panel"/>
+  <text x="478" y="126" class="panel-title">2. Derecho de Supresión (GDPR Art. 17)</text>
+
+  <rect x="478" y="144" width="380" height="148" class="card-slate"/>
+  <text x="494" y="166" class="card-title">Lo que la API Permite Borrar Hoy (y Lo que No)</text>
+  <text x="494" y="188" class="small-text">• <tspan class="mono">client.delete_project(project_name=...)</tspan> ✅ Borra el</text>
+  <text x="494" y="204" class="small-text">  proyecto entero con todas sus trazas.</text>
+  <text x="494" y="224" class="small-text">• <tspan class="mono">client.delete_example(example_id)</tspan> ✅ Borra un caso</text>
+  <text x="494" y="240" class="small-text">  individual dentro de un Dataset.</text>
+  <text x="494" y="260" class="small-text" fill="#b91c1c" font-weight="700">• ¡No existe delete_run(run_id) quirúrgico estándar</text>
+  <text x="494" y="276" class="small-text" fill="#b91c1c">  para borrar una sola traza suelta dentro de un proyecto!</text>
+
+  <rect x="478" y="306" width="380" height="320" class="card-green"/>
+  <text x="494" y="328" class="card-title" fill="#047857">Arquitectura para Cumplir el Derecho al Olvido</text>
+  <text x="494" y="352" class="body-text" font-weight="700">Capa 1 · No Enviar PII Cruda (Seudonimización):</text>
+  <text x="494" y="370" class="small-text">En lugar de enviar <tspan class="mono">email</tspan> o <tspan class="mono">nombre</tspan>, envía solo un</text>
+  <text x="494" y="386" class="small-text"><tspan class="mono">user_token = HMAC(key_usuario, user_id)</tspan> y pasa el</text>
+  <text x="494" y="402" class="small-text">texto por <tspan class="mono">create_anonymizer()</tspan>. Al borrar <tspan class="mono">key_usuario</tspan></text>
+  <text x="494" y="418" class="small-text">en tu BD local (Crypto-Shredding), la traza queda</text>
+  <text x="494" y="434" class="small-text">irreversiblemente desvinculada de la persona física.</text>
+
+  <text x="494" y="462" class="body-text" font-weight="700">Capa 2 · Limpieza de Datasets y Colas:</text>
+  <text x="494" y="480" class="small-text">Guarda <tspan class="mono">metadata={"user_hash": ...}</tspan> en cada ejemplo;</text>
+  <text x="494" y="496" class="small-text">ante una solicitud GDPR, busca con <tspan class="mono">list_examples()</tspan></text>
+  <text x="494" y="512" class="small-text">y ejecuta <tspan class="mono">client.delete_example(ex.id)</tspan>.</text>
+
+  <text x="494" y="540" class="body-text" font-weight="700">Capa 3 · Rotación de Proyectos por Ventana (Sharding):</text>
+  <text x="494" y="558" class="small-text">Usa proyectos mensuales (<tspan class="mono">prod-2026-10</tspan>) con TTL corto</text>
+  <text x="494" y="574" class="small-text">y purga el proyecto completo al vencer la ventana legal.</text>
+
+  <!-- Panel 3: Soberanía de Datos y El Puente con LangGraph #30 -->
+  <rect x="892" y="98" width="360" height="544" class="panel"/>
+  <text x="910" y="126" class="panel-title">3. Soberanía y el Agujero con LangGraph</text>
+
+  <rect x="910" y="144" width="324" height="196" class="card-purple"/>
+  <text x="926" y="166" class="card-title" fill="#5b21b6">Opciones de Residencia de Datos</text>
+  <text x="926" y="188" class="small-text">• <tspan font-weight="700">SaaS US (Default):</tspan> <tspan class="mono">api.smith.langchain.com</tspan></text>
+  <text x="926" y="208" class="small-text">• <tspan font-weight="700">SaaS Unión Europea (GDPR):</tspan></text>
+  <text x="926" y="226" class="mono" font-size="10.5" fill="#4c1d95">LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com</text>
+  <text x="926" y="248" class="small-text">• <tspan font-weight="700">Self-Hosted (Kubernetes en tu VPC):</tspan> los datos</text>
+  <text x="926" y="264" class="small-text">  nunca abandonan tu infraestructura bancaria/salud.</text>
+  <text x="926" y="284" class="small-text">• <tspan font-weight="700">Modo OTel-Only:</tspan> usa el SDK de LangSmith pero</text>
+  <text x="926" y="300" class="small-text">  exporta a tu Tempo/ClickHouse interno (<tspan class="mono">OTEL_ONLY=true</tspan>).</text>
+
+  <rect x="910" y="354" width="324" height="272" class="card-red"/>
+  <text x="926" y="376" class="card-title" fill="#b91c1c">Lo que el Notebook 30 de LangGraph NO Borra</text>
+  <text x="926" y="398" class="small-text">En el curso de LangGraph viste cómo borrar la memoria</text>
+  <text x="926" y="414" class="small-text">de un usuario en Postgres con:</text>
+  <text x="926" y="434" class="mono" font-size="10.5" fill="#7f1d1d">checkpointer.delete_thread(thread_id)</text>
+  <text x="926" y="458" class="small-text" fill="#b91c1c" font-weight="700">¡Eso borra el estado en tu base de datos, pero NO</text>
+  <text x="926" y="474" class="small-text" fill="#b91c1c">borra las trazas que ya se enviaron a LangSmith!</text>
+  <text x="926" y="498" class="small-text">Un sistema verdaderamente conforme con GDPR debe</text>
+  <text x="926" y="514" class="small-text">coordinar <tspan font-weight="700">ambos planos</tspan>:</text>
+  <text x="926" y="534" class="small-text">1. Redactar PII antes de trazar (<tspan class="mono">anonymizer</tspan>).</text>
+  <text x="926" y="552" class="small-text">2. Borrar <tspan class="mono">thread_id</tspan> en el checkpointer de LangGraph.</text>
+  <text x="926" y="570" class="small-text">3. Borrar ejemplos derivados en Datasets de LangSmith</text>
+  <text x="926" y="586" class="small-text">   y rotar la clave de seudonimización del usuario.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Coordinar LangGraph + LangSmith en GDPR exige redactar PII en origen, borrar el thread en el checkpointer y limpiar los datasets.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 05 · Notebook 17</text>
+</svg>

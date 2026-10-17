@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arr20m" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">PROTOCOLO MCP EN LANGGRAPH: CLIENTE, SEGURIDAD Y GRAFO COMO TOOL (20)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Cómo conectar múltiples servidores MCP (`MultiServerMCPClient`), los 3 detalles asíncronos y defensa contra Tool Poisoning</text>
+
+  <!-- Top Section: MultiServerMCPClient Architecture -->
+  <rect x="20" y="90" width="1080" height="225" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="38" y="116" class="panel-title">1. Arquitectura: `MultiServerMCPClient` Convierte Servidores MCP en `StructuredTool` de LangGraph</text>
+
+  <rect x="38" y="134" width="320" height="162" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="198" y="158" text-anchor="middle" class="card-title" style="fill:#1e40af;">Grafo LangGraph (`ToolNode`)</text>
+  <text x="52" y="184" class="mono" style="font-size:11px;fill:#1d4ed8;">client = MultiServerMCPClient({...})</text>
+  <text x="52" y="204" class="mono" style="font-size:11px;fill:#1d4ed8;">tools = await client.get_tools()</text>
+  <text x="52" y="228" class="body" style="font-size:11.5px;">• El grafo debe ejecutarse con</text>
+  <text x="52" y="246" class="mono" style="font-size:11px;fill:#dc2626;">  await graph.ainvoke(...) / astream</text>
+  <text x="52" y="266" class="body" style="font-size:11.5px;">  porque todas las tools MCP son</text>
+  <text x="52" y="284" class="body" style="font-size:11.5px;">  corutinas asíncronas (`coroutine`).</text>
+
+  <line x1="358" y1="185" x2="412" y2="165" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arr20m)"/>
+  <line x1="358" y1="235" x2="412" y2="255" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arr20m)"/>
+
+  <!-- Transport 1: stdio -->
+  <rect x="418" y="134" width="305" height="74" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="434" y="156" class="card-title" style="fill:#5b21b6;font-size:13px;">Transporte `stdio` (Subproceso Local)</text>
+  <text x="434" y="176" class="mono" style="font-size:11px;fill:#6d28d9;">command="python", args=["srv.py"]</text>
+  <text x="434" y="194" class="body" style="font-size:11px;">Ideal en desarrollo local o sidecar aislado.</text>
+
+  <!-- Transport 2: streamable_http -->
+  <rect x="418" y="222" width="305" height="74" rx="8" fill="#ecfdf5" stroke="#059669" stroke-width="1.5"/>
+  <text x="434" y="244" class="card-title" style="fill:#065f46;font-size:13px;">Transporte `streamable_http` (Producción)</text>
+  <text x="434" y="264" class="mono" style="font-size:11px;fill:#047857;">url="https://mcp.empresa.internal/mcp"</text>
+  <text x="434" y="282" class="body" style="font-size:11px;">Soporta cabeceras `Authorization` y escalado.</text>
+
+  <!-- Right Box inside Top Panel: The 3 Gotchas -->
+  <rect x="742" y="134" width="340" height="162" rx="8" fill="#0f172a"/>
+  <text x="758" y="158" class="card-title" style="fill:#38bdf8;font-size:13px;">Los 3 Detalles que Sorprenden:</text>
+  <text x="758" y="182" class="body" style="fill:#e2e8f0;font-size:11.5px;">1. <tspan style="font-weight:700;fill:#fbbf24;">Solo Async:</tspan> `graph.invoke()` síncrono lanza error con herramientas MCP.</text>
+  <text x="758" y="222" class="body" style="fill:#e2e8f0;font-size:11.5px;">2. <tspan style="font-weight:700;fill:#4ade80;">Bloques de contenido:</tspan> MCP devuelve listas de bloques (`TextContent`, `ImageContent`), no siempre un `str` plano.</text>
+  <text x="758" y="262" class="body" style="fill:#e2e8f0;font-size:11.5px;">3. <tspan style="font-weight:700;fill:#f87171;">Colisión de nombres:</tspan> prefija siempre las tools por servidor (`db__query`, `git__query`).</text>
+
+  <!-- Bottom Left: Security Against Untrusted MCP Servers -->
+  <rect x="20" y="330" width="535" height="225" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="330" width="535" height="36" rx="12" fill="#fee2e2"/>
+  <text x="36" y="353" class="panel-title" style="fill:#991b1b;">2. Seguridad: Un Servidor MCP Externo es Código de Terceros</text>
+
+  <text x="36" y="384" class="body">• <tspan style="font-weight:700;fill:#dc2626;">Tool Poisoning (Envenenamiento de Descripción):</tspan> un servidor MCP malicioso</text>
+  <text x="36" y="404" class="body">  mete instrucciones ocultas en el `description` de la herramienta para que tu</text>
+  <text x="36" y="422" class="body">  LLM lea ficheros locales y los envíe por parámetro.</text>
+
+  <rect x="36" y="436" width="503" height="104" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="52" y="458" class="card-title" style="fill:#991b1b;">4 Controles Obligatorios antes de hacer `bind_tools(mcp_tools)`:</text>
+  <text x="52" y="480" class="body" style="font-size:12px;">1. <tspan style="font-weight:700;">Lista blanca (`allowed_tools`):</tspan> nunca expongas todas las tools que anuncie el servidor.</text>
+  <text x="52" y="500" class="body" style="font-size:12px;">2. <tspan style="font-weight:700;">Sobrescribe `tool.description`</tspan> con tu propio texto auditado y congela el hash del schema.</text>
+  <text x="52" y="520" class="body" style="font-size:12px;">3. <tspan style="font-weight:700;">Sanea `env` en `stdio`:</tspan> no le pases `os.environ` completo con tus API keys al subproceso.</text>
+
+  <!-- Bottom Right: Rate Limiting & Exposing a LangGraph as an MCP Tool -->
+  <rect x="570" y="330" width="530" height="225" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="330" width="530" height="36" rx="12" fill="#dcfce7"/>
+  <text x="586" y="353" class="panel-title" style="fill:#166534;">3. Limitar Concurrencia (`Semaphore`) y Exponer un Grafo como MCP</text>
+
+  <text x="586" y="384" class="body">Si el LLM pide 15 llamadas MCP en un mismo turno, `ToolNode` las lanza todas a la vez:</text>
+  <rect x="586" y="396" width="498" height="68" rx="6" fill="#0f172a"/>
+  <text x="602" y="418" class="mono" style="fill:#38bdf8;">sem = asyncio.Semaphore(3)  # Máximo 3 peticiones concurrentes al servidor MCP</text>
+  <text x="602" y="440" class="mono" style="fill:#4ade80;">async def tool_protegida(**kwargs):</text>
+  <text x="602" y="456" class="mono" style="fill:#fbbf24;">    async with sem: return await asyncio.wait_for(mcp_tool.ainvoke(kwargs), 8.0)</text>
+
+  <text x="586" y="488" class="card-title" style="fill:#065f46;">Simetría Total: Tu Grafo LangGraph también puede ser un Servidor MCP</text>
+  <text x="586" y="510" class="body" style="font-size:12px;">Cualquier `StateGraph` compilado con `InputState` y `OutputState` claros puede</text>
+  <text x="586" y="530" class="body" style="font-size:12px;">envolverse en `@mcp.tool()` (o exponerse automáticamente en `/mcp` desde `langgraph.json`).</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Trata la salida de cualquier herramienta MCP como entrada no confiable: recórtala en longitud y aplica guardarraíles antes del LLM.</text>
+</svg>

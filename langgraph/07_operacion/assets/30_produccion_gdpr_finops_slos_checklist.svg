@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">EL RESTO DE PRODUCCIÓN: GDPR, FINOPS, MIGRACIÓN DE MODELO Y SLOs (30)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">La lista maestra de cierre: derecho al olvido en las 4 superficies, atribución de costes, matriz de cambio de LLM y backups</text>
+
+  <!-- 2x2 Grid of Day-2 Operations -->
+  <!-- Quadrant 1: GDPR Right to Erasure Across All 4 Surfaces -->
+  <rect x="20" y="90" width="535" height="225" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+  <rect x="20" y="90" width="535" height="36" rx="12" fill="#2563eb"/>
+  <text x="36" y="113" class="badge" style="font-size:13.5px;">1. Derecho al Olvido (GDPR Art. 17): Las 4 Superficies a Borrar</text>
+  <text x="36" y="142" class="body">Borrar al usuario de tu tabla `users` NO basta; sus datos siguen en el agente:</text>
+  <rect x="36" y="156" width="503" height="142" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="50" y="178" class="mono" style="fill:#1e40af;font-size:11.5px;">① Checkpointer: borrar todos sus thread_id en checkpoints, blobs y writes.</text>
+  <text x="50" y="202" class="mono" style="fill:#1e40af;font-size:11.5px;">② BaseStore:    borrar todo el prefijo namespace = ("users", user_id, ...).</text>
+  <text x="50" y="226" class="mono" style="fill:#1e40af;font-size:11.5px;">③ Caché / Vec:  invalidar entradas con user_id en Cache e índice vectorial.</text>
+  <text x="50" y="250" class="mono" style="fill:#1e40af;font-size:11.5px;">④ Trazas/Logs:  haber redactado PII en ingesta + pseudónimo con sal rotatoria.</text>
+  <text x="50" y="278" class="body" style="font-size:11.5px;fill:#15803d;font-weight:700;">✅ Emite un recibo de borrado auditable con conteos eliminados por superficie.</text>
+
+  <!-- Quadrant 2: Cost Attribution & Budget Guards -->
+  <rect x="570" y="90" width="530" height="225" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2"/>
+  <rect x="570" y="90" width="530" height="36" rx="12" fill="#059669"/>
+  <text x="586" y="113" class="badge" style="font-size:13.5px;">2. FinOps en LangGraph: Quién Paga Qué (`usage_metadata`)</text>
+  <text x="586" y="142" class="body">Cada `AIMessage` devuelto por el modelo incluye `response.usage_metadata`:</text>
+  <rect x="586" y="156" width="498" height="142" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="600" y="178" class="mono" style="fill:#065f46;font-size:11.5px;">input_tokens, output_tokens, input_token_details["cache_read"]</text>
+  <text x="600" y="202" class="body" style="font-size:12px;">• <tspan style="font-weight:700;">Por Nodo:</tspan> descubre si el 70% del gasto se va en el nodo `reescribir_rag`.</text>
+  <text x="600" y="224" class="body" style="font-size:12px;">• <tspan style="font-weight:700;">Por Tenant/Usuario:</tspan> suma en un reducer o middleware y degrada a modelo</text>
+  <text x="600" y="242" class="body" style="font-size:12px;">  Mini cuando el tenant supere su presupuesto diario.</text>
+  <text x="600" y="268" class="body" style="font-size:12px;">• <tspan style="font-weight:700;">Por Versión de Assistant:</tspan> detecta si un prompt nuevo encareció el ticket ×2.</text>
+
+  <!-- Quadrant 3: Safe Model Migration Protocol -->
+  <rect x="20" y="330" width="535" height="225" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+  <rect x="20" y="330" width="535" height="36" rx="12" fill="#7c3aed"/>
+  <text x="36" y="353" class="badge" style="font-size:13.5px;">3. Protocolo para Cambiar de Modelo LLM sin Sorpresas</text>
+  <text x="36" y="382" class="body">Los proveedores retiran versiones cada pocos meses. Nunca cambies a ciegas:</text>
+  <rect x="36" y="396" width="503" height="142" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="50" y="418" class="body" style="font-size:12px;">1. <tspan style="font-weight:700;fill:#5b21b6;">Replay sobre el Golden Set (Mód 17/27):</tspan> compara exactitud de `tool_calls`,</text>
+  <text x="50" y="436" class="body" style="font-size:12px;">   cumplimiento de `with_structured_output`, latencia p95 y coste por caso.</text>
+  <text x="50" y="460" class="body" style="font-size:12px;">2. <tspan style="font-weight:700;fill:#5b21b6;">Shadow / Canario por Assistant (Mód 18):</tspan> crea una nueva versión del</text>
+  <text x="50" y="478" class="body" style="font-size:12px;">   Assistant con el nuevo modelo y enruta el 5% del tráfico real.</text>
+  <text x="50" y="502" class="body" style="font-size:12px;">3. <tspan style="font-weight:700;fill:#5b21b6;">Pin de Versión Exacta:</tspan> usa siempre el ID fechado del modelo, nunca un alias</text>
+  <text x="50" y="520" class="body" style="font-size:12px;">   flotante (`-latest`) que cambie de comportamiento un viernes por la tarde.</text>
+
+  <!-- Quadrant 4: Backups, SLOs & Dependency Pinning -->
+  <rect x="570" y="330" width="530" height="225" rx="12" fill="#ffffff" stroke="#d97706" stroke-width="2"/>
+  <rect x="570" y="330" width="530" height="36" rx="12" fill="#d97706"/>
+  <text x="586" y="353" class="badge" style="font-size:13.5px;">4. Backups Verificados, SLOs Centrados en el Usuario y `uv.lock`</text>
+  <rect x="586" y="380" width="498" height="158" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="600" y="402" class="body" style="font-size:12px;">• <tspan style="font-weight:700;fill:#92400e;">Qué respaldar:</tspan> las 3 tablas del Checkpointer + la tabla del `Store` + el</text>
+  <text x="600" y="420" class="body" style="font-size:12px;">  manifiesto de versiones de Assistants. Un backup no probado no es un backup.</text>
+  <text x="600" y="446" class="body" style="font-size:12px;">• <tspan style="font-weight:700;fill:#92400e;">SLOs del Agente:</tspan> mide TTFT (tiempo al primer token &lt; 1.5s), tasa de</text>
+  <text x="600" y="464" class="body" style="font-size:12px;">  finalización sin `GraphRecursionError` (≥ 99%) y fidelidad en muestra online.</text>
+  <text x="600" y="490" class="body" style="font-size:12px;">• <tspan style="font-weight:700;fill:#92400e;">Actualizaciones de `langgraph` con `uv.lock`:</tspan> al subir versión, corre siempre</text>
+  <text x="600" y="508" class="body" style="font-size:12px;">  el test de round-trip de checkpoints (Mód 22) y la suite de trayectorias (Mód 27).</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Síntesis del Curso: Un agente de producción es 20% prompt y 80% ingeniería de sistemas (estado, contratos, límites, seguridad y evaluación).</text>
+</svg>

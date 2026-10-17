@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">COSTES Y FINOPS EN AGENTES: FÓRMULA DE TOKENS, CACHÉ Y TOPES (MÓDULO 13)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">El 5% de los tickets con bucles consume más del 40% del presupuesto mensual: cómo medirlo, atribuirlo y cortarlo</text>
+
+  <!-- Panel 1: Exact Cost Formula & Cache Break-Even -->
+  <rect x="20" y="90" width="535" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="535" height="38" rx="12" fill="#dcfce7"/>
+  <text x="36" y="114" class="panel-title" style="fill:#166534;">1. De Tokens a Dólares: La Ecuación Exacta con Caché</text>
+
+  <!-- Formula Box -->
+  <rect x="36" y="142" width="503" height="150" rx="8" fill="#0f172a"/>
+  <text x="52" y="166" class="mono" style="fill:#38bdf8;"># En OpenTelemetry, input_tokens INCLUYE los tokens de caché:</text>
+  <text x="52" y="192" class="mono" style="fill:#f8fafc;">regular_in = input_tokens - cache_read_tokens - cache_creation_tokens</text>
+  <text x="52" y="220" class="mono" style="fill:#4ade80;">cost_usd = (regular_in        × P_in)</text>
+  <text x="52" y="240" class="mono" style="fill:#4ade80;">         + (cache_read_tokens × P_in × 0.10)   # ¡90% descuento!</text>
+  <text x="52" y="260" class="mono" style="fill:#fbbf24;">         + (cache_creation    × P_in × 1.25)   # +25% recargo</text>
+  <text x="52" y="280" class="mono" style="fill:#f472b6;">         + (output_tokens     × P_out)         # 3x a 5x más caro</text>
+
+  <!-- Cache Break-even & Anti-patterns -->
+  <rect x="36" y="306" width="503" height="232" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="52" y="330" class="card-title" style="fill:#0f172a;">Punto de Equilibrio del Prompt Caching y Errores Típicos</text>
+  <text x="52" y="354" class="body">• Escribir en caché cuesta un <tspan style="font-weight:700;fill:#d97706;">+25% extra</tspan>, pero cada lectura ahorra un <tspan style="font-weight:700;fill:#16a34a;">90%</tspan>.</text>
+  <text x="52" y="376" class="body">• <tspan style="font-weight:700;">Break-even:</tspan> Con solo <tspan class="mono" style="fill:#166534;">1 lectura posterior (N ≥ 2 llamadas)</tspan> dentro del TTL (5 min), la caché ya ahorra dinero.</text>
+
+  <rect x="52" y="394" width="471" height="62" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="64" y="414" class="card-title" style="fill:#991b1b;font-size:12.5px;">❌ Cómo se rompe la caché sin darte cuenta (Hit Ratio = 0%):</text>
+  <text x="64" y="432" class="mono" style="font-size:11.5px;fill:#b91c1c;">system = f"Hoy es {datetime.now()} | Ticket {ticket_id}... [Reglas]"</text>
+  <text x="64" y="448" class="body" style="font-size:11.5px;fill:#7f1d1d;">El prefijo cambia en cada petición → pagas +25% de escritura siempre.</text>
+
+  <rect x="52" y="464" width="471" height="62" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="64" y="484" class="card-title" style="fill:#166534;font-size:12.5px;">✅ Diseño correcto del Prompt para alto Hit Ratio:</text>
+  <text x="64" y="502" class="mono" style="font-size:11.5px;fill:#15803d;">[Prefijo Estático: System + Tools Schema] + [Sufijo Dinámico: Ticket]</text>
+  <text x="64" y="518" class="body" style="font-size:11.5px;fill:#14532d;">Pon todo lo variable al final del prompt o en el mensaje del usuario.</text>
+
+  <!-- Panel 2: Cardinality Attribution + Budget Enforcer & Burn Rate -->
+  <rect x="570" y="90" width="530" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#fef3c7"/>
+  <text x="586" y="114" class="panel-title" style="fill:#92400e;">2. Atribución sin Explotar Prometheus y Control de Presupuesto</text>
+
+  <!-- Where to attribute table -->
+  <rect x="586" y="142" width="498" height="162" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="602" y="166" class="card-title">¿Dónde atribuir cada dimensión del gasto?</text>
+
+  <rect x="602" y="178" width="466" height="52" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="614" y="198" class="card-title" style="fill:#1e40af;font-size:13px;">Métricas (Prometheus): <tspan class="mono">supportops_cost_usd_total</tspan></text>
+  <text x="614" y="218" class="body" style="font-size:12px;">Solo baja cardinalidad: <tspan class="mono" style="fill:#1d4ed8;">model, agent_name, feature, customer_tier</tspan> (~180 series).</text>
+
+  <rect x="602" y="238" width="466" height="54" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="614" y="258" class="card-title" style="fill:#5b21b6;font-size:13px;">Trazas y Logs (Tempo / Loki): Atributo <tspan class="mono">supportops.cost_usd</tspan></text>
+  <text x="614" y="278" class="body" style="font-size:12px;">Alta cardinalidad: <tspan class="mono" style="fill:#6d28d9;">customer_id, ticket_id, trace_id</tspan> (Top-K clientes más caros).</text>
+
+  <!-- 3-Level Budget Enforcer & Burn Rate -->
+  <rect x="586" y="318" width="498" height="220" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="602" y="342" class="card-title">Cortafuegos FinOps en 3 Niveles (Defensa en Profundidad)</text>
+
+  <rect x="602" y="356" width="466" height="46" rx="6" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="614" y="376" class="card-title" style="font-size:13px;fill:#0f172a;">Nivel 1 · Por Petición (En Vivo):</text>
+  <text x="614" y="394" class="body" style="font-size:12px;">Tope <tspan class="mono">max_steps</tspan>, <tspan class="mono">max_cost_usd</tspan> por ticket y <tspan style="font-weight:700;fill:#dc2626;">detector de bucle</tspan> (<tspan class="mono">tool + args_hash</tspan> repetido).</text>
+
+  <rect x="602" y="410" width="466" height="52" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="614" y="430" class="card-title" style="font-size:13px;fill:#b45309;">Nivel 2 · Por Cliente / Día (Degradación Elegante):</text>
+  <text x="614" y="448" class="body" style="font-size:12px;">Al 80% de cuota diaria → <tspan style="font-weight:700;">downgrade automático</tspan> de <tspan class="mono">pro</tspan> a <tspan class="mono">mini</tspan>. Al 100% → bloqueo suave.</text>
+
+  <rect x="602" y="470" width="466" height="56" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="614" y="490" class="card-title" style="font-size:13px;fill:#991b1b;">Nivel 3 · Burn Rate Mensual y Alerta de Desvío:</text>
+  <text x="614" y="508" class="mono" style="font-size:11.5px;fill:#b91c1c;">burn_rate = tasa_gasto_actual / (presupuesto_mes / horas_mes)</text>
+  <text x="614" y="522" class="body" style="font-size:11.5px;">Si <tspan class="mono">burn_rate &gt; 2.0</tspan>, el presupuesto se agotará en la mitad del mes.</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Regla FinOps: Versiona tu tabla de precios con fecha de vigencia; si cambia la tarifa del proveedor, tus dashboards históricos no deben reescribirse.</text>
+</svg>

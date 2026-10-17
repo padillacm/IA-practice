@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 500" width="100%" height="500">
+  <style>
+    text { stroke: none !important; font-family: 'Segoe UI', system-ui, sans-serif; text-rendering: geometricPrecision; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; }
+  </style>
+  <rect width="1040" height="500" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" />
+  <rect width="1040" height="70" rx="16" fill="#0f172a" />
+  <rect y="48" width="1040" height="22" fill="#0f172a" />
+  <text x="36" y="34" font-size="21" font-weight="700" fill="#ffffff">AUTO-INSTRUMENTACIÓN vs. PATRÓN HÍBRIDO EN PRODUCCIÓN (MÓDULO 06)</text>
+  <text x="36" y="56" font-size="14" fill="#cbd5e1">Por qué la estrategia híbrida gana en agentes reales y por qué NUNCA debes redactar PII en on_end()</text>
+
+  <!-- Left Panel: Pure Auto-instrumentation vs Hybrid -->
+  <rect x="26" y="88" width="490" height="250" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2.5" />
+  <text x="46" y="118" font-size="17" font-weight="700" fill="#1e3a8a">1. El Patrón Híbrido (Manual + Automático)</text>
+
+  <rect x="46" y="134" width="450" height="82" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2" />
+  <text x="62" y="158" font-size="14" font-weight="700" fill="#5b21b6">CAPA EXTERIOR MANUAL (Tu código de negocio)</text>
+  <text x="62" y="180" font-size="13" fill="#0f172a" class="mono">with tracer.start_as_current_span("invoke_agent"):</text>
+  <text x="62" y="200" font-size="13" fill="#475569">Conoce ticket_id, customer_tier, intent y estado funcional.</text>
+
+  <rect x="76" y="228" width="420" height="92" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2" />
+  <text x="92" y="252" font-size="14" font-weight="700" fill="#1d4ed8">CAPA INTERIOR AUTOMÁTICA (Monkey-Patching SDK)</text>
+  <text x="92" y="274" font-size="13" fill="#0f172a" class="mono">OpenAI / Anthropic / HTTPX instrumentors</text>
+  <text x="92" y="294" font-size="13" fill="#334155">Cuelgan automáticamente del span raíz vía ContextVar</text>
+  <text x="92" y="310" font-size="13" fill="#334155">y capturan tokens, modelo y latencia de cada llamada.</text>
+
+  <!-- Right Panel: SpanProcessor lifecycle trap -->
+  <rect x="536" y="88" width="478" height="250" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="2.5" />
+  <text x="556" y="118" font-size="17" font-weight="700" fill="#7f1d1d">2. Trampa de Privacidad: on_start vs. on_end</text>
+
+  <rect x="556" y="134" width="438" height="82" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" />
+  <text x="572" y="158" font-size="14" font-weight="700" fill="#15803d" class="mono">on_start(span: Span, parent_context)  [MUTABLE]</text>
+  <text x="572" y="180" font-size="13" fill="#14532d">✅ Se ejecuta al abrir el span. Ideal para inyectar atributos</text>
+  <text x="572" y="200" font-size="13" fill="#14532d">del Baggage/Contexto (tenant_id, request_id) en todos los hijos.</text>
+
+  <rect x="556" y="228" width="438" height="92" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2" />
+  <text x="572" y="252" font-size="14" font-weight="700" fill="#b91c1c" class="mono">on_end(span: ReadableSpan)  [SOLO LECTURA]</text>
+  <text x="572" y="274" font-size="13" fill="#7f1d1d">❌ ¡El prompt y la respuesta se añadieron DURANTE el span!</text>
+  <text x="572" y="294" font-size="13" fill="#7f1d1d">En on_end el span ya es inmutable. Para redactar PII debes</text>
+  <text x="572" y="310" font-size="13" font-weight="700" fill="#991b1b">hacerlo ANTES de set_attribute(), en un Exporter wrapper o en el Collector.</text>
+
+  <!-- Bottom Decision Matrix Summary -->
+  <rect x="26" y="356" width="988" height="118" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <text x="46" y="386" font-size="16" font-weight="700" fill="#0f172a">⚖️ Regla de Decisión para Equipos de Ingeniería</text>
+  <text x="46" y="414" font-size="14" fill="#334155">• Prototipo rápido (Día 1): Auto-instrumentación pura (1 línea) para ver llamadas al LLM de inmediato.</text>
+  <text x="46" y="438" font-size="14" fill="#334155">• Producción con SLA/FinOps: Híbrido (spans de agente y herramientas manuales + atributos de negocio + control estricto de PII).</text>
+  <text x="46" y="460" font-size="14" font-weight="600" fill="#1e3a8a">• Recuerda fijar versiones: un cambio menor del SDK del proveedor LLM puede romper el monkey-patching silenciosamente.</text>
+</svg>

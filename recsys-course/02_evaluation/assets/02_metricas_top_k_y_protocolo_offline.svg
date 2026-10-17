@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 02 · EVALUACIÓN</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">EVALUACIÓN OFFLINE RIGUROSA: MÉTRICAS TOP-K, FULL-CATALOG Y BOOTSTRAP</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">Por qué el RMSE es ciego al orden de la lista + Anatomía matemática de Precision, Recall, MRR, MAP y NDCG@K</text>
+
+
+  <!-- Left Panel: Why RMSE Lies -->
+  <rect x="24" y="108" width="390" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="354" height="32" rx="8" fill="#fef2f2"/>
+  <text x="219" y="147" text-anchor="middle" fill="#b91c1c" font-size="14.5" font-weight="800">1. Por qué el RMSE Miente en Top-K</text>
+
+  <text x="44" y="178" fill="#334155" font-size="12">Dos modelos con el mismo error cuadrático global:</text>
+
+  <rect x="44" y="192" width="350" height="122" rx="8" fill="#fff1f2" stroke="#fda4af"/>
+  <text x="58" y="214" fill="#9f1239" font-size="13" font-weight="800">Modelo A: RMSE = 0.72 (Mal Recomendador)</text>
+  <text x="58" y="236" fill="#475569" font-size="11.5">• Clava las notas de 500 películas mediocres (2.5★)</text>
+  <text x="58" y="254" fill="#475569" font-size="11.5">  que el usuario jamás verá en su pantalla.</text>
+  <text x="58" y="274" fill="#dc2626" font-size="11.5" font-weight="700">• Falla el orden de las 5 favoritas (predice 4.1★</text>
+  <text x="58" y="292" fill="#dc2626" font-size="11.5" font-weight="700">  a obras maestras y 4.6★ a películas aburridas).</text>
+  <text x="58" y="308" fill="#9f1239" font-size="11.5" font-weight="700">Resultado: NDCG@10 = 0.14 (Fracaso en Home)</text>
+
+  <rect x="44" y="328" width="350" height="122" rx="8" fill="#ecfdf5" stroke="#6ee7b7"/>
+  <text x="58" y="350" fill="#065f46" font-size="13" font-weight="800">Modelo B: RMSE = 0.89 (Gran Recomendador)</text>
+  <text x="58" y="372" fill="#475569" font-size="11.5">• Comete más error en las películas de 1★–3★.</text>
+  <text x="58" y="392" fill="#047857" font-size="11.5" font-weight="700">• Pero separa y ordena impecablemente el Top-10</text>
+  <text x="58" y="410" fill="#047857" font-size="11.5" font-weight="700">  de películas que el usuario realmente consume.</text>
+  <text x="58" y="434" fill="#065f46" font-size="11.5" font-weight="700">Resultado: NDCG@10 = 0.42 (+200% clics reales)</text>
+
+  <rect x="44" y="464" width="350" height="164" rx="8" fill="#0f172a"/>
+  <text x="58" y="488" fill="#38bdf8" font-size="12.5" font-weight="700">Ejemplo en Mano (Proyecto 02):</text>
+  <text x="58" y="510" fill="#e2e8f0" font-size="11.5" class="mono">Recomendación Top-5: [10, 25, 42, 88, 91]</text>
+  <text x="58" y="530" fill="#34d399" font-size="11.5" class="mono">Verdad Test (G_u)  : {25, 91, 99} (|G_u|=3)</text>
+  <text x="58" y="552" fill="#fbbf24" font-size="11.5" class="mono">Vector de aciertos : [ 0,  1,  0,  0,  1]</text>
+  <text x="58" y="576" fill="#cbd5e1" font-size="11.5">• Posición 2 (ítem 25): descuento 1 / log2(2+1)</text>
+  <text x="58" y="596" fill="#cbd5e1" font-size="11.5">• Posición 5 (ítem 91): descuento 1 / log2(5+1)</text>
+  <text x="58" y="616" fill="#38bdf8" font-size="11.5" font-weight="700">• MRR@5 = 1/2 = 0.50 | Recall@5 = 2/3 = 0.667</text>
+
+  <!-- Center Panel: The 6 Ranking Metrics -->
+  <rect x="430" y="108" width="444" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="448" y="126" width="408" height="32" rx="8" fill="#eff6ff"/>
+  <text x="652" y="147" text-anchor="middle" fill="#1d4ed8" font-size="14.5" font-weight="800">2. Las 6 Métricas de Ranking (cinematch_eval)</text>
+
+  <!-- Metric cards -->
+  <rect x="448" y="170" width="408" height="68" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="464" y="192" fill="#0f172a" font-size="13" font-weight="800">① HitRate@K  &amp;  ② Precision@K</text>
+  <text x="464" y="212" fill="#2563eb" font-size="11.5" class="mono">HR@K = 1[|R_u@K ∩ G_u| &gt; 0]   |   P@K = |R_u@K ∩ G_u| / K</text>
+  <text x="464" y="230" fill="#64748b" font-size="11">No les importa en qué posición dentro del Top-K cayó el acierto.</text>
+
+  <rect x="448" y="248" width="408" height="68" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="464" y="270" fill="#0f172a" font-size="13" font-weight="800">③ Recall@K (Sensibilidad de Candidatos)</text>
+  <text x="464" y="290" fill="#7c3aed" font-size="11.5" class="mono">Recall@K = |R_u@K ∩ G_u| / |G_u|   (o min(K, |G_u|) capped)</text>
+  <text x="464" y="308" fill="#64748b" font-size="11">Métrica reina de la Etapa 1 (Retrieval): ¿atrapamos los relevantes?</text>
+
+  <rect x="448" y="326" width="408" height="68" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="464" y="348" fill="#0f172a" font-size="13" font-weight="800">④ MRR@K (Mean Reciprocal Rank)</text>
+  <text x="464" y="368" fill="#ea580c" font-size="11.5" class="mono">MRR@K = 1 / rank_primer_acierto   (0 si no hay acierto en K)</text>
+  <text x="464" y="386" fill="#64748b" font-size="11">Ideal cuando el usuario solo necesita UN gran resultado arriba.</text>
+
+  <rect x="448" y="404" width="408" height="68" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text x="464" y="426" fill="#0f172a" font-size="13" font-weight="800">⑤ MAP@K (Mean Average Precision)</text>
+  <text x="464" y="446" fill="#0891b2" font-size="11.5" class="mono">AP@K = (1 / min(K, |G_u|)) · Σ_{k=1..K} P@k · rel(k)</text>
+  <text x="464" y="464" fill="#64748b" font-size="11">Premia concentrar todos los relevantes en las primeras posiciones.</text>
+
+  <rect x="448" y="482" width="408" height="146" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="464" y="506" fill="#065f46" font-size="13.5" font-weight="800">⑥ NDCG@K (Normalized Discounted Cumulative Gain) ★</text>
+  <text x="464" y="528" fill="#047857" font-size="12" class="mono">DCG@K  = Σ_{k=1..K} (2^{rel_k} - 1) / log2(k + 1)</text>
+  <text x="464" y="548" fill="#047857" font-size="12" class="mono">NDCG@K = DCG@K / IDCG@K   (donde IDCG ordena G_u perfecto)</text>
+  <text x="464" y="574" fill="#065f46" font-size="11.5">• Descuento logarítmico suave: k=1 vale 1.0, k=2 vale 0.63, k=10 vale 0.29.</text>
+  <text x="464" y="594" fill="#065f46" font-size="11.5">• Soporta relevancia binaria {0,1} y graduada (ratings / minutos vistos).</text>
+  <text x="464" y="614" fill="#059669" font-size="11.5" font-weight="700">• Estándar universal para evaluar Ranking en producción.</text>
+
+  <!-- Right Panel: Protocol Traps & Paired Bootstrap -->
+  <rect x="890" y="108" width="366" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="908" y="126" width="330" height="32" rx="8" fill="#fff7ed"/>
+  <text x="1073" y="147" text-anchor="middle" fill="#c2410c" font-size="14.5" font-weight="800">3. Protocolo Honesto vs Trampas</text>
+
+  <rect x="908" y="172" width="330" height="140" rx="10" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="922" y="194" fill="#991b1b" font-size="13" font-weight="800">✗ Trampa 1: Negativos Muestreados (1:99)</text>
+  <text x="922" y="214" fill="#475569" font-size="11.5">Rankear el ítem positivo contra 99 aleatorios</text>
+  <text x="922" y="232" fill="#475569" font-size="11.5">(Krichene &amp; Rendle, KDD 2020):</text>
+  <text x="922" y="252" fill="#dc2626" font-size="11.5" font-weight="700">• ¡Invierte el orden relativo entre modelos!</text>
+  <text x="922" y="272" fill="#047857" font-size="11.5" font-weight="700">✓ Siempre evalúa contra TODO el catálogo</text>
+  <text x="922" y="290" fill="#047857" font-size="11.5" font-weight="700">  enmascarando con -∞ los vistos en Train.</text>
+
+  <rect x="908" y="326" width="330" height="144" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="922" y="348" fill="#1e40af" font-size="13" font-weight="800">✓ Paired Bootstrap (Intervalos IC 95%)</text>
+  <text x="922" y="368" fill="#475569" font-size="11.5">¿NDCG 0.084 vs 0.081 es mejora real o ruido?</text>
+  <text x="922" y="388" fill="#1e3a8a" font-size="11.5">1. Calcula diff por usuario: d_u = m_A(u) - m_B(u)</text>
+  <text x="922" y="406" fill="#1e3a8a" font-size="11.5">2. Remuestrea B=1,000 veces con reemplazo</text>
+  <text x="922" y="424" fill="#1e3a8a" font-size="11.5">3. Si el IC [p2.5%, p97.5%] de Δ NO cruza el 0,</text>
+  <text x="922" y="444" fill="#2563eb" font-size="11.5" font-weight="700">   la mejora es estadísticamente significativa.</text>
+
+  <rect x="908" y="484" width="330" height="144" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="922" y="506" fill="#0f172a" font-size="13" font-weight="800">✓ Desglose por Segmentos (Slicing)</text>
+  <text x="922" y="528" fill="#475569" font-size="11.5">Nunca reportes solo la media global. Audita:</text>
+  <text x="922" y="548" fill="#334155" font-size="11.5">• <tspan font-weight="700">Cold users (1–5 eventos)</tspan> vs Power users (&gt;100)</text>
+  <text x="922" y="568" fill="#334155" font-size="11.5">• <tspan font-weight="700">Head items</tspan> vs <tspan font-weight="700">Tail items</tspan></text>
+  <text x="922" y="590" fill="#475569" font-size="11.5">Un modelo puede subir el promedio global</text>
+  <text x="922" y="608" fill="#dc2626" font-size="11.5" font-weight="700">destruyendo la experiencia de usuarios nuevos.</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">Regla del Módulo 02: Enmascarar SIEMPRE los ítems ya consumidos en Train (scores[seen] = -inf) antes de extraer el argpartition Top-K.</text>
+</svg>

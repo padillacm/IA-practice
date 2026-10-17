@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arr12" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">TRAZAS A TRAVÉS DE SERVIDORES MCP Y HERRAMIENTAS REMOTAS (MÓDULO 12)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Cruzar la frontera de proceso con JSON-RPC (_meta.traceparent), desglose de latencia y detección de Rug Pull</text>
+
+  <!-- Top Section: Two Processes Crossing Boundary -->
+  <rect x="20" y="90" width="1080" height="270" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="38" y="116" class="panel-title">1. Una Llamada, Dos Procesos: Propagación W3C dentro de JSON-RPC (_meta)</text>
+
+  <!-- Process A: Agent Client -->
+  <rect x="38" y="132" width="380" height="210" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <rect x="38" y="132" width="380" height="32" rx="10" fill="#2563eb"/>
+  <text x="228" y="153" text-anchor="middle" class="badge" style="font-size:13px;">PROCESO A · Agente SupportOps (Cliente MCP)</text>
+
+  <rect x="54" y="176" width="348" height="70" rx="6" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="68" y="196" class="mono" style="fill:#1d4ed8;">Span CLIENT: execute_tool get_order</text>
+  <text x="68" y="216" class="mono" style="font-size:11.5px;fill:#334155;">mcp.method.name = "tools/call"</text>
+  <text x="68" y="234" class="mono" style="font-size:11.5px;fill:#334155;">gen_ai.tool.name = "get_order"</text>
+
+  <rect x="54" y="256" width="348" height="72" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="68" y="276" class="card-title" style="fill:#991b1b;font-size:12.5px;">⚠️ Trampa del SDK MCP (call_tool):</text>
+  <text x="68" y="294" class="body" style="font-size:11.5px;">No pasa <tspan class="mono">meta=</tspan> por defecto. Usa <tspan class="mono" style="fill:#b91c1c;">send_request(CallToolRequestParams(_meta=...))</tspan></text>
+  <text x="68" y="312" class="body" style="font-size:11.5px;">para inyectar <tspan class="mono">traceparent</tspan> y <tspan class="mono">baggage</tspan>.</text>
+
+  <!-- Middle JSON-RPC Wire -->
+  <rect x="436" y="168" width="248" height="145" rx="8" fill="#0f172a"/>
+  <text x="560" y="190" text-anchor="middle" class="mono" style="fill:#38bdf8;">JSON-RPC (stdio / HTTP SSE)</text>
+  <text x="450" y="214" class="mono" style="fill:#e2e8f0;font-size:11px;">"params": {</text>
+  <text x="462" y="232" class="mono" style="fill:#e2e8f0;font-size:11px;">"name": "get_order",</text>
+  <text x="462" y="250" class="mono" style="fill:#4ade80;font-size:11px;">"_meta": {</text>
+  <text x="474" y="268" class="mono" style="fill:#4ade80;font-size:11px;">"traceparent": "00-4bf9..."</text>
+  <text x="462" y="286" class="mono" style="fill:#4ade80;font-size:11px;">}</text>
+  <text x="450" y="302" class="mono" style="fill:#e2e8f0;font-size:11px;">}</text>
+  <line x1="418" y1="220" x2="434" y2="220" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arr12)"/>
+  <line x1="684" y1="220" x2="700" y2="220" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arr12)"/>
+
+  <!-- Process B: MCP Server -->
+  <rect x="702" y="132" width="380" height="210" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="2"/>
+  <rect x="702" y="132" width="380" height="32" rx="10" fill="#059669"/>
+  <text x="892" y="153" text-anchor="middle" class="badge" style="font-size:13px;">PROCESO B · Servidor MCP (Pedidos / KB)</text>
+
+  <rect x="718" y="176" width="348" height="72" rx="6" fill="#ffffff" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="732" y="196" class="mono" style="fill:#047857;">Span SERVER: tools/call get_order</text>
+  <text x="732" y="216" class="body" style="font-size:12px;">Extrae <tspan class="mono">_meta.traceparent</tspan> en el middleware</text>
+  <text x="732" y="234" class="mono" style="font-size:11.5px;fill:#065f46;">└─ Span INTERNAL: db.query SELECT orders</text>
+
+  <rect x="718" y="258" width="348" height="70" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="732" y="278" class="card-title" style="fill:#166534;font-size:12.5px;">Overhead de Cruzar la Frontera:</text>
+  <text x="732" y="296" class="mono" style="font-size:11.5px;fill:#14532d;">overhead = duracion(CLIENT) - duracion(SERVER)</text>
+  <text x="732" y="314" class="body" style="font-size:11.5px;">Mide serialización JSON + red + cola del bucle de eventos.</text>
+
+  <!-- Bottom Section: 3 Pillars of MCP Security & Reliability -->
+  <rect x="20" y="375" width="350" height="235" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="375" width="350" height="36" rx="12" fill="#fef3c7"/>
+  <text x="36" y="398" class="panel-title" style="fill:#92400e;">2. Tres Modos de Fallo en MCP</text>
+  <text x="36" y="428" class="body">• <tspan style="font-weight:700;fill:#b45309;">1. Error de transporte:</tspan> Servidor caído o timeout; NO existe span SERVER.</text>
+  <text x="36" y="468" class="body">• <tspan style="font-weight:700;fill:#dc2626;">2. Excepción JSON-RPC:</tspan> Ambos spans (<tspan class="mono">CLIENT</tspan> y <tspan class="mono">SERVER</tspan>) marcan <tspan class="mono">STATUS_ERROR</tspan>.</text>
+  <text x="36" y="508" class="body">• <tspan style="font-weight:700;fill:#7c3aed;">3. Fallo de negocio (isError=true):</tspan> El transporte devuelve HTTP 200 OK; tu middleware debe leer <tspan class="mono">result.isError</tspan> y marcar error.</text>
+
+  <rect x="385" y="375" width="350" height="235" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="385" y="375" width="350" height="36" rx="12" fill="#dbeafe"/>
+  <text x="401" y="398" class="panel-title" style="fill:#1e40af;">3. Idempotencia y Confianza</text>
+  <text x="401" y="428" class="body">• <tspan style="font-weight:700;">Herramientas destructivas</tspan> (<tspan class="mono">issue_refund</tspan>): obligatoria clave <tspan class="mono" style="fill:#1d4ed8;">idempotency_key</tspan> en span y llamada para evitar reembolsos dobles en reintentos.</text>
+  <text x="401" y="485" class="body">• <tspan style="font-weight:700;">Frontera de confianza:</tspan> Servidor MCP propio → continúa la traza (padre-hijo). Servidor MCP de terceros → inicia traza nueva y usa <tspan class="mono" style="fill:#1d4ed8;">SpanLink</tspan>.</text>
+
+  <rect x="750" y="375" width="350" height="235" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="750" y="375" width="350" height="36" rx="12" fill="#fee2e2"/>
+  <text x="766" y="398" class="panel-title" style="fill:#991b1b;">4. Seguridad: Rug Pull y PII</text>
+  <text x="766" y="428" class="body">• <tspan style="font-weight:700;fill:#dc2626;">Ataque Rug Pull:</tspan> Un servidor MCP externo cambia silenciosamente el <tspan class="mono">description</tspan> o <tspan class="mono">inputSchema</tspan> de una herramienta para inyectar instrucciones.</text>
+  <text x="766" y="485" class="body">• <tspan style="font-weight:700;fill:#166534;">Defensa en Telemetría:</tspan> Registra <tspan class="mono" style="fill:#991b1b;">mcp.tool.schema_hash</tspan> (SHA-256 de nombre + descripción + schema) y alerta si cambia sin release.</text>
+  <text x="766" y="542" class="body">• <tspan style="font-weight:700;">Lista blanca:</tspan> Nunca guardes argumentos crudos con PII en el span.</text>
+</svg>

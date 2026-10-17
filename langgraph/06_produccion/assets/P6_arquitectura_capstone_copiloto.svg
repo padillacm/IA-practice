@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arrp6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrp6p" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrp6g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">CAPSTONE P6: ARQUITECTURA DEL COPILOTO DE SOPORTE DE PRODUCCIÓN</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Integración de extremo a extremo: Memoria (`Store`), Triaje Estructurado, Subgrafo RAG/Tools, Guardarraíl y Aprobación HITL</text>
+
+  <!-- Main End-to-End Graph Flow -->
+  <rect x="20" y="90" width="1080" height="310" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="38" y="116" class="panel-title">1. Topología del Grafo Completo (`InputState` → `CopilotState` → `OutputState`)</text>
+
+  <!-- Node 1: Cargar Memoria -->
+  <rect x="38" y="148" width="175" height="96" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="125" y="172" text-anchor="middle" class="card-title" style="fill:#1e40af;">1. `cargar_contexto`</text>
+  <text x="125" y="194" text-anchor="middle" class="mono" style="font-size:11px;fill:#1d4ed8;">store.search(</text>
+  <text x="125" y="212" text-anchor="middle" class="mono" style="font-size:11px;fill:#1d4ed8;">  ("clientes", id))</text>
+  <text x="125" y="232" text-anchor="middle" class="body" style="font-size:11px;">Lee preferencias y SLA</text>
+
+  <line x1="213" y1="196" x2="245" y2="196" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrp6)"/>
+
+  <!-- Node 2: Triaje -->
+  <rect x="250" y="148" width="185" height="96" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <text x="342" y="172" text-anchor="middle" class="card-title" style="fill:#5b21b6;">2. `triaje` (Structured)</text>
+  <text x="342" y="194" text-anchor="middle" class="mono" style="font-size:11px;fill:#6d28d9;">intent, urgencia,</text>
+  <text x="342" y="212" text-anchor="middle" class="mono" style="font-size:11px;fill:#6d28d9;">requiere_accion</text>
+  <text x="342" y="232" text-anchor="middle" class="mono" style="font-size:11px;fill:#4c1d95;">Command(goto=...)</text>
+
+  <line x1="435" y1="196" x2="467" y2="196" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arrp6p)"/>
+
+  <!-- Node 3: Subgrafo Investigacion (RAG + Tools) -->
+  <rect x="472" y="136" width="220" height="120" rx="10" fill="#ecfdf5" stroke="#059669" stroke-width="2.5"/>
+  <text x="582" y="160" text-anchor="middle" class="card-title" style="fill:#065f46;">3. Subgrafo `investigar`</text>
+  <text x="582" y="182" text-anchor="middle" class="mono" style="font-size:11px;fill:#047857;">• RAG Híbrido (BM25+Vec)</text>
+  <text x="582" y="200" text-anchor="middle" class="mono" style="font-size:11px;fill:#047857;">• Tools con ToolRuntime</text>
+  <text x="582" y="218" text-anchor="middle" class="mono" style="font-size:11px;fill:#047857;">• Esquema aislado SubState</text>
+  <text x="582" y="240" text-anchor="middle" class="body" style="font-size:11px;">Devuelve solo evidencia + citas</text>
+
+  <line x1="692" y1="196" x2="724" y2="196" stroke="#059669" stroke-width="2.5" marker-end="url(#arrp6g)"/>
+
+  <!-- Node 4: Redactor + Guardrail Loop -->
+  <rect x="729" y="148" width="180" height="96" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <text x="819" y="172" text-anchor="middle" class="card-title" style="fill:#1e40af;">4. `redactar` + `validar`</text>
+  <text x="819" y="194" text-anchor="middle" class="body" style="font-size:11px;">Verifica citas, PII y</text>
+  <text x="819" y="212" text-anchor="middle" class="body" style="font-size:11px;">política comercial.</text>
+  <text x="819" y="230" text-anchor="middle" class="mono" style="font-size:10.5px;fill:#dc2626;">Reintenta máx 2 veces</text>
+
+  <line x1="909" y1="196" x2="936" y2="196" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrp6)"/>
+
+  <!-- Node 5: HITL Approval + Consolidate Memory -->
+  <rect x="941" y="136" width="142" height="120" rx="8" fill="#fffbeb" stroke="#d97706" stroke-width="2"/>
+  <text x="1012" y="160" text-anchor="middle" class="card-title" style="fill:#b45309;">5. `aprobacion`</text>
+  <text x="1012" y="182" text-anchor="middle" class="mono" style="font-size:11px;fill:#92400e;">interrupt(...)</text>
+  <text x="1012" y="202" text-anchor="middle" class="body" style="font-size:11px;">Si reembolso &gt; $50</text>
+  <text x="1012" y="222" text-anchor="middle" class="mono" style="font-size:10.5px;fill:#047857;">↓</text>
+  <text x="1012" y="240" text-anchor="middle" class="mono" style="font-size:11px;fill:#047857;">6. `guardar_mem`</text>
+
+  <!-- Security & Defense Strip inside Top Panel -->
+  <rect x="38" y="274" width="1044" height="110" rx="8" fill="#0f172a"/>
+  <text x="54" y="298" class="card-title" style="fill:#38bdf8;">Fronteras de Seguridad y Fiabilidad Verificadas en el Capstone:</text>
+  <text x="54" y="322" class="mono" style="fill:#4ade80;font-size:11.5px;">✓ Identidad del cliente (`customer_id`) inyectada por `Runtime[Context]`, nunca elegida por el LLM.</text>
+  <text x="54" y="344" class="mono" style="fill:#fbbf24;font-size:11.5px;">✓ Reembolsos protegidos por `interrupt()` + clave de idempotencia determinista.</text>
+  <text x="54" y="366" class="mono" style="fill:#c084fc;font-size:11.5px;">✓ `RetryPolicy` en nodos de red, `RemainingSteps` en el subgrafo y suite de evaluación de 3 niveles.</text>
+
+  <!-- Bottom Section: Production Readiness Checklist -->
+  <rect x="20" y="415" width="1080" height="195" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="38" y="442" class="panel-title">2. Los 4 Criterios de Aceptación del Capstone (Evaluación Cuantitativa)</text>
+
+  <rect x="38" y="458" width="248" height="134" rx="8" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="162" y="482" text-anchor="middle" class="card-title" style="fill:#1e40af;">1. Precisión de Triaje</text>
+  <text x="52" y="508" class="body" style="font-size:11.5px;">• Exactitud ≥ 95% en intención</text>
+  <text x="52" y="528" class="body" style="font-size:11.5px;">  y detección del 100% de casos</text>
+  <text x="52" y="548" class="body" style="font-size:11.5px;">  que requieren aprobación.</text>
+
+  <rect x="302" y="458" width="248" height="134" rx="8" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="426" y="482" text-anchor="middle" class="card-title" style="fill:#065f46;">2. Fidelidad y Citas RAG</text>
+  <text x="316" y="508" class="body" style="font-size:11.5px;">• Cero citas inventadas.</text>
+  <text x="316" y="528" class="body" style="font-size:11.5px;">• Abstención correcta cuando la</text>
+  <text x="316" y="548" class="body" style="font-size:11.5px;">  política no cubre la consulta.</text>
+
+  <rect x="566" y="458" width="248" height="134" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="690" y="482" text-anchor="middle" class="card-title" style="fill:#991b1b;">3. Resistencia Adversarial</text>
+  <text x="580" y="508" class="body" style="font-size:11.5px;">• Bloqueo del 100% de intentos</text>
+  <text x="580" y="528" class="body" style="font-size:11.5px;">  de leer pedidos de otro cliente</text>
+  <text x="580" y="548" class="body" style="font-size:11.5px;">  o saltarse el tope de reembolso.</text>
+
+  <rect x="830" y="458" width="252" height="134" rx="8" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="956" y="482" text-anchor="middle" class="card-title" style="fill:#5b21b6;">4. Memoria Multi-Sesión</text>
+  <text x="844" y="508" class="body" style="font-size:11.5px;">• Un nuevo `thread_id` del mismo</text>
+  <text x="844" y="528" class="body" style="font-size:11.5px;">  cliente recupera sus datos del</text>
+  <text x="844" y="548" class="body" style="font-size:11.5px;">  `Store` en el primer turno.</text>
+</svg>

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 580" width="100%">
+  <defs>
+    <style>
+      
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+
+      @keyframes raceCollision {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(6px); }
+      }
+      @keyframes streamPulse {
+        0% { stroke-dashoffset: 140; }
+        100% { stroke-dashoffset: 0; }
+      }
+      .race-box {
+        animation: raceCollision 1.5s ease-in-out infinite;
+      }
+      .sse-line {
+        stroke-dasharray: 8 5;
+        animation: streamPulse 1.8s linear infinite;
+      }
+    </style>
+  </defs>
+  <rect width="1120" height="580" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">CONCURRENCIA POR THREAD_ID, DOUBLE TEXTING Y SERVIDOR SSE (24 · ANIMACIÓN)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">El grafo compilado es thread-safe, pero un mismo `thread_id` NO lo es: condiciones de carrera y las 4 estrategias multitarea</text>
+
+  <!-- Left Panel: Race Condition on Same thread_id vs Per-Thread Lock -->
+  <rect x="20" y="90" width="535" height="415" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="535" height="38" rx="12" fill="#fee2e2"/>
+  <text x="36" y="114" class="panel-title" style="fill:#991b1b;">1. Condición de Carrera cuando Llegan 2 Peticiones al Mismo `thread_id`</text>
+
+  <rect x="36" y="140" width="503" height="162" rx="8" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="52" y="164" class="card-title" style="fill:#991b1b;">❌ Sin Cerrojo por `thread_id` (El usuario hace doble clic o envía 2 mensajes):</text>
+  <rect x="52" y="178" width="471" height="46" rx="6" fill="#ffffff" stroke="#fca5a5" stroke-width="1.5" class="race-box"/>
+  <text x="64" y="198" class="mono" style="fill:#b91c1c;font-size:11.5px;">t=0.0s: Petición A lee Checkpoint C1  |  t=0.1s: Petición B TAMBIÉN lee C1</text>
+  <text x="64" y="216" class="mono" style="fill:#b91c1c;font-size:11.5px;">t=1.2s: A escribe C2a (hijo de C1)    |  t=1.4s: B escribe C2b (¡pisa a C2a!)</text>
+  <text x="52" y="248" class="body" style="font-size:12px;fill:#7f1d1d;">Resultado: el hilo se bifurca sin querer y la respuesta de la Petición A desaparece</text>
+  <text x="52" y="268" class="body" style="font-size:12px;fill:#7f1d1d;">de la rama principal aunque las hayas pagado las dos.</text>
+
+  <rect x="36" y="314" width="503" height="175" rx="8" fill="#0f172a"/>
+  <text x="52" y="338" class="card-title" style="fill:#4ade80;">✅ El Arreglo en Tu Servidor Propio: Cerrojo por `thread_id`</text>
+  <text x="52" y="364" class="mono" style="fill:#38bdf8;"># En 1 proceso: dict[thread_id, asyncio.Lock] | En N pods: pg_advisory_lock / Redis</text>
+  <text x="52" y="388" class="mono" style="fill:#f8fafc;">lock = obtener_lock(thread_id)</text>
+  <text x="52" y="408" class="mono" style="fill:#fbbf24;">if lock.locked():  # Estrategia "reject": devuelve HTTP 409 Conflict</text>
+  <text x="52" y="428" class="mono" style="fill:#fbbf24;">    raise HTTPException(409, "El hilo ya tiene una ejecución en curso")</text>
+  <text x="52" y="448" class="mono" style="fill:#4ade80;">async with lock:</text>
+  <text x="52" y="468" class="mono" style="fill:#4ade80;">    return await graph.ainvoke(entrada, config=cfg)</text>
+
+  <!-- Right Panel: The 4 Double-Texting Strategies & Client Disconnection -->
+  <rect x="570" y="90" width="530" height="415" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#dbeafe"/>
+  <text x="586" y="114" class="panel-title" style="fill:#1e40af;">2. Las 4 Estrategias de *Double Texting* (`multitask_strategy`)</text>
+
+  <rect x="586" y="140" width="242" height="92" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="707" y="162" text-anchor="middle" class="card-title" style="fill:#991b1b;">1. `reject` (HTTP 409)</text>
+  <text x="600" y="184" class="body" style="font-size:11.5px;">Rechaza el segundo mensaje mientras</text>
+  <text x="600" y="202" class="body" style="font-size:11.5px;">el primero corre. Ideal para pagos</text>
+  <text x="600" y="220" class="body" style="font-size:11.5px;">y operaciones transaccionales.</text>
+
+  <rect x="842" y="140" width="242" height="92" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="963" y="162" text-anchor="middle" class="card-title" style="fill:#1e40af;">2. `enqueue` (Encolar FIFO)</text>
+  <text x="856" y="184" class="body" style="font-size:11.5px;">Espera a que termine el Run 1 y</text>
+  <text x="856" y="202" class="body" style="font-size:11.5px;">ejecuta el Run 2 sobre el estado C2</text>
+  <text x="856" y="220" class="body" style="font-size:11.5px;">resultante. Cero pérdida de datos.</text>
+
+  <rect x="586" y="242" width="242" height="92" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="707" y="264" text-anchor="middle" class="card-title" style="fill:#92400e;">3. `interrupt` (Pausar 1º)</text>
+  <text x="600" y="286" class="body" style="font-size:11.5px;">Cancela el Run 1 pero <tspan style="font-weight:700;">conserva</tspan></text>
+  <text x="600" y="304" class="body" style="font-size:11.5px;">los pasos que ya completó antes de</text>
+  <text x="600" y="322" class="body" style="font-size:11.5px;">arrancar el Run 2 con el nuevo input.</text>
+
+  <rect x="842" y="242" width="242" height="92" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="963" y="264" text-anchor="middle" class="card-title" style="fill:#5b21b6;">4. `rollback` (Rebobinar 1º)</text>
+  <text x="856" y="286" class="body" style="font-size:11.5px;">Cancela el Run 1 y <tspan style="font-weight:700;">borra</tspan> sus</text>
+  <text x="856" y="304" class="body" style="font-size:11.5px;">checkpoints parciales como si nunca</text>
+  <text x="856" y="322" class="body" style="font-size:11.5px;">hubiera existido; lanza el Run 2.</text>
+
+  <!-- Client Disconnection on SSE -->
+  <rect x="586" y="346" width="498" height="143" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="602" y="370" class="card-title" style="fill:#166534;">3. ¿Qué deja escrito una Desconexión del Cliente en mitad de SSE?</text>
+  <line x1="602" y1="384" x2="1060" y2="384" stroke="#16a34a" stroke-width="2.5" class="sse-line"/>
+  <text x="602" y="408" class="body" style="font-size:12px;">• Si el cliente cierra la pestaña, Starlette lanza `asyncio.CancelledError` en el generador.</text>
+  <text x="602" y="430" class="body" style="font-size:12px;">• Si cancelas el grafo a mitad de un turno con `AIMessage(tool_calls)` ya guardado pero</text>
+  <text x="602" y="450" class="body" style="font-size:12px;">  <tspan style="font-weight:700;fill:#dc2626;">sin su `ToolMessage`</tspan>, el hilo queda corrupto para el próximo mensaje. <tspan style="font-weight:700;fill:#15803d;">Solución:</tspan> ejecuta</text>
+  <text x="602" y="470" class="body" style="font-size:12px;">  el grafo en un `asyncio.Task` con `asyncio.shield()` para que termine el paso limpio.</text>
+
+  <!-- Footer -->
+  <rect x="20" y="520" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="547" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Compila el grafo UNA sola vez al arrancar el servidor; es inmutable y seguro compartirlo entre miles de corutinas.</text>
+</svg>

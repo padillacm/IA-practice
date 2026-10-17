@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">STREAMING EN LANGGRAPH: LOS 7 MODOS Y CUÁNDO USAR CADA UNO (11)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Cómo combinar `stream_mode=["updates", "messages", "custom"]` y observar el interior de los subgrafos con `subgraphs=True`</text>
+
+  <!-- Left Panel: The 7 Stream Modes Comparison Matrix -->
+  <rect x="20" y="90" width="600" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="600" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#1e40af;">1. Catálogo de los 7 Modos de `graph.stream(..., stream_mode=...)`</text>
+
+  <rect x="36" y="138" width="568" height="52" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="50" y="158" class="mono" style="fill:#1d4ed8;">1. "updates"   → {nombre_nodo: delta_devuelto}</text>
+  <text x="50" y="178" class="body" style="font-size:11.5px;">El modo más ligero y usado para barras de progreso («Acaba de terminar el nodo X»).</text>
+
+  <rect x="36" y="198" width="568" height="52" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="50" y="218" class="mono" style="fill:#334155;">2. "values"    → Estado completo tras cada super-paso</text>
+  <text x="50" y="238" class="body" style="font-size:11.5px;">Útil para sincronizar un store de UI completo, pero más pesado en red si el estado es grande.</text>
+
+  <rect x="36" y="258" width="568" height="52" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="50" y="278" class="mono" style="fill:#5b21b6;">3. "messages"  → (AIMessageChunk, metadata_dict)</text>
+  <text x="50" y="298" class="body" style="font-size:11.5px;">Emite token a token desde cualquier LLM del grafo; filtra por <tspan class="mono">metadata["langgraph_node"]</tspan>.</text>
+
+  <rect x="36" y="318" width="568" height="52" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="50" y="338" class="mono" style="fill:#047857;">4. "custom"    → Cualquier payload emitido con get_stream_writer()</text>
+  <text x="50" y="358" class="body" style="font-size:11.5px;">Tu canal propio desde dentro de un nodo o tool: <tspan class="mono">writer({"progreso": "3/10 docs"})</tspan>.</text>
+
+  <rect x="36" y="378" width="568" height="52" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="50" y="398" class="mono" style="fill:#b45309;">5. "checkpoints" / 6. "tasks" → Snapshots y ciclo de vida de tareas</text>
+  <text x="50" y="418" class="body" style="font-size:11.5px;">Ideales para depuradores visuales, auditoría de reintentos y visualización de `Send()`.</text>
+
+  <rect x="36" y="438" width="568" height="52" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="50" y="458" class="mono" style="fill:#991b1c;">7. "debug"     → Unión de checkpoints + tasks con tiempos exactos</text>
+  <text x="50" y="478" class="body" style="font-size:11.5px;">Máximo detalle de diagnóstico durante el desarrollo.</text>
+
+  <text x="36" y="518" class="body" style="font-size:12px;">• <tspan style="font-weight:700;fill:#0f172a;">¿Y `astream_events(version="v2")`?</tspan> Es la API de bajo nivel de LangChain Runnable</text>
+  <text x="36" y="538" class="body" style="font-size:12px;">  (`on_chat_model_stream`, `on_tool_start`); en LangGraph prefiere `stream_mode` combinado.</text>
+
+  <!-- Right Panel: Combining Multiple Modes & Subgraphs -->
+  <rect x="640" y="90" width="460" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="640" y="90" width="460" height="38" rx="12" fill="#ede9fe"/>
+  <text x="656" y="114" class="panel-title" style="fill:#5b21b6;">2. Receta de Producción: Multi-Modo + Subgrafos</text>
+
+  <rect x="656" y="140" width="428" height="196" rx="8" fill="#0f172a"/>
+  <text x="672" y="164" class="mono" style="fill:#38bdf8;">for ns, modo, chunk in graph.stream(</text>
+  <text x="672" y="184" class="mono" style="fill:#4ade80;">    entrada,</text>
+  <text x="672" y="204" class="mono" style="fill:#fbbf24;">    stream_mode=["updates", "messages", "custom"],</text>
+  <text x="672" y="224" class="mono" style="fill:#c084fc;">    subgraphs=True,</text>
+  <text x="672" y="244" class="mono" style="fill:#38bdf8;">):</text>
+  <text x="672" y="268" class="mono" style="fill:#f8fafc;font-size:11px;">    # ns = () en el grafo raíz</text>
+  <text x="672" y="286" class="mono" style="fill:#f8fafc;font-size:11px;">    # ns = ("investigador:4a9b...",) en subgrafo</text>
+  <text x="672" y="306" class="mono" style="fill:#94a3b8;font-size:11px;">    # modo = "updates" | "messages" | "custom"</text>
+
+  <rect x="656" y="350" width="428" height="188" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="672" y="374" class="card-title">Trampa Común al Filtrar Tokens en `stream_mode="messages"`:</text>
+  <text x="672" y="398" class="body" style="font-size:12px;">Si tu grafo tiene un nodo `clasificador` (JSON interno) y un nodo `redactor`</text>
+  <text x="672" y="418" class="body" style="font-size:12px;">(respuesta al usuario), <tspan style="font-weight:700;fill:#dc2626;">ambos emiten tokens</tspan> en `stream_mode="messages"`.</text>
+  <rect x="672" y="434" width="396" height="88" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="686" y="456" class="card-title" style="fill:#166534;font-size:12.5px;">✅ Filtra siempre por nodo o tag:</text>
+  <text x="686" y="478" class="mono" style="font-size:11px;fill:#15803d;">msg_chunk, meta = chunk</text>
+  <text x="686" y="496" class="mono" style="font-size:11px;fill:#15803d;">if meta.get("langgraph_node") == "redactor":</text>
+  <text x="686" y="514" class="mono" style="font-size:11px;fill:#15803d;">    enviar_al_frontend(msg_chunk.content)</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">En Python asíncrono (FastAPI/Starlette), usa siempre async for ... in graph.astream(...) para no bloquear el event loop.</text>
+</svg>

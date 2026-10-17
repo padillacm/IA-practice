@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 17 · MLOPS &amp; CT</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">MLOPS PARA RECOMENDADORES: DATA DRIFT (PSI), CT PIPELINE Y GATES</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">Por qué los modelos de recomendación envejecen en días y cómo automatizar re-entrenamiento, validación y promoción segura</text>
+
+
+  <!-- Left Panel: Model Rot & Drift Detection (PSI / JS / Coverage) -->
+  <rect x="24" y="108" width="604" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="568" height="32" rx="8" fill="#fef2f2"/>
+  <text x="326" y="147" text-anchor="middle" fill="#b91c1c" font-size="14.5" font-weight="800">1. Por qué un Recomendador Envejece y Cómo Medir el Drift (Proyecto 17)</text>
+
+  <!-- 3 Sources of Decay -->
+  <rect x="44" y="172" width="564" height="126" rx="10" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="62" y="194" fill="#9f1239" font-size="13" font-weight="800">Las 3 Causas de Degradación Silenciosa (Model Decay):</text>
+  <text x="62" y="216" fill="#475569" font-size="11.5">1. <tspan font-weight="700" fill="#dc2626">Rotación del Catálogo:</tspan> Los estrenos de esta semana concentran el 30% del interés</text>
+  <text x="76" y="234" fill="#475569" font-size="11.5">pero un modelo estático entrenado hace 1 mes ni siquiera los tiene en su tabla de IDs.</text>
+  <text x="62" y="254" fill="#475569" font-size="11.5">2. <tspan font-weight="700" fill="#dc2626">Deriva de Concepto / Estacionalidad:</tspan> Halloween, Navidad, estrenos virales.</text>
+  <text x="62" y="274" fill="#475569" font-size="11.5">3. <tspan font-weight="700" fill="#dc2626">Data Pipeline Breakage:</tspan> Una columna de feature pasa a llegar en NULL o con otra unidad.</text>
+
+  <!-- PSI & JS Divergence Formulas -->
+  <rect x="44" y="312" width="564" height="184" rx="10" fill="#0f172a"/>
+  <text x="64" y="336" fill="#38bdf8" font-size="13" font-weight="700">Sensores Matemáticos de Deriva en Entrada y Salida:</text>
+  <rect x="64" y="348" width="524" height="40" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="326" y="373" text-anchor="middle" fill="#34d399" font-size="12.5" class="mono">PSI = Σ_{b=1..B} ( p_{actual,b} - p_{ref,b} ) · ln( p_{actual,b} / p_{ref,b} )</text>
+  <text x="64" y="410" fill="#e2e8f0" font-size="11.5">• <tspan font-weight="700" fill="#34d399">PSI &lt; 0.10:</tspan> Estable (Verde)  |  <tspan font-weight="700" fill="#fbbf24">0.10 ≤ PSI &lt; 0.25:</tspan> Vigilar  |  <tspan font-weight="700" fill="#f87171">PSI ≥ 0.25:</tspan> Drift Severo (Rojo)</text>
+  <text x="64" y="432" fill="#cbd5e1" font-size="11.5">• <tspan font-weight="700" fill="#a78bfa">Divergencia Jensen-Shannon (JSD):</tspan> mide si la distribución de géneros recomendados</text>
+  <text x="64" y="450" fill="#cbd5e1" font-size="11.5">  en las salidas del modelo hoy se ha desviado respecto a la distribución histórica.</text>
+  <text x="64" y="472" fill="#fbbf24" font-size="11.5" font-weight="700">• Alerta de Colapso de Salida: Caída brusca en Catalog Coverage@10 o COPC ∉ [0.9, 1.1].</text>
+
+  <!-- Retraining Cadence Tradeoff -->
+  <rect x="44" y="510" width="564" height="120" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="62" y="532" fill="#1e40af" font-size="13" font-weight="800">Política de Re-entrenamiento: ¿Ventana Deslizante o Historia Completa?</text>
+  <text x="62" y="554" fill="#334155" font-size="11.5">• <tspan font-weight="700">Full History:</tspan> Más datos para la Long-Tail, pero lento de entrenar y arrastras modas viejas.</text>
+  <text x="62" y="574" fill="#334155" font-size="11.5">• <tspan font-weight="700">Sliding Window (ej. últimos 90 días) + Decaimiento:</tspan> Se adapta rápido a tendencias actuales.</text>
+  <text x="62" y="596" fill="#1d4ed8" font-size="11.5" font-weight="700">• Trigger Híbrido: Programado (diario/semanal) + Reactivo si PSI &gt; 0.25 o % ítems nuevos &gt; 5%.</text>
+
+  <!-- Right Panel: Continuous Training Pipeline with Prefect + MLflow + Promotion Gate -->
+  <rect x="644" y="108" width="612" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="662" y="126" width="576" height="32" rx="8" fill="#ecfdf5"/>
+  <text x="950" y="147" text-anchor="middle" fill="#047857" font-size="14.5" font-weight="800">2. Pipeline de Entrenamiento Continuo (CT): Prefect + MLflow + Promotion Gate</text>
+
+  <!-- Step 1: Data Validation Gate -->
+  <rect x="664" y="172" width="572" height="78" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+  <text x="684" y="196" fill="#0f172a" font-size="13" font-weight="800">Paso 1 · Data Contract &amp; Schema Gate (Antes de Tocar una GPU)</text>
+  <text x="684" y="216" fill="#475569" font-size="11.5">Verifica esquema, rango de ratings [1, 5], % de nulos = 0%, volumen mínimo de eventos</text>
+  <text x="684" y="234" fill="#dc2626" font-size="11.5" font-weight="700">y ausencia de timestamps en el futuro. Si falla → aborta el flow y mantiene el Champion.</text>
+
+  <line x1="950" y1="250" x2="950" y2="272" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+
+  <!-- Step 2: Train Challenger & Log to MLflow -->
+  <rect x="664" y="274" width="572" height="90" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="1.8"/>
+  <text x="684" y="298" fill="#1e40af" font-size="13" font-weight="800">Paso 2 · Entrenamiento del Challenger + Registro en MLflow</text>
+  <text x="684" y="318" fill="#334155" font-size="11.5">• Registra <tspan font-weight="700">hash del dataset</tspan>, commit de git, hiperparámetros y artefactos serializados.</text>
+  <text x="684" y="338" fill="#334155" font-size="11.5">• Evalúa en la ventana temporal más reciente <tspan class="mono">[T_val, T_now]</tspan> a TRES contendientes:</text>
+  <text x="698" y="354" fill="#1d4ed8" font-size="11.5" font-weight="700">(1) Nuevo Challenger, (2) Actual Champion en producción, y (3) Baseline Popularidad.</text>
+
+  <line x1="950" y1="364" x2="950" y2="386" stroke="#059669" stroke-width="2.5" marker-end="url(#arrowGreen)"/>
+
+  <!-- Step 3: Automated Promotion Gate -->
+  <rect x="664" y="388" width="572" height="144" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2.2"/>
+  <text x="684" y="412" fill="#065f46" font-size="13.5" font-weight="800">Paso 3 · El Guardián de Promoción (Automated Promotion Gate) ★</text>
+  <text x="684" y="434" fill="#047857" font-size="11.5">El Challenger SOLO se promueve a <tspan class="mono" font-weight="700">@champion</tspan> si supera las 4 puertas simultáneamente:</text>
+  <text x="698" y="454" fill="#065f46" font-size="11.5" class="mono">✓ Gate 1 (Calidad)   : NDCG@10(Challenger) ≥ NDCG@10(Champion) - ε_tol</text>
+  <text x="698" y="474" fill="#065f46" font-size="11.5" class="mono">✓ Gate 2 (Sanidad)   : NDCG@10(Challenger) &gt; NDCG@10(Popularidad) · 1.10</text>
+  <text x="698" y="494" fill="#065f46" font-size="11.5" class="mono">✓ Gate 3 (Diversidad): Coverage@10 ≥ 0.15  &amp;  Golden Users Jaccard &gt; 0.20</text>
+  <text x="698" y="514" fill="#065f46" font-size="11.5" class="mono">✓ Gate 4 (Sistemas)  : Latencia p99 en Benchmark &lt; 45 ms</text>
+
+  <line x1="950" y1="532" x2="950" y2="554" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arrowPurple)"/>
+
+  <!-- Step 4: Canary & Instant Rollback -->
+  <rect x="664" y="556" width="572" height="74" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.8"/>
+  <text x="684" y="580" fill="#5b21b6" font-size="13" font-weight="800">Paso 4 · Shadow / Canary Deployment (5% → 50% → 100%) + Rollback en 1 Clic</text>
+  <text x="684" y="600" fill="#475569" font-size="11.5">El Model Registry conserva los N últimos artefactos inmutables; volver atrás es reasignar el alias</text>
+  <text x="684" y="618" fill="#5b21b6" font-size="11.5" font-weight="700"><tspan class="mono">@champion</tspan> a la versión N-1 sin recompilar ni re-entrenar nada.</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">Regla MLOps: Nunca sobrescribas el modelo en producción sin evaluar también al Champion anterior sobre los datos nuevos de hoy.</text>
+</svg>
