@@ -24,6 +24,9 @@ Los siete módulos tenían muy buena base: intuición con tabla ML / backend / S
 - **21 Playbook / mesa:** caja 🧭; prerrequisitos reales; recuadro «predice → mira → compara» (ejemplo resuelto que se desvanece hacia la mesa); protocolo de la mesa (15 min por incidente, 6 pasos, orden sugerido B, D, A, E, C); 🔁 +Q03. Verificado que las alertas de los cinco incidentes son neutrales (solo síntoma) y que cada incidente trae 3-5 cambios plausibles con ruido; los datos necesarios para cada diagnóstico están en la lección (variantes resueltas).
 - **22 Capstone:** tabla «Qué reutilizas de cada módulo» (paso → módulos → qué releer); ADR corto resuelto en la lección; pistas en pasos 2, 5, 6, 7, 8; 🔁 +Q21; prerrequisitos concretos.
 
+## Guía de estudio (`GUIA_DE_ESTUDIO.md`)
+Ciclo de 6 pasos por módulo (recuperar → leer/ejecutar → proyecto sin solución → pistas → autoevaluación → repaso espaciado), tabla de los 23 módulos con nivel, horas de cabecera frente a **horas reales** (suma de los tres informes: ≈ 118 h frente a ≈ 105 h anunciadas), grafo de prerrequisitos y mapa de conceptos en mermaid, ruta núcleo de ≈ 60 h, rutas por objetivo (trabajo actual ≈ 87 h, producto propio ≈ 87 h, entrevistas, depuración rápida), calendarios de 8 (núcleo), 12 y 16 semanas, escalera de ayuda cuando te atascas, hitos por bloque, mapa de los criterios del brief → módulos y glosario ES/EN de ≈ 50 términos. **Corrige las rutas del README**, que omitían prerrequisitos (el 10 exige 07 y 08; el 22 reutiliza 16 y 20); el README ya apunta a la guía.
+
 ## Pendientes (cambios grandes, no abordados)
 - **Duraciones reales.** Las cabeceras dicen ≈ 4,5 h por módulo; por nº de celdas y densidad, 18-21 son más cercanos a 5-5,5 h (20 con 84 celdas, 21 con 79). La guía lo refleja; las cabeceras no se tocaron para no divergir del README.
 - **Niveles 14-15.** Las cabeceras de los módulos 14 y 15 dicen 🔴 y el README raíz 🟠 (rango de P2); conviene unificar.

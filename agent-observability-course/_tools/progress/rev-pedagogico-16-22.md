@@ -8,7 +8,7 @@ Agente: Revisor pedagógico P3 · Módulos: 16–22 + GUIA_DE_ESTUDIO.md · Info
 - [x] 21_elite_playbook
 - [x] 22_capstone
 - [x] GUIA_DE_ESTUDIO.md (borrador completo; P1 aún sin informe: horas 00-07 de cabeceras; revisar al llegar REVISION_PEDAGOGICA_1.md) (ruta, tiempos, mapa mermaid, glosario ES/EN; tras leer los informes P1 y P2)
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - Helpers en /tmp/claude-0/s (ph.py rep(n,old,new), commit.sh). Cambios 16: nivel 🟠, ejemplo resuelto §2, 🔁 +Módulo 09, pistas 1/2 en TODO 1,3,4a,5,6. Solo md cambiado (sin re-ejecutar).
@@ -20,3 +20,4 @@ Agente: Revisor pedagógico P3 · Módulos: 16–22 + GUIA_DE_ESTUDIO.md · Info
 - 21: faltaba 🧭 (78 celdas, compendio 74) -> añadida; prereqs reales (03,09,11,13,15,16,18,20); 🔁 +Q módulo 03 (caso E); predice-mira-compara; protocolo de mesa (15 min/incidente, orden B,D,A,E,C). Mesa: alertas neutrales y cambios con ruido OK (verificado). Caveat: Pista 2 de INC-C/E casi algorítmica.
 - 22: tabla 'Qué reutilizas de cada módulo' en proyecto; pistas Paso 2,5,6,7,8; ADR corto resuelto en §9; 🔁 +Q módulo 21; prereqs concretos.
 - Guía escrita y README actualizado; informe REVISION_PEDAGOGICA_3.md escrito. Falta: esperar _1.md, ajustar horas 00-07 de la guía, check_course y cierre.
+- Guía final con horas de P1/P2/P3 (≈118 h reales); check_course OK; informe actualizado. Listo para entrega.

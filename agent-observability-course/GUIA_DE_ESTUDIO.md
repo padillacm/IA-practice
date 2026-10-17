@@ -2,7 +2,7 @@
 
 Cómo recorrer los 23 módulos (00-22) sin perderte, cuánto tiempo reservar de verdad, qué hacer cuando te atascas y cómo se corresponde el curso con lo que pediste. Esta guía **no añade contenido técnico**: ordena el que ya está en los módulos.
 
-> **Sobre las horas.** El README anuncia ≈ 100 h (≈ 4,3 h por módulo) y las cabeceras de los cuadernos suman ≈ 105 h. Contando el número de celdas y la densidad de cada módulo, el tiempo *real* de un alumno que parte de cero en Docker, agentes y observabilidad es **≈ 110-115 h** con todas las ampliaciones y **≈ 60 h** si sigues la ruta núcleo de abajo. Son **estimaciones razonadas**, no mediciones con alumnos: ajusta tu ritmo tras el módulo 03.
+> **Sobre las horas.** El README anuncia ≈ 100 h (≈ 4,3 h por módulo) y las cabeceras de los cuadernos suman ≈ 105 h. Contando el número de celdas y la densidad de cada módulo, el tiempo *real* de un alumno que parte de cero en Docker, agentes y observabilidad es **≈ 115-120 h** con todas las ampliaciones (≈ 118 h sumando las estimaciones de los tres revisores pedagógicos) y **≈ 60 h** si sigues la ruta núcleo de abajo. Son **estimaciones razonadas**, no mediciones con alumnos: ajusta tu ritmo tras el módulo 03.
 
 ## 1. Cómo estudiar cada módulo (el ciclo de 6 pasos)
 
@@ -25,14 +25,14 @@ Niveles del README: 🟢 Básico · 🟡 Intermedio · 🟠 Avanzado · 🔴 Exp
 
 | Módulo | Nivel | Cabecera | **Horas reales** | Núcleo | Prerrequisitos directos | Qué construyes (proyecto) |
 |---|---|---|---|---|---|---|
-| 00 Entorno | 🟢 | 4 h | **4 h** | 4 h | Python | Stack arriba y primer dashboard |
-| 01 Agente base | 🟢 | 4,3 h | **4,5 h** | 3,5 h | 00 | SupportOps extendido y 3 fallos reproducidos |
-| 02 Tres pilares | 🟢 | 4,5 h | **4,5 h** | 4 h | 00, 01 | Clasificar 10 incidentes por señal |
-| 03 SDK de OTel | 🟡 | 4,5 h | **4,5 h** | 4,5 h | 01, 02 | SupportOps v0 instrumentado |
-| 04 Convenciones GenAI | 🟡 | 4,5 h | **4,5 h** | 4 h | 03 | Modelo del agente validado con un linter |
-| 05 Collector | 🟡 | 4,5 h | **4,5 h** | 4,5 h | 00, 03, 04 | Collector que exporta a los tres backends |
-| 06 Auto-instrumentación | 🟡 | 4,5 h | **4,5 h** | 2 h | 01, 03-05 | Matriz de decisión manual vs auto |
-| 07 Tempo y TraceQL | 🟡 | 4,5 h | **4,5 h** | 4,5 h | 03-06 | Consultas de diagnóstico sobre trazas |
+| 00 Entorno | 🟢 | 4 h | **4,5 h** | 3,5 h | Python | Stack arriba y primer dashboard |
+| 01 Agente base | 🟢 | 4,3 h | **5 h** | 3,5 h | 00 | SupportOps extendido y 3 fallos reproducidos |
+| 02 Tres pilares | 🟢 | 4,5 h | **5 h** | 3,5 h | 00, 01 | Clasificar 10 incidentes por señal |
+| 03 SDK de OTel | 🟡 | 4,5 h | **5,5 h** | 4 h | 01, 02 | SupportOps v0 instrumentado |
+| 04 Convenciones GenAI | 🟡 | 4,5 h | **5 h** | 3,5 h | 03 | Modelo del agente validado con un linter |
+| 05 Collector | 🟡 | 4,5 h | **5,5 h** | 4 h | 00, 03, 04 | Collector que exporta a los tres backends |
+| 06 Auto-instrumentación | 🟡 | 4,5 h | **5 h** | 3,5 h | 01, 03-05 | Matriz de decisión manual vs auto |
+| 07 Tempo y TraceQL | 🟡 | 4,5 h | **6 h** | 4,5 h | 03-06 | Consultas de diagnóstico sobre trazas |
 | 08 Loki y LogQL | 🟡 | 4,5 h | **5 h** | 4,5 h | 02, 05, 07 | Pipeline de logs correlacionados |
 | 09 Métricas | 🟡 | 4,5 h | **5,5 h** | 4,5 h | 02-05 | Métricas de negocio y de modelo |
 | 10 Grafana | 🟡 | 4,5 h | **5 h** | 4,5 h | 07, 08, 09 | Dashboard «Salud del agente» |
@@ -48,9 +48,9 @@ Niveles del README: 🟢 Básico · 🟡 Intermedio · 🟠 Avanzado · 🔴 Exp
 | 20 Privacidad y seguridad | 🔴 | 4,5 h | **5,5 h** | 3 h | 04, 05, 08, 12, 16 | Pipeline de redacción y alertas de inyección |
 | 21 Playbook de élite | 🔴 | 4,5 h | **5 h** | 3,5 h | 03, 09, 11, 13, 15, 16, 18, 20 | «Mesa de incidentes»: 5 incidentes sin pistas |
 | 22 Capstone | 🔴 | 4,5 h | **4,5 h** | 3 h | todo (sobre todo 05, 09, 11, 14, 16, 18-21) | Plataforma completa y revisión de arquitectura |
-| | | **≈ 105 h** | **≈ 112 h** | **≈ 60 h** (solo los módulos de la ruta núcleo, §3.1) | | |
+| | | **≈ 105 h** | **≈ 118 h** | **≈ 60 h** (solo los módulos de la ruta núcleo, §3.1) | | |
 
-Notas: los módulos **09 y 11** (≈ 100 y ≈ 90 celdas) y **20 y 21** (≈ 84 y ≈ 79) son los más cargados; usa su caja 🧭 / dos sesiones. El **19** es el primero que exige tener `helm` y, idealmente, `kind`/`k3d` (si no, funciona con los datos pregrabados). Los módulos 00-07 y 14-15 muestran la duración de su cabecera; si el informe de los revisores 1 y 2 ajusta alguna, prevalece este cuadro con una desviación de ± 0,5 h por módulo.
+Notas: los módulos **09 y 11** (≈ 100 y ≈ 90 celdas) y **20 y 21** (≈ 84 y ≈ 79) son los más cargados; usa su caja 🧭 / dos sesiones. El **19** es el primero que exige tener `helm` y, idealmente, `kind`/`k3d` (si no, funciona con los datos pregrabados). Las horas reales de 00-07, 08-15 y 16-22 salen de los informes de revisión pedagógica 1, 2 y 3 (`_tools/REVISION_PEDAGOGICA_*.md`): un alumno que parte de cero necesita ≈ 1 h más que la cabecera en los módulos con más Docker o más conceptos nuevos (03, 05, 07, 09, 11, 12, 18-20), incluidas las primeras descargas y los fallos normales.
 
 ### Prerrequisitos entre módulos
 
@@ -104,9 +104,9 @@ flowchart TD
 ## 3. Itinerarios
 
 ### 3.1 Ruta núcleo (≈ 60 h): lo mínimo para operar un agente con este stack
-Módulos **00-05, 06 (solo conceptos y matriz, ≈ 2 h), 07-10, 13, 16, 18 (núcleo §1-8 y §12), 21 (núcleo: método + 5 casos)**. Para cada módulo hazlo con su caja 🧭 de ruta núcleo. Te deja con: un agente instrumentado, un pipeline de Collector, consultas en Tempo/Loki/Prometheus, un dashboard, un SLO con alerta multiventana, control de coste y un método de depuración. **No** cubre multi-agente (11-12), evaluación online (14-15), profiling (17), Kubernetes (19), privacidad (20) ni capstone (22).
+Módulos **00-05, 06 (núcleo: conceptos y matriz de decisión), 07-10, 13, 16, 18 (núcleo §1-8 y §12), 21 (núcleo: método + 5 casos)**. Para cada módulo hazlo con su caja 🧭 de ruta núcleo. Te deja con: un agente instrumentado, un pipeline de Collector, consultas en Tempo/Loki/Prometheus, un dashboard, un SLO con alerta multiventana, control de coste y un método de depuración. **No** cubre multi-agente (11-12), evaluación online (14-15), profiling (17), Kubernetes (19), privacidad (20) ni capstone (22).
 
-### 3.2 Ruta completa (≈ 110-115 h)
+### 3.2 Ruta completa (≈ 115-120 h)
 Todos los módulos en orden, con sus ampliaciones. Es el camino hacia el nivel «experto de empresa top» y la única que incluye el capstone.
 
 ### 3.3 Por objetivo
@@ -114,10 +114,10 @@ La tabla corrige un detalle de las rutas del README: **no se puede hacer el 10 s
 
 | Objetivo | Módulos | Horas | Para qué te sirve |
 |---|---|---|---|
-| **Trabajo actual** (tengo agentes en producción que monitorear) | 00-05, **07-10**, 13, **14-15** (calidad: tu mayor riesgo silencioso), 16, 18, 20, 21; 11-12 si tu sistema es multi-agente o usa MCP | ≈ 82 h (+ 11 h con 11-12) | Instrumentar con el estándar, ver trazas/logs/métricas, calidad y coste, SLOs y alertas, privacidad e incidentes |
-| **Producto propio** (observabilidad barata y seria desde el día 1) | 00-10, 13, 16, 18, 19, 20, 22 (21 recomendado) | ≈ 82 h (+ 5 h con el 21) | Stack propio versionable, coste controlado, despliegue como código y una revisión de arquitectura defendible |
+| **Trabajo actual** (tengo agentes en producción que monitorear) | 00-05, **07-10**, 13, **14-15** (calidad: tu mayor riesgo silencioso), 16, 18, 20, 21; 11-12 si tu sistema es multi-agente o usa MCP | ≈ 87 h (+ 11 h con 11-12) | Instrumentar con el estándar, ver trazas/logs/métricas, calidad y coste, SLOs y alertas, privacidad e incidentes |
+| **Producto propio** (observabilidad barata y seria desde el día 1) | 00-10, 13, 16, 18, 19, 20, 22 (21 recomendado) | ≈ 87 h (+ 5 h con el 21) | Stack propio versionable, coste controlado, despliegue como código y una revisión de arquitectura defendible |
 | **Entrevistas / system design** | Ruta núcleo + 11, 14-15, 18, 21, 22 y `extras/ENTREVISTAS_SYSTEM_DESIGN.md` | ≈ 85 h | Diseño de plataforma, trade-offs y casos de fallo |
-| **Tengo poco tiempo, solo quiero depurar mejor** | 02, 07, 08, 21 (lección) | ≈ 17 h | Método de análisis, TraceQL/LogQL y los cinco patrones de fallo |
+| **Tengo poco tiempo, solo quiero depurar mejor** | 02, 07, 08, 21 (lección) | ≈ 18 h | Método de análisis, TraceQL/LogQL y los cinco patrones de fallo |
 
 Después de cualquier ruta: `extras/RUTA_DE_CARRERA.md` (roles, certificaciones, comunidad) y `21_elite_playbook/COMPENDIO_SECRETOS.md` como lista de comprobación antes de cada despliegue.
 
@@ -127,22 +127,22 @@ Una **sesión** = 2-3 h. Las semanas marcan horas aproximadas; si una semana se 
 ### 4.1 En 8 semanas · ruta núcleo (≈ 60 h, 7-8 h por semana)
 | Semana | Módulos | Horas | Hito de salida |
 |---|---|---|---|
-| 1 | 00, 01 | 8 | Stack arriba y SupportOps con 3 fallos reproducidos |
-| 2 | 02, 03 | 8,5 | Primeras trazas de tu agente |
-| 3 | 04, 05 | 8,5 | Collector exportando a los tres backends |
-| 4 | 06 (solo conceptos), 07 | 6,5 | Diagnóstico con TraceQL |
+| 1 | 00, 01 | 7 | Stack arriba y SupportOps con 3 fallos reproducidos |
+| 2 | 02, 03 | 7,5 | Primeras trazas de tu agente |
+| 3 | 04, 05 | 7,5 | Collector exportando a los tres backends |
+| 4 | 06 (núcleo), 07 | 8 | Diagnóstico con TraceQL |
 | 5 | 08, 09 | 9 | Logs con `trace_id` y métricas de negocio |
 | 6 | 10, 13 | 9 | Dashboard «Salud del agente» y alerta de coste |
 | 7 | 16, 18 (núcleo) | 8 | SLO con alerta multiventana y política de muestreo |
 | 8 | 21 (núcleo) + repaso | 5 | Resolver ≥ 3 incidentes de la mesa; repasa tus errores |
 
-### 4.2 En 12 semanas · ruta completa (≈ 112 h, 9-10 h por semana)
+### 4.2 En 12 semanas · ruta completa (≈ 118 h, ≈ 10 h por semana)
 | Semana | Módulos | Horas |
 |---|---|---|
-| 1 | 00, 01 | 8,5 |
-| 2 | 02, 03 | 9 |
-| 3 | 04, 05 | 9 |
-| 4 | 06, 07 | 9 |
+| 1 | 00, 01 | 9,5 |
+| 2 | 02, 03 | 10,5 |
+| 3 | 04, 05 | 10,5 |
+| 4 | 06, 07 | 11 |
 | 5 | 08, 09 | 10,5 |
 | 6 | 10, 11 | 10,5 |
 | 7 | 12, 13 | 10 |
@@ -152,7 +152,7 @@ Una **sesión** = 2-3 h. Las semanas marcan horas aproximadas; si una semana se 
 | 11 | 20, 21 | 10,5 |
 | 12 | 22 + extras (entrevistas, carrera) + repaso general | 8 |
 
-### 4.3 En 16 semanas · ruta completa (≈ 112 h, ≈ 7 h por semana)
+### 4.3 En 16 semanas · ruta completa (≈ 118 h, ≈ 7,5 h por semana)
 Aquí algunos módulos se parten en sus dos sesiones (A = lección, B = proyecto).
 
 | Semana | Contenido | Semana | Contenido |
@@ -199,7 +199,7 @@ Problemas típicos de entorno: RAM insuficiente (arranca solo `--profile core`; 
 | «Sección por módulo y módulo propio» de élite | Caja 🧠 en cada lección + módulo 21 + compendio |
 | «Hasta lo publicado este año», marcando lo experimental | 04 (semconv GenAI en *Development*, instantánea fechada), 12 (MCP), 17 (OpenTelemetry Profiles, alfa), 06 y cada «Honestidad técnica» |
 | «Notebooks + docker-compose», «mi máquina con Docker» | 00 (Docker y Compose desde cero), `stack/`, `check_stack()` y modo degradado en cada cuaderno |
-| «~100 h, 16+ módulos» | 23 módulos, ≈ 105-112 h (ver §2) |
+| «~100 h, 16+ módulos» | 23 módulos, ≈ 105 h anunciadas y ≈ 118 h reales (ver §2) |
 | «LLM agnóstico de proveedor» | 01 (variable `LLM_PROVIDER`: mock, anthropic, openai u ollama; `mock`, determinista, en las rúbricas) |
 | Profundizar «calidad y evaluación online» | 14 (LLM-juez, sesgos, coste de evaluar) y 15 (regresión, drift, canario, A/B); recuperada en 16 (SLO de calidad) y 21 (caso C) |
 | Profundizar «multi-agente y MCP» | 11 (orquestación, handoffs, cascadas) y 12 (trazas a través de servidores MCP, seguridad de herramientas); reutilizados en 21 (caso A) y 22 |

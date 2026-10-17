@@ -80,7 +80,7 @@ Grafana: <http://localhost:3000> (`admin` / `admin`; en Grafana 13 el acceso an�
 
 ## Cómo estudiar
 Cada módulo: leer la lección → hacer el proyecto **sin mirar la solución** (usa las pistas 🪜 solo si te atascas) → autoevaluación. Los recuadros 🧠 son el contenido de élite; **👀 Qué debes observar** va tras cada gráfico. Las rúbricas de los proyectos se ejecutan en el propio notebook y sus umbrales están medidos con la solución en modo `mock` y semilla fija.
-Rutas sugeridas (detalle, horas y calendarios en la [guía de estudio](GUIA_DE_ESTUDIO.md)): **ruta núcleo** (≈ 60 h) → 00-05, 06 (conceptos), 07-10, 13, 16, 18, 21; **trabajo actual** → 00-05, 07-10, 13-16, 18, 20-21 (+ 11-12 si es multi-agente o usa MCP); **producto propio** → 00-10, 13, 16, 18-20, 22. Las horas reales de un alumno que parte de cero rondan las 110 h con todas las ampliaciones.
+Rutas sugeridas (detalle, horas y calendarios en la [guía de estudio](GUIA_DE_ESTUDIO.md)): **ruta núcleo** (≈ 60 h) → 00-05, 06 (conceptos), 07-10, 13, 16, 18, 21; **trabajo actual** → 00-05, 07-10, 13-16, 18, 20-21 (+ 11-12 si es multi-agente o usa MCP); **producto propio** → 00-10, 13, 16, 18-20, 22. Las horas reales de un alumno que parte de cero rondan las 115-120 h con todas las ampliaciones.
 
 ## Estructura del repositorio
 ```
