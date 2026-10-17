@@ -55,6 +55,9 @@ if ROOT is None:  # p. ej. Google Colab: el notebook se abre sin el repo
     subprocess.run(["git", "clone", "-q", "--depth", "1", "https://github.com/padillacm/IA-practice", "/content/IA-practice"], check=True)
     ROOT = pathlib.Path("/content/IA-practice/agent-observability-course")
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-e", f"{ROOT}[EXTRAS]"], check=True)
+if str(ROOT) not in sys.path:   # un editable recién instalado no es visible hasta reiniciar el kernel: lo añadimos a mano
+    sys.path.insert(0, str(ROOT))
+import importlib; importlib.invalidate_caches()
 print("Curso en:", ROOT)
 '''
 
