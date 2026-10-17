@@ -1,0 +1,558 @@
+#%%md
+# 01 · Anatomía de una traza
+
+**Módulo 1 · Trazas** — *tiempo estimado: 70 minutos* — *consumo: 0 trazas*
+
+Este notebook se ejecuta **entero sin clave y sin red**. Todo lo que vas a ver aquí es
+el objeto real que LangSmith recibe, construido en tu máquina.
+
+Al terminar sabrás:
+
+1. Distinguir **run, traza e hilo** — tres palabras que todo el mundo confunde y que en
+   LangSmith significan cosas distintas.
+2. Qué campos tiene un run, y cuáles importan.
+3. Cómo **el árbol se reconstruye desde una lista plana y desordenada**, que es el truco
+   de ingeniería que hace que esto funcione a escala.
+4. Por qué el `run_type` no es decoración.
+5. Que **una excepción que tú capturas queda registrada como error de todos modos** — y
+   por qué eso es una de las cosas más útiles de tener trazas.
+6. Cómo etiquetas y metadatos **se heredan hacia abajo**, y por qué eso cambia cómo
+   instrumentas.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import init, traza_local, separador
+from langsmith import traceable, RunTree
+from langsmith.run_helpers import get_current_run_tree
+
+init(silencioso=True)
+print("listo · este notebook no necesita clave")
+
+#%%md
+## 1. Tres palabras que no significan lo mismo
+
+Antes de nada, el vocabulario. La documentación los usa con precisión y los tutoriales
+los mezclan, y de ahí sale la mitad de la confusión.
+
+| Palabra | Qué es | Cuántos |
+|---|---|---|
+| **Run** | Una unidad de trabajo con entrada y salida. Una llamada al modelo, una herramienta, una función tuya | Muchos |
+| **Traza** *(trace)* | **Un árbol de runs** con una raíz. Corresponde a una petición de principio a fin | Uno por petición |
+| **Hilo** *(thread)* | Una **secuencia de trazas** que comparten conversación | Uno por conversación |
+
+O dicho al revés: un hilo contiene trazas, una traza contiene runs, y un run puede
+contener otros runs.
+
+Lo que se cobra y lo que se limita son **las trazas**, no los runs. Es la razón de que
+la cuenta del presupuesto (notebook 00) salga como sale: una petición que dispara
+cuarenta llamadas al modelo sigue siendo **una** traza.
+
+> El hilo es el que da más problemas, porque LangGraph también tiene un `thread_id` y
+> **no son lo mismo ni se conectan solos**. Eso es el notebook 04.
+
+#%%md
+## 2. Los campos de un run
+
+Vamos a construir uno y a mirarlo entero. Nada de esto sale a la red.
+
+#%%py
+@traceable(run_type="retriever")
+def recuperar(pregunta: str) -> list[str]:
+    return ["art. 14: los reembolsos se tramitan en 5 días hábiles"]
+
+@traceable(run_type="llm")
+def redactar(pregunta: str, contexto: list[str]) -> str:
+    return "Tu reembolso estará en 5 días hábiles."
+
+@traceable(run_type="chain", name="responder_ticket")
+def responder_ticket(pregunta: str) -> str:
+    return redactar(pregunta, recuperar(pregunta))
+
+with traza_local() as t:
+    responder_ticket("¿Cuándo me devolvéis el dinero?")
+
+run = t.principales[0]
+
+separador("los campos que importan")
+print(f"name          : {run.name}")
+print(f"run_type      : {run.run_type}")
+print(f"id            : {run.id}")
+print(f"trace_id      : {run.trace_id}")
+print(f"parent_run_id : {run.parent_run_id}")
+print(f"inputs        : {run.inputs}")
+print(f"outputs       : {run.outputs}")
+print(f"error         : {run.error}")
+print(f"start_time    : {run.start_time}")
+print(f"end_time      : {run.end_time}")
+print(f"tags          : {run.tags}")
+print(f"metadata      : {run.extra.get('metadata')}")
+print(f"dotted_order  : {run.dotted_order}")
+
+#%%md
+Los tres primeros identificadores son los que hacen el trabajo:
+
+- **`id`** — este run. Único.
+- **`trace_id`** — la traza a la que pertenece. **Todos los runs del árbol comparten el
+  mismo**, y es igual al `id` del run más externo.
+- **`parent_run_id`** — de quién cuelga.
+
+Y aquí conviene parar, porque hay algo en la salida de arriba que no cuadra con lo que
+esperarías: `responder_ticket` es lo que llamamos nosotros, pero **tiene un
+`parent_run_id`**, y su `trace_id` no es su propio `id`.
+
+No es un fallo: es `traza_local()`. Para poder capturar el árbol sin clave, crea un run
+envoltorio del que cuelga todo lo demás. Lo tienes en `t.raiz`, y `t.principales` son
+sus hijos — las funciones que tú llamaste.
+
+#%%py
+envoltorio = t.raiz
+print("el envoltorio que crea traza_local():")
+print(f"  name          : {envoltorio.name}")
+print(f"  id            : {envoltorio.id}")
+print(f"  parent_run_id : {envoltorio.parent_run_id}")
+print(f"  trace_id      : {envoltorio.trace_id}")
+print()
+print("y ahora sí se cumple todo lo de arriba:")
+print(f"  el envoltorio no tiene padre        : {envoltorio.parent_run_id is None}")
+print(f"  su trace_id es su propio id         : {envoltorio.trace_id == envoltorio.id}")
+print(f"  el hijo comparte ese trace_id       : {run.trace_id == envoltorio.trace_id}")
+print(f"  y su parent_run_id apunta al padre  : {run.parent_run_id == envoltorio.id}")
+
+#%%md
+Esto, que parecía una molestia del andamiaje, es en realidad **exactamente el mecanismo
+que verás en el apartado 7**: un run de un sitio que se convierte en el padre de runs
+que se ejecutan en otro. Es lo mismo que hace un servidor web cuando abre un run por
+petición y todo lo que ocurre dentro cuelga de él.
+
+De aquí en adelante, cuando el notebook diga «la raíz» se refiere a `t.principales[0]`,
+que es lo que tú llamaste; el envoltorio no se vuelve a mencionar.
+
+#%%md
+## 3. `dotted_order`: cómo se reconstruye un árbol que llega desordenado
+
+Piensa en el problema desde el lado del servidor. Tu aplicación manda los runs por la
+red, en lotes, desde hilos distintos, quizá desde procesos distintos. **Los eventos
+llegan desordenados, y el hijo puede llegar antes que el padre.** ¿Cómo dibujas el árbol
+sin esperar a tenerlo todo, y sin hacer una consulta recursiva por cada nivel?
+
+La solución de LangSmith es `dotted_order`, y es elegante:
+
+```
+20260831T030612624937Z01a055c8-...   <- marca de tiempo + id, de la raíz
+   |
+   +-- .20260831T030612625119Z01a055c8-...   <- y otra vez, del hijo
+```
+
+Un segmento por nivel, cada uno con **la marca de tiempo de inicio pegada al id**,
+separados por puntos. De ahí salen tres propiedades, y las tres se usan:
+
+1. **La profundidad es contar puntos.** No hace falta consultar nada.
+2. **El `dotted_order` del hijo empieza por el del padre.** Un `LIKE 'prefijo%'` en la
+   base de datos te da el subárbol entero en una consulta.
+3. **Ordenar alfabéticamente = ordenar cronológicamente y por jerarquía a la vez**,
+   porque la marca de tiempo va delante del id dentro de cada segmento.
+
+Vamos a demostrarlo por la vía dura: aplanamos el árbol, lo barajamos, y lo
+reconstruimos usando **solo** ese campo.
+
+#%%py
+import random
+
+@traceable(run_type="tool")
+def consultar_saldo(cliente: str) -> float:
+    return 42.0
+
+@traceable(run_type="tool")
+def consultar_pedidos(cliente: str) -> list[str]:
+    return ["PED-1"]
+
+@traceable(run_type="llm")
+def decidir(datos: dict) -> str:
+    return "reembolsar"
+
+@traceable(run_type="chain", name="agente")
+def agente(cliente: str) -> str:
+    datos = {"saldo": consultar_saldo(cliente), "pedidos": consultar_pedidos(cliente)}
+    return decidir(datos)
+
+with traza_local() as t:
+    agente("acme")
+
+# Aplanamos y barajamos: así es como llegan al servidor.
+planos = [r for _, r in t.recorrer()]
+random.seed(7)
+random.shuffle(planos)
+
+print("Orden de llegada (barajado):")
+for r in planos:
+    print(f"  {r.name}")
+
+#%%py
+# Reconstrucción. Solo se usa `dotted_order`: ni parent_run_id, ni consultas, ni nada.
+base = min(r.dotted_order.count(".") for r in planos)
+
+print("Reconstruido a partir de un solo campo:\n")
+for r in sorted(planos, key=lambda r: r.dotted_order):
+    nivel = r.dotted_order.count(".") - base
+    print(f"  {'   ' * nivel}├─ {r.name}  [{r.run_type}]")
+
+#%%md
+Los cuatro runs llegaron en un orden en el que **el padre no es el primero**, y de ahí
+sale el árbol correcto con dos operaciones: `sorted()` y contar puntos.
+
+Esto no es curiosidad: es la razón de que la interfaz te dibuje la traza mientras la
+petición **todavía se está ejecutando**. Y también explica un comportamiento que
+desconcierta: si tu proceso muere a mitad, verás el árbol parcial con los runs sin
+cerrar — porque el árbol nunca dependió de tener el final.
+
+> **Ojo con la marca de tiempo.** `dotted_order` incorpora el `start_time` del cliente.
+> Si tus máquinas tienen los relojes desincronizados, el orden entre hermanos sale mal.
+> No rompe la jerarquía —esa la fija el prefijo— pero sí el orden dentro de cada nivel.
+
+#%%md
+## 4. `run_type`: seis palabras que cambian lo que ves
+
+El `run_type` es un `str` en el modelo de datos, así que el SDK te deja poner lo que
+quieras. Pero solo seis valores significan algo:
+
+| `run_type` | Para qué | Qué cambia |
+|---|---|---|
+| `chain` | Lo genérico. Una función que orquesta | El valor por defecto |
+| `llm` | Una llamada al modelo | Es el único que contabiliza **tokens y coste**, y el que muestra la conversación en formato de chat |
+| `tool` | Una herramienta | Se destaca en la vista de agente |
+| `retriever` | Una búsqueda de documentos | Vista propia con los documentos y sus puntuaciones |
+| `prompt` | El formateo de una plantilla | Se enlaza con el Hub (notebook 15) |
+| `parser` | El parseo de la salida | Poco frecuente a mano |
+
+**Lo que hay que retener:** si envuelves una llamada al modelo con `run_type="chain"`,
+funciona, se traza, y **no verás ni tokens ni coste**. El panel de gasto del módulo 4
+se queda vacío y no hay ningún error que te avise. Es el fallo de instrumentación más
+común, y el notebook 02 lo trata a fondo.
+
+#%%py
+@traceable(run_type="chain")     # <- mal: es una llamada al modelo
+def llamar_modelo_mal(p: str) -> str:
+    return "respuesta"
+
+@traceable(run_type="llm")       # <- bien
+def llamar_modelo_bien(p: str) -> str:
+    return "respuesta"
+
+with traza_local() as t:
+    llamar_modelo_mal("hola")
+    llamar_modelo_bien("hola")
+
+for _, r in t.recorrer():
+    contable = "sí" if r.run_type == "llm" else "NO"
+    print(f"  {r.name:<22} run_type={r.run_type:<8} ¿cuenta tokens y coste? {contable}")
+
+#%%md
+## 5. Los errores: lo que la traza ve y tu programa no
+
+Aquí viene lo que más rendimiento da de todo el notebook.
+
+Un patrón habitual y razonable: llamas a algo que puede fallar, capturas la excepción y
+sigues con un plan B. Tu programa **no falla**. Devuelve una respuesta. Nadie se entera.
+
+La pregunta es: ¿qué guarda la traza?
+
+#%%py
+@traceable(run_type="tool", name="api_de_facturacion")
+def api_de_facturacion(cliente: str) -> dict:
+    raise ConnectionError("el servicio de facturación devolvió 503")
+
+@traceable(run_type="chain", name="responder_con_plan_b")
+def responder_con_plan_b(cliente: str) -> str:
+    try:
+        datos = api_de_facturacion(cliente)
+        return f"Tu saldo es {datos['saldo']}."
+    except ConnectionError:
+        return "Ahora mismo no puedo consultar tu saldo, inténtalo más tarde."
+
+with traza_local() as t:
+    respuesta = responder_con_plan_b("acme")
+
+print("lo que ve el usuario:", respuesta)
+print()
+separador("lo que ve la traza")
+for p, r in t.recorrer():
+    estado = "OK" if not r.error else "ERROR"
+    print(f"{'  ' * p}{r.name}  ->  {estado}")
+    if r.error:
+        print(f"{'  ' * p}   {r.error.splitlines()[0]}")
+
+#%%md
+**El padre figura como correcto y el hijo como error.** Las dos cosas a la vez, y las
+dos son verdad: la petición se atendió, y por dentro algo se rompió.
+
+Esto es exactamente lo que no te da un log. Tu aplicación se ve sana desde fuera —tasa
+de error 0 %, el usuario recibe respuesta— mientras el servicio de facturación lleva
+tres días caído y todas las respuestas son el plan B.
+
+La consulta que esto habilita, y que vale su peso en oro (módulo 4):
+
+> «Dame las trazas cuya **raíz** terminó bien pero que contienen **algún run con error**.»
+
+Eso son tus fallos silenciosos. En una aplicación con LLM son la mayoría, porque el
+patrón «captura la excepción y sigue con lo que puedas» está por todas partes: el
+recuperador que no encuentra nada, la herramienta que agota el tiempo, el parseo que
+falla y cae al texto en bruto.
+
+#%%md
+## 6. Etiquetas y metadatos: se heredan hacia abajo
+
+Última pieza del notebook, y cambia cómo se instrumenta.
+
+- **Etiquetas** (`tags`): una lista de cadenas. Para filtrar por categorías (`"v2"`,
+  `"produccion"`, `"experimento-a"`).
+- **Metadatos** (`metadata`): un diccionario. Para valores (`{"cliente": "acme",
+  "ticket": "TCK-0001"}`).
+
+La regla que importa: **lo que pones en un run lo heredan todos sus descendientes.**
+
+#%%py
+@traceable(run_type="tool", tags=["herramienta"])
+def buscar(q: str) -> str:
+    actual = get_current_run_tree()
+    return f"visto desde dentro -> tags={actual.tags} meta={actual.extra['metadata']}"
+
+@traceable(run_type="chain", tags=["soporte"], metadata={"version": "v2"})
+def atender(q: str) -> str:
+    return buscar(q)
+
+with traza_local() as t:
+    print(atender("reembolso"))
+
+print()
+for p, r in t.recorrer():
+    print(f"{'  ' * p}{r.name}: tags={r.tags} meta={ {k: v for k, v in r.extra['metadata'].items() if k != 'ls_method'} }")
+
+#%%md
+El hijo lleva `['soporte', 'herramienta']` y el `version: v2` del padre, sin que nadie
+se lo pasara.
+
+Y ahora la parte útil: los datos que solo conoces **en tiempo de ejecución** —qué
+cliente, qué ticket, qué versión del prompt— se inyectan en la llamada con
+`langsmith_extra`, y bajan igual.
+
+#%%py
+with traza_local() as t:
+    atender("reembolso", langsmith_extra={
+        "metadata": {"cliente": "acme", "ticket": "TCK-0001"},
+        "tags": ["prioridad-alta"],
+    })
+
+for p, r in t.recorrer():
+    meta = {k: v for k, v in r.extra["metadata"].items() if k != "ls_method"}
+    print(f"{'  ' * p}{r.name}: tags={r.tags}")
+    print(f"{'  ' * p}   meta={meta}")
+
+#%%md
+**La consecuencia práctica, que es la lección de la sección:** para poder buscar «todas
+las trazas del ticket TCK-0001» no hay que etiquetar cada nodo. **Se etiqueta la raíz y
+ya está.** Instrumentar bien es, casi entero, poner los metadatos correctos en un solo
+sitio: el punto de entrada de la petición.
+
+#%%md
+## 7. Cuando no puedes decorar: `RunTree` a mano
+
+`@traceable` cubre el 95 % de los casos. El 5 % restante es cuando el trabajo cruza un
+límite de proceso: un servicio HTTP llama a otro y quieres **una sola traza** que
+atraviese los dos.
+
+`RunTree` se maneja a mano, y trae dos métodos para eso.
+
+#%%py
+# --- servicio A ---
+servicio_a = RunTree(name="pasarela", run_type="chain", inputs={"ticket": "TCK-0001"})
+cabeceras = servicio_a.to_headers()
+print("cabeceras que viajan en la petición HTTP:")
+for k, v in cabeceras.items():
+    print(f"  {k}: {v}")
+
+# --- servicio B, en otro proceso, otra máquina ---
+servicio_b = RunTree.from_headers(cabeceras, name="clasificador", run_type="chain", inputs={})
+
+print()
+print("¿misma traza?                        ", servicio_b.trace_id == servicio_a.trace_id)
+print("¿B cuelga de A en la jerarquía?      ",
+      servicio_b.dotted_order.startswith(servicio_a.dotted_order))
+
+#%%md
+Dos procesos distintos, una sola traza, y lo único que viajó fue una cabecera de texto.
+Es el mismo mecanismo que usa OpenTelemetry —y de hecho `baggage` es una cabecera
+estándar de OTel—, que es por lo que el notebook 00 podía decir que la salida de
+LangSmith no es traumática.
+
+En el lado del que recibe, lo normal no es seguir a mano sino volver a `@traceable`
+dentro del contexto reconstruido; el notebook 02 lo enseña con un servidor de verdad.
+
+#%%md
+## 8. Ejercicios
+
+### Ejercicio 1 — Cazar el fallo silencioso
+
+Escribe `detectar_fallos_silenciosos(traza)`, que devuelva la lista de runs con error
+**solo si la raíz terminó bien**. Es la consulta del apartado 5, en local.
+
+Pruébala con dos trazas: una donde el error se captura y otra donde se propaga hasta
+arriba. Solo la primera debe devolver algo.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def detectar_fallos_silenciosos(traza):
+    """Runs con error dentro de una traza que, vista desde fuera, terminó bien."""
+    silenciosos = []
+    for raiz in traza.principales:
+        if raiz.error:
+            continue                      # esta no es silenciosa: falló y se nota
+        for _, run in traza.recorrer():
+            if run is not raiz and run.error:
+                silenciosos.append(run)
+    return silenciosos
+
+
+@traceable(run_type="tool")
+def se_rompe():
+    raise TimeoutError("agotado el tiempo")
+
+@traceable(run_type="chain", name="con_plan_b")
+def con_plan_b():
+    try:
+        return se_rompe()
+    except TimeoutError:
+        return "respuesta degradada"
+
+@traceable(run_type="chain", name="sin_plan_b")
+def sin_plan_b():
+    return se_rompe()
+
+with traza_local() as t_ok:
+    con_plan_b()
+with traza_local() as t_mal:
+    try:
+        sin_plan_b()
+    except TimeoutError:
+        pass
+
+print("captura el error :", [r.name for r in detectar_fallos_silenciosos(t_ok)])
+print("propaga el error :", [r.name for r in detectar_fallos_silenciosos(t_mal)])
+
+#%%md
+`['se_rompe']` y `[]`. La segunda traza también tiene un error, pero **no es silencioso**:
+la raíz está en rojo, así que ya lo estás viendo en el panel de errores.
+
+Lo valioso de la primera es que su raíz está en verde. En producción esa traza no
+aparece en ninguna alerta, en ninguna métrica de error, en ningún sitio — salvo en esta
+consulta. Por eso el módulo 4 la convierte en una regla automática.
+
+</details>
+
+#%%md
+### Ejercicio 2 — El prefijo que responde a todo
+
+Sin usar `child_runs` ni `parent_run_id`: dada una lista plana de runs y el
+`dotted_order` de uno de ellos, devuelve **su subárbol completo**.
+
+Después mide cuánto de la duración total de la traza se fue en ese subárbol. Es la
+pregunta de «¿dónde se va el tiempo?» que motiva tener trazas.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+def subarbol(planos, prefijo):
+    """Todo lo que cuelga de `prefijo`, él incluido. Una comparación de cadenas."""
+    return sorted((r for r in planos if r.dotted_order.startswith(prefijo)),
+                  key=lambda r: r.dotted_order)
+
+
+def duracion(run):
+    return (run.end_time - run.start_time).total_seconds()
+
+
+import time
+
+@traceable(run_type="tool")
+def lento():
+    time.sleep(0.05)
+    return "ya"
+
+@traceable(run_type="tool")
+def rapido():
+    return "ya"
+
+@traceable(run_type="chain", name="recuperacion")
+def recuperacion():
+    lento()
+    return rapido()
+
+@traceable(run_type="llm")
+def generacion():
+    time.sleep(0.03)
+    return "texto"
+
+@traceable(run_type="chain", name="peticion")
+def peticion():
+    recuperacion()
+    return generacion()
+
+with traza_local() as t:
+    peticion()
+
+planos = [r for _, r in t.recorrer()]
+raiz = t.principales[0]
+rama = next(r for r in planos if r.name == "recuperacion")
+
+print("subárbol de «recuperacion»:")
+for r in subarbol(planos, rama.dotted_order):
+    print(f"  {r.name}  ({duracion(r) * 1000:.1f} ms)")
+
+cuota = 100 * duracion(rama) / duracion(raiz)
+print(f"\nla recuperación se llevó el {cuota:.0f} % del tiempo total")
+
+#%%md
+Fíjate en que **no hemos mirado la jerarquía ni una vez**: `startswith` sobre una cadena.
+Eso es un `LIKE 'prefijo%'` en la base de datos, que es un recorrido de índice, y es la
+razón de que la interfaz pueda abrir una rama de una traza con diez mil runs sin
+recorrerla entera.
+
+Y el resultado —el porcentaje— es la pregunta que se hace todo el mundo la primera
+semana: *¿por qué tarda tanto?* Con logs se responde a ojo. Con la traza es una resta.
+
+</details>
+
+#%%md
+## 9. Resumen
+
+- **Run ⊂ traza ⊂ hilo.** Lo que se cobra y se limita son las trazas, no los runs: una
+  petición con cuarenta llamadas al modelo sigue siendo una traza.
+- El árbol se reconstruye desde una lista plana y desordenada **solo con
+  `dotted_order`**: profundidad = contar puntos, subárbol = comparar prefijos, orden =
+  `sorted()`. Por eso la interfaz dibuja trazas que aún se están ejecutando.
+- El **`run_type` no es decoración**: solo `llm` contabiliza tokens y coste, y
+  equivocarlo no da ningún error, solo un panel de gasto vacío.
+- **Una excepción capturada queda registrada igual.** «Raíz correcta + algún hijo con
+  error» es la consulta que encuentra los fallos silenciosos, que en estas aplicaciones
+  son la mayoría.
+- **Etiquetas y metadatos se heredan hacia abajo**, así que instrumentar bien es sobre
+  todo poner los metadatos correctos en el punto de entrada, una sola vez.
+- `RunTree.to_headers()` / `from_headers()` cosen una traza a través de varios procesos
+  con una cabecera de texto, igual que OpenTelemetry.
+
+**Siguiente:** [`02_instrumentar_de_verdad`](02_instrumentar_de_verdad.ipynb) — el paso de
+esto a una aplicación real: qué se instrumenta solo, qué no, y las variables de entorno
+que gobiernan el comportamiento.

@@ -1,0 +1,656 @@
+#%%md
+# 05 · Lo que no debe salir
+
+**Módulo 1 · Trazas** — *tiempo estimado: 75 minutos* — *consumo: 0 trazas*
+
+Cuatro notebooks mandando entradas y salidas enteras a un servicio de terceros sin
+preguntarnos qué iba dentro. Toca la pregunta incómoda.
+
+Y no es un notebook de cumplimiento normativo escrito por compromiso: la mitad de lo que
+hay aquí lo descubrí comprobando, y una parte contradice lo que dice el nombre de las
+funciones.
+
+Este notebook se ejecuta **entero sin clave**, y no describe lo que pasaría: usa el
+servicio simulado del notebook 03 para **mirar lo que llega de verdad al servidor**.
+
+Al terminar sabrás:
+
+1. Qué se manda **exactamente** —que es más de lo que crees—.
+2. Las tres herramientas: `hide_inputs`, el anonimizador y la decisión de no trazar.
+3. Que `hide_inputs` **acepta una función**, y por qué eso lo cambia todo.
+4. Que el anonimizador que viene de fábrica protege **tus credenciales, no a tus
+   usuarios**.
+5. Dónde queda el agujero que ninguna de las tres tapa.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import init, online, cliente, servicio_simulado, separador
+from langsmith import traceable
+
+init(silencioso=True)
+print("listo · vamos a mirar qué llega al servidor, no a suponerlo")
+
+#%%md
+## 1. Qué se manda exactamente
+
+Del notebook 01: las entradas y salidas se capturan solas, desde la firma de la función.
+Eso es cómodo y es el problema.
+
+Vamos a mirarlo con el servicio simulado, que registra lo que recibe.
+
+#%%py
+@traceable(run_type="chain", name="atender_ticket")
+def atender_ticket(mensaje: str, correo: str, id_cliente: str) -> str:
+    return f"Confirmado, {correo}: te devolvemos el cargo."
+
+with servicio_simulado() as servicio:
+    with servicio.trazando():
+        atender_ticket(
+            mensaje="Me han cobrado dos veces en la 4111 1111 1111 1111",
+            correo="ana.perez@acme.com",
+            id_cliente="CLI-8891",
+        )
+    servicio.cliente.flush()
+
+recibido = servicio.run()
+separador("lo que llegó al servidor")
+print("inputs :", recibido["inputs"])
+print("outputs:", recibido["outputs"])
+
+#%%md
+Ahí va el correo de una persona, su número de tarjeta y su identificador de cliente, a
+un servicio de terceros, alojado en Estados Unidos por defecto. Nadie lo pidió y no hubo
+ningún aviso.
+
+**Y hay más de lo que se ve.** El SDK añade a los metadatos de cada run un contexto de
+ejecución que incluye algo que sorprende:
+
+#%%py
+import os
+from langsmith.env._runtime_env import get_langchain_env_var_metadata
+
+# Simulamos un despliegue con variables propias, como las que tendrías tú.
+os.environ["LANGSMITH_URL_FACTURACION"] = "https://facturacion.interna.acme.local:8443"
+os.environ["LANGCHAIN_CLIENTE"] = "acme-s-a"
+os.environ["LANGSMITH_MI_API_KEY"] = "sk-un-secreto-de-verdad"
+
+get_langchain_env_var_metadata.cache_clear()
+print("lo que viaja en los metadatos de CADA run:")
+for clave, valor in get_langchain_env_var_metadata().items():
+    print(f"   {clave} = {valor}")
+
+#%%md
+**El SDK copia a los metadatos todas tus variables de entorno que empiecen por
+`LANGCHAIN_` o `LANGSMITH_`.** No solo las suyas: las tuyas también, si las nombraste
+así.
+
+El filtro que aplica es una lista negra de subcadenas —`key`, `secret`, `token`,
+`password`, `credential`, `email`— más un puñado de nombres concretos. Por eso
+`LANGSMITH_MI_API_KEY` no aparece arriba: la salvó la subcadena `key`, por casualidad.
+`LANGSMITH_URL_FACTURACION`, que es un nombre de máquina interna, sí se fue. Y
+`LANGCHAIN_CLIENTE=acme-s-a`, que es el nombre de un cliente, también.
+
+> **Regla, y es de una línea:** no llames `LANGSMITH_*` ni `LANGCHAIN_*` a ninguna
+> variable de entorno que no sea de LangSmith. Es gratis y te ahorra una filtración.
+
+Y un detalle simpático que viene de lo mismo: `revision_id` sale de ejecutar
+`git describe --tags --always --dirty` en tu directorio de trabajo. Es **muy** útil —cada
+traza sabe con qué versión del código se produjo— pero conviene saber que está pasando,
+sobre todo si tus etiquetas de git dicen cosas.
+
+#%%py
+from langsmith.env._runtime_env import _get_default_revision_id
+
+print("revision_id que se adjunta a tus trazas:", _get_default_revision_id())
+print("  (sale de: git describe --tags --always --dirty)")
+
+# Limpiamos el experimento para no ensuciar el resto del notebook.
+for v in ("LANGSMITH_URL_FACTURACION", "LANGCHAIN_CLIENTE", "LANGSMITH_MI_API_KEY"):
+    os.environ.pop(v, None)
+get_langchain_env_var_metadata.cache_clear()
+
+#%%md
+## 2. Herramienta 1: `hide_inputs`, que no es un interruptor
+
+La documentación lo presenta como un booleano: `hide_inputs=True` y no se manda nada.
+Funciona, y es casi siempre lo peor que puedes hacer.
+
+#%%py
+with servicio_simulado(hide_inputs=True, hide_outputs=True) as servicio:
+    with servicio.trazando():
+        atender_ticket("cobro duplicado", "ana@acme.com", "CLI-8891")
+    servicio.cliente.flush()
+
+recibido = servicio.run()
+print("con hide_inputs=True / hide_outputs=True:")
+print("  inputs :", recibido["inputs"])
+print("  outputs:", recibido["outputs"])
+
+#%%md
+Nada. Has protegido los datos y has perdido la herramienta: una traza sin entradas ni
+salidas te dice que algo tardó 400 ms y nada más. No puedes depurar, no puedes evaluar,
+no puedes construir un dataset. Has pagado por un cronómetro.
+
+**Lo que la documentación no destaca:** el parámetro está tipado como
+`Optional[Union[Callable[[dict], dict], bool]]`. **Acepta una función.**
+
+Eso cambia la pregunta de «¿mando esto o no?» a «¿qué mando en su lugar?».
+
+#%%py
+import inspect
+from langsmith import Client
+
+print("la firma real:")
+for nombre in ("hide_inputs", "hide_outputs", "hide_metadata"):
+    print(f"  {nombre}: {inspect.signature(Client.__init__).parameters[nombre].annotation}")
+
+#%%py
+def solo_la_forma(entradas: dict) -> dict:
+    """Manda la estructura y el tamaño, nunca el contenido.
+
+    Con esto una traza sigue sirviendo para depurar —ves que llegó un mensaje de 47
+    caracteres y un correo— y no lleva ni un dato personal.
+    """
+    return {clave: f"<{type(valor).__name__} de {len(str(valor))} caracteres>"
+            for clave, valor in entradas.items()}
+
+
+with servicio_simulado(hide_inputs=solo_la_forma) as servicio:
+    with servicio.trazando():
+        atender_ticket("Me han cobrado dos veces", "ana.perez@acme.com", "CLI-8891")
+    servicio.cliente.flush()
+
+print("con hide_inputs=<función>:")
+print("  inputs:", servicio.run()["inputs"])
+
+#%%md
+La misma idea, escalada: **una función que decide clave por clave**. Lo que no es
+personal pasa entero; lo que sí, se resume o se sustituye.
+
+#%%py
+CLAVES_SENSIBLES = {"correo", "telefono", "dni", "direccion", "tarjeta"}
+
+def por_clave(entradas: dict) -> dict:
+    salida = {}
+    for clave, valor in entradas.items():
+        if clave in CLAVES_SENSIBLES:
+            salida[clave] = "[oculto]"
+        elif isinstance(valor, str) and len(valor) > 200:
+            salida[clave] = valor[:200] + f"… (+{len(valor) - 200} car.)"   # el límite de 20 MB
+        else:
+            salida[clave] = valor
+    return salida
+
+
+with servicio_simulado(hide_inputs=por_clave) as servicio:
+    with servicio.trazando():
+        atender_ticket("Me han cobrado dos veces", "ana.perez@acme.com", "CLI-8891")
+    servicio.cliente.flush()
+
+print("con una política por clave:")
+for clave, valor in servicio.run()["inputs"].items():
+    print(f"  {clave:<12} = {valor!r}")
+
+#%%md
+El mensaje —que es lo que necesitas para depurar— llega entero. El correo no. Y de paso
+se recortan las cadenas larguísimas, que es lo que evita pisar el límite de 20 MB del
+notebook 03.
+
+#%%md
+## 3. Herramienta 2: el anonimizador
+
+`hide_inputs` decide **por clave**. El anonimizador busca **patrones dentro del texto**,
+que es donde de verdad se esconde lo personal: nadie te manda el DNI en un campo
+llamado `dni`, te lo mete en mitad de un párrafo.
+
+Recorre la estructura entera —diccionarios, listas, anidamientos— aplicando expresiones
+regulares.
+
+#%%py
+import re
+from langsmith.anonymizer import StringNodeRule, create_anonymizer
+
+anonimizador = create_anonymizer([
+    StringNodeRule(pattern=re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), replace="[correo]"),
+    StringNodeRule(pattern=re.compile(r"\b(?:\d[ -]*?){13,16}\b"), replace="[tarjeta]"),
+    StringNodeRule(pattern=re.compile(r"\b\d{8}[A-HJ-NP-TV-Z]\b"), replace="[dni]"),
+    StringNodeRule(pattern=re.compile(r"\b(?:\+34[ -]?)?[6-9]\d{8}\b"), replace="[telefono]"),
+])
+
+with servicio_simulado(anonymizer=anonimizador) as servicio:
+    with servicio.trazando():
+        atender_ticket(
+            mensaje="Soy Ana, DNI 12345678Z, tel 611223344. Me cobrasteis dos veces "
+                    "en la 4111 1111 1111 1111. Escribidme a ana.perez@acme.com",
+            correo="ana.perez@acme.com",
+            id_cliente="CLI-8891",
+        )
+    servicio.cliente.flush()
+
+recibido = servicio.run()
+print("inputs :", recibido["inputs"]["mensaje"])
+print("outputs:", recibido["outputs"])
+
+#%%md
+Se aplica a las entradas **y a las salidas**, y funciona dentro del texto libre. Es la
+herramienta correcta para datos personales.
+
+### Lo que trae de fábrica, y a quién protege
+
+El SDK incluye reglas por defecto. Merece la pena mirarlas antes de confiar en ellas.
+
+#%%py
+from langsmith.anonymizer import DEFAULT_SECRET_RULES, create_secret_anonymizer
+
+print(f"reglas por defecto: {len(DEFAULT_SECRET_RULES)}\n")
+for regla in DEFAULT_SECRET_RULES[:8]:
+    print("  ", regla["pattern"].pattern[:64])
+print("   ... y", len(DEFAULT_SECRET_RULES) - 8, "más")
+
+print("\n¿qué detectan y qué no?")
+por_defecto = create_secret_anonymizer()
+prueba = {
+    "clave_de_openai": "sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGh",
+    "clave_de_aws":    "AKIAIOSFODNN7EXAMPLE",
+    "correo":          "ana.perez@acme.com",
+    "tarjeta":         "4111 1111 1111 1111",
+    "texto_libre":     "mi DNI es 12345678Z y vivo en la calle Mayor 3",
+}
+for clave, valor in por_defecto(prueba).items():
+    marca = "PROTEGIDO" if "[SECRET_DETECTED]" in str(valor) else "pasa tal cual"
+    print(f"  {clave:<18} {marca:<14} {str(valor)[:52]}")
+
+#%%md
+Veinticuatro reglas, y **las veinticuatro son para secretos**: claves de OpenAI, de
+Anthropic, de AWS, tokens de GitHub, JWT, claves privadas, cadenas de conexión con
+contraseña.
+
+**Ni una para datos personales.** Coge tu clave de AWS y deja pasar el correo, la
+tarjeta y el DNI.
+
+Y está bien que sea así, siempre que sepas lo que significa:
+
+> El anonimizador de fábrica te protege **a ti** de filtrar tus credenciales en una
+> traza. **No protege a tus usuarios.** Para eso las reglas las escribes tú, y nadie te
+> va a avisar de que faltan.
+
+Un `create_secret_anonymizer()` no es una política de privacidad. Es un cortafuegos
+contra el accidente de que un `Authorization: Bearer ...` acabe en un run.
+
+#%%md
+### La combinación que tiene sentido
+
+Las dos cosas a la vez, que es lo que casi nadie hace: las reglas de fábrica **más** las
+tuyas.
+
+#%%py
+# OJO AL ORDEN. Las reglas se aplican una detrás de otra sobre el texto ya modificado,
+# así que una regla golosa se come lo que debía coger la siguiente. El IBAN va ANTES que
+# la tarjeta: si no, el patrón de la tarjeta —que busca 13-16 dígitos con separadores—
+# muerde los dígitos del IBAN y deja un resultado absurdo. Lo vemos justo debajo.
+REGLAS_PERSONALES = [
+    StringNodeRule(pattern=re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), replace="[correo]"),
+    StringNodeRule(pattern=re.compile(r"\bES\d{2}[ ]?(?:\d{4}[ ]?){5}\b"), replace="[iban]"),
+    StringNodeRule(pattern=re.compile(r"\b(?:\d[ -]*?){13,16}\b"), replace="[tarjeta]"),
+    StringNodeRule(pattern=re.compile(r"\b\d{8}[A-HJ-NP-TV-Z]\b"), replace="[dni]"),
+    StringNodeRule(pattern=re.compile(r"\b(?:\+34[ -]?)?[6-9]\d{8}\b"), replace="[telefono]"),
+]
+
+anonimizador_completo = create_anonymizer(list(DEFAULT_SECRET_RULES) + REGLAS_PERSONALES)
+
+MENSAJE = ("Ana, DNI 12345678Z, IBAN ES91 2100 0418 4502 0005 1332. "
+           "La clave del webhook es sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789Ab")
+
+with servicio_simulado(anonymizer=anonimizador_completo) as servicio:
+    with servicio.trazando():
+        atender_ticket(mensaje=MENSAJE, correo="ana@acme.com", id_cliente="CLI-8891")
+    servicio.cliente.flush()
+
+print("con el orden correcto:")
+print("  ", servicio.run()["inputs"]["mensaje"])
+
+#%%py
+# Y esto es lo que pasa con el orden al revés, que es el que sale natural al escribirlas.
+mal_ordenadas = [
+    StringNodeRule(pattern=re.compile(r"\b(?:\d[ -]*?){13,16}\b"), replace="[tarjeta]"),
+    StringNodeRule(pattern=re.compile(r"\bES\d{2}[ ]?(?:\d{4}[ ]?){5}\b"), replace="[iban]"),
+]
+
+with servicio_simulado(anonymizer=create_anonymizer(mal_ordenadas)) as servicio:
+    with servicio.trazando():
+        atender_ticket(mensaje=MENSAJE, correo="ana@acme.com", id_cliente="CLI-8891")
+    servicio.cliente.flush()
+
+print("con el orden al revés:")
+print("  ", servicio.run()["inputs"]["mensaje"])
+
+#%%md
+El `ES91` y el `1332` sobreviven, porque la regla de la tarjeta se comió los dígitos de
+en medio y dejó fuera lo que no le encajaba. El resultado no es «menos anonimizado»: es
+**un IBAN parcialmente visible**, que es peor que nada porque parece que la política
+funcionó.
+
+Dos consecuencias:
+
+1. **El orden importa**, y va de más específico a más general. El IBAN tiene prefijo
+   (`ES` + dos dígitos): es más específico que «trece a dieciséis dígitos».
+2. **Escribe una prueba por regla, con un ejemplo que debe cambiar y otro que no.** Una
+   expresión regular golosa no falla: acierta de menos, en silencio, y te deja con la
+   sensación de estar cubierto. Es la quinta trampa silenciosa del módulo.
+
+Y al escribir esas pruebas te vas a encontrar con esto, así que mejor saberlo antes:
+
+#%%py
+import copy
+
+anonimizador_dni = create_anonymizer([
+    StringNodeRule(pattern=re.compile(r"\d{8}[A-HJ-NP-TV-Z]"), replace="[dni]"),
+])
+
+original = {"mensaje": "DNI 12345678Z", "anidado": {"otro": "DNI 87654321X"}}
+copia_previa = copy.deepcopy(original)
+resultado = anonimizador_dni(original)
+
+print("¿devuelve el mismo objeto que le diste?", resultado is original)
+print("¿ha modificado tu diccionario?         ", original != copia_previa)
+print("tu diccionario ahora:", original)
+
+#%%md
+**El anonimizador muta lo que recibe** y devuelve el mismo objeto. Si escribes dos
+pruebas seguidas reutilizando el mismo diccionario, la segunda trabaja sobre lo que
+anonimizó la primera y pasa por el motivo equivocado. (Sí, me pasó.)
+
+A través del SDK no te afecta —el cliente copia antes de anonimizar, así que tus datos
+vivos quedan intactos— pero sí te afecta cuando lo llamas tú: al probarlo, o dentro de
+un `hide_inputs` escrito a mano.
+
+#%%py
+@traceable(run_type="chain", name="comprobacion")
+def comprobacion(cliente: dict) -> str:
+    return "ok"
+
+mi_dato = {"correo": "ana@acme.com", "nombre": "Ana"}
+anon_correo = create_anonymizer([
+    StringNodeRule(pattern=re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), replace="[correo]"),
+])
+
+with servicio_simulado(anonymizer=anon_correo) as servicio:
+    with servicio.trazando():
+        comprobacion(mi_dato)
+    servicio.cliente.flush()
+
+print("tu diccionario después de trazar:", mi_dato)
+print("lo que llegó al servidor        :", servicio.run()["inputs"]["cliente"])
+
+#%%md
+## 4. Herramienta 3: no trazar
+
+La tercera opción es la que menos se considera y la única que da una garantía: **decidir
+por petición si se traza**.
+
+Es útil cuando la sensibilidad depende del dato y no del campo: un cliente del sector
+sanitario, una región con reglas propias, una conversación marcada como confidencial.
+
+#%%py
+from langsmith.run_helpers import tracing_context
+
+def atender_segun_el_cliente(ticket: dict, servicio) -> str:
+    """La traza es una decisión de negocio, no una constante de configuración."""
+    se_puede_trazar = not ticket.get("datos_sensibles", False)
+    with tracing_context(enabled=se_puede_trazar, client=servicio.cliente):
+        return atender_ticket(ticket["mensaje"], ticket["correo"], ticket["id"])
+
+
+tickets = [
+    {"id": "CLI-1", "mensaje": "cobro duplicado", "correo": "a@acme.com", "datos_sensibles": False},
+    {"id": "CLI-2", "mensaje": "informe médico adjunto", "correo": "b@clinica.com", "datos_sensibles": True},
+    {"id": "CLI-3", "mensaje": "cambiar el plan", "correo": "c@acme.com", "datos_sensibles": False},
+]
+
+with servicio_simulado() as servicio:
+    for t in tickets:
+        atender_segun_el_cliente(t, servicio)
+    servicio.cliente.flush()
+
+print(f"tickets atendidos : {len(tickets)}")
+print(f"runs que llegaron : {len(servicio.recibidos)}")
+print("ids de cliente que llegaron:",
+      [r["inputs"].get("id_cliente") for r in servicio.recibidos])
+
+#%%md
+El ticket sensible se atendió con normalidad y **no salió nada suyo**. Ni entradas
+recortadas, ni metadatos, ni el hecho de que existiera.
+
+Es la única de las tres herramientas que da una garantía de verdad. Las otras dos
+dependen de que tus reglas estén completas, y las reglas nunca están completas.
+
+#%%md
+## 5. Las tres, comparadas — y el agujero que dejan
+
+| Herramienta | Granularidad | Qué conservas | Garantía |
+|---|---|---|---|
+| `hide_inputs=True` | Todo o nada | Nada | Total, e inútil |
+| `hide_inputs=<función>` | Por clave | Lo que decidas | Depende de tu función |
+| Anonimizador | Por patrón, dentro del texto | Casi todo | Depende de tus expresiones regulares |
+| No trazar | Por petición | Nada de esa petición | **Total** |
+
+Y ahora lo que ninguna tapa, que es lo importante:
+
+> **Todas actúan en el envío. Ninguna toca lo que ya está guardado.**
+
+Concretamente:
+
+- **Lo que ya subiste, subido está.** Cambiar el anonimizador hoy no limpia el mes
+  pasado. Hay que borrar, y eso es el notebook 17.
+- **El checkpointer de LangGraph guarda el estado en claro.** Esto engancha directamente
+  con el notebook 30 de aquel curso, donde se comprueba que `PIIMiddleware` redacta lo
+  que ve el modelo y **deja el dato original en el checkpoint**. Aquí es lo mismo con
+  otra pieza: puedes tener una traza impecablemente anonimizada y la misma información
+  en claro en tu base de datos de checkpoints. Son dos capas y hay que tratar las dos.
+- **Los metadatos de entorno se van igual**, salvo que renombres tus variables (apartado 1).
+- **`revision_id` sale de tu git**, sin que nadie lo haya pedido.
+
+#%%py
+@online("Comprobar qué llega de verdad a TU proyecto", trazas=1)
+def _():
+    """La comprobación que solo puedes hacer tú, y que deberías hacer una vez.
+
+    Traza una petición con datos de mentira reconocibles y luego léela de vuelta del
+    servidor. Es la única forma de saber que tu política hace lo que crees.
+    """
+    from langsmith.run_helpers import tracing_context
+
+    c = cliente()
+    testigo = "TESTIGO-DE-FUGA-9F3A"
+    with tracing_context(enabled=True, client=c):
+        atender_ticket(f"mensaje con {testigo} dentro", "prueba@ejemplo.com", "CLI-TEST")
+    c.flush()
+
+    import time
+    time.sleep(3)
+    for run in c.list_runs(project_name="curso-langsmith", limit=5):
+        entradas = str(run.inputs)
+        if testigo in entradas:
+            print("  EL TESTIGO LLEGÓ AL SERVIDOR: tu política no lo filtró")
+        print(f"  {run.name}: {entradas[:120]}")
+
+#%%md
+## 6. Ejercicios
+
+### Ejercicio 1 — Un auditor de fugas
+
+Escribe `auditar_fugas(servicio, testigos)`, que revise **todo** lo que llegó al servicio
+—entradas, salidas y metadatos— y avise si alguno de los testigos se coló.
+
+Úsalo para comprobar que la política del apartado 3 aguanta, y encuentra al menos un
+caso en el que no.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import json
+
+def auditar_fugas(servicio, testigos: dict[str, str]) -> list[str]:
+    """Busca los testigos en TODO lo que llegó, no solo en las entradas."""
+    fugas = []
+    for indice in range(len(servicio.recibidos)):
+        run = servicio.run(indice)
+        for zona in ("inputs", "outputs", "extra", "name", "tags"):
+            texto = json.dumps(run.get(zona), ensure_ascii=False, default=str)
+            for etiqueta, testigo in testigos.items():
+                if testigo in texto:
+                    fugas.append(f"«{etiqueta}» apareció en {zona} de {run.get('name')}")
+    return fugas
+
+
+TESTIGOS = {
+    "correo":   "ana.perez@acme.com",
+    "dni":      "12345678Z",
+    "tarjeta":  "4111 1111 1111 1111",
+    "nombre":   "Ana Pérez",
+    "id_interno": "CLI-8891",
+}
+
+@traceable(run_type="chain", name="ticket")
+def ticket(mensaje: str, correo: str, id_cliente: str) -> str:
+    return f"Hola, hemos resuelto tu caso {id_cliente}."
+
+
+def probar(anonimizador, etiqueta):
+    with servicio_simulado(anonymizer=anonimizador) as s:
+        with s.trazando():
+            ticket(mensaje="Soy Ana Pérez, DNI 12345678Z, tarjeta 4111 1111 1111 1111",
+                   correo="ana.perez@acme.com", id_cliente="CLI-8891")
+        s.cliente.flush()
+    fugas = auditar_fugas(s, TESTIGOS)
+    print(f"\n{etiqueta}")
+    for f in fugas:
+        print("   [FUGA]", f)
+    if not fugas:
+        print("   sin fugas")
+
+
+probar(None, "=== sin anonimizador ===")
+probar(anonimizador_completo, "=== con el anonimizador del apartado 3 ===")
+
+#%%md
+Tres líneas, **dos fugas distintas** que sobreviven al anonimizador completo, y las dos
+son instructivas:
+
+- **«Ana Pérez».** Un nombre propio no tiene forma reconocible. No hay expresión regular
+  que lo cace, y por eso los sistemas serios usan un detector de entidades y no
+  expresiones regulares. Que es caro, lento y falible — de ahí que la opción de **no
+  trazar** siga siendo la única con garantía.
+- **`CLI-8891`.** Se coló por la puerta de atrás: nadie lo puso en el mensaje, lo puso
+  **la salida**, que lo compone a partir de un argumento. Tu política vigilaba las
+  entradas y el dato salió por donde no mirabas.
+
+La segunda es la lección real del ejercicio: **auditar solo las entradas no vale**. Lo
+que el modelo escribe también es un canal de salida, y ahí acaba todo lo que le diste.
+
+</details>
+
+#%%md
+### Ejercicio 2 — Redacción reversible
+
+El problema del anonimizador es que pierdes la información: ves `[correo]` y ya no
+puedes agrupar por cliente ni saber si dos trazas son del mismo.
+
+Escribe una redacción **seudonimizada**: sustituye cada dato por un identificador
+estable derivado de él, de forma que el mismo correo dé siempre la misma etiqueta pero
+la etiqueta no permita recuperar el correo.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+import hashlib
+import os
+
+# La sal vive en tu entorno, NUNCA en el código ni en la traza. Sin ella, un correo
+# se recupera probando: el espacio de correos es pequeño y el hash es rápido.
+SAL = os.environ.get("SAL_DE_SEUDONIMOS", "cambia-esto-en-produccion").encode()
+
+def seudonimo(valor: str, prefijo: str) -> str:
+    digest = hashlib.blake2b(SAL + valor.encode(), digest_size=4).hexdigest()
+    return f"[{prefijo}:{digest}]"
+
+
+def seudonimizar_correos(entradas: dict) -> dict:
+    patron = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
+    return {clave: (patron.sub(lambda m: seudonimo(m.group(), "correo"), valor)
+                    if isinstance(valor, str) else valor)
+            for clave, valor in entradas.items()}
+
+
+with servicio_simulado(hide_inputs=seudonimizar_correos) as s:
+    with s.trazando():
+        for correo in ["ana@acme.com", "ana@acme.com", "luis@acme.com"]:
+            ticket(mensaje=f"escribo desde {correo}", correo=correo, id_cliente="X")
+    s.cliente.flush()
+
+for run in s.recibidos:
+    print("  ", run["inputs"]["mensaje"])
+
+etiquetas = [run["inputs"]["mensaje"].split("desde ")[1] for run in s.recibidos]
+print(f"\n¿las dos de Ana dan la misma etiqueta? {etiquetas[0] == etiquetas[1]}")
+print(f"¿la de Luis es distinta?                {etiquetas[0] != etiquetas[2]}")
+
+#%%md
+Ahora puedes preguntarle a la traza «¿cuántas peticiones distintas hizo este usuario?» y
+«¿le pasa a más gente?» sin tener el correo de nadie en el servidor.
+
+Es un buen término medio, pero **hay que decir lo que no es**: seudonimizar no es
+anonimizar. El RGPD trata los datos seudonimizados como datos personales, porque con la
+sal se revierte. Sirve para reducir el riesgo de que el dato quede a la vista de quien
+mire un panel; no sirve para decir que ya no manejas datos personales.
+
+Y la sal en el entorno, con un nombre que **no empiece por `LANGSMITH_`** — si no, ya
+sabes dónde acaba (apartado 1).
+
+</details>
+
+#%%md
+## 7. Resumen
+
+- Se manda **más de lo que crees**: las entradas y salidas enteras, y además todas tus
+  variables de entorno `LANGCHAIN_*`/`LANGSMITH_*` que no contengan `key`, `secret`,
+  `token`, `password`, `credential` o `email` en el nombre. **No nombres así tus
+  variables.** Y `revision_id` sale de tu `git describe`.
+- **`hide_inputs` acepta una función**, no solo un booleano. Ponerlo a `True` protege
+  los datos y te deja un cronómetro caro; una función decide qué mandar en su lugar.
+- El **anonimizador** actúa por patrones dentro del texto, en entradas y salidas. Es la
+  herramienta correcta para datos personales.
+- Las **24 reglas de fábrica son todas para secretos**: te protegen a ti de filtrar tus
+  credenciales, no a tus usuarios. Las reglas de datos personales las escribes tú.
+- **El orden de las reglas importa**, de más específica a más general: una golosa se come
+  lo de la siguiente y deja un dato *parcialmente* visible, que es peor que nada porque
+  parece que funcionó. Y **el anonimizador muta el diccionario que le pasas** —da igual a
+  través del SDK, que copia antes; importa cuando lo llamas tú.
+- **No trazar** es la única opción con garantía, y se decide por petición.
+- Ninguna de las tres toca **lo ya guardado**, ni el **checkpointer de LangGraph**, que
+  sigue teniendo el estado en claro — el mismo hueco que el notebook 30 de aquel curso
+  encuentra con `PIIMiddleware`. Son dos capas.
+- **Audita las salidas, no solo las entradas.** Lo que el modelo escribe también es un
+  canal de fuga, y ahí acaba todo lo que le diste.
+
+---
+
+Con esto se cierra el **módulo 1**. Ya sabes qué es una traza, cómo instrumentar, cómo no
+perderlas, cómo agruparlas y puntuarlas, y qué no debe salir.
+
+**Siguiente:** [`P1 · Instrumentar el agente de soporte`](P1_instrumentar_el_agente.ipynb)
+— coger el agente del curso de LangGraph y dejarlo instrumentado de verdad, con las
+decisiones de este módulo tomadas a conciencia.

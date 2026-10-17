@@ -1,0 +1,81 @@
+# Verificación del curso de LangSmith.
+#
+# Las mismas tres etapas que el curso de LangGraph, con una diferencia que aquí es el
+# punto entero: la tercera ejecuta los notebooks **con la salida a smith.langchain.com
+# cortada**. El curso afirma que su modo local es local; esto es lo que lo demuestra.
+#
+# Ninguna etapa necesita clave ni gasta cuota de trazas.
+
+name: Verificar el curso de LangSmith
+
+on:
+  push:
+    paths: ["langsmith/**", ".github/workflows/verificar-langsmith.yml"]
+  pull_request:
+    paths: ["langsmith/**", ".github/workflows/verificar-langsmith.yml"]
+
+defaults:
+  run:
+    working-directory: langsmith
+
+jobs:
+  estatico:
+    name: 1 · Estático
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: langsmith/uv.lock
+
+      # --frozen falla si uv.lock no cuadra con pyproject.toml, en vez de resolver por
+      # su cuenta. Un lock desactualizado se detecta aquí, no en tu máquina.
+      - run: uv sync --frozen --all-groups
+
+      - name: requirements.txt al día con uv.lock
+        run: uv run _tools/exportar_requisitos.py --check
+
+      # Este paso pesa más aquí que en el otro curso: buena parte del material llama a
+      # un servicio que no se puede alcanzar al escribirlo, así que comprobar que cada
+      # símbolo del SDK existe de verdad es lo que separa el código escrito desde la
+      # documentación del código inventado.
+      - name: Los notebooks compilan y cada símbolo del SDK existe
+        run: uv run _tools/validar.py
+
+  pruebas:
+    name: 2 · Pruebas
+    runs-on: ubuntu-latest
+    needs: estatico
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: langsmith/uv.lock
+      - run: uv sync --frozen --all-groups
+      - run: uv run pytest
+
+  notebooks:
+    name: 3 · Los notebooks se ejecutan sin servicio
+    runs-on: ubuntu-latest
+    needs: pruebas
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: langsmith/uv.lock
+      # A PROPÓSITO sin --all-groups: aquí se instala lo MISMO que instala quien sigue
+      # el curso con `uv sync`. Con los grupos de desarrollo puestos, un notebook que
+      # dependa de algo opcional pasa aquí y falla en su portátil. Ya ocurrió una vez.
+      - run: uv sync --frozen
+
+      - name: Cada notebook, entero, sin clave y con la red cortada
+        run: uv run --frozen _tools/ejecutar_notebooks.py
+
+      # Y la cuarta pasada, que es la que cubre lo que antes no cubría nadie: las
+      # celdas @online se EJECUTAN contra un LangSmith simulado en vez de saltarse.
+      # No prueba la semántica del servicio real, pero sí que ese código corre.
+      - name: Las celdas @online, contra un LangSmith simulado
+        run: uv run --frozen _tools/ejecutar_notebooks.py --simulado

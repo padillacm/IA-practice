@@ -1,0 +1,829 @@
+#%%md
+# 05 · Herramientas y `ToolNode`
+
+**Módulo 2 · Agentes** — *tiempo estimado: 1 h 30 min*
+
+Un modelo de lenguaje sin herramientas solo puede escribir. Con herramientas puede
+consultar, calcular y actuar. Toda la diferencia entre un chatbot y un agente está aquí.
+
+Y casi todo lo que falla en un agente de producción falla **en las herramientas**: nombres
+ambiguos, descripciones vagas, errores que revientan el grafo, salidas de 40.000 tokens.
+
+Al terminar sabrás:
+
+1. Definir herramientas que el modelo **use bien**, no solo que existan.
+2. Los seis principios de diseño que separan una herramienta de juguete de una de producción.
+3. `ToolNode` y `tools_condition`, y **exactamente** cómo se comportan ante los errores
+   (que no es lo que casi todo el mundo cree).
+4. `ToolRuntime`: acceder al estado, al contexto y a la memoria desde dentro de una herramienta.
+5. Herramientas que **modifican el estado del grafo** devolviendo un `Command`.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m2")
+
+#%%md
+## 1. Qué es realmente una herramienta
+
+Para el modelo, una herramienta es **un esquema JSON con una descripción**. Nada más. El
+modelo nunca ejecuta nada: mira los esquemas, decide cuál encaja y emite una petición
+estructurada. Ejecutar es cosa tuya.
+
+Por eso la calidad de una herramienta se juega casi entera en **el nombre, la descripción y
+los nombres de los parámetros**. Es lo único que el modelo ve.
+
+#%%py
+import json
+
+from langchain.tools import tool
+
+
+@tool
+def buscar_ticket(id_ticket: str) -> str:
+    """Busca un ticket de soporte por su identificador y devuelve su estado actual."""
+    return f"El ticket {id_ticket} está abierto, prioridad alta."
+
+
+print("nombre     :", buscar_ticket.name)
+print("descripción:", buscar_ticket.description)
+print("\nesto es literalmente lo que ve el modelo:")
+print(json.dumps(buscar_ticket.args_schema.model_json_schema(), indent=2, ensure_ascii=False))
+
+#%%md
+### 1.1 Documentar los parámetros con `parse_docstring`
+
+Por defecto, la descripción de la herramienta es el docstring entero y los parámetros van
+**sin descripción**. Con `parse_docstring=True`, LangChain separa el docstring en estilo
+Google y da a cada parámetro su propia explicación. Es gratis y mejora mucho el uso.
+
+#%%py
+@tool(parse_docstring=True)
+def buscar_tickets(
+    categoria: str,
+    prioridad_minima: str = "baja",
+    limite: int = 5,
+) -> str:
+    """Busca tickets de soporte que cumplan unos filtros.
+
+    Args:
+        categoria: Una de: facturacion, acceso_cuenta, bug_producto, integraciones,
+            rendimiento, solicitud_funcionalidad, datos_privacidad, otros.
+        prioridad_minima: Prioridad mínima a incluir. Una de: baja, media, alta, critica.
+        limite: Cuántos tickets devolver como máximo. Entre 1 y 20.
+    """
+    return "..."
+
+
+for nombre, esquema in buscar_tickets.args.items():
+    print(f"  {nombre:<18} {esquema.get('description', '(sin descripción)')}")
+
+#%%md
+### 1.2 Cuando necesitas validación: `args_schema` con Pydantic
+
+Si los argumentos tienen restricciones reales (rangos, valores cerrados, formatos), un
+esquema Pydantic explícito los impone **antes** de que tu código se ejecute. Y el `Literal`
+además se lo comunica al modelo, así que ni siquiera lo intentará mal.
+
+#%%py
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class ArgsBusqueda(BaseModel):
+    """Filtros para buscar tickets de soporte."""
+
+    categoria: Literal["facturacion", "acceso_cuenta", "bug_producto", "integraciones",
+                       "rendimiento", "solicitud_funcionalidad", "datos_privacidad", "otros"] = Field(
+        description="La categoría del ticket"
+    )
+    prioridad_minima: Literal["baja", "media", "alta", "critica"] = Field(
+        default="baja", description="Prioridad mínima a incluir"
+    )
+    limite: int = Field(default=5, ge=1, le=20, description="Máximo de tickets a devolver")
+
+
+@tool("buscar_tickets_validado", args_schema=ArgsBusqueda)
+def buscar_validado(categoria: str, prioridad_minima: str = "baja", limite: int = 5) -> str:
+    """Busca tickets de soporte que cumplan unos filtros."""
+    return f"buscando {limite} tickets de {categoria} con prioridad >= {prioridad_minima}"
+
+
+print(buscar_validado.invoke({"categoria": "bug_producto", "limite": 3}))
+
+try:
+    buscar_validado.invoke({"categoria": "inventada", "limite": 3})
+except Exception as exc:
+    print(f"\nrechazado antes de ejecutar nada: {type(exc).__name__}")
+
+#%%md
+## 2. Los seis principios de diseño
+
+Estos seis puntos son la diferencia entre un agente que funciona y uno que da vueltas.
+Ninguno es teórico: cada uno viene de un fallo concreto que verás en producción.
+
+#%%md
+### Principio 1 · El nombre y la descripción son el prompt
+
+`obtener_datos` no dice nada. `buscar_tickets_por_categoria` dice cuándo usarla. La
+descripción debe responder **cuándo usarla y cuándo no**, no *qué hace por dentro*.
+
+#%%py
+# MAL: descripción centrada en la implementación
+@tool
+def consulta_bd(q: str) -> str:
+    """Ejecuta una consulta en la base de datos."""
+    return "..."
+
+
+# BIEN: descripción centrada en la decisión del modelo
+@tool
+def buscar_tickets_de_cliente(correo_cliente: str) -> str:
+    """Devuelve los tickets abiertos de un cliente, buscándolo por su correo electrónico.
+
+    Úsala cuando el usuario pregunte por el estado de sus incidencias o mencione un correo.
+    NO la uses para buscar por identificador de ticket: para eso está `buscar_ticket`.
+    """
+    return "..."
+
+
+print("mal :", consulta_bd.description)
+print("bien:", buscar_tickets_de_cliente.description)
+
+#%%md
+### Principio 2 · Granularidad: ni muy fina ni muy gruesa
+
+- **Demasiado fina** (`abrir_conexion`, `ejecutar`, `cerrar_conexion`): obligas al modelo a
+  orquestar detalles de implementación. Cada paso es una oportunidad de equivocarse y una
+  llamada más que pagar.
+- **Demasiado gruesa** (`hacer_todo(instrucciones: str)`): has movido el problema dentro de
+  la herramienta y el modelo ya no controla nada.
+
+**La regla:** una herramienta = una acción que un compañero humano describiría en una frase.
+
+#%%md
+### Principio 3 · Los errores son información, no excepciones
+
+Cuando una herramienta falla, el modelo debería **enterarse y poder reaccionar**: reintentar
+con otros argumentos, probar otra herramienta o decírselo al usuario. Un `raise` que sube
+hasta arriba mata la conversación entera.
+
+Lo veremos en detalle en la sección 4, porque el comportamiento por defecto de LangGraph 1.x
+sorprende a mucha gente.
+
+#%%md
+### Principio 4 · Acota la salida
+
+Una herramienta que devuelve 500 filas mete 40.000 tokens en el contexto, dispara la factura
+y provoca que el modelo pierda de vista lo que estaba haciendo. **Trunca, resume y dilo.**
+
+#%%py
+def formatear_resultados(filas: list[dict], maximo: int = 10) -> str:
+    """Devuelve como mucho `maximo` filas, y avisa explícitamente de lo que se ha recortado."""
+    cabecera = f"{len(filas)} resultados"
+    if len(filas) > maximo:
+        cabecera += f" (mostrando los {maximo} primeros; afina los filtros para ver menos)"
+    cuerpo = "\n".join(f"- {f}" for f in filas[:maximo])
+    return f"{cabecera}:\n{cuerpo}"
+
+
+print(formatear_resultados([{"id": f"TCK-{i}"} for i in range(50)], maximo=3))
+
+#%%md
+Ese "afina los filtros" no es cortesía: es una **instrucción para el modelo**. La salida de
+una herramienta es otro sitio donde puedes guiar su siguiente decisión.
+
+#%%md
+### Principio 5 · Diseña para el reintento
+
+El modelo va a llamar mal a tus herramientas. Que el mensaje de error diga **qué hacer**,
+no solo qué pasó.
+
+#%%py
+@tool(parse_docstring=True)
+def obtener_ticket(id_ticket: str) -> str:
+    """Devuelve los detalles de un ticket de soporte.
+
+    Args:
+        id_ticket: Identificador con formato TCK-0001 (prefijo TCK, guion, cuatro dígitos).
+    """
+    import re
+    if not re.fullmatch(r"TCK-\d{4}", id_ticket):
+        # Error accionable: dice el formato correcto y da un ejemplo.
+        return (f"Error: '{id_ticket}' no es un identificador válido. "
+                "El formato correcto es TCK seguido de guion y cuatro dígitos, por ejemplo TCK-0042. "
+                "Si solo tienes el número, formatéalo con ceros a la izquierda.")
+    return f"Ticket {id_ticket}: abierto, categoría facturación, prioridad media."
+
+
+print(obtener_ticket.invoke({"id_ticket": "42"}))
+print()
+print(obtener_ticket.invoke({"id_ticket": "TCK-0042"}))
+
+#%%md
+### Principio 6 · Deja claro qué es destructivo
+
+Una herramienta que borra, cobra o envía correos debe decirlo en su descripción **y** estar
+sujeta a aprobación humana. Lo montaremos en el notebook 10, pero la señal empieza aquí.
+
+#%%py
+@tool
+def reembolsar_cliente(id_factura: str, importe_euros: float) -> str:
+    """ACCIÓN IRREVERSIBLE: emite un reembolso real contra la factura indicada.
+
+    El dinero sale de la cuenta de la empresa y no se puede deshacer desde este sistema.
+    Requiere confirmación explícita del usuario antes de llamarla. Nunca la llames para
+    "comprobar" nada ni con importes de ejemplo.
+    """
+    return f"reembolsados {importe_euros} € de la factura {id_factura}"
+
+
+print(reembolsar_cliente.description)
+
+#%%md
+## 3. El bucle: `bind_tools`, `ToolNode` y `tools_condition`
+
+Tres piezas y ya tienes un agente:
+
+1. **`modelo.bind_tools([...])`** — el modelo ahora puede emitir `tool_calls`.
+2. **`ToolNode([...])`** — un nodo que ejecuta todas las `tool_calls` del último `AIMessage`
+   (en paralelo si son varias) y devuelve un `ToolMessage` por cada una.
+3. **`tools_condition`** — un router listo para usar: si el último mensaje trae `tool_calls`,
+   va a `"tools"`; si no, a `END`.
+
+#%%py
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+
+from utils.datos import tickets
+
+df = tickets()
+
+
+@tool(parse_docstring=True)
+def contar_tickets(categoria: str = "todas", prioridad: str = "todas") -> str:
+    """Cuenta cuántos tickets hay con los filtros indicados.
+
+    Args:
+        categoria: Categoría a filtrar, o 'todas' para no filtrar.
+        prioridad: Prioridad a filtrar (baja, media, alta, critica), o 'todas'.
+    """
+    sel = df
+    if categoria != "todas":
+        sel = sel[sel.categoria == categoria]
+    if prioridad != "todas":
+        sel = sel[sel.prioridad == prioridad]
+    return f"{len(sel)} tickets (categoría={categoria}, prioridad={prioridad})"
+
+
+@tool(parse_docstring=True)
+def tickets_mas_lentos(limite: int = 5) -> str:
+    """Devuelve los tickets con mayor tiempo hasta la primera respuesta.
+
+    Args:
+        limite: Cuántos devolver, entre 1 y 10.
+    """
+    limite = max(1, min(10, limite))
+    sel = df.nlargest(limite, "minutos_primera_respuesta")
+    filas = [f"{r.id_ticket} ({r.prioridad}, {r.minutos_primera_respuesta} min): {r.asunto}"
+             for r in sel.itertuples()]
+    return f"Los {limite} tickets con peor tiempo de respuesta:\n" + "\n".join(f"- {f}" for f in filas)
+
+
+HERRAMIENTAS = [contar_tickets, tickets_mas_lentos]
+modelo_con_tools = llm().bind_tools(HERRAMIENTAS)
+
+
+def nodo_modelo(estado: MessagesState) -> dict:
+    return {"messages": [modelo_con_tools.invoke(estado["messages"])]}
+
+
+agente = (
+    StateGraph(MessagesState)
+    .add_node("modelo", nodo_modelo)
+    .add_node("tools", ToolNode(HERRAMIENTAS))
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", tools_condition)   # -> "tools" o -> END
+    .add_edge("tools", "modelo")                        # el ciclo: resultados de vuelta al modelo
+    .compile()
+)
+
+mostrar_grafo(agente)
+
+#%%md
+Ese `add_edge("tools", "modelo")` es **el ciclo del agente**. Sin él tendrías una cadena; con
+él, un sistema que sigue trabajando hasta llegar a una respuesta. Es la razón por la que
+LangGraph existe.
+
+#%%py
+from langchain.messages import HumanMessage
+
+resultado = agente.invoke(
+    {"messages": [HumanMessage(
+        "¿Cuántos tickets críticos de rendimiento hay? Y dime los 3 que peor tiempo de respuesta tuvieron."
+    )]},
+    {"recursion_limit": 20},
+)
+
+mostrar_mensajes(resultado)
+
+#%%md
+Observa la traza completa: el modelo pidió **dos** herramientas, el `ToolNode` las ejecutó en
+paralelo, los dos `ToolMessage` volvieron al modelo y este redactó la respuesta final. Ese
+ida y vuelta es todo lo que hay debajo de la palabra "agente".
+
+#%%md
+## 4. Errores en herramientas: lo que de verdad hace LangGraph 1.x
+
+Aquí hay una trampa que se lleva por delante muchos despliegues, así que en vez de creernos
+la documentación de memoria vamos a **medirlo**.
+
+#%%py
+@tool
+def dividir(a: float, b: float) -> float:
+    """Divide a entre b."""
+    return a / b
+
+
+def probar_manejo(tool_node, nombre_herramienta, args) -> str:
+    """Ejecuta un ToolNode dentro de un grafo mínimo y describe qué ocurre.
+
+    Nota: un `ToolNode` no se puede invocar suelto en LangGraph 1.x — necesita el runtime
+    que solo existe dentro de un grafo. Este envoltorio es la forma correcta de probarlo.
+    """
+    from langchain.messages import AIMessage
+    g = StateGraph(MessagesState).add_node("tools", tool_node).add_edge(START, "tools").compile()
+    peticion = {"messages": [AIMessage("", tool_calls=[
+        {"name": nombre_herramienta, "args": args, "id": "call_1"}])]}
+    try:
+        m = g.invoke(peticion)["messages"][-1]
+        return f"ToolMessage(status={m.status!r}): {m.content[:80]}"
+    except Exception as exc:
+        return f"EXCEPCIÓN {type(exc).__name__}: {str(exc).splitlines()[0][:70]}"
+
+
+casos = [
+    ("por defecto · error dentro de la herramienta", ToolNode([dividir]), "dividir", {"a": 1, "b": 0}),
+    ("por defecto · argumentos inválidos", ToolNode([dividir]), "dividir", {"a": 1}),
+    ("por defecto · herramienta inexistente", ToolNode([dividir]), "fantasma", {}),
+    ("handle_tool_errors=True", ToolNode([dividir], handle_tool_errors=True), "dividir", {"a": 1, "b": 0}),
+    ("mensaje fijo", ToolNode([dividir], handle_tool_errors="No puedo dividir entre cero. Usa b != 0."),
+     "dividir", {"a": 1, "b": 0}),
+    ("función", ToolNode([dividir], handle_tool_errors=lambda e: f"Falló: {e}. Reintenta con otro divisor."),
+     "dividir", {"a": 1, "b": 0}),
+    ("solo ZeroDivisionError", ToolNode([dividir], handle_tool_errors=ZeroDivisionError),
+     "dividir", {"a": 1, "b": 0}),
+]
+
+for etiqueta, nodo, herramienta, args in casos:
+    print(f"  {etiqueta:<46} {probar_manejo(nodo, herramienta, args)}")
+
+#%%md
+Lee la primera línea otra vez, porque es la importante:
+
+> **Por defecto, una excepción lanzada dentro de tu herramienta NO se convierte en un
+> `ToolMessage`: se propaga y aborta la ejecución del grafo.**
+
+En LangGraph 1.x el manejador por defecto solo captura los errores de *invocación*
+—argumentos que no encajan con el esquema, herramienta inexistente—, que son culpa del
+modelo. Todo lo demás —tu `KeyError`, un timeout de red, un 500 de una API— sube.
+
+Es una decisión de diseño defendible: un fallo de tu infraestructura no debería disfrazarse
+de "resultado" y hacer que el modelo alucine una respuesta. Pero **hay que saberlo**, porque
+el comportamiento cambió respecto a la serie 0.x.
+
+| `handle_tool_errors=` | Qué hace |
+|---|---|
+| *(por defecto)* | Solo captura errores de invocación. El resto **se propaga** |
+| `True` | Captura todo y devuelve `Error: <repr>. Please fix your mistakes.` |
+| `"un texto"` | Captura todo y devuelve ese texto |
+| `lambda e: ...` | Captura todo y devuelve lo que devuelva tu función |
+| `TipoDeError` o `(A, B)` | Captura solo esos tipos; los demás se propagan |
+| `False` | No captura nada, ni siquiera los de invocación |
+
+**Qué usar en producción:** una función. Te deja registrar el error de verdad (con
+`logging`, con su traza) y devolver al modelo un mensaje corto y accionable, que son dos
+públicos distintos con necesidades distintas.
+
+#%%py
+import logging
+
+logger = logging.getLogger("agente.herramientas")
+
+
+def manejar_error(exc: Exception) -> str:
+    """Registra el error completo para nosotros; devuelve al modelo algo breve y útil."""
+    logger.exception("fallo en herramienta")
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return "El servicio no responde ahora mismo. Dilo al usuario y ofrece reintentar en un minuto."
+    if isinstance(exc, PermissionError):
+        return "No hay permisos para esta operación. NO reintentes; escala a un humano."
+    return f"La herramienta falló ({type(exc).__name__}). Prueba con otros argumentos o usa otra herramienta."
+
+
+nodo_robusto = ToolNode(HERRAMIENTAS + [dividir], handle_tool_errors=manejar_error)
+print(probar_manejo(nodo_robusto, "dividir", {"a": 1, "b": 0}))
+
+#%%md
+> La traza de excepción que aparece encima de la salida **no es un fallo**: es el
+> `logger.exception` haciendo su trabajo. Ese es justamente el punto de usar una función como
+> manejador — el error completo, con su traza, va a tus registros para que puedas depurarlo,
+> mientras que al modelo le llega una frase corta y accionable. Dos públicos, dos mensajes.
+
+Fíjate en el detalle del `PermissionError`: el mensaje le dice al modelo **que no reintente**.
+Sin esa instrucción, un agente entra en bucle probando lo mismo hasta agotar el
+`recursion_limit`. La salida de error es un canal de control, no solo un informe.
+
+#%%md
+## 5. `ToolRuntime`: el estado desde dentro de la herramienta
+
+Muchas herramientas necesitan datos que **el modelo no debería ver ni inventar**: el
+identificador del usuario, el contenido acumulado en el estado, la memoria de largo plazo.
+
+Si los pones como parámetros normales, el modelo tendrá que rellenarlos, y los inventará.
+La solución es `ToolRuntime`: un parámetro especial que LangGraph inyecta y que **no aparece
+en el esquema que ve el modelo**.
+
+#%%py
+import operator
+from dataclasses import dataclass
+from typing import Annotated
+
+from langchain.tools import ToolRuntime
+
+
+@dataclass
+class ContextoSoporte:
+    id_agente: str
+    nivel_acceso: str = "lectura"
+
+
+class EstadoSoporte(MessagesState):
+    tickets_consultados: Annotated[list[str], operator.add]
+
+
+@tool(parse_docstring=True)
+def detalle_ticket(id_ticket: str, runtime: ToolRuntime) -> str:
+    """Devuelve el detalle completo de un ticket de soporte.
+
+    Args:
+        id_ticket: Identificador con formato TCK-0001.
+    """
+    fila = df[df.id_ticket == id_ticket]
+    if fila.empty:
+        return f"No existe el ticket {id_ticket}. Comprueba el formato (TCK-0001)."
+    r = fila.iloc[0]
+
+    # Datos que el modelo NO proporciona: vienen del contexto de la petición.
+    ctx = runtime.context
+    visible = f"{r.asunto} — {r.mensaje}"
+    if ctx.nivel_acceso == "lectura":
+        visible += "\n(datos del cliente ocultos: tu nivel de acceso es solo lectura)"
+
+    # Y el estado acumulado hasta ahora, para no repetir trabajo.
+    ya_vistos = len(runtime.state.get("tickets_consultados", []))
+    return f"[consulta #{ya_vistos + 1} del agente {ctx.id_agente}] {r.id_ticket} ({r.prioridad}): {visible}"
+
+
+print("lo que ve el modelo :", detalle_ticket.args)
+print("(ni 'runtime' ni el contexto ni el estado aparecen: no puede inventarlos)")
+
+#%%py
+def nodo_modelo_soporte(estado: EstadoSoporte) -> dict:
+    m = llm().bind_tools([detalle_ticket])
+    return {"messages": [m.invoke(estado["messages"])]}
+
+
+agente_soporte = (
+    StateGraph(EstadoSoporte, context_schema=ContextoSoporte)
+    .add_node("modelo", nodo_modelo_soporte)
+    .add_node("tools", ToolNode([detalle_ticket], handle_tool_errors=manejar_error))
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", tools_condition)
+    .add_edge("tools", "modelo")
+    .compile()
+)
+
+salida = agente_soporte.invoke(
+    {"messages": [HumanMessage("¿Qué pasa con el ticket TCK-0007?")], "tickets_consultados": []},
+    context=ContextoSoporte(id_agente="ana.lopez", nivel_acceso="lectura"),
+    config={"recursion_limit": 15},
+)
+mostrar_mensajes(salida, maximo=3)
+
+#%%md
+| Atributo de `ToolRuntime` | Qué te da |
+|---|---|
+| `runtime.state` | El estado del grafo en este momento |
+| `runtime.context` | El contexto de solo lectura de la petición |
+| `runtime.store` | La memoria de largo plazo (módulo 3) |
+| `runtime.tool_call_id` | El id de esta llamada; necesario para construir `ToolMessage` a mano |
+| `runtime.stream_writer` | Emitir progreso propio al stream (módulo 4) |
+
+#%%md
+## 6. Herramientas que modifican el estado: devolver `Command`
+
+Por defecto una herramienta devuelve texto, que se convierte en un `ToolMessage`. Pero puede
+devolver un **`Command`** y entonces actualiza el estado del grafo directamente.
+
+Esto desbloquea tres cosas que de otra forma son incómodas:
+
+- Acumular resultados estructurados en el estado, no solo texto en el historial.
+- Pasar el control a otro nodo (la base de los *handoffs* entre agentes, módulo 13).
+- Escribir en varias claves del estado en una sola acción.
+
+**El detalle que hay que recordar:** si devuelves un `Command`, tú te encargas del
+`ToolMessage`. Si no lo incluyes, el historial queda con un `tool_call` sin respuesta y el
+proveedor rechazará la siguiente llamada.
+
+#%%py
+from langchain.messages import ToolMessage
+from langgraph.types import Command
+
+
+class EstadoCarrito(MessagesState):
+    seleccionados: Annotated[list[str], operator.add]
+    total_minutos: Annotated[int, operator.add]
+
+
+@tool(parse_docstring=True)
+def marcar_para_revision(id_ticket: str, runtime: ToolRuntime) -> Command:
+    """Marca un ticket para revisión manual y lo añade a la lista de trabajo.
+
+    Args:
+        id_ticket: Identificador del ticket, formato TCK-0001.
+    """
+    fila = df[df.id_ticket == id_ticket]
+    if fila.empty:
+        return Command(update={"messages": [ToolMessage(
+            f"No existe {id_ticket}; no se ha marcado nada.", tool_call_id=runtime.tool_call_id)]})
+
+    minutos = int(fila.iloc[0].minutos_primera_respuesta)
+    return Command(update={
+        "seleccionados": [id_ticket],                                  # estructurado, en el estado
+        "total_minutos": minutos,
+        "messages": [ToolMessage(                                       # obligatorio: cierra el tool_call
+            f"{id_ticket} marcado para revisión ({minutos} min de primera respuesta).",
+            tool_call_id=runtime.tool_call_id,
+        )],
+    })
+
+
+def nodo_modelo_carrito(estado: EstadoCarrito) -> dict:
+    m = llm().bind_tools([marcar_para_revision])
+    return {"messages": [m.invoke(estado["messages"])]}
+
+
+revisor = (
+    StateGraph(EstadoCarrito)
+    .add_node("modelo", nodo_modelo_carrito)
+    .add_node("tools", ToolNode([marcar_para_revision], handle_tool_errors=manejar_error))
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", tools_condition)
+    .add_edge("tools", "modelo")
+    .compile()
+)
+
+salida = revisor.invoke(
+    {"messages": [HumanMessage("Marca para revisión los tickets TCK-0003, TCK-0007 y TCK-0011.")],
+     "seleccionados": [], "total_minutos": 0},
+    {"recursion_limit": 20},
+)
+
+print("seleccionados en el estado:", salida["seleccionados"])
+print("suma de minutos           :", salida["total_minutos"])
+print("\nrespuesta final:", salida["messages"][-1].text)
+
+#%%md
+Lo relevante: `seleccionados` y `total_minutos` son **datos estructurados en el estado**, no
+texto que haya que volver a parsear del historial. El siguiente nodo del grafo puede usarlos
+directamente, y un reducer se encargó de acumularlos aunque las tres llamadas ocurrieran en
+paralelo.
+
+#%%md
+## 7. Ejercicios
+
+> **EJERCICIO 5.1 — Una herramienta de análisis bien diseñada**
+>
+> Construye una herramienta `analizar_ventas` sobre `utils.datos.ventas()` que responda
+> preguntas agregadas: total, media o conteo de una métrica, agrupando opcionalmente por una
+> dimensión y filtrando por ciudad.
+>
+> Requisitos, y son los que importan:
+> - `Literal` para métrica, agregación y dimensión (nada de texto libre).
+> - Salida **acotada** a 12 filas como máximo, avisando del recorte.
+> - Errores **accionables**, que digan qué hacer.
+> - Que el modelo no pueda pedir columnas que no existen.
+>
+> Pruébala con un agente y tres preguntas distintas.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 5.1</b></summary>
+
+El truco de diseño está en <code>Literal</code>: al cerrar el dominio de <code>metrica</code>
+y <code>dimension</code>, el modelo <b>no puede</b> pedir una columna inexistente, así que
+desaparece toda una familia de errores sin escribir una sola validación. Cerrar el dominio
+en el esquema es siempre mejor que validar después.
+
+Fíjate también en que la herramienta devuelve las cifras <b>formateadas y con unidades</b>.
+Devolver un <code>DataFrame</code> en crudo obligaría al modelo a interpretar una tabla, y
+ahí es donde se inventa los números.
+</details>
+
+#%%py
+from utils.datos import ventas
+
+dfv = ventas()
+print("columnas disponibles:", list(dfv.columns))
+print(dfv[["city", "product_line", "total", "quantity", "gross_income"]].head(3).to_string(index=False))
+
+#%%py
+COLUMNA = {"ingresos": "total", "unidades": "quantity", "margen": "gross_income"}
+DIMENSION = {"ciudad": "city", "linea_producto": "product_line", "tipo_cliente": "customer_type",
+             "metodo_pago": "payment", "genero": "gender"}
+
+
+class ArgsVentas(BaseModel):
+    """Consulta agregada sobre las ventas de supermercado."""
+
+    metrica: Literal["ingresos", "unidades", "margen"] = Field(description="Qué se agrega")
+    agregacion: Literal["suma", "media", "conteo"] = Field(default="suma", description="Cómo se agrega")
+    dimension: Literal["ciudad", "linea_producto", "tipo_cliente", "metodo_pago", "genero", "ninguna"] = Field(
+        default="ninguna", description="Por qué columna agrupar. 'ninguna' devuelve un único total."
+    )
+    filtrar_ciudad: str = Field(default="", description="Limitar a una ciudad. Vacío para no filtrar.")
+
+
+@tool("analizar_ventas", args_schema=ArgsVentas)
+def analizar_ventas(metrica: str, agregacion: str = "suma",
+                    dimension: str = "ninguna", filtrar_ciudad: str = "") -> str:
+    """Calcula agregados sobre las ventas: totales, medias o conteos, opcionalmente por dimensión."""
+    sel = dfv
+    if filtrar_ciudad:
+        sel = sel[sel.city.str.lower() == filtrar_ciudad.lower()]
+        if sel.empty:
+            disponibles = ", ".join(sorted(dfv.city.unique()))
+            return f"No hay datos para la ciudad '{filtrar_ciudad}'. Ciudades disponibles: {disponibles}."
+
+    col = COLUMNA[metrica]
+    func = {"suma": "sum", "media": "mean", "conteo": "count"}[agregacion]
+    unidad = {"ingresos": "€", "margen": "€", "unidades": "uds"}[metrica]
+
+    if dimension == "ninguna":
+        valor = getattr(sel[col], func)()
+        return f"{agregacion} de {metrica}{f' en {filtrar_ciudad}' if filtrar_ciudad else ''}: {valor:,.2f} {unidad}"
+
+    serie = getattr(sel.groupby(DIMENSION[dimension])[col], func)().sort_values(ascending=False)
+    MAXIMO = 12
+    cabecera = f"{agregacion} de {metrica} por {dimension}"
+    if filtrar_ciudad:
+        cabecera += f" (solo {filtrar_ciudad})"
+    if len(serie) > MAXIMO:
+        cabecera += f" — {len(serie)} grupos, mostrando los {MAXIMO} mayores"
+    filas = "\n".join(f"  {k}: {v:,.2f} {unidad}" for k, v in serie.head(MAXIMO).items())
+    return f"{cabecera}:\n{filas}"
+
+
+print(analizar_ventas.invoke({"metrica": "ingresos", "dimension": "ciudad"}))
+print()
+print(analizar_ventas.invoke({"metrica": "unidades", "agregacion": "media",
+                              "dimension": "linea_producto", "filtrar_ciudad": "Yangon"}))
+print()
+print(analizar_ventas.invoke({"metrica": "ingresos", "filtrar_ciudad": "Madrid"}))
+
+#%%py
+analista = (
+    StateGraph(MessagesState)
+    .add_node("modelo", lambda e: {"messages": [llm().bind_tools([analizar_ventas]).invoke(e["messages"])]})
+    .add_node("tools", ToolNode([analizar_ventas], handle_tool_errors=manejar_error))
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", tools_condition)
+    .add_edge("tools", "modelo")
+    .compile()
+)
+
+for pregunta in [
+    "¿Qué ciudad factura más y cuánto?",
+    "¿Cuál es el margen medio por línea de producto en Naypyitaw?",
+    "¿Cuántas ventas hubo en Barcelona?",     # ciudad inexistente: probamos el error accionable
+]:
+    r = analista.invoke({"messages": [HumanMessage(pregunta)]}, {"recursion_limit": 15})
+    print(f"P: {pregunta}\nR: {r['messages'][-1].text}\n")
+
+#%%md
+> **EJERCICIO 5.2 — Una herramienta con presupuesto**
+>
+> Escribe una herramienta `buscar_documentos(consulta)` que lleve la cuenta de cuántas veces
+> se ha llamado **en la ejecución actual** y que, a partir de la tercera, devuelva un mensaje
+> pidiendo al modelo que deje de buscar y responda con lo que ya tiene.
+>
+> Pistas: el contador va en el estado, se lee con `runtime.state` y se incrementa devolviendo
+> un `Command`.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 5.2</b></summary>
+
+Este patrón —<b>una herramienta que se autolimita</b>— es una de las defensas más efectivas
+contra el agente que da vueltas. Compáralo con las alternativas:
+<ul>
+<li><code>recursion_limit</code> corta con una <b>excepción</b>: el usuario no recibe nada.</li>
+<li>Un contador en un nodo aparte funciona, pero la información llega al modelo un paso tarde.</li>
+<li>Aquí el modelo se entera <b>en el mismo turno</b>, dentro del resultado de la herramienta,
+y puede cerrar la conversación con lo que ya tiene.</li>
+</ul>
+La versión de fábrica de esta idea es <code>ToolCallLimitMiddleware</code>, que veremos en el
+notebook 07.
+</details>
+
+#%%py
+class EstadoBusqueda(MessagesState):
+    busquedas: Annotated[int, operator.add]
+
+
+PRESUPUESTO_BUSQUEDAS = 3
+CORPUS = {
+    "checkpointer": "Un checkpointer guarda una instantánea del estado tras cada super-paso.",
+    "reducer": "Un reducer decide cómo se combinan las escrituras concurrentes en una clave.",
+    "send": "Send crea N tareas dinámicas, cada una con su propio estado.",
+    "interrupt": "interrupt() pausa el grafo y espera un Command(resume=...) para continuar.",
+}
+
+
+@tool(parse_docstring=True)
+def buscar_documentos(consulta: str, runtime: ToolRuntime) -> Command:
+    """Busca en la documentación interna y devuelve los fragmentos relevantes.
+
+    Args:
+        consulta: Términos de búsqueda, en minúsculas y sin signos de puntuación.
+    """
+    usadas = runtime.state.get("busquedas", 0)
+
+    if usadas >= PRESUPUESTO_BUSQUEDAS:
+        texto = (f"PRESUPUESTO AGOTADO: ya has hecho {usadas} búsquedas, el máximo por consulta. "
+                 "No busques más. Responde ya al usuario con la información que tengas y di "
+                 "explícitamente qué parte no has podido confirmar.")
+        return Command(update={"messages": [ToolMessage(texto, tool_call_id=runtime.tool_call_id)]})
+
+    encontrados = [v for k, v in CORPUS.items() if k in consulta.lower()]
+    texto = ("\n".join(f"- {t}" for t in encontrados) if encontrados
+             else f"Sin resultados para '{consulta}'. Te quedan {PRESUPUESTO_BUSQUEDAS - usadas - 1} búsquedas.")
+
+    return Command(update={
+        "busquedas": 1,
+        "messages": [ToolMessage(f"[búsqueda {usadas + 1}/{PRESUPUESTO_BUSQUEDAS}]\n{texto}",
+                                 tool_call_id=runtime.tool_call_id)],
+    })
+
+
+buscador = (
+    StateGraph(EstadoBusqueda)
+    .add_node("modelo", lambda e: {"messages": [llm().bind_tools([buscar_documentos]).invoke(e["messages"])]})
+    .add_node("tools", ToolNode([buscar_documentos], handle_tool_errors=manejar_error))
+    .add_edge(START, "modelo")
+    .add_conditional_edges("modelo", tools_condition)
+    .add_edge("tools", "modelo")
+    .compile()
+)
+
+salida = buscador.invoke(
+    {"messages": [HumanMessage(
+        "Busca en la documentación qué son un checkpointer, un reducer, Send, interrupt, "
+        "los subgrafos y el Functional API. Busca cada uno por separado."
+    )], "busquedas": 0},
+    {"recursion_limit": 25},
+)
+
+print(f"búsquedas realizadas: {salida['busquedas']} (presupuesto: {PRESUPUESTO_BUSQUEDAS})\n")
+print(salida["messages"][-1].text)
+
+#%%md
+## 8. Resumen
+
+- Para el modelo, una herramienta **es su esquema**. El nombre, la descripción y los nombres
+  de los parámetros son prompt, no documentación.
+- `parse_docstring=True` da descripción a cada parámetro. `args_schema` con `Literal` cierra
+  el dominio y elimina familias enteras de errores.
+- Los seis principios: nombre y descripción orientados a la decisión, granularidad de una
+  frase, errores como información, salida acotada, mensajes de error accionables, y marcar
+  lo destructivo.
+- El bucle del agente es `modelo -> tools_condition -> ToolNode -> modelo`.
+- **Por defecto, una excepción dentro de tu herramienta aborta el grafo.** Pasa una función
+  a `handle_tool_errors` en cualquier cosa que vaya a producción.
+- `ToolRuntime` inyecta estado, contexto, store y `tool_call_id` **sin** exponerlos al modelo.
+- Una herramienta puede devolver `Command` para escribir en el estado; si lo haces, incluye
+  tú el `ToolMessage`.
+
+**Siguiente:** [`06_agente_react_desde_cero.ipynb`](06_agente_react_desde_cero.ipynb) — el
+bucle ReAct construido a mano, con todo lo que los atajos te esconden.

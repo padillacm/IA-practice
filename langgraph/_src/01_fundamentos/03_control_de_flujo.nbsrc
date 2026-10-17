@@ -1,0 +1,759 @@
+#%%md
+# 03 · Control de flujo: ramificar, paralelizar y repartir
+
+**Módulo 1 · Fundamentos** — *tiempo estimado: 1 h 30 min*
+
+Hasta ahora nuestros grafos eran líneas rectas. Aquí aprendemos a decidir el camino, a
+ejecutar varias ramas a la vez y a crear trabajo dinámicamente en tiempo de ejecución.
+
+Al terminar dominarás las **cuatro** formas de decidir el flujo en LangGraph, y sabrás
+cuál toca en cada caso:
+
+| Mecanismo | Quién decide | Cuándo usarlo |
+|---|---|---|
+| `add_edge` | nadie, es fija | El siguiente paso siempre es el mismo |
+| `add_conditional_edges` | una función *router* | Ramificar según el estado |
+| `Command` | el propio nodo | El nodo ya calculó la decisión al hacer su trabajo |
+| `Send` | una función, en ejecución | Map-reduce: N tareas, N desconocido de antemano |
+
+Y además: ciclos, límites de recursión, ejecución diferida y visualización de topologías
+dinámicas.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init()
+
+#%%md
+## 1. Aristas condicionales
+
+Una arista condicional es un nodo origen, una **función de enrutado** y (opcionalmente) un
+mapa de destinos. La función recibe el estado y devuelve el **nombre** del siguiente nodo.
+
+Un detalle que la gente confunde constantemente: **la función de enrutado no es un nodo**.
+No se ejecuta como un super-paso, no puede modificar el estado y no aparece en el diagrama.
+Solo lee y decide. Si necesitas que la decisión *cambie* el estado, eso es un nodo (o un
+`Command`).
+
+#%%py
+import operator
+from typing import Annotated, Literal, TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
+
+class EstadoTicket(TypedDict):
+    mensaje: str
+    prioridad: str
+    accion: str
+
+
+def clasificar(estado: EstadoTicket) -> dict:
+    """Un nodo: hace trabajo y escribe en el estado."""
+    texto = estado["mensaje"].lower()
+    if any(p in texto for p in ("urgente", "caído", "bloqueado", "parado")):
+        return {"prioridad": "critica"}
+    if "factura" in texto or "cobro" in texto:
+        return {"prioridad": "media"}
+    return {"prioridad": "baja"}
+
+
+def enrutar_por_prioridad(estado: EstadoTicket) -> Literal["escalar", "cola_normal", "autoservicio"]:
+    """Una función de enrutado: solo lee y devuelve el nombre del siguiente nodo.
+
+    La anotación `Literal[...]` no es decorativa: LangGraph la lee para dibujar las
+    aristas posibles en el diagrama.
+    """
+    return {"critica": "escalar", "media": "cola_normal", "baja": "autoservicio"}[estado["prioridad"]]
+
+
+def escalar(estado: EstadoTicket) -> dict:
+    return {"accion": "avisar al ingeniero de guardia"}
+
+
+def cola_normal(estado: EstadoTicket) -> dict:
+    return {"accion": "a la cola de soporte (SLA 8 h)"}
+
+
+def autoservicio(estado: EstadoTicket) -> dict:
+    return {"accion": "responder con un artículo del centro de ayuda"}
+
+
+enrutador = (
+    StateGraph(EstadoTicket)
+    .add_node("clasificar", clasificar)
+    .add_node("escalar", escalar)
+    .add_node("cola_normal", cola_normal)
+    .add_node("autoservicio", autoservicio)
+    .add_edge(START, "clasificar")
+    .add_conditional_edges(
+        "clasificar",
+        enrutar_por_prioridad,
+        # El path_map: valor devuelto -> nodo destino. Aquí coinciden, pero decláralo igual.
+        {"escalar": "escalar", "cola_normal": "cola_normal", "autoservicio": "autoservicio"},
+    )
+    .add_edge("escalar", END)
+    .add_edge("cola_normal", END)
+    .add_edge("autoservicio", END)
+    .compile()
+)
+
+for msg in ["El servicio está caído y estamos parados",
+            "No me llega la factura de mayo",
+            "¿Tenéis modo oscuro?"]:
+    r = enrutador.invoke({"mensaje": msg, "prioridad": "", "accion": ""})
+    print(f"  {r['prioridad']:<8} -> {r['accion']}")
+
+#%%py
+mostrar_grafo(enrutador)
+
+#%%md
+### 1.1 Sobre el `path_map`
+
+`add_conditional_edges` acepta tres formas de declarar los destinos:
+
+```python
+add_conditional_edges("origen", router)                          # (a) sin mapa
+add_conditional_edges("origen", router, ["nodo_a", "nodo_b"])    # (b) lista de destinos
+add_conditional_edges("origen", router, {"si": "a", "no": "b"})  # (c) mapa valor -> nodo
+```
+
+- **(c) es la mejor por defecto**: separa el vocabulario del router (`"si"`, `"no"`) de los
+  nombres de los nodos, así que puedes renombrar nodos sin tocar la lógica.
+- **(b)** sirve cuando el router ya devuelve nombres de nodo.
+- **(a)** funciona, pero el diagrama queda incompleto y un destino inexistente se ignora en
+  silencio (lo viste en el notebook 01). Con la anotación `Literal[...]` en el router,
+  LangGraph puede inferir los destinos y el dibujo sale bien.
+
+Regla práctica: **usa `Literal[...]` en el router o pasa el `path_map`. Idealmente los dos.**
+
+#%%md
+### 1.2 Un router puede abrir varias ramas a la vez
+
+Si el router devuelve una **lista** de nombres, todos esos nodos se ejecutan en el mismo
+super-paso. Es la forma más simple de abanico condicional.
+
+#%%py
+class EstadoRevision(TypedDict):
+    codigo: str
+    hallazgos: Annotated[list[str], operator.add]
+
+
+def decidir_analisis(estado: EstadoRevision) -> list[str]:
+    """Devuelve TODOS los análisis que aplican. Todos correrán a la vez."""
+    analisis = ["estilo"]                                # siempre
+    if "password" in estado["codigo"] or "token" in estado["codigo"]:
+        analisis.append("seguridad")
+    if "for " in estado["codigo"]:
+        analisis.append("rendimiento")
+    return analisis
+
+
+revision = (
+    StateGraph(EstadoRevision)
+    .add_node("preparar", lambda e: {})
+    .add_node("estilo", lambda e: {"hallazgos": ["estilo: faltan anotaciones de tipo"]})
+    .add_node("seguridad", lambda e: {"hallazgos": ["seguridad: credencial en el código"]})
+    .add_node("rendimiento", lambda e: {"hallazgos": ["rendimiento: bucle anidado O(n^2)"]})
+    .add_node("informe", lambda e: {})
+    .add_edge(START, "preparar")
+    .add_conditional_edges("preparar", decidir_analisis, ["estilo", "seguridad", "rendimiento"])
+    .add_edge("estilo", "informe")
+    .add_edge("seguridad", "informe")
+    .add_edge("rendimiento", "informe")
+    .compile()
+)
+
+r = revision.invoke({"codigo": "for x in y: password = 'abc'", "hallazgos": []})
+print("con credencial y bucle:")
+for h in r["hallazgos"]:
+    print("   -", h)
+
+r = revision.invoke({"codigo": "def suma(a, b): return a + b", "hallazgos": []})
+print("\ncódigo limpio:", r["hallazgos"])
+
+#%%md
+Fíjate en el nodo `informe`: tiene tres aristas de entrada, pero **solo se ejecuta una vez**,
+y espera a que terminen todas las ramas que se activaron. Eso es el *fan-in* de Pregel, y es
+automático. No hace falta ninguna barrera ni sincronización manual.
+
+#%%md
+## 2. `Command`: cuando el nodo ya sabe adónde ir
+
+A veces separar "hacer el trabajo" de "decidir el camino" es artificial: el nodo llama al
+modelo, y en la misma respuesta viene el resultado *y* la decisión. Con aristas condicionales
+tendrías que escribir la decisión en el estado solo para que el router la vuelva a leer.
+
+`Command` deja que el nodo devuelva **las dos cosas a la vez**: la actualización del estado y
+el siguiente nodo.
+
+#%%py
+from langgraph.types import Command
+
+
+class EstadoRedaccion(TypedDict):
+    borrador: str
+    criticas: Annotated[list[str], operator.add]
+    iteraciones: Annotated[int, operator.add]
+
+
+def escribir(estado: EstadoRedaccion) -> dict:
+    n = estado["iteraciones"]
+    return {"borrador": f"borrador v{n + 1}", "iteraciones": 1}
+
+
+def revisar(estado: EstadoRedaccion) -> Command[Literal["escribir", "publicar"]]:
+    """Evalúa y decide, en una sola operación.
+
+    La anotación del tipo de retorno, `Command[Literal[...]]`, es lo que permite a
+    LangGraph dibujar las aristas: sin ella el diagrama no muestra ningún destino.
+    """
+    aprobado = estado["iteraciones"] >= 3
+    return Command(
+        update={"criticas": [f"revisión de {estado['borrador']}: "
+                             f"{'aprobado' if aprobado else 'necesita más trabajo'}"]},
+        goto="publicar" if aprobado else "escribir",
+    )
+
+
+ciclo = (
+    StateGraph(EstadoRedaccion)
+    .add_node("escribir", escribir)
+    .add_node("revisar", revisar)
+    .add_node("publicar", lambda e: {"criticas": ["publicado"]})
+    .add_edge(START, "escribir")
+    .add_edge("escribir", "revisar")
+    .add_edge("publicar", END)
+    .compile()
+)
+
+r = ciclo.invoke({"borrador": "", "criticas": [], "iteraciones": 0})
+print(f"{r['iteraciones']} iteraciones, borrador final: {r['borrador']}")
+for c in r["criticas"]:
+    print("  -", c)
+
+#%%py
+mostrar_grafo(ciclo)
+
+#%%md
+> Fíjate en el diagrama: las aristas `revisar -> escribir` y `revisar -> publicar` aparecen
+> **sin que las hayamos declarado**. Salen de la anotación `Command[Literal["escribir",
+> "publicar"]]`. Si quitas la anotación, el grafo funciona igual pero el dibujo queda mudo,
+> y con él LangGraph Studio y cualquiera que herede tu código.
+>
+> Si el destino es dinámico y no lo puedes anotar, usa
+> `add_node("revisar", revisar, destinations=("escribir", "publicar"))`.
+
+#%%md
+### ¿Arista condicional o `Command`?
+
+| | Arista condicional | `Command` |
+|---|---|---|
+| La decisión está separada del trabajo | **sí** | no |
+| El nodo hace trabajo *y* decide | forzado a escribir en el estado | **natural** |
+| El destino sale de una respuesta del LLM | dos pasos | **un paso** |
+| Saltar a un nodo del **grafo padre** desde un subgrafo | imposible | **`Command(graph=Command.PARENT)`** |
+| Se ve en el diagrama sin ayuda | **sí** | necesita anotación o `destinations` |
+
+Ese `Command(graph=Command.PARENT)` de la penúltima fila es la base de los *handoffs* entre
+agentes, y es el motivo por el que `Command` existe. Lo usaremos a fondo en el módulo 4.
+
+**Recomendación:** empieza con aristas condicionales, que son más fáciles de leer y de
+dibujar. Pasa a `Command` cuando el nodo ya tenga la decisión en la mano, o cuando necesites
+saltar entre grafos.
+
+#%%md
+## 3. Paralelismo real: abanico de salida y de entrada
+
+Todos los nodos alcanzables en el mismo super-paso corren **a la vez**. Vamos a medirlo,
+porque es el tipo de cosa que conviene ver con un cronómetro y no de fiarse.
+
+#%%py
+import time
+
+
+class EstadoLento(TypedDict):
+    resultados: Annotated[list[str], operator.add]
+
+
+def tarea_lenta(nombre: str, segundos: float):
+    def nodo(estado: EstadoLento) -> dict:
+        time.sleep(segundos)
+        return {"resultados": [f"{nombre} ({segundos}s)"]}
+    return nodo
+
+
+# (a) en secuencia
+secuencial = (
+    StateGraph(EstadoLento)
+    .add_node("a", tarea_lenta("a", 0.5)).add_node("b", tarea_lenta("b", 0.5)).add_node("c", tarea_lenta("c", 0.5))
+    .add_edge(START, "a").add_edge("a", "b").add_edge("b", "c").add_edge("c", END)
+    .compile()
+)
+
+# (b) en paralelo: los tres salen de START
+paralelo = (
+    StateGraph(EstadoLento)
+    .add_node("a", tarea_lenta("a", 0.5)).add_node("b", tarea_lenta("b", 0.5)).add_node("c", tarea_lenta("c", 0.5))
+    .add_edge(START, "a").add_edge(START, "b").add_edge(START, "c")
+    .compile()
+)
+
+for nombre, g in [("secuencial", secuencial), ("paralelo  ", paralelo)]:
+    t0 = time.perf_counter()
+    g.invoke({"resultados": []})
+    print(f"  {nombre}: {time.perf_counter() - t0:.2f} s")
+
+#%%md
+Tres veces más rápido, y lo único que cambió fue el cableado. **Cada vez que dos nodos no
+dependen el uno del otro, ponerlos en el mismo super-paso es dinero y latencia gratis.**
+En un grafo con tres llamadas a un LLM de 2 segundos, la diferencia entre 6 s y 2 s es la
+diferencia entre un producto usable y uno que no.
+
+Los nodos síncronos corren en un pool de hilos; los `async def`, en el bucle de eventos.
+En los dos casos, el paralelismo es real para trabajo de E/S — que es el 99 % de lo que hace
+un agente.
+
+#%%md
+### 3.1 `defer`: esperar a que acaben *todas* las ramas
+
+Un nodo agregador con varias aristas de entrada se ejecuta cuando le llega el primer lote de
+mensajes. Si las ramas tienen **longitudes distintas** (una tarda un super-paso y otra tres),
+el agregador puede dispararse antes de tiempo.
+
+`defer=True` lo pospone hasta que no quede nada pendiente en el grafo.
+
+#%%py
+class EstadoDesigual(TypedDict):
+    pasos: Annotated[list[str], operator.add]
+
+
+def paso(nombre: str):
+    return lambda estado: {"pasos": [nombre]}
+
+
+def construir(diferido: bool):
+    b = StateGraph(EstadoDesigual)
+    b.add_node("rama_corta", paso("rama_corta"))
+    b.add_node("rama_larga_1", paso("rama_larga_1"))
+    b.add_node("rama_larga_2", paso("rama_larga_2"))
+    b.add_node("rama_larga_3", paso("rama_larga_3"))
+    b.add_node("agregar", lambda e: {"pasos": [f">>> agregar vio {len(e['pasos'])} pasos"]},
+               defer=diferido)
+    b.add_edge(START, "rama_corta")
+    b.add_edge(START, "rama_larga_1")
+    b.add_edge("rama_larga_1", "rama_larga_2")
+    b.add_edge("rama_larga_2", "rama_larga_3")
+    b.add_edge("rama_corta", "agregar")
+    b.add_edge("rama_larga_3", "agregar")
+    return b.compile()
+
+
+print("sin defer :", construir(False).invoke({"pasos": []})["pasos"])
+print("con defer :", construir(True).invoke({"pasos": []})["pasos"])
+
+#%%md
+Con `defer=True`, el agregador ve las cuatro ramas. Sin él, se ejecuta en cuanto llega la
+rama corta y luego **otra vez** al llegar la larga — dos ejecuciones, dos facturas del LLM y
+un informe parcial que nadie pidió.
+
+Úsalo siempre que un nodo tenga que ver "todo lo que produjo el grafo" y las ramas no sean
+simétricas: el sintetizador de un sistema multiagente, el nodo que escribe el informe final,
+el que decide si hay que reintentar.
+
+#%%md
+## 4. `Send`: map-reduce cuando no sabes cuántas tareas hay
+
+Las aristas condicionales eligen entre nodos que **existen**. Pero muchas veces el número de
+tareas se decide en ejecución: "resume cada uno de los N documentos recuperados", "analiza
+cada uno de los M ficheros del PR".
+
+`Send(nodo, estado)` crea una ejecución de un nodo **con su propio estado**, independiente
+del estado del grafo. Devuelve una lista de `Send` desde una función de enrutado y tendrás
+N copias del nodo corriendo a la vez.
+
+Dos cosas que hay que entender bien:
+
+1. El nodo destino recibe **exactamente** el objeto que le pasas en el `Send`, no el estado
+   del grafo. Su esquema puede ser distinto.
+2. Lo que devuelva el nodo **sí** se aplica al estado del grafo, con sus reducers. Por eso
+   la clave de recogida necesita un reducer acumulador. Es la parte *reduce* del map-reduce.
+
+#%%py
+from langgraph.types import Send
+
+
+class EstadoInforme(TypedDict):
+    tickets: list[dict]
+    resumenes: Annotated[list[str], operator.add]
+    informe: str
+
+
+class TareaTicket(TypedDict):
+    """El estado privado de cada tarea del map. No es el estado del grafo."""
+    id_ticket: str
+    asunto: str
+
+
+def repartir(estado: EstadoInforme) -> list[Send]:
+    """No es un nodo: es una función de enrutado que fabrica N tareas."""
+    return [Send("resumir_uno", {"id_ticket": t["id"], "asunto": t["asunto"]})
+            for t in estado["tickets"]]
+
+
+def resumir_uno(tarea: TareaTicket) -> dict:
+    """Recibe la tarea, no el estado del grafo. Escribe en el estado del grafo."""
+    return {"resumenes": [f"[{tarea['id_ticket']}] {tarea['asunto'][:40]}"]}
+
+
+def redactar_informe(estado: EstadoInforme) -> dict:
+    return {"informe": f"Informe con {len(estado['resumenes'])} tickets resumidos"}
+
+
+mapreduce = (
+    StateGraph(EstadoInforme)
+    .add_node("preparar", lambda e: {})
+    .add_node("resumir_uno", resumir_uno)
+    .add_node("redactar_informe", redactar_informe)
+    .add_edge(START, "preparar")
+    .add_conditional_edges("preparar", repartir, ["resumir_uno"])
+    .add_edge("resumir_uno", "redactar_informe")
+    .compile()
+)
+
+entrada = {
+    "tickets": [
+        {"id": "TCK-1", "asunto": "Error 500 al guardar un informe"},
+        {"id": "TCK-2", "asunto": "No me llega la factura de mayo"},
+        {"id": "TCK-3", "asunto": "El webhook deja de disparar eventos"},
+    ],
+    "resumenes": [],
+    "informe": "",
+}
+
+salida = mapreduce.invoke(entrada)
+for r in salida["resumenes"]:
+    print("  ", r)
+print("\n", salida["informe"])
+
+#%%py
+mostrar_grafo(mapreduce)
+
+#%%md
+En el diagrama solo hay **un** nodo `resumir_uno`, aunque en ejecución hubo tres instancias.
+Es una limitación conocida y esperable: la topología dinámica no se puede dibujar antes de
+ejecutar. Para ver las instancias reales necesitas la traza de LangSmith o
+`stream(stream_mode="updates")`.
+
+#%%md
+### `Send` frente a un router que devuelve una lista
+
+| | Router con lista | `Send` |
+|---|---|---|
+| Cuántos destinos | fijo, conocido al escribir el código | **dinámico, decidido en ejecución** |
+| Qué recibe cada destino | el estado del grafo | **su propio estado, a medida** |
+| Nodos distintos o el mismo N veces | nodos distintos | normalmente **el mismo, N veces** |
+| Caso típico | "ejecuta los análisis que apliquen" | "resume cada uno de los N documentos" |
+
+#%%md
+## 5. Ciclos y el límite de recursión
+
+Los ciclos son la razón de ser de LangGraph. Un agente **es** un ciclo:
+`modelo -> herramientas -> modelo -> ...` hasta que el modelo decide parar.
+
+La protección contra bucles infinitos es `recursion_limit`, que cuenta **super-pasos**, no
+iteraciones de tu bucle lógico.
+
+#%%py
+from langgraph.errors import GraphRecursionError
+
+
+class EstadoBucle(TypedDict):
+    i: int
+
+
+def incrementar(estado: EstadoBucle) -> dict:
+    return {"i": estado["i"] + 1}
+
+
+def seguir_o_parar(estado: EstadoBucle) -> Literal["incrementar", "__end__"]:
+    return "incrementar" if estado["i"] < 500 else END
+
+
+bucle = (
+    StateGraph(EstadoBucle)
+    .add_node("incrementar", incrementar)
+    .add_edge(START, "incrementar")
+    .add_conditional_edges("incrementar", seguir_o_parar, ["incrementar", END])
+    .compile()
+)
+
+print("con recursion_limit=25:")
+try:
+    bucle.invoke({"i": 0}, {"recursion_limit": 25})
+except GraphRecursionError as exc:
+    print(f"  GraphRecursionError -> {str(exc)[:90]}...")
+
+print("\ncon el límite por defecto:")
+print("  ", bucle.invoke({"i": 0}))
+
+#%%md
+> **Ojo con el valor por defecto.** En LangGraph 1.x el `recursion_limit` por defecto es
+> **10007** super-pasos (lo puedes comprobar: viene de la variable de entorno
+> `LANGGRAPH_DEFAULT_RECURSION_LIMIT`). En versiones antiguas eran 25.
+>
+> Diez mil super-pasos de un agente con LLM son *miles* de llamadas a la API antes de que
+> salte ninguna alarma. El límite por defecto ya no te protege de un bucle infinito: te
+> protege de que el proceso se cuelgue para siempre, que no es lo mismo.
+>
+> **Ponle un `recursion_limit` explícito y ajustado a todo grafo con ciclos que llame a un
+> modelo.** Un agente de herramientas razonable rara vez necesita más de 30–50 super-pasos.
+
+#%%py
+def calcular_limite(max_turnos_de_herramienta: int) -> int:
+    """Cada turno del agente son 2 super-pasos (modelo + herramientas), más entrada y salida."""
+    return 2 * max_turnos_de_herramienta + 2
+
+
+for turnos in (5, 10, 25):
+    print(f"  hasta {turnos:>2} turnos de herramienta -> recursion_limit={calcular_limite(turnos)}")
+
+#%%md
+Si prefieres **degradar con elegancia** en vez de lanzar la excepción, mete el contador en el
+propio estado y corta tú:
+
+#%%py
+class EstadoConTope(TypedDict):
+    turnos: Annotated[int, operator.add]
+    resultado: str
+
+
+def trabajar(estado: EstadoConTope) -> dict:
+    return {"turnos": 1}
+
+
+def seguir_con_tope(estado: EstadoConTope) -> Literal["trabajar", "rendirse"]:
+    return "trabajar" if estado["turnos"] < 4 else "rendirse"
+
+
+def rendirse(estado: EstadoConTope) -> dict:
+    return {"resultado": f"me rindo tras {estado['turnos']} turnos; escalando a un humano"}
+
+
+con_tope = (
+    StateGraph(EstadoConTope)
+    .add_node("trabajar", trabajar)
+    .add_node("rendirse", rendirse)
+    .add_edge(START, "trabajar")
+    .add_conditional_edges("trabajar", seguir_con_tope, {"trabajar": "trabajar", "rendirse": "rendirse"})
+    .add_edge("rendirse", END)
+    .compile()
+)
+
+print(con_tope.invoke({"turnos": 0, "resultado": ""})["resultado"])
+
+#%%md
+Esto es casi siempre lo que quieres en producción: una excepción es un error 500 para tu
+usuario, mientras que un "no he podido, te paso con una persona" es un producto.
+
+#%%md
+## 6. Ejercicios
+
+> **EJERCICIO 3.1 — Triaje real con abanico dinámico**
+>
+> Con el conjunto de tickets del curso, construye un grafo que:
+>
+> 1. Tome los `n` tickets más recientes del estado.
+> 2. Use **`Send`** para clasificar cada uno en paralelo (sin LLM: basta una regla sobre
+>    `plan_cliente` y palabras clave).
+> 3. Agregue los resultados en un `dict` de conteos por prioridad, con el reducer adecuado.
+> 4. Ramifique al final: si hay alguna `critica`, ir a un nodo `alertar`; si no, a `archivar`.
+>
+> Es el patrón map-reduce-branch completo, que es el esqueleto del Proyecto 1.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 3.1</b></summary>
+
+Tres detalles que merece la pena mirar:
+<ul>
+<li>El reducer de <code>conteos</code> suma diccionarios clave a clave — es conmutativo, que
+es obligatorio porque las N tareas del <code>Send</code> escriben concurrentemente.</li>
+<li><code>agregar</code> lleva <code>defer=True</code>: sin él se dispararía en cuanto
+llegase la primera clasificación.</li>
+<li>La rama final es una <b>arista condicional</b>, no un <code>Command</code>: la decisión
+no requiere trabajo, solo leer el estado.</li>
+</ul>
+</details>
+
+#%%py
+from collections import Counter
+
+from utils.datos import tickets
+
+
+def sumar_conteos(izquierda: dict, derecha: dict) -> dict:
+    """Suma dos diccionarios de conteos. Conmutativo, como debe ser."""
+    return dict(Counter(izquierda) + Counter(derecha))
+
+
+class EstadoTriaje(TypedDict):
+    entrantes: list[dict]
+    conteos: Annotated[dict, sumar_conteos]
+    veredicto: str
+
+
+class TareaClasificar(TypedDict):
+    id_ticket: str
+    texto: str
+    plan: str
+
+
+PALABRAS_CRITICAS = ("caído", "parado", "bloquea", "urgente", "no autorizado", "crítico")
+
+
+def repartir_tickets(estado: EstadoTriaje) -> list[Send]:
+    return [
+        Send("clasificar_uno", {
+            "id_ticket": t["id_ticket"],
+            "texto": f"{t['asunto']} {t['mensaje']}".lower(),
+            "plan": t["plan_cliente"],
+        })
+        for t in estado["entrantes"]
+    ]
+
+
+def clasificar_uno(tarea: TareaClasificar) -> dict:
+    urgente = any(p in tarea["texto"] for p in PALABRAS_CRITICAS)
+    if urgente and tarea["plan"] in ("business", "enterprise"):
+        prioridad = "critica"
+    elif urgente:
+        prioridad = "alta"
+    elif tarea["plan"] == "enterprise":
+        prioridad = "media"
+    else:
+        prioridad = "baja"
+    return {"conteos": {prioridad: 1}}
+
+
+def hay_criticas(estado: EstadoTriaje) -> Literal["alertar", "archivar"]:
+    return "alertar" if estado["conteos"].get("critica", 0) > 0 else "archivar"
+
+
+triaje = (
+    StateGraph(EstadoTriaje)
+    .add_node("recibir", lambda e: {})
+    .add_node("clasificar_uno", clasificar_uno)
+    .add_node("agregar", lambda e: {}, defer=True)     # espera a las N tareas
+    .add_node("alertar", lambda e: {"veredicto": f"ALERTA: {e['conteos'].get('critica', 0)} tickets críticos"})
+    .add_node("archivar", lambda e: {"veredicto": "sin críticos; archivado"})
+    .add_edge(START, "recibir")
+    .add_conditional_edges("recibir", repartir_tickets, ["clasificar_uno"])
+    .add_edge("clasificar_uno", "agregar")
+    .add_conditional_edges("agregar", hay_criticas, {"alertar": "alertar", "archivar": "archivar"})
+    .add_edge("alertar", END)
+    .add_edge("archivar", END)
+    .compile()
+)
+
+df = tickets().sort_values("fecha", ascending=False)
+lote = df.head(20)[["id_ticket", "asunto", "mensaje", "plan_cliente"]].to_dict("records")
+
+resultado = triaje.invoke({"entrantes": lote, "conteos": {}, "veredicto": ""})
+print("conteos :", resultado["conteos"])
+print("veredicto:", resultado["veredicto"])
+
+#%%py
+mostrar_grafo(triaje)
+
+#%%md
+> **EJERCICIO 3.2 — De arista condicional a `Command`**
+>
+> Reescribe el grafo `enrutador` de la sección 1 para que `clasificar` devuelva un `Command`
+> en vez de escribir `prioridad` y dejar que un router la lea. Comprueba que el diagrama
+> sigue mostrando las tres ramas.
+>
+> Después responde: ¿cuál de las dos versiones preferirías mantener, y por qué?
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 3.2</b></summary>
+
+La versión con <code>Command</code> tiene un nodo y una función menos, y desaparece la clave
+<code>prioridad</code> como intermediaria artificial. A cambio, la decisión queda enterrada
+dentro del cuerpo del nodo en lugar de estar en una función pequeña y fácil de probar por
+separado.
+
+<b>El criterio</b>: si la decisión es una función pura del estado que quieres poder probar
+en aislamiento (y en un sistema serio, quieres), déjala como router. Si la decisión es un
+subproducto del trabajo del nodo —sobre todo si viene de la respuesta del modelo—, usa
+<code>Command</code>. Aquí, con una regla de palabras clave que merece sus propias pruebas,
+la versión con router es la más mantenible; lo interesante es que la respuesta no es
+"<code>Command</code> siempre porque es más nuevo".
+</details>
+
+#%%py
+class EstadoTicketCmd(TypedDict):
+    mensaje: str
+    prioridad: str
+    accion: str
+
+
+def clasificar_y_enrutar(estado: EstadoTicketCmd) -> Command[Literal["escalar", "cola_normal", "autoservicio"]]:
+    texto = estado["mensaje"].lower()
+    if any(p in texto for p in ("urgente", "caído", "bloqueado", "parado")):
+        prioridad, destino = "critica", "escalar"
+    elif "factura" in texto or "cobro" in texto:
+        prioridad, destino = "media", "cola_normal"
+    else:
+        prioridad, destino = "baja", "autoservicio"
+    return Command(update={"prioridad": prioridad}, goto=destino)
+
+
+enrutador_cmd = (
+    StateGraph(EstadoTicketCmd)
+    .add_node("clasificar", clasificar_y_enrutar)
+    .add_node("escalar", escalar)
+    .add_node("cola_normal", cola_normal)
+    .add_node("autoservicio", autoservicio)
+    .add_edge(START, "clasificar")
+    .add_edge("escalar", END)
+    .add_edge("cola_normal", END)
+    .add_edge("autoservicio", END)
+    .compile()
+)
+
+for msg in ["El servicio está caído", "Duda con el cobro de mayo", "¿Tenéis modo oscuro?"]:
+    r = enrutador_cmd.invoke({"mensaje": msg, "prioridad": "", "accion": ""})
+    print(f"  {r['prioridad']:<8} -> {r['accion']}")
+
+print("\naristas del diagrama:", [(e.source, e.target) for e in enrutador_cmd.get_graph().edges])
+
+#%%md
+## 7. Resumen
+
+- **Arista condicional**: una función pura lee el estado y devuelve el nombre del siguiente
+  nodo. Anota con `Literal[...]` **y** pasa el `path_map`.
+- Un router puede devolver una **lista** para abrir varias ramas en el mismo super-paso.
+- **`Command`** deja que un nodo actualice el estado y salte, en una sola operación. Anota
+  `Command[Literal[...]]` o usa `destinations=` para que el diagrama no mienta.
+- Los nodos del mismo super-paso corren **en paralelo de verdad**. Paralelizar lo
+  independiente es la optimización más barata que existe.
+- **`defer=True`** pospone un agregador hasta que no quede trabajo pendiente. Imprescindible
+  con ramas de longitudes distintas.
+- **`Send`** crea N tareas en ejecución, cada una con su propio estado: es el map de
+  map-reduce. La recogida necesita un reducer acumulador.
+- El `recursion_limit` por defecto es **10007**: pon el tuyo, o corta tú con un contador en
+  el estado y degrada con elegancia.
+
+**Siguiente:** [`04_mensajes_y_modelos.ipynb`](04_mensajes_y_modelos.ipynb) — mensajes,
+modelos de chat, salida estructurada y gestión del historial.

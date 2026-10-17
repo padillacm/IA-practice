@@ -1,0 +1,709 @@
+#%%md
+# 13 · Sistemas multiagente
+
+**Módulo 4 · Composición** — *tiempo estimado: 1 h 45 min*
+
+"Multiagente" es la palabra más sobrevendida del sector. Antes de nada, la advertencia:
+
+> **Un sistema multiagente casi siempre es peor que un agente bien hecho.** Multiplica el
+> coste, multiplica la latencia, y añade una fuente de error nueva: el reparto de trabajo.
+> Si tu agente falla, la primera hipótesis debería ser "las herramientas están mal
+> diseñadas", no "necesito otro agente".
+
+Dicho eso, hay tres situaciones donde sí compensa, y las verás en la sección 1.
+
+Al terminar sabrás:
+
+1. Cuándo un sistema multiagente **está justificado** y cuándo no.
+2. Los cuatro patrones —red, supervisor, jerárquico y enjambre— y cómo se implementan.
+3. Los **handoffs** con `Command(graph=Command.PARENT)`.
+4. La decisión que de verdad determina si funciona: **qué contexto comparten**.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-m4")
+
+#%%md
+## 1. Cuándo compensa
+
+| Motivo | ¿Vale? | Comentario |
+|---|---|---|
+| "El agente falla con 12 herramientas" | **a veces** | Prueba antes `LLMToolSelectorMiddleware`. Solo si no basta, divide |
+| "Cada especialidad necesita un prompt largo y distinto" | **sí** | Prompts que se estorban entre sí es señal legítima de división |
+| "Necesito que dos partes trabajen en paralelo" | **sí** | Investigar tres temas a la vez son tres agentes, no tres turnos |
+| "Distintos equipos mantienen distintas partes" | **sí** | Es una razón organizativa, y es la mejor de todas |
+| "Suena más sofisticado" | no | |
+| "Quiero que un agente revise al otro" | **rara vez** | Suele bastar un nodo verificador, más barato y determinista |
+
+El criterio operativo: **divide cuando el prompt de un solo agente ya no cabe o se
+contradice**, no antes.
+
+#%%md
+## 2. Los cuatro patrones
+
+```
+RED (network)                    SUPERVISOR
+  A <--> B                          S
+  ^  \  / ^                       / | \
+  |   \/  |                      A  B  C
+  v   /\  v                    (todos vuelven a S)
+  C <--> D
+
+JERÁRQUICO                       ENJAMBRE (swarm)
+      S                            A --> B
+     / \                           ^     |
+   S1   S2                         |     v
+  / \   / \                        D <-- C
+ A   B C   D                  (cada uno cede a quien quiera,
+                               y el sistema recuerda quién manda)
+```
+
+| Patrón | Quién decide | Ventaja | Inconveniente |
+|---|---|---|---|
+| **Red** | cada agente | máxima flexibilidad | impredecible, caro, difícil de depurar |
+| **Supervisor** | uno central | **predecible y auditable** | el supervisor es un cuello de botella y un coste fijo |
+| **Jerárquico** | supervisores anidados | escala a muchos agentes | complejo; solo con equipos grandes |
+| **Enjambre** | el agente activo | conversación natural, sin intermediario | hace falta recordar quién está activo |
+
+**Empieza siempre por supervisor.** Es el único que puedes explicar en una reunión y depurar
+con una traza lineal.
+
+#%%md
+## 3. Los agentes especialistas
+
+Tres especialistas sobre los datos del curso. Cada uno con **sus** herramientas y **su**
+prompt, que es justamente lo que justifica separarlos.
+
+#%%py
+import operator
+from typing import Annotated, Literal, TypedDict
+
+from langchain.agents import create_agent
+from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain.tools import tool
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.types import Command
+
+from utils.datos import tickets, ventas
+
+df_t = tickets()
+df_v = ventas()
+modelo = llm()
+
+
+# --- herramientas del analista de soporte ---
+@tool(parse_docstring=True)
+def estadisticas_tickets(dimension: str) -> str:
+    """Reparto de tickets de soporte por una dimensión.
+
+    Args:
+        dimension: categoria, prioridad, plan_cliente, canal o sentimiento.
+    """
+    if dimension not in {"categoria", "prioridad", "plan_cliente", "canal", "sentimiento"}:
+        return "Error: dimensión no válida. Usa categoria, prioridad, plan_cliente, canal o sentimiento."
+    c = df_t[dimension].value_counts()
+    return f"Tickets por {dimension}:\n" + "\n".join(f"  {k}: {v}" for k, v in c.items())
+
+
+@tool(parse_docstring=True)
+def tiempos_respuesta(dimension: str = "prioridad") -> str:
+    """Mediana de minutos hasta la primera respuesta, por dimensión.
+
+    Args:
+        dimension: prioridad, categoria, plan_cliente o canal.
+    """
+    if dimension not in {"prioridad", "categoria", "plan_cliente", "canal"}:
+        return "Error: usa prioridad, categoria, plan_cliente o canal."
+    s = df_t.groupby(dimension).minutos_primera_respuesta.median().sort_values()
+    return f"Mediana de minutos por {dimension}:\n" + "\n".join(f"  {k}: {v:.0f}" for k, v in s.items())
+
+
+# --- herramientas del analista comercial ---
+@tool(parse_docstring=True)
+def ingresos_por(dimension: str) -> str:
+    """Ingresos totales agrupados por una dimensión de ventas.
+
+    Args:
+        dimension: city, product_line, customer_type, payment o branch.
+    """
+    if dimension not in {"city", "product_line", "customer_type", "payment", "branch"}:
+        return "Error: usa city, product_line, customer_type, payment o branch."
+    s = df_v.groupby(dimension).total.sum().sort_values(ascending=False)
+    return f"Ingresos por {dimension}:\n" + "\n".join(f"  {k}: {v:,.2f} €" for k, v in s.items())
+
+
+@tool
+def resumen_ventas() -> str:
+    """Cifras globales del negocio: ventas, ingresos, ticket medio y margen."""
+    return (f"{len(df_v)} ventas | ingresos {df_v.total.sum():,.2f} € | "
+            f"ticket medio {df_v.total.mean():,.2f} € | margen {df_v.gross_income.sum():,.2f} €")
+
+
+analista_soporte = create_agent(
+    model=modelo, tools=[estadisticas_tickets, tiempos_respuesta],
+    system_prompt=("Eres analista de SOPORTE TÉCNICO. Solo hablas de la cola de tickets: volúmenes, "
+                   "categorías, prioridades y tiempos de respuesta. No opinas de ventas ni de dinero. "
+                   "Responde en español, con cifras exactas, en 3 frases."),
+    name="analista_soporte",
+)
+
+analista_comercial = create_agent(
+    model=modelo, tools=[ingresos_por, resumen_ventas],
+    system_prompt=("Eres analista COMERCIAL. Solo hablas de ventas, ingresos y márgenes. "
+                   "No opinas de incidencias técnicas. Responde en español, con cifras exactas, en 3 frases."),
+    name="analista_comercial",
+)
+
+redactor = create_agent(
+    model=modelo, tools=[],
+    system_prompt=("Eres redactor de informes de dirección. Recibes análisis de otros equipos y los "
+                   "conviertes en un informe breve: 3 viñetas con las cifras clave y 1 recomendación. "
+                   "NO inventes cifras: usa solo las que aparezcan en la conversación. En español."),
+    name="redactor",
+)
+
+print("tres especialistas listos, con prompts que se contradirían si estuvieran juntos")
+
+#%%md
+## 4. Patrón supervisor
+
+Un agente central lee la petición, decide quién trabaja, recoge el resultado y decide otra
+vez. Todos los caminos pasan por él, y por eso la traza es lineal y legible.
+
+#%%py
+from pydantic import BaseModel, Field
+
+ESPECIALISTAS = ("analista_soporte", "analista_comercial", "redactor")
+
+
+class DecisionSupervisor(BaseModel):
+    """A quién le toca trabajar ahora."""
+    razonamiento: str = Field(description="En una frase: qué falta por hacer")
+    siguiente: Literal["analista_soporte", "analista_comercial", "redactor", "FIN"] = Field(
+        description="El especialista que debe actuar. 'FIN' solo si la petición ya está "
+                    "completamente respondida y redactada."
+    )
+    instruccion: str = Field(description="Qué exactamente debe hacer. Vacío si siguiente='FIN'.")
+
+
+decisor = modelo.with_structured_output(DecisionSupervisor)
+
+
+class EstadoEquipo(MessagesState):
+    ruta: Annotated[list[str], operator.add]
+    turnos: Annotated[int, operator.add]
+
+
+MAX_TURNOS = 6
+
+PROMPT_SUPERVISOR = (
+    "Eres el supervisor de un equipo de analistas. Tu trabajo es repartir tareas, no hacerlas.\n"
+    "Equipo disponible:\n"
+    "- analista_soporte: tickets, incidencias, tiempos de respuesta.\n"
+    "- analista_comercial: ventas, ingresos, márgenes.\n"
+    "- redactor: convierte análisis ya hechos en un informe. Llámalo SIEMPRE al final.\n\n"
+    "Reglas:\n"
+    "- Un especialista cada vez.\n"
+    "- No repitas a quien ya ha respondido salvo que falte algo concreto.\n"
+    "- Cuando el redactor haya entregado el informe, responde FIN."
+)
+
+
+def supervisor(estado: EstadoEquipo) -> Command:
+    if estado["turnos"] >= MAX_TURNOS:
+        return Command(goto=END, update={"ruta": ["supervisor: tope de turnos alcanzado"]})
+
+    decision = decisor.invoke([SystemMessage(PROMPT_SUPERVISOR), *estado["messages"]])
+    if decision.siguiente == "FIN":
+        return Command(goto=END, update={"ruta": [f"supervisor: FIN — {decision.razonamiento}"]})
+
+    return Command(
+        goto=decision.siguiente,
+        update={
+            "messages": [HumanMessage(decision.instruccion, name="supervisor")],
+            "ruta": [f"supervisor -> {decision.siguiente}: {decision.instruccion[:60]}"],
+            "turnos": 1,
+        },
+    )
+
+
+def hacer_nodo_especialista(agente, nombre: str):
+    """Envuelve un agente para que el equipo solo vea su CONCLUSIÓN, no su cocina interna."""
+    def nodo(estado: EstadoEquipo) -> Command:
+        resultado = agente.invoke({"messages": estado["messages"]}, {"recursion_limit": 15})
+        conclusion = resultado["messages"][-1].text
+        return Command(
+            goto="supervisor",
+            update={"messages": [AIMessage(conclusion, name=nombre)],
+                    "ruta": [f"{nombre}: {conclusion[:60]}..."]},
+        )
+    return nodo
+
+
+equipo = StateGraph(EstadoEquipo)
+equipo.add_node("supervisor", supervisor, destinations=(*ESPECIALISTAS, END))
+for nombre, agente in [("analista_soporte", analista_soporte),
+                       ("analista_comercial", analista_comercial),
+                       ("redactor", redactor)]:
+    equipo.add_node(nombre, hacer_nodo_especialista(agente, nombre), destinations=("supervisor",))
+equipo.add_edge(START, "supervisor")
+equipo_g = equipo.compile()
+
+mostrar_grafo(equipo_g)
+
+#%%md
+Fíjate en `hacer_nodo_especialista`: el equipo recibe **solo el último mensaje** del
+especialista, no todo su historial de llamadas a herramientas. Es la decisión más importante
+de todo el notebook y la desarrollamos en la sección 6.
+
+#%%py
+salida = equipo_g.invoke(
+    {"messages": [HumanMessage(
+        "Prepara un informe para dirección: cómo está la cola de soporte y cómo van las ventas. "
+        "Quiero una recomendación al final."
+    )], "ruta": [], "turnos": 0},
+    {"recursion_limit": 30},
+)
+
+separador("ruta de decisiones")
+for paso in salida["ruta"]:
+    print("  ", paso)
+
+separador("informe final")
+print(salida["messages"][-1].text)
+
+#%%md
+## 5. Patrón enjambre: handoffs directos
+
+Sin supervisor. Cada agente puede **ceder el turno** a otro cuando ve que el caso no es suyo.
+El mecanismo es una **herramienta de handoff** que devuelve un `Command`.
+
+Ventaja: no pagas un turno de supervisor en cada paso. Inconveniente: la ruta es
+impredecible y hay que llevar la cuenta de quién manda.
+
+#%%py
+from langchain.tools import ToolRuntime
+
+
+def crear_handoff(destino: str, descripcion: str):
+    """Fabrica una herramienta de traspaso. Devolver un Command es lo que mueve el control."""
+
+    @tool(f"pasar_a_{destino}", description=descripcion)
+    def handoff(motivo: str, runtime: ToolRuntime) -> Command:
+        return Command(
+            goto=destino,
+            graph=Command.PARENT,       # saltamos en el grafo del enjambre, no dentro del agente
+            update={
+                "messages": [ToolMessage(f"Traspasado a {destino}. Motivo: {motivo}",
+                                         tool_call_id=runtime.tool_call_id)],
+                "agente_activo": destino,
+                "ruta": [f"handoff -> {destino}: {motivo}"],
+            },
+        )
+
+    return handoff
+
+
+class EstadoEnjambre(MessagesState):
+    agente_activo: str
+    ruta: Annotated[list[str], operator.add]
+    saltos: Annotated[int, operator.add]
+
+
+a_soporte = crear_handoff("soporte", "Pasa el caso al analista de soporte técnico: incidencias, "
+                                     "tickets, tiempos de respuesta. Indica el motivo.")
+a_comercial = crear_handoff("comercial", "Pasa el caso al analista comercial: ventas, ingresos, "
+                                         "márgenes. Indica el motivo.")
+
+agente_soporte_sw = create_agent(
+    model=modelo, tools=[estadisticas_tickets, tiempos_respuesta, a_comercial],
+    system_prompt=("Eres el analista de SOPORTE. Respondes sobre tickets con tus herramientas. "
+                   "Si la pregunta es de ventas o dinero, usa pasar_a_comercial en vez de improvisar. "
+                   "Responde en español y en 3 frases."),
+    name="soporte",
+)
+
+agente_comercial_sw = create_agent(
+    model=modelo, tools=[ingresos_por, resumen_ventas, a_soporte],
+    system_prompt=("Eres el analista COMERCIAL. Respondes sobre ventas con tus herramientas. "
+                   "Si la pregunta es de incidencias o tickets, usa pasar_a_soporte. "
+                   "Responde en español y en 3 frases."),
+    name="comercial",
+)
+
+MAX_SALTOS = 4
+
+
+def envolver_enjambre(agente, nombre: str):
+    def nodo(estado: EstadoEnjambre) -> Command:
+        if estado["saltos"] >= MAX_SALTOS:
+            return Command(goto=END, update={"ruta": [f"{nombre}: tope de traspasos"]})
+        resultado = agente.invoke({"messages": estado["messages"]}, {"recursion_limit": 15})
+        return Command(goto=END, update={
+            "messages": [AIMessage(resultado["messages"][-1].text, name=nombre)],
+            "ruta": [f"{nombre} responde"], "saltos": 1,
+        })
+    return nodo
+
+
+enjambre = (
+    StateGraph(EstadoEnjambre)
+    .add_node("soporte", envolver_enjambre(agente_soporte_sw, "soporte"), destinations=("comercial", END))
+    .add_node("comercial", envolver_enjambre(agente_comercial_sw, "comercial"), destinations=("soporte", END))
+    .add_conditional_edges(START, lambda e: e["agente_activo"] or "soporte",
+                           {"soporte": "soporte", "comercial": "comercial"})
+    .compile()
+)
+
+mostrar_grafo(enjambre)
+
+#%%py
+for consulta in ["¿Cuántos tickets críticos hay?",
+                 "¿Qué ciudad factura más?"]:
+    salida = enjambre.invoke(
+        {"messages": [HumanMessage(consulta)], "agente_activo": "soporte", "ruta": [], "saltos": 0},
+        {"recursion_limit": 25},
+    )
+    print(f"P: {consulta}")
+    print(f"   ruta: {salida['ruta']}")
+    print(f"R: {salida['messages'][-1].text[:200]}\n")
+
+#%%md
+La segunda consulta entra por soporte, que **no** tiene herramientas de ventas, así que la
+traspasa. Ese traspaso es el `Command(goto=..., graph=Command.PARENT)` de la herramienta de
+handoff: el mismo mecanismo del notebook 12, ahora al servicio de la coordinación.
+
+#%%md
+### `agente_activo`: la memoria del enjambre
+
+En una conversación real, si el usuario hace una segunda pregunta debería atenderla **quien
+estaba activo**, no siempre el de entrada. Por eso `agente_activo` está en el estado y la
+arista de `START` lo lee. Con un checkpointer, esa continuidad se mantiene entre turnos.
+
+#%%py
+from langgraph.checkpoint.memory import InMemorySaver
+
+enjambre_persistente = (
+    StateGraph(EstadoEnjambre)
+    .add_node("soporte", envolver_enjambre(agente_soporte_sw, "soporte"), destinations=("comercial", END))
+    .add_node("comercial", envolver_enjambre(agente_comercial_sw, "comercial"), destinations=("soporte", END))
+    .add_conditional_edges(START, lambda e: e.get("agente_activo") or "soporte",
+                           {"soporte": "soporte", "comercial": "comercial"})
+    .compile(checkpointer=InMemorySaver())
+)
+
+conf = {"configurable": {"thread_id": "enjambre-1"}, "recursion_limit": 25}
+
+r1 = enjambre_persistente.invoke(
+    {"messages": [HumanMessage("¿Qué ciudad factura más?")], "agente_activo": "soporte",
+     "ruta": [], "saltos": 0}, conf)
+print("turno 1 — activo al terminar:", r1["agente_activo"] or "soporte")
+
+r2 = enjambre_persistente.invoke({"messages": [HumanMessage("¿Y cuál es el ticket medio?")]}, conf)
+print("turno 2 — atiende directamente el comercial, sin traspaso:")
+print("  ruta:", r2["ruta"][len(r1["ruta"]):])
+print("  ", r2["messages"][-1].text[:180])
+
+#%%md
+## 6. La decisión que de verdad importa: qué contexto se comparte
+
+Aquí es donde los sistemas multiagente se hunden o funcionan. Tres opciones:
+
+| Estrategia | Qué ve cada agente | Coste | Riesgo |
+|---|---|---|---|
+| **Historial completo** | todo, incluidas las herramientas de los demás | **el mayor** | ruido, confusión, contexto agotado |
+| **Solo conclusiones** | el último mensaje de cada uno | **el menor** | puede faltar un detalle importante |
+| **Resumen dirigido** | un resumen escrito para el siguiente | medio | una llamada extra |
+
+La opción por defecto en casi todo el mundo es la primera, y es casi siempre la peor.
+
+#%%py
+from langchain_core.messages.utils import count_tokens_approximately
+
+
+def medir_contexto(estado_final) -> None:
+    mensajes = estado_final["messages"]
+    por_tipo = {}
+    for m in mensajes:
+        por_tipo[m.type] = por_tipo.get(m.type, 0) + 1
+    print(f"  {len(mensajes)} mensajes {por_tipo}")
+    print(f"  {count_tokens_approximately(mensajes):,} tokens en el contexto final")
+
+
+separador("supervisor con SOLO CONCLUSIONES (lo que construimos arriba)")
+medir_contexto(salida if "ruta" in salida else {"messages": []})
+
+# Ahora la variante que comparte el historial completo de cada especialista.
+def especialista_verboso(agente, nombre: str):
+    def nodo(estado: EstadoEquipo) -> Command:
+        resultado = agente.invoke({"messages": estado["messages"]}, {"recursion_limit": 15})
+        # Volcamos TODO lo que produjo el agente, herramientas incluidas.
+        nuevos = resultado["messages"][len(estado["messages"]):]
+        return Command(goto="supervisor", update={"messages": nuevos, "ruta": [f"{nombre} (verboso)"]})
+    return nodo
+
+
+equipo_verboso = StateGraph(EstadoEquipo)
+equipo_verboso.add_node("supervisor", supervisor, destinations=(*ESPECIALISTAS, END))
+for nombre, agente in [("analista_soporte", analista_soporte),
+                       ("analista_comercial", analista_comercial),
+                       ("redactor", redactor)]:
+    equipo_verboso.add_node(nombre, especialista_verboso(agente, nombre), destinations=("supervisor",))
+equipo_verboso.add_edge(START, "supervisor")
+equipo_verboso_g = equipo_verboso.compile()
+
+peticion = {"messages": [HumanMessage(
+    "Prepara un informe para dirección: estado de la cola de soporte y de las ventas, con una recomendación."
+)], "ruta": [], "turnos": 0}
+
+separador("supervisor con HISTORIAL COMPLETO")
+salida_verbosa = equipo_verboso_g.invoke(peticion, {"recursion_limit": 30})
+medir_contexto(salida_verbosa)
+
+#%%md
+La diferencia de tokens es directamente dinero, y crece con cada agente y cada turno. Pero el
+argumento más fuerte no es el coste: es que **el `ToolMessage` de otro agente confunde al
+supervisor**. Ve una llamada a `ingresos_por` que él no pidió, en un formato que no espera, y
+empieza a razonar sobre la cocina interna del comercial en vez de sobre su conclusión.
+
+**La regla:** comparte conclusiones, no transcripciones. Si un detalle intermedio importa, que
+el especialista lo incluya **en su conclusión**; es su responsabilidad, no la del supervisor.
+
+#%%md
+## 7. Ejercicios
+
+> **EJERCICIO 13.1 — Especialistas en paralelo**
+>
+> El supervisor de la sección 4 llama a un especialista cada vez. Cuando dos análisis son
+> independientes —soporte y ventas lo son— eso es tiempo tirado.
+>
+> Construye una variante que lance **los dos analistas a la vez** en un mismo super-paso y
+> luego pase al redactor. Mide la diferencia de tiempo frente a la versión secuencial.
+>
+> Pista: no hace falta supervisor para esto. Un abanico de salida desde `START` y un
+> agregador con `defer=True`.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 13.1</b></summary>
+
+La lección va más allá del ejemplo: <b>gran parte de lo que se resuelve con un supervisor es
+en realidad un problema de topología</b>. Si sabes de antemano quién tiene que trabajar, el
+supervisor solo añade una llamada al modelo por turno y serializa lo que podría ir en
+paralelo.
+
+El supervisor se gana el sueldo cuando el reparto <b>depende del contenido</b> de la petición.
+Cuando no depende, es fontanería cara.
+</details>
+
+#%%py
+import time
+
+
+class EstadoParalelo(TypedDict):
+    peticion: str
+    analisis: Annotated[list[str], operator.add]
+    informe: str
+
+
+def hacer_analista_paralelo(agente, nombre: str):
+    def nodo(estado: EstadoParalelo) -> dict:
+        r = agente.invoke({"messages": [HumanMessage(estado["peticion"])]}, {"recursion_limit": 15})
+        return {"analisis": [f"[{nombre}] {r['messages'][-1].text}"]}
+    return nodo
+
+
+def redactar_informe(estado: EstadoParalelo) -> dict:
+    r = redactor.invoke(
+        {"messages": [HumanMessage(
+            "Petición original: " + estado["peticion"] + "\n\nAnálisis recibidos:\n"
+            + "\n\n".join(estado["analisis"])
+        )]},
+        {"recursion_limit": 10},
+    )
+    return {"informe": r["messages"][-1].text}
+
+
+paralelo = (
+    StateGraph(EstadoParalelo)
+    .add_node("soporte", hacer_analista_paralelo(analista_soporte, "soporte"))
+    .add_node("comercial", hacer_analista_paralelo(analista_comercial, "comercial"))
+    .add_node("redactar", redactar_informe, defer=True)      # espera a los dos
+    .add_edge(START, "soporte").add_edge(START, "comercial")
+    .add_edge("soporte", "redactar").add_edge("comercial", "redactar")
+    .add_edge("redactar", END)
+    .compile()
+)
+
+mostrar_grafo(paralelo)
+
+#%%py
+PETICION = ("Informe para dirección: estado de la cola de soporte y de las ventas, "
+            "con una recomendación final.")
+
+t0 = time.perf_counter()
+r_par = paralelo.invoke({"peticion": PETICION, "analisis": [], "informe": ""}, {"recursion_limit": 25})
+t_par = time.perf_counter() - t0
+
+t0 = time.perf_counter()
+r_sup = equipo_g.invoke({"messages": [HumanMessage(PETICION)], "ruta": [], "turnos": 0},
+                        {"recursion_limit": 30})
+t_sup = time.perf_counter() - t0
+
+print(f"  paralelo sin supervisor : {t_par:>5.1f} s")
+print(f"  supervisor secuencial   : {t_sup:>5.1f} s   ({t_sup / t_par:.1f}x)")
+print(f"\ninforme (paralelo):\n{r_par['informe']}")
+
+#%%md
+> **EJERCICIO 13.2 — Un supervisor que no se fía**
+>
+> Añade al supervisor una comprobación: antes de dar por buena la respuesta de un
+> especialista, verifica que **contiene al menos una cifra** y que **responde a lo que se le
+> pidió**. Si no, se la devuelve con una instrucción concreta, como mucho una vez por
+> especialista.
+>
+> Es el patrón de control de calidad interno, y el límite de un reintento es lo que impide
+> que se convierta en un bucle.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 13.2</b></summary>
+
+Dos cosas que hacen que esto funcione en vez de dar vueltas:
+
+<ol>
+<li><b>La verificación es determinista</b> (una expresión regular busca cifras) y solo la
+parte de "¿responde a lo pedido?" usa el modelo. Lo barato primero: si no hay ni un número, no
+hace falta preguntarle a nadie.</li>
+<li><b>Un reintento por especialista</b>, contado en el estado. Un verificador estricto y un
+modelo terco giran indefinidamente si no pones el tope, y aquí cada vuelta son dos llamadas
+al modelo.</li>
+</ol>
+</details>
+
+#%%py
+import re
+
+
+class EstadoVerificado(MessagesState):
+    ruta: Annotated[list[str], operator.add]
+    turnos: Annotated[int, operator.add]
+    reintentos: Annotated[dict, lambda a, b: {**a, **b}]
+
+
+def tiene_cifras(texto: str) -> bool:
+    return bool(re.search(r"\d", texto))
+
+
+class Suficiencia(BaseModel):
+    """¿La respuesta cubre lo que se pidió?"""
+    suficiente: bool
+    que_falta: str = Field(description="Qué falta, en una frase. Vacío si es suficiente.")
+
+
+juez = modelo.with_structured_output(Suficiencia)
+
+
+def especialista_verificado(agente, nombre: str):
+    def nodo(estado: EstadoVerificado) -> Command:
+        resultado = agente.invoke({"messages": estado["messages"]}, {"recursion_limit": 15})
+        conclusion = resultado["messages"][-1].text
+
+        instruccion = next((m.text for m in reversed(estado["messages"])
+                            if m.type == "human"), "")
+        usados = estado["reintentos"].get(nombre, 0)
+
+        # 1) comprobación barata y determinista
+        problema = None
+        if not tiene_cifras(conclusion):
+            problema = "no incluye ninguna cifra concreta"
+        else:
+            # 2) solo si pasa la barata, gastamos una llamada
+            veredicto = juez.invoke(
+                f"Instrucción dada: {instruccion}\n\nRespuesta del especialista: {conclusion}\n\n"
+                "¿La respuesta cubre lo que se pedía?"
+            )
+            if not veredicto.suficiente:
+                problema = veredicto.que_falta
+
+        if problema and usados < 1:
+            return Command(
+                goto=nombre,
+                update={
+                    "messages": [HumanMessage(
+                        f"CONTROL DE CALIDAD: tu respuesta {problema}. Rehazla usando tus "
+                        "herramientas y dando cifras exactas.", name="supervisor")],
+                    "ruta": [f"{nombre}: RECHAZADO ({problema}); un reintento"],
+                    "reintentos": {nombre: usados + 1},
+                },
+            )
+
+        marca = " (aceptada tras reintento)" if usados else ""
+        return Command(goto="supervisor", update={
+            "messages": [AIMessage(conclusion, name=nombre)],
+            "ruta": [f"{nombre}: aceptada{marca}"],
+        })
+
+    return nodo
+
+
+def supervisor_v(estado: EstadoVerificado) -> Command:
+    if estado["turnos"] >= MAX_TURNOS:
+        return Command(goto=END, update={"ruta": ["supervisor: tope de turnos"]})
+    decision = decisor.invoke([SystemMessage(PROMPT_SUPERVISOR), *estado["messages"]])
+    if decision.siguiente == "FIN":
+        return Command(goto=END, update={"ruta": ["supervisor: FIN"]})
+    return Command(goto=decision.siguiente, update={
+        "messages": [HumanMessage(decision.instruccion, name="supervisor")],
+        "ruta": [f"supervisor -> {decision.siguiente}"], "turnos": 1,
+    })
+
+
+equipo_v = StateGraph(EstadoVerificado)
+equipo_v.add_node("supervisor", supervisor_v, destinations=(*ESPECIALISTAS, END))
+for nombre, agente in [("analista_soporte", analista_soporte),
+                       ("analista_comercial", analista_comercial),
+                       ("redactor", redactor)]:
+    equipo_v.add_node(nombre, especialista_verificado(agente, nombre),
+                      destinations=("supervisor", nombre))
+equipo_v.add_edge(START, "supervisor")
+equipo_v_g = equipo_v.compile()
+
+salida_v = equipo_v_g.invoke(
+    {"messages": [HumanMessage(PETICION)], "ruta": [], "turnos": 0, "reintentos": {}},
+    {"recursion_limit": 40},
+)
+
+separador("ruta con control de calidad")
+for paso in salida_v["ruta"]:
+    print("  ", paso)
+print("\nreintentos por especialista:", salida_v["reintentos"])
+
+#%%md
+## 8. Resumen
+
+- **Multiagente es casi siempre peor que un agente bien hecho.** Divide cuando los prompts se
+  contradicen o no caben, o cuando hay una razón organizativa. No antes.
+- Cuatro patrones: **red** (flexible e impredecible), **supervisor** (predecible, el que hay
+  que usar por defecto), **jerárquico** (para equipos grandes) y **enjambre** (natural, pero
+  hay que recordar quién manda).
+- Un **handoff** es una herramienta que devuelve `Command(goto=..., graph=Command.PARENT)`.
+- En el enjambre, `agente_activo` en el estado + checkpointer da continuidad entre turnos.
+- **Comparte conclusiones, no transcripciones.** Volcar el historial completo de cada agente
+  cuesta tokens y, peor, confunde al que lo recibe.
+- Si sabes de antemano quién trabaja, **no necesitas supervisor**: un abanico con `defer=True`
+  hace lo mismo en paralelo y sin llamadas extra.
+- Todo bucle entre agentes necesita **tope y memoria de por dónde ha pasado**.
+
+**Siguiente:** [`P4_proyecto_equipo_multiagente.ipynb`](P4_proyecto_equipo_multiagente.ipynb)
+— una redacción de informes con equipo, paralelismo y control de calidad.

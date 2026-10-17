@@ -1,0 +1,759 @@
+#%%md
+# 01 · Grafos, estado y nodos a fondo
+
+**Módulo 1 · Fundamentos** — *tiempo estimado: 1 h 15 min*
+
+En el notebook anterior viste un grafo funcionando. Aquí lo desmontamos.
+
+Al terminar sabrás:
+
+1. Elegir entre `TypedDict`, `dataclass` y Pydantic para el estado, **con criterio**.
+2. Escribir nodos correctamente: firma, valor de retorno, síncronos y asíncronos.
+3. Separar **estado** de **contexto de ejecución** (`Runtime`), que es una de las
+   distinciones que más código feo ahorra.
+4. Reconocer los **cinco fallos clásicos** del principiante, porque los vas a provocar
+   a propósito y vas a ver el error real.
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init()
+
+#%%md
+## 1. El estado: el contrato de tu sistema
+
+El estado es lo primero que se diseña y lo último que se debería cambiar. Es el esquema
+que **todos** los nodos leen y escriben. Diseñarlo bien es el 60 % del trabajo de diseñar
+un grafo.
+
+Tres reglas que se aprenden por las malas:
+
+1. **El estado es el canal de comunicación.** Si dos nodos necesitan compartir algo,
+   va al estado. No hay variables globales ni "pasar argumentos" entre nodos.
+2. **El estado se serializa en cada checkpoint.** Todo lo que metas se guarda en cada
+   super-paso. No metas conexiones a base de datos, clientes HTTP ni DataFrames de 2 GB.
+   Mete identificadores, y que el nodo resuelva el objeto.
+3. **Modela el estado, no el flujo.** Si te encuentras con una clave `paso_actual: int`,
+   probablemente estás reimplementando a mano lo que las aristas ya hacen por ti.
+
+#%%md
+### 1.1 Las tres formas de declarar el estado
+
+LangGraph acepta tres tipos de esquema. No son equivalentes.
+
+#%%py
+from dataclasses import dataclass, field
+from typing import TypedDict
+
+from pydantic import BaseModel, Field
+
+
+# (a) TypedDict — la opción por defecto
+class EstadoDict(TypedDict):
+    consulta: str
+    resultados: list[str]
+
+
+# (b) dataclass — cuando quieres valores por defecto y acceso con punto
+@dataclass
+class EstadoData:
+    consulta: str
+    resultados: list[str] = field(default_factory=list)
+    intentos: int = 0
+
+
+# (c) Pydantic — cuando quieres validación en tiempo de ejecución
+class EstadoPydantic(BaseModel):
+    consulta: str
+    resultados: list[str] = Field(default_factory=list)
+    intentos: int = Field(default=0, ge=0, le=5)
+
+#%%md
+| | `TypedDict` | `dataclass` | Pydantic `BaseModel` |
+|---|---|---|---|
+| Acceso | `estado["clave"]` | `estado.clave` | `estado.clave` |
+| Valores por defecto | no | **sí** | **sí** |
+| Validación en ejecución | no | no | **sí** |
+| Coste | ninguno (es un `dict`) | bajo | **el más alto** |
+| ¿Lo acepta `create_agent`? | sí | sí | **no** |
+
+**Recomendación práctica:** empieza siempre con `TypedDict`. Pasa a `dataclass` cuando
+te canses de escribir `estado.get("x", 0)`. Usa Pydantic **solo** en las fronteras donde
+entran datos que no controlas (la entrada de una API pública, por ejemplo) y donde
+prefieras que reviente pronto y fuerte a que un `None` se propague veinte nodos.
+
+Un matiz importante y poco documentado: **los nodos siempre devuelven un `dict` de
+actualización**, sea cual sea el tipo del esquema. El esquema describe cómo *lees* el
+estado, no cómo lo *escribes*.
+
+#%%py
+from langgraph.graph import END, START, StateGraph
+
+
+def buscar(estado: EstadoPydantic) -> dict:
+    # Lees con punto (es un modelo Pydantic)...
+    consulta = estado.consulta
+    # ...pero devuelves un dict de actualización. Siempre.
+    return {"resultados": [f"resultado de {consulta}"], "intentos": estado.intentos + 1}
+
+
+grafo_pyd = StateGraph(EstadoPydantic).add_node("buscar", buscar).add_edge(START, "buscar").compile()
+print("válido  :", grafo_pyd.invoke({"consulta": "langgraph"}))
+
+# Y aquí está lo que compras con Pydantic: la validación se aplica de verdad.
+try:
+    grafo_pyd.invoke({"consulta": "x", "intentos": 99})
+except Exception as exc:
+    print(f"\ninválido: {type(exc).__name__} -> intentos=99 incumple le=5")
+
+#%%md
+> **Aviso con `dataclass`:** los valores por defecto se aplican cuando el nodo *lee* el
+> estado, pero una clave que nunca se ha escrito **no aparece en la salida** de `invoke()`.
+> El canal existe, pero está vacío. Si necesitas que una clave esté siempre presente en el
+> resultado, escríbela desde algún nodo o pásala en la entrada.
+
+#%%py
+@dataclass
+class Config:
+    modo: str = "rapido"
+    reintentos: int = 3
+
+
+def leer(estado: Config) -> dict:
+    print(f"  el nodo lee modo={estado.modo!r} (viene del valor por defecto)")
+    return {"reintentos": estado.reintentos + 1}
+
+
+g = StateGraph(Config).add_node("leer", leer).add_edge(START, "leer").compile()
+print("salida de invoke({}):", g.invoke({}), "  <- 'modo' no aparece: nadie lo escribió")
+
+#%%md
+## 2. Los nodos
+
+Un nodo es **una función**. Eso es todo. Las reglas del contrato:
+
+| Regla | Detalle |
+|---|---|
+| Primer argumento | El **estado completo** |
+| Segundo argumento (opcional) | El `Runtime`, para leer contexto, store y writer |
+| Valor de retorno | Un `dict` con **solo las claves que cambian**, o `None`, o un `Command` |
+| Nombre del nodo | El de `add_node("nombre", fn)`; si lo omites, el `__name__` de la función |
+| Síncrono o asíncrono | Los dos valen. Un grafo puede mezclarlos |
+
+#%%py
+import asyncio
+
+
+class E(TypedDict):
+    x: int
+    trazas: list[str]
+
+
+def sincrono(estado: E) -> dict:
+    return {"x": estado["x"] + 1}
+
+
+async def asincrono(estado: E) -> dict:
+    await asyncio.sleep(0.01)  # aquí iría una llamada de red de verdad
+    return {"x": estado["x"] * 10}
+
+
+mixto = (
+    StateGraph(E)
+    .add_node("sincrono", sincrono)
+    .add_node("asincrono", asincrono)
+    .add_edge(START, "sincrono")
+    .add_edge("sincrono", "asincrono")
+    .add_edge("asincrono", END)
+    .compile()
+)
+
+# Con el API asíncrono funcionan los dos tipos de nodo.
+print("ainvoke :", asyncio.run(mixto.ainvoke({"x": 1, "trazas": []})))
+
+# Con el API síncrono, en cambio, el nodo async no se puede ejecutar.
+try:
+    mixto.invoke({"x": 1, "trazas": []})
+except TypeError as exc:
+    print(f"invoke  : {type(exc).__name__} -> {str(exc).splitlines()[0]}")
+
+#%%md
+**La regla, que conviene tener clara desde el principio:**
+
+| El grafo contiene... | `invoke()` / `stream()` | `ainvoke()` / `astream()` |
+|---|---|---|
+| solo nodos `def` | sí | sí (LangGraph los ejecuta en un hilo) |
+| algún nodo `async def` | **`TypeError`** | sí |
+
+Es decir: **el API asíncrono sirve para todo, el síncrono no**. Un solo `async def` en
+cualquier nodo — o dentro de una herramienta, o en un subgrafo — convierte el grafo entero
+en asíncrono desde fuera.
+
+En la práctica: si el grafo va a vivir detrás de una API web, escribe los nodos de E/S como
+`async def` y llama siempre a `ainvoke()` / `astream()`. En un notebook, mantén los nodos
+síncronos mientras puedas y te ahorras el `asyncio.run` en cada celda. En este curso los
+nodos son síncronos salvo cuando el tema es precisamente la concurrencia.
+
+#%%md
+### 2.1 `add_sequence`: azúcar para tuberías lineales
+
+Cuando varios nodos van en fila, `add_sequence` los declara y los cablea de una vez.
+
+#%%py
+def normalizar(estado: E) -> dict:
+    return {"trazas": ["normalizar"]}
+
+
+def enriquecer(estado: E) -> dict:
+    return {"trazas": ["enriquecer"]}
+
+
+def puntuar(estado: E) -> dict:
+    return {"trazas": ["puntuar"]}
+
+
+tuberia = (
+    StateGraph(E)
+    .add_sequence([normalizar, enriquecer, puntuar])   # los nombra por __name__ y los encadena
+    .add_edge(START, "normalizar")                     # el enganche inicial sigue siendo tuyo
+    .compile()
+)
+
+print("nodos:", [n for n in tuberia.get_graph().nodes if not n.startswith("__")])
+print("salida:", tuberia.invoke({"x": 0, "trazas": []}))
+
+#%%md
+Fíjate en la salida: `trazas` acabó siendo `["puntuar"]`, no las tres. Cada nodo
+**sobrescribió** la clave, porque el comportamiento por defecto de una clave del estado es
+*el último que escribe gana*. Para acumular hace falta un **reducer**, y eso es
+exactamente el notebook 02.
+
+#%%md
+## 3. Estado frente a contexto: la distinción que ahorra código
+
+Hay dos clases de datos en un grafo, y meterlos en el mismo sitio es un error de diseño
+que se paga caro:
+
+| | **Estado** | **Contexto** (`Runtime`) |
+|---|---|---|
+| Qué es | Lo que la ejecución **produce y modifica** | Lo que la ejecución **recibe y no toca** |
+| Ejemplos | mensajes, borradores, resultados, contadores | `user_id`, `tenant_id`, idioma, nivel de plan, cliente de BD |
+| ¿Cambia durante la ejecución? | sí | no |
+| ¿Se guarda en el checkpoint? | **sí** | **no** |
+| Cómo se pasa | `invoke(entrada)` | `invoke(entrada, context=...)` |
+
+Meter el `user_id` en el estado "porque es más cómodo" tiene tres consecuencias
+desagradables: se serializa en cada checkpoint, aparece en cada snapshot que inspecciones,
+y cualquier nodo puede sobrescribirlo por accidente. El contexto es de **solo lectura** y
+no se persiste. Úsalo.
+
+Se declara con `context_schema=` y se lee con el segundo parámetro del nodo.
+
+#%%py
+from langgraph.runtime import Runtime
+
+
+@dataclass
+class ContextoPeticion:
+    """Datos de la petición: los fija quien llama, el grafo no los modifica."""
+    id_usuario: str
+    idioma: str = "es"
+    plan: str = "free"
+
+
+class EstadoSaludo(TypedDict):
+    nombre: str
+    saludo: str
+
+
+def saludar(estado: EstadoSaludo, runtime: Runtime[ContextoPeticion]) -> dict:
+    ctx = runtime.context
+    plantilla = {"es": "Hola", "en": "Hello", "fr": "Bonjour"}[ctx.idioma]
+    sufijo = " (cliente prioritario)" if ctx.plan == "enterprise" else ""
+    return {"saludo": f"{plantilla}, {estado['nombre']}{sufijo}. [usuario={ctx.id_usuario}]"}
+
+
+grafo_ctx = (
+    StateGraph(EstadoSaludo, context_schema=ContextoPeticion)
+    .add_node("saludar", saludar)
+    .add_edge(START, "saludar")
+    .compile()
+)
+
+print(grafo_ctx.invoke({"nombre": "Ana"}, context=ContextoPeticion(id_usuario="u-1", idioma="es"))["saludo"])
+print(grafo_ctx.invoke({"nombre": "Bob"}, context=ContextoPeticion(id_usuario="u-2", idioma="en", plan="enterprise"))["saludo"])
+
+#%%md
+El `Runtime` trae más cosas además de `context`, y las iremos usando a lo largo del curso:
+
+| Atributo | Para qué sirve | Módulo |
+|---|---|---|
+| `runtime.context` | Los datos de solo lectura de la petición | este |
+| `runtime.store` | Memoria de largo plazo entre hilos | 3 |
+| `runtime.stream_writer` | Emitir eventos propios al stream | 4 |
+| `runtime.previous` | El resultado anterior (Functional API) | 6 |
+
+También hay una función `get_runtime()` para leer el runtime desde código anidado
+(por ejemplo, dentro de una herramienta) sin tener que ir pasándolo de parámetro en parámetro.
+
+#%%md
+## 4. Los cinco fallos clásicos
+
+Los provocamos a propósito. Verlos fallar una vez ahorra horas después.
+
+#%%md
+### Fallo 1 · Devolver el estado completo en vez de la actualización
+
+Técnicamente funciona con el reducer por defecto, pero es una bomba de relojería: en cuanto
+una clave tenga un reducer acumulador, reescribirla entera duplica datos. Y si dos nodos
+concurrentes devuelven el estado entero, colisionan en *todas* las claves en vez de en una.
+
+#%%py
+class EstadoMal(TypedDict):
+    a: int
+    b: int
+
+
+def nodo_mal(estado: EstadoMal) -> dict:
+    estado["a"] = estado["a"] + 1
+    return estado                      # MAL: devuelve las dos claves, incluida 'b' sin tocar
+
+
+def nodo_bien(estado: EstadoMal) -> dict:
+    return {"a": estado["a"] + 1}      # BIEN: solo lo que cambia
+
+
+for nombre, fn in [("mal", nodo_mal), ("bien", nodo_bien)]:
+    g = StateGraph(EstadoMal).add_node("n", fn).add_edge(START, "n").compile()
+    for paso in g.stream({"a": 0, "b": 100}, stream_mode="updates"):
+        print(f"  {nombre:<4} escribe -> {paso}")
+
+#%%md
+### Fallo 2 · Mutar el estado que recibes
+
+Esta es más grave de lo que parece. El estado que recibe el nodo **no es una copia
+profunda**: si mutas una lista o un dict anidado, estás modificando la estructura real, e
+incluso el diccionario que le pasaste a `invoke()` desde fuera.
+
+#%%py
+class EstadoLista(TypedDict):
+    items: list[str]
+
+
+def muta(estado: EstadoLista) -> dict:
+    estado["items"].append("mutado")   # MAL: efecto lateral sobre el estado y sobre quien llamó
+    return {}
+
+
+entrada = {"items": ["original"]}
+salida = StateGraph(EstadoLista).add_node("n", muta).add_edge(START, "n").compile().invoke(entrada)
+
+print("salida del grafo :", salida)
+print("tu dict de entrada:", entrada, "  <- ¡lo hemos modificado desde dentro del grafo!")
+
+#%%md
+La forma correcta es **construir un valor nuevo y devolverlo**:
+
+```python
+def no_muta(estado: EstadoLista) -> dict:
+    return {"items": [*estado["items"], "añadido"]}
+```
+
+Con un reducer acumulador (notebook 02) ni siquiera hace falta copiar: devuelves
+`{"items": ["añadido"]}` y el reducer se encarga de concatenar.
+
+#%%md
+### Fallo 3 · Una errata en el nombre de una clave
+
+Este duele porque **no lanza ningún error**. LangGraph descarta en silencio las claves que
+no existen en el esquema. Un `retsultados` en vez de `resultados` te deja depurando media tarde.
+
+#%%py
+class EstadoErrata(TypedDict):
+    resultados: list[str]
+
+
+def con_errata(estado: EstadoErrata) -> dict:
+    return {"retsultados": ["a", "b"]}   # errata: falta la 'e' en su sitio
+
+
+g = StateGraph(EstadoErrata).add_node("n", con_errata).add_edge(START, "n").compile()
+print("resultado:", g.invoke({"resultados": []}), "  <- vacío, y sin ni un aviso")
+
+#%%md
+**Cómo protegerte:** anota el tipo de retorno de tus nodos (`-> EstadoErrata` en lugar de
+`-> dict`) y pasa `mypy` o `pyright` sobre el proyecto. Es la única defensa real, y es
+gratis. Si no puedes, al menos escribe una prueba por nodo que compruebe las claves de
+la actualización (módulo 6).
+
+#%%md
+### Fallo 4 · Confiar en que `compile()` detecte tus errores de cableado
+
+`compile()` valida la topología, pero **valida menos de lo que la gente cree**. Merece la
+pena saber exactamente dónde está la línea, porque los dos casos que *no* detecta son
+precisamente los más fáciles de cometer.
+
+Vamos a comprobarlo caso por caso en vez de creernos nada.
+
+#%%py
+class EstadoT(TypedDict):
+    x: int
+
+
+def probar(nombre, construir):
+    try:
+        resultado = construir()
+        print(f"  {nombre:<38} SIN ERROR  -> {resultado}")
+    except Exception as exc:
+        print(f"  {nombre:<38} {type(exc).__name__}: {str(exc)[:80]}")
+
+
+# (a) un nodo que nadie conecta
+def huerfano():
+    c = StateGraph(EstadoT)
+    c.add_node("conectado", lambda s: {"x": 1})
+    c.add_node("huerfano", lambda s: {"x": 999})   # nadie apunta aquí
+    c.add_edge(START, "conectado")
+    return c.compile().invoke({"x": 0})
+
+
+# (b) una arista hacia un nodo que no existe
+def arista_fantasma():
+    c = StateGraph(EstadoT)
+    c.add_node("n", lambda s: {"x": 1})
+    c.add_edge(START, "n")
+    c.add_edge("n", "fantasma")
+    return c.compile()
+
+
+# (c) un grafo sin punto de entrada
+def sin_entrada():
+    c = StateGraph(EstadoT)
+    c.add_node("n", lambda s: {"x": 1})
+    return c.compile()
+
+
+# (d) dos nodos con el mismo nombre
+def duplicado():
+    c = StateGraph(EstadoT)
+    c.add_node("n", lambda s: {"x": 1})
+    c.add_node("n", lambda s: {"x": 2})
+    return c.compile()
+
+
+# (e) una rama condicional que devuelve un nodo inexistente
+def rama_fantasma():
+    c = StateGraph(EstadoT)
+    c.add_node("n", lambda s: {"x": 1})
+    c.add_edge(START, "n")
+    c.add_conditional_edges("n", lambda s: "fantasma")
+    return c.compile().invoke({"x": 0})
+
+
+for nombre, fn in [
+    ("(a) nodo huérfano", huerfano),
+    ("(b) arista a nodo inexistente", arista_fantasma),
+    ("(c) grafo sin punto de entrada", sin_entrada),
+    ("(d) nombre de nodo duplicado", duplicado),
+    ("(e) rama condicional a nodo inexistente", rama_fantasma),
+]:
+    probar(nombre, fn)
+
+#%%md
+Lo que acabas de ver, resumido:
+
+| Error de cableado | ¿Lo detecta LangGraph? |
+|---|---|
+| Arista hacia un nodo inexistente | **sí**, `ValueError` al compilar |
+| Grafo sin punto de entrada | **sí**, `ValueError` al compilar |
+| Nombre de nodo duplicado | **sí**, `ValueError` al compilar |
+| Nombre reservado (`__start__`, `__end__`) | **sí**, `ValueError` al compilar |
+| **Nodo huérfano** | **no** — compila y el nodo sencillamente nunca corre |
+| **Rama condicional a un nodo inexistente** | **no** — solo un aviso en el log, y sigue |
+
+Los dos "no" son peligrosos porque el grafo *parece* funcionar. El síntoma es siempre el
+mismo: "he añadido el nodo y no hace nada".
+
+**Tus dos defensas**, y son baratas:
+
+1. **Dibuja el grafo** (`mostrar_grafo`) cada vez que cambies la topología. Un nodo huérfano
+   salta a la vista en el diagrama y es invisible en el código.
+2. Cuando uses aristas condicionales, **pasa siempre el `path_map`**
+   (`add_conditional_edges(origen, router, {"a": "nodo_a", "b": "nodo_b"})`). Además de
+   documentar los destinos en el dibujo, convierte el caso (e) en un fallo mucho más
+   visible. Lo vemos en detalle en el notebook 03.
+
+### Fallo 5 · Meter objetos no serializables en el estado
+
+El estado se serializa en cada checkpoint. Una conexión a base de datos, un socket o un
+cliente HTTP no se pueden serializar, y aunque sin checkpointer parezca que funciona, el
+día que actives la persistencia (y la vas a activar) se rompe.
+
+**La regla:** en el estado van *datos*, no *recursos*. El identificador de la conexión, no
+la conexión. Los recursos van en el `context` o se crean dentro del nodo.
+
+#%%py
+# MAL
+class EstadoRecurso(TypedDict):
+    conexion: object          # un objeto vivo: no sobrevive a un checkpoint
+    filas: list[dict]
+
+# BIEN
+class EstadoDatos(TypedDict):
+    id_conexion: str          # un identificador: se serializa sin problema
+    filas: list[dict]
+
+@dataclass
+class ContextoRecursos:
+    conexion: object          # el recurso vivo va aquí: nunca se persiste
+
+print("Recursos -> contexto. Datos -> estado.")
+
+#%%md
+## 5. Ejecutar el grafo: `invoke`, `stream`, `batch`
+
+| Método | Qué devuelve | Cuándo lo usas |
+|---|---|---|
+| `invoke(entrada)` | El estado final | Producción, cuando solo quieres el resultado |
+| `stream(entrada, stream_mode=...)` | Un iterador de eventos | Depurar y mostrar progreso al usuario |
+| `batch([e1, e2, ...])` | Una lista de resultados | Lotes independientes, en paralelo |
+| `ainvoke` / `astream` / `abatch` | Lo mismo, asíncrono | Servidores web |
+
+Los modos de stream tienen un notebook entero en el módulo 4. Por ahora, los dos que
+necesitas para trabajar:
+
+- **`updates`** — qué devolvió cada nodo. Es tu depurador.
+- **`values`** — el estado completo después de cada super-paso. Es tu inspector.
+
+#%%py
+def paso_a(estado: E) -> dict:
+    return {"x": estado["x"] + 10}
+
+
+def paso_b(estado: E) -> dict:
+    return {"x": estado["x"] * 2}
+
+
+demo = (
+    StateGraph(E)
+    .add_sequence([paso_a, paso_b])
+    .add_edge(START, "paso_a")
+    .compile()
+)
+
+separador("stream_mode='updates'  (qué escribió cada nodo)")
+for evento in demo.stream({"x": 1, "trazas": []}, stream_mode="updates"):
+    print(" ", evento)
+
+separador("stream_mode='values'  (el estado completo tras cada super-paso)")
+for evento in demo.stream({"x": 1, "trazas": []}, stream_mode="values"):
+    print(" ", evento)
+
+separador("batch  (tres entradas independientes, en paralelo)")
+print(" ", demo.batch([{"x": 1, "trazas": []}, {"x": 2, "trazas": []}, {"x": 3, "trazas": []}]))
+
+#%%md
+Observa que `values` emite **un evento más** que `updates`: el primero es el estado inicial,
+antes de que corra ningún nodo. Es una diferencia que confunde al principio y que importa
+cuando construyes una interfaz que va pintando el progreso.
+
+#%%md
+## 6. Poniéndolo junto: un mini-clasificador con LLM
+
+Un grafo de tres nodos sobre datos reales: leemos un ticket de soporte del conjunto de
+datos del curso, lo clasificamos con el modelo y comprobamos el acierto contra la
+etiqueta verdadera. Es el esqueleto del Proyecto 1, en 20 líneas.
+
+#%%py
+from utils.datos import tickets
+
+df = tickets()
+print(f"{len(df)} tickets. Categorías: {sorted(df['categoria'].unique())}\n")
+print(df[["id_ticket", "plan_cliente", "asunto", "categoria", "prioridad"]].head(3).to_string(index=False))
+
+#%%py
+CATEGORIAS = sorted(df["categoria"].unique())
+modelo = llm()
+
+
+class EstadoTicket(TypedDict):
+    asunto: str
+    mensaje: str
+    categoria_predicha: str
+    categoria_real: str
+    acierto: bool
+
+
+def clasificar(estado: EstadoTicket) -> dict:
+    respuesta = modelo.invoke(
+        "Clasifica este ticket de soporte en UNA de estas categorías: "
+        f"{', '.join(CATEGORIAS)}.\n"
+        "Responde únicamente con el nombre exacto de la categoría, sin nada más.\n\n"
+        f"Asunto: {estado['asunto']}\nMensaje: {estado['mensaje']}"
+    )
+    return {"categoria_predicha": respuesta.text.strip().lower()}
+
+
+def evaluar(estado: EstadoTicket) -> dict:
+    return {"acierto": estado["categoria_predicha"] == estado["categoria_real"]}
+
+
+clasificador = (
+    StateGraph(EstadoTicket)
+    .add_sequence([clasificar, evaluar])
+    .add_edge(START, "clasificar")
+    .compile()
+)
+
+mostrar_grafo(clasificador)
+
+#%%py
+# Diez tickets, con batch: se procesan en paralelo.
+muestra = df.sample(10, random_state=7)
+entradas = [
+    {"asunto": r.asunto, "mensaje": r.mensaje, "categoria_real": r.categoria}
+    for r in muestra.itertuples()
+]
+
+salidas = clasificador.batch(entradas)
+
+aciertos = sum(s["acierto"] for s in salidas)
+for s in salidas:
+    marca = "ok  " if s["acierto"] else "FALLO"
+    print(f"  [{marca}] predicho={s['categoria_predicha']:<24} real={s['categoria_real']}")
+print(f"\nAcierto: {aciertos}/{len(salidas)}")
+
+#%%md
+Fíjate en lo que acaba de pasar: **has medido el sistema**. No has mirado la salida y
+dicho "pinta bien". Tienes un número. Ese reflejo — construir con verdad de terreno al
+lado desde el primer día — es lo que separa a quien hace demos de quien pone agentes en
+producción, y lo vamos a repetir en todos los proyectos.
+
+#%%md
+## 7. Ejercicios
+
+> **EJERCICIO 1.1 — Contexto en vez de estado**
+>
+> Modifica el clasificador para que el **conjunto de categorías permitidas** venga del
+> contexto (`context_schema`) en lugar de estar en una variable global. Añade también al
+> contexto un campo `idioma` y haz que la instrucción del modelo cambie de idioma con él.
+>
+> Comprueba que el mismo grafo compilado clasifica en español y en inglés cambiando solo
+> el `context=` de la llamada.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Ver solución 1.1</b></summary>
+
+La clave está en que <code>categorias</code> e <code>idioma</code> no cambian durante la
+ejecución: son parámetros de la petición, no estado. Un mismo grafo compilado sirve para
+los dos idiomas sin recompilar ni tocar globales.
+</details>
+
+#%%py
+@dataclass
+class ContextoClasificacion:
+    categorias: tuple[str, ...]
+    idioma: str = "es"
+
+
+class EstadoTicket2(TypedDict):
+    asunto: str
+    mensaje: str
+    categoria_predicha: str
+
+
+def clasificar_ctx(estado: EstadoTicket2, runtime: Runtime[ContextoClasificacion]) -> dict:
+    ctx = runtime.context
+    instruccion = {
+        "es": "Clasifica este ticket de soporte en UNA de estas categorías",
+        "en": "Classify this support ticket into ONE of these categories",
+    }[ctx.idioma]
+    cierre = {
+        "es": "Responde únicamente con el nombre exacto de la categoría.",
+        "en": "Reply with the exact category name only.",
+    }[ctx.idioma]
+
+    respuesta = modelo.invoke(
+        f"{instruccion}: {', '.join(ctx.categorias)}.\n{cierre}\n\n"
+        f"Asunto: {estado['asunto']}\nMensaje: {estado['mensaje']}"
+    )
+    return {"categoria_predicha": respuesta.text.strip().lower()}
+
+
+clasificador_ctx = (
+    StateGraph(EstadoTicket2, context_schema=ContextoClasificacion)
+    .add_node("clasificar", clasificar_ctx)
+    .add_edge(START, "clasificar")
+    .compile()
+)
+
+ticket = df.iloc[3]
+entrada = {"asunto": ticket.asunto, "mensaje": ticket.mensaje}
+
+for idioma in ("es", "en"):
+    ctx = ContextoClasificacion(categorias=tuple(CATEGORIAS), idioma=idioma)
+    print(f"  [{idioma}] {clasificador_ctx.invoke(entrada, context=ctx)['categoria_predicha']}"
+          f"   (real: {ticket.categoria})")
+
+#%%md
+> **EJERCICIO 1.2 — Cazar la errata**
+>
+> El grafo de abajo debería contar las palabras del `texto` y guardar el número en
+> `n_palabras`, pero siempre devuelve `0`. Encuentra el fallo **sin ejecutarlo**, explica
+> por qué LangGraph no protesta, y arréglalo.
+
+#%%py
+class EstadoRoto(TypedDict):
+    texto: str
+    n_palabras: int
+
+
+def contar_roto(estado: EstadoRoto) -> dict:
+    return {"num_palabras": len(estado["texto"].split())}
+
+
+grafo_roto = StateGraph(EstadoRoto).add_node("contar", contar_roto).add_edge(START, "contar").compile()
+print(grafo_roto.invoke({"texto": "una dos tres cuatro", "n_palabras": 0}))
+
+#%%md
+<details>
+<summary><b>Ver solución 1.2</b></summary>
+
+El nodo escribe en <code>num_palabras</code> y el esquema declara <code>n_palabras</code>.
+LangGraph <b>descarta en silencio</b> las claves que no corresponden a ningún canal del
+estado: no hay excepción, no hay aviso, solo un cero que no cuadra. Es el fallo 3 de la
+sección 4, y por eso merece la pena anotar el tipo de retorno de los nodos y pasar un
+comprobador de tipos.
+</details>
+
+#%%py
+def contar_arreglado(estado: EstadoRoto) -> EstadoRoto:   # el tipo de retorno lo habría cazado
+    return {"n_palabras": len(estado["texto"].split())}
+
+
+grafo_ok = StateGraph(EstadoRoto).add_node("contar", contar_arreglado).add_edge(START, "contar").compile()
+print(grafo_ok.invoke({"texto": "una dos tres cuatro", "n_palabras": 0}))
+
+#%%md
+## 8. Resumen
+
+- El **estado** es el contrato del sistema: se serializa en cada checkpoint, así que lleva
+  datos, no recursos.
+- `TypedDict` por defecto; `dataclass` si quieres valores por defecto; Pydantic solo en
+  las fronteras donde valide algo que de verdad importa.
+- Un **nodo** es una función `(estado[, runtime]) -> dict de cambios`. Nunca mutes lo que
+  recibes; nunca devuelvas el estado entero.
+- **Estado ≠ contexto.** Lo que la ejecución produce va al estado; lo que la petición
+  aporta y nadie modifica va al `Runtime`.
+- Las claves mal escritas **se descartan sin avisar**. Anota los tipos de retorno.
+- `stream(stream_mode="updates")` es tu depurador de cabecera.
+
+**Siguiente:** [`02_reducers_y_esquemas.ipynb`](02_reducers_y_esquemas.ipynb) — cómo se
+resuelven de verdad las escrituras: reducers, concurrencia y esquemas de entrada/salida.

@@ -1,0 +1,434 @@
+#%%md
+# 00 · Por qué LangSmith, y cuándo no
+
+**Módulo 0 · Punto de partida** — *tiempo estimado: 50 minutos* — *consumo: 0 trazas*
+
+Este curso continúa el [curso de LangGraph](../../langgraph/) que está en este mismo
+repositorio. Aquel enseña a **construir** aplicaciones con modelos de lenguaje. Este
+enseña lo otro, que es la mitad del trabajo y casi todo el sufrimiento: **saber si
+funcionan**.
+
+Al terminar este notebook sabrás:
+
+1. **Qué problema resuelve LangSmith** — y por qué los logs de siempre no lo resuelven.
+2. **Qué es y qué no es**: cuatro productos en uno, con un solo hilo conductor.
+3. **Dónde encaja respecto a lo que ya sabes** del curso de LangGraph, sin repetirlo.
+4. **Cuándo NO usarlo**, con los números delante.
+5. El **entorno montado**, los dos modos del curso entendidos, y tu primera traza
+   construida y leída —sin clave, sin red y sin gastar cuota.
+
+#%%md
+## 1. El problema: por qué `print()` no basta
+
+Depurar software normal funciona porque el software normal es determinista y plano.
+Ejecutas, falla, miras la traza de la pila, arreglas. Una aplicación con un modelo de
+lenguaje rompe las tres suposiciones a la vez:
+
+| Suposición del depurado clásico | Qué pasa con un LLM |
+|---|---|
+| **Mismo entrada, misma salida** | No. Con `temperature=0` tampoco: el proveedor cambia el modelo bajo tus pies |
+| **El fallo es una excepción** | No. El fallo típico es una respuesta *correcta de forma y equivocada de fondo*. No lanza nada |
+| **La ejecución es una pila** | No. Es un árbol de decenas de llamadas anidadas: agente → herramienta → recuperador → modelo → otro agente |
+| **Ejecutar es gratis** | No. Cada reintento cuesta dinero y latencia, y hay un presupuesto |
+
+La consecuencia práctica la conoce cualquiera que haya llevado uno de estos sistemas a
+producción: **el usuario dice «me ha respondido mal» y tú no tienes forma de saber por
+qué**. No hay excepción, no hay línea de log que destaque, y reproducirlo en local da un
+resultado distinto.
+
+Un `print()` en cada nodo no arregla esto por tres razones que conviene tener claras:
+
+- **Pierde la estructura.** Un árbol impreso en líneas planas deja de ser un árbol. Con
+  cinco niveles de anidamiento no sabes qué llamó a qué.
+- **Pierde la correlación.** Con diez peticiones a la vez, tus líneas se intercalan.
+- **No mide.** «Mal» no es un booleano. Necesitas *cuánto* mal, sobre *cuántos* casos, y
+  *si ha empeorado* respecto a la semana pasada. Eso no sale de leer logs.
+
+> LangSmith es la respuesta de LangChain a estas tres cosas: **guardar el árbol
+> completo de cada ejecución, con sus entradas, salidas, tiempos, tokens y coste, y
+> encima de eso montar un ciclo de medida.**
+
+#%%md
+## 2. Qué es LangSmith: cuatro productos y un hilo
+
+Es fácil perderse porque la documentación mezcla cosas bastante distintas. Son cuatro,
+y el orden importa porque cada una depende de la anterior:
+
+```
+1. TRAZAS        Registrar qué pasó.            -> Módulo 1
+        |         (sin esto, lo demás no existe)
+        v
+2. EVALUACIÓN    Medirlo sobre un conjunto.     -> Módulo 2
+        |         datasets + experimentos
+        v
+3. ANOTACIÓN     Que un humano diga qué está    -> Módulo 3
+        |         bien, y alinear al juez
+        v
+4. OBSERVACIÓN   Mirar producción y actuar.     -> Módulo 4
+                  paneles, reglas, prompts
+```
+
+**El hilo conductor es el bucle**, y es lo único que hay que memorizar de este notebook:
+
+> Producción genera **trazas** → las que van mal se convierten en **casos de prueba** →
+> los casos forman un **dataset** → el dataset alimenta **experimentos** → los
+> experimentos deciden si un cambio entra → el cambio va a **producción**, que genera
+> trazas.
+
+El proyecto final del curso (`P4`) es exactamente ese bucle, cerrado, sobre los tickets
+de soporte que ya conoces del otro curso.
+
+### Lo que LangSmith no es
+
+- **No es un framework.** No te obliga a usar LangChain ni LangGraph. `@traceable` sobre
+  una función tuya con el SDK de OpenAI a pelo funciona igual (notebook 02).
+- **No es un evaluador.** No sabe si tu respuesta es buena. Te da el sitio donde guardar
+  tu criterio y la maquinaria para aplicarlo — el criterio lo pones tú, y el módulo 3 va
+  entero de que ese criterio valga algo.
+- **No es un gestor de despliegue.** Lo que la documentación llama «LangSmith
+  Deployment» es el Agent Server, y eso **ya lo cubre el curso de LangGraph** en los
+  notebooks 18, 25, 26 y 28. Aquí no se repite.
+
+#%%md
+## 3. El mapa contra lo que ya sabes
+
+Este curso es un complemento, no un curso independiente. La regla es: **si ya está
+allí, aquí se enlaza y se extiende, no se cuenta otra vez.**
+
+| Ya lo viste en el curso de LangGraph | Qué añade este curso |
+|---|---|
+| nb 17 — evaluación offline, conjunto dorado, varianza | Lo sube a datasets versionados y experimentos comparables (módulo 2) |
+| nb 17 — OpenTelemetry *sin* LangSmith | El camino inverso: OTel **hacia** LangSmith, y la salida si te quieres ir |
+| nb 27 — `agentevals`, trayectorias de agentes | Los mismos evaluadores, ahora dentro de `evaluate()` |
+| nb 18/25/26/28 — despliegue, `langgraph.json`, assistants | Solo el puente: dónde vive la versión de un prompt (nb 15) |
+| nb 30 — datos personales, coste por cliente | La capa que aquel deja abierta: anonimizador, retención, borrado (nb 05 y 17) |
+| nb 28 — drenaje ante `SIGTERM` | Que ese mismo `SIGTERM` **también se lleva tus trazas** (nb 03) |
+
+Si no has hecho el curso de LangGraph, este se puede seguir igual: los notebooks que
+dependen de él lo dicen en la cabecera y traen el contexto mínimo. Pero los proyectos
+usan su aplicación, así que perderás la mitad de la gracia.
+
+#%%md
+## 4. Cuándo NO usar LangSmith
+
+Un curso que no dice esto es un folleto. Los números son de agosto de 2026 y **cambian**;
+compruébalos en `https://www.langchain.com/pricing` antes de decidir nada con ellos.
+
+**El precio no está en las trazas, está en los asientos.** El plan Plus son ~39 $ por
+usuario y mes, y eso se paga **antes de la primera traza**. Un equipo de ocho personas
+son ~312 $/mes de suelo. Encima va el consumo: las trazas con retención larga se cobran
+por unidad, y a volumen alto esa parte domina — del orden de miles de dólares al mes en
+el entorno del millón de trazas mensuales, frente a las decenas o pocos cientos que
+cuesta autoalojar una alternativa de código abierto en tu propia infraestructura.
+
+Con eso delante, **no uses LangSmith si**:
+
+- **Tu aplicación es una llamada al modelo sin ramas.** Un log estructurado con la
+  entrada, la salida y el coste te da el 90 % del valor por cero euros.
+- **No puedes mandar los datos fuera.** Hay opción autoalojada, pero es de plan
+  Enterprise: si tu obstáculo es regulatorio y tu presupuesto no es Enterprise, esta
+  no es tu herramienta. (El notebook 05 enseña a mandar trazas *sin* el contenido, que
+  a veces resuelve esto; y el 17, qué se guarda y por cuánto tiempo.)
+- **Ya tienes observabilidad y solo quieres LLM dentro.** Instrumenta con
+  OpenTelemetry hacia donde ya miras. LangSmith **habla OTel en los dos sentidos**, así
+  que esta decisión no es irreversible, y ese es el argumento de peso para empezar por
+  aquí sin miedo.
+- **Es un proyecto personal de volumen alto.** 5.000 trazas al mes se agotan rápido.
+- **Necesitas el código.** LangSmith es cerrado. Si eso es un requisito, mira las
+  alternativas de código abierto (Langfuse, Phoenix, Helicone) — con menos integración
+  con LangGraph, que es justo lo que estás pagando aquí.
+
+**Sí lo quieres si** construyes con LangChain o LangGraph (la instrumentación es
+automática y no hay competencia en eso), si tienes un equipo que necesita mirar lo mismo,
+o si el problema que tienes es de *calidad* y no de *disponibilidad* — que es el caso
+casi siempre.
+
+#%%md
+## 5. Los dos modos de este curso
+
+Aquí toca una advertencia sobre el material que estás leyendo, y va por delante porque
+condiciona cómo debes leerlo.
+
+**LangSmith es un servicio en la nube. Este curso se escribió en un entorno que no lo
+alcanza.** En vez de esconderlo, el curso está diseñado alrededor de esa limitación:
+
+- **Modo local** (sin clave, el de por defecto). El notebook se ejecuta entero. Todo lo
+  que no necesita el servicio funciona de verdad, y es mucho más de lo que parece:
+  `@traceable`, el árbol de la traza, `RunTree`, el anonimizador, el muestreo, los
+  envoltorios de SDK, los evaluadores. Lo que sí necesita servicio se salta y **dice qué
+  habría hecho**.
+- **Modo en línea** (con tu clave en `.env`). Esas mismas celdas se conectan.
+
+La frontera está en el código, marcada con `@online`:
+
+```python
+@online("Crear el dataset de tickets", trazas=0)
+def _():
+    ds = cliente().create_dataset(dataset_name="tickets-curso")
+    print(ds.id)
+```
+
+**Qué significa esto para ti, sin adornos:** el código de las celdas locales está
+ejecutado en cada *commit*, incluido el corte de red que impide que se escapen. El de
+las celdas `@online` está escrito desde la documentación y desde la firma real de cada
+función del SDK instalado —el validador comprueba que cada símbolo existe— pero **no lo
+he podido ejecutar**. Si una falla, `@online` te lo señala y el notebook sigue. Cuando
+eso pase, es un error del material.
+
+#%%md
+## 6. Puesta a punto
+
+Cuatro variables de entorno gobiernan casi todo. Hay 51 en total —el notebook 02 tiene
+la tabla— pero estas cuatro son las que se usan a diario:
+
+| Variable | Para qué | Si no la pones |
+|---|---|---|
+| `LANGSMITH_TRACING` | El interruptor general (`true`/`false`) | No se traza nada |
+| `LANGSMITH_API_KEY` | Tu clave, de `Settings → API Keys` | No se traza nada |
+| `LANGSMITH_PROJECT` | Dónde caen las trazas | Van a `default`, que se convierte en un vertedero |
+| `LANGSMITH_ENDPOINT` | Región (`https://eu.api.smith.langchain.com` para Europa) | EE. UU. |
+
+Ojo con un detalle que causa confusión: los nombres antiguos `LANGCHAIN_*` siguen
+funcionando por compatibilidad. Si tienes las dos versiones puestas con valores
+distintos, el resultado depende del SDK y no de lo que tú creas. **Deja solo las
+`LANGSMITH_*`.**
+
+Copia `.env.example` a `.env` si vas a usar el modo en línea. Si no, no hagas nada: el
+curso funciona igual.
+
+#%%py
+# Arranque estándar del curso. Estas tres líneas están al principio de todos los
+# notebooks: encuentran la raíz del curso subiendo desde donde estés.
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+
+from utils.curso import init, online, cliente, traza_local, presupuesto_de_trazas
+
+info = init()
+
+#%%md
+El bloque de arriba te dice en qué modo estás. Si pone **MODO LOCAL**, todo lo que sigue
+en este notebook funciona igual: no hay ni una celda `@online` que sea imprescindible.
+
+Comprobemos que el mecanismo hace lo que dice.
+
+#%%py
+# Una celda que necesita el servicio. En modo local no se ejecuta el cuerpo.
+@online("Listar mis proyectos de LangSmith", trazas=0)
+def _():
+    proyectos = list(cliente().list_projects(limit=5))
+    for p in proyectos:
+        print(f"  {p.name}")
+    return proyectos
+
+#%%md
+## 7. El presupuesto de trazas
+
+El plan Developer sin método de pago da **5.000 trazas al mes y un mes de retención**.
+Eso suena a mucho hasta que haces la primera cuenta seria, y la cuenta tiene una
+trampa que casi todo el mundo pisa una vez.
+
+#%%py
+# La trampa: cada evaluador que sea un juez LLM es OTRA llamada trazada por ejemplo,
+# no un extra gratuito de la primera.
+presupuesto_de_trazas(
+    ejemplos=50,
+    repeticiones=3,
+    evaluadores_llm=2,
+    etiqueta="una evaluación de regresión de aspecto muy razonable",
+)
+
+#%%md
+Cuatrocientas cincuenta trazas. **El 9 % de tu cuota mensual en una sola celda**, y es
+un experimento perfectamente normal: cincuenta casos, tres repeticiones para ver la
+varianza (notebook 17 del curso de LangGraph), dos jueces.
+
+Por eso el curso trae `presupuesto_de_trazas()` con un tope, y por eso cada notebook
+declara su consumo en la cabecera. El curso entero, en modo en línea y de principio a
+fin, está presupuestado por debajo de **1.500 trazas**: menos de un tercio del mes.
+
+#%%py
+# Con `tope`, la función se niega en vez de dejarte lanzarlo.
+try:
+    presupuesto_de_trazas(ejemplos=200, repeticiones=5, evaluadores_llm=1,
+                          tope=500, etiqueta="el experimento que no vas a lanzar")
+except ValueError as e:
+    print(f"\nRechazado: {e}")
+
+#%%md
+## 8. Tu primera traza, sin clave y sin red
+
+Y aquí es donde este curso deja de ser teoría. Hay un detalle del SDK que no está en los
+tutoriales y que sostiene todo el modo local:
+
+> `tracing_context(enabled="local")` **construye el árbol entero de la traza en memoria
+> —jerarquía, tipos, entradas, salidas, `dotted_order`— y no lo envía a ninguna parte.**
+
+Es exactamente el mismo árbol que subiría el modo en línea. O sea que puedes estudiar la
+anatomía de una traza sin cuenta, sin clave y sin gastar una sola de tus 5.000.
+
+`traza_local()` lo envuelve. Vamos a trazar algo que se parezca a una aplicación de
+verdad: recuperar, redactar, comprobar.
+
+#%%py
+from langsmith import traceable
+
+@traceable(run_type="retriever")
+def recuperar(pregunta: str) -> list[str]:
+    """Un recuperador de mentira, pero con el `run_type` correcto."""
+    return [f"política de reembolsos relevante para: {pregunta}"]
+
+@traceable(run_type="llm")
+def redactar(pregunta: str, contexto: list[str]) -> str:
+    return f"Según nuestra política, {pregunta.lower()} se resuelve en 5 días hábiles."
+
+@traceable(run_type="tool")
+def comprobar_longitud(texto: str) -> bool:
+    return len(texto) < 500
+
+@traceable(run_type="chain", name="responder_ticket", tags=["soporte", "v1"])
+def responder_ticket(pregunta: str) -> str:
+    contexto = recuperar(pregunta)
+    respuesta = redactar(pregunta, contexto)
+    comprobar_longitud(respuesta)
+    return respuesta
+
+with traza_local() as t:
+    salida = responder_ticket("Un cobro duplicado")
+
+print("respuesta:", salida)
+print()
+t.dibujar(detalle=True)
+
+#%%md
+Eso de ahí arriba es una traza. No una aproximación: es el objeto que LangSmith recibe.
+
+Fíjate en tres cosas, porque las tres se explotan en el resto del curso:
+
+1. **Es un árbol, no una lista.** `responder_ticket` tiene tres hijos. La estructura es
+   lo que te deja preguntar «¿cuánto de la latencia fue el recuperador?».
+2. **Cada nodo tiene un `run_type`.** `retriever`, `llm`, `tool`, `chain`. No es
+   decoración: la interfaz muestra cada tipo distinto, y las evaluaciones de trayectoria
+   del notebook 27 filtran por él.
+3. **Las entradas y salidas se capturan solas**, desde la firma de la función. Con lo
+   bueno y lo malo: si tu función recibe un secreto, el secreto acaba en la traza. Ese
+   es el notebook 05 entero.
+
+#%%md
+## 9. Ejercicios
+
+### Ejercicio 1 — Encuentra el cuello de botella
+
+Añade a la aplicación de arriba un nodo `traducir` que dependa de `redactar`, y haz que
+`comprobar_longitud` cuelgue de `traducir` en vez de colgar de `responder_ticket`.
+Después dibuja la traza y responde: ¿cuántos runs hay, y cuál es la profundidad máxima?
+
+*Pista: `t.recorrer()` produce `(profundidad, run)`.*
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+@traceable(run_type="llm")
+def traducir(texto: str, idioma: str = "en") -> str:
+    resultado = f"[{idioma}] {texto}"
+    comprobar_longitud(resultado)   # ahora cuelga de aquí
+    return resultado
+
+@traceable(run_type="chain", name="responder_ticket_v2")
+def responder_ticket_v2(pregunta: str) -> str:
+    contexto = recuperar(pregunta)
+    respuesta = redactar(pregunta, contexto)
+    return traducir(respuesta)
+
+with traza_local() as t2:
+    responder_ticket_v2("Un cobro duplicado")
+
+t2.dibujar()
+
+profundidades = [p for p, _ in t2.recorrer()]
+print(f"\nruns: {len(t2)}  |  profundidad máxima: {max(profundidades)}")
+
+#%%md
+Cinco runs y profundidad máxima 2 — `recorrer()` cuenta desde los runs de primer nivel,
+así que `responder_ticket_v2` está a profundidad 0 y `comprobar_longitud` a 2.
+
+Y ahí está lo que hace útil el árbol: en la primera versión `comprobar_longitud` colgaba
+directamente de la cadena, y aquí cuelga de `traducir`. Los dos programas devuelven lo
+mismo y tardan lo mismo; **solo la traza distingue quién llamó a quién**. Cuando dentro
+de un mes te preguntes por qué se comprueba la longitud sobre el texto traducido y no
+sobre el original, la respuesta está en el árbol y en ningún otro sitio.
+
+</details>
+
+#%%md
+### Ejercicio 2 — El presupuesto que sí te cabe
+
+Tienes 5.000 trazas al mes y quieres reservar el 20 % (1.000) para evaluaciones. Con
+un juez LLM y 3 repeticiones, ¿cuál es el dataset más grande que puedes evaluar **cuatro
+veces al mes**?
+
+Calcúlalo y compruébalo con `presupuesto_de_trazas(..., tope=...)`.
+
+#%%py
+# Tu solución aquí.
+
+#%%md
+<details>
+<summary><b>Solución</b></summary>
+
+#%%py
+reserva = 1000
+evaluaciones_al_mes = 4
+por_evaluacion = reserva // evaluaciones_al_mes      # 250 trazas
+
+repeticiones, evaluadores_llm = 3, 1
+trazas_por_ejemplo = repeticiones * (1 + evaluadores_llm)   # 6
+ejemplos = por_evaluacion // trazas_por_ejemplo
+
+print(f"presupuesto por evaluación : {por_evaluacion} trazas")
+print(f"trazas por ejemplo         : {trazas_por_ejemplo}")
+print(f"ejemplos que caben         : {ejemplos}")
+print()
+
+presupuesto_de_trazas(ejemplos=ejemplos, repeticiones=repeticiones,
+                      evaluadores_llm=evaluadores_llm, tope=por_evaluacion,
+                      etiqueta="regresión semanal")
+
+#%%md
+Cuarenta y un ejemplos. Que es **poco**, y esa es la lección del ejercicio: con el plan
+gratuito no vas a hacer evaluación continua sobre un conjunto grande, así que hay que
+elegir bien los casos.
+
+El notebook 09 va justo de eso: cómo se construye un conjunto pequeño que aun así
+detecte regresiones, y cuántas repeticiones hacen falta de verdad para que la diferencia
+que ves no sea ruido.
+
+</details>
+
+#%%md
+## 10. Resumen
+
+- Una aplicación con LLM rompe las tres suposiciones del depurado clásico: no es
+  determinista, sus fallos no son excepciones y su ejecución es un árbol.
+- LangSmith son **cuatro productos encadenados** —trazas, evaluación, anotación,
+  observación— y el hilo que los une es un bucle: producción → traza → caso → dataset →
+  experimento → producción.
+- **No lo uses** si tu aplicación es una llamada suelta, si los datos no pueden salir
+  con presupuesto no-Enterprise, o si ya tienes observabilidad. La salida es
+  OpenTelemetry, así que la decisión no es irreversible.
+- El curso tiene **dos modos**. El local se ejecuta entero y está verificado; el de
+  `@online` está escrito pero no ejecutado, y va marcado.
+- **El presupuesto de trazas es una restricción de diseño**, no un detalle: 50 ejemplos
+  × 3 repeticiones × 2 jueces = 450 trazas, el 9 % del mes.
+- `tracing_context(enabled="local")` construye la traza entera en memoria sin enviarla.
+  Es lo que hace este curso posible, y lo vas a usar en todo el módulo 1.
+
+**Siguiente:** [`01_anatomia_de_una_traza`](../01_trazas/01_anatomia_de_una_traza.ipynb),
+donde se abre el árbol y se ve cómo LangSmith reconstruye la jerarquía a partir de una
+lista plana de eventos que pueden llegar desordenados.

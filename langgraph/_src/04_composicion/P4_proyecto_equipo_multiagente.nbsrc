@@ -1,0 +1,533 @@
+#%%md
+# P4 · Proyecto: equipo de informes con control de calidad
+
+**Módulo 4 · Proyecto** — *tiempo estimado: 2 h 30 min · coste aproximado: 0,15 € con `gpt-4o-mini`*
+
+## El encargo
+
+Dirección quiere un **informe semanal** que cruce tres fuentes: la cola de soporte, las
+ventas y el contexto operativo. Hoy lo hace una persona los lunes por la mañana y le lleva
+dos horas.
+
+Requisitos:
+
+1. Cruzar las **tres fuentes** con cifras reales.
+2. Un informe con **estructura fija**: titulares, cifras, riesgos y recomendaciones.
+3. **Control de calidad** automático antes de entregarlo.
+4. Que sea **rápido**: nadie espera cinco minutos por un informe.
+
+## La pregunta que de verdad responde este proyecto
+
+Vamos a construirlo de dos formas —**un solo agente** con todas las herramientas, y un
+**equipo** con especialistas— y a medir cuál gana en calidad, coste y tiempo.
+
+Es la pregunta que nadie se hace antes de montar un sistema multiagente, y la respuesta es
+menos obvia de lo que parece.
+
+| Fase | Qué construimos |
+|---|---|
+| 0 | Las fuentes de datos y las herramientas |
+| 1 | **Línea base**: un solo agente con todas las herramientas |
+| 2 | La rúbrica de evaluación (un juez con criterios explícitos) |
+| 3 | El equipo: investigadores en paralelo, redactor y crítico con ciclo de revisión |
+| 4 | Comparativa medida: calidad, coste, tiempo |
+| 5 | La decisión, y qué generalizamos de ella |
+
+#%%py
+import sys, pathlib
+sys.path.insert(0, str(next(p for p in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]
+                            if (p / "utils" / "curso.py").exists())))
+from utils.curso import init, llm, mostrar_grafo, mostrar_mensajes, separador
+
+init(proyecto="curso-langgraph-P4")
+
+#%%md
+## Fase 0 · Tres fuentes, tres familias de herramientas
+
+#%%py
+import operator
+import time
+from typing import Annotated, Literal, TypedDict
+
+from langchain.agents import create_agent
+from langchain.messages import AIMessage, HumanMessage, SystemMessage
+from langchain.tools import tool
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.types import Command
+from pydantic import BaseModel, Field
+
+from utils.datos import cargar, tickets, ventas
+
+df_t = tickets()
+df_v = ventas()
+df_c = cargar("clima_seattle.csv", parse_dates=["date"])
+modelo = llm()
+
+
+# --- fuente 1: soporte ---
+@tool(parse_docstring=True)
+def soporte_reparto(dimension: str) -> str:
+    """Reparto de tickets de soporte por una dimensión.
+
+    Args:
+        dimension: categoria, prioridad, plan_cliente, canal o sentimiento.
+    """
+    if dimension not in {"categoria", "prioridad", "plan_cliente", "canal", "sentimiento"}:
+        return "Error: usa categoria, prioridad, plan_cliente, canal o sentimiento."
+    c = df_t[dimension].value_counts()
+    return f"Tickets por {dimension} (total {len(df_t)}):\n" + "\n".join(f"  {k}: {v}" for k, v in c.items())
+
+
+@tool(parse_docstring=True)
+def soporte_tiempos(dimension: str = "prioridad") -> str:
+    """Mediana de minutos hasta la primera respuesta, por dimensión.
+
+    Args:
+        dimension: prioridad, categoria, plan_cliente o canal.
+    """
+    if dimension not in {"prioridad", "categoria", "plan_cliente", "canal"}:
+        return "Error: usa prioridad, categoria, plan_cliente o canal."
+    s = df_t.groupby(dimension).minutos_primera_respuesta.median().sort_values(ascending=False)
+    return f"Mediana de minutos por {dimension}:\n" + "\n".join(f"  {k}: {v:.0f} min" for k, v in s.items())
+
+
+@tool
+def soporte_sin_resolver() -> str:
+    """Tickets aún sin resolver, con su reparto por prioridad."""
+    abiertos = df_t[~df_t.resuelto]
+    c = abiertos.prioridad.value_counts()
+    return (f"{len(abiertos)} tickets sin resolver de {len(df_t)} ({len(abiertos) / len(df_t):.1%}):\n"
+            + "\n".join(f"  {k}: {v}" for k, v in c.items()))
+
+
+# --- fuente 2: ventas ---
+@tool(parse_docstring=True)
+def ventas_por(dimension: str, metrica: str = "ingresos") -> str:
+    """Ventas agregadas por una dimensión.
+
+    Args:
+        dimension: city, product_line, customer_type, payment o branch.
+        metrica: ingresos, unidades o margen.
+    """
+    if dimension not in {"city", "product_line", "customer_type", "payment", "branch"}:
+        return "Error: usa city, product_line, customer_type, payment o branch."
+    col = {"ingresos": "total", "unidades": "quantity", "margen": "gross_income"}.get(metrica)
+    if col is None:
+        return "Error: metrica debe ser ingresos, unidades o margen."
+    s = df_v.groupby(dimension)[col].sum().sort_values(ascending=False)
+    unidad = "uds" if metrica == "unidades" else "€"
+    return f"{metrica} por {dimension}:\n" + "\n".join(f"  {k}: {v:,.2f} {unidad}" for k, v in s.items())
+
+
+@tool
+def ventas_globales() -> str:
+    """Cifras globales de negocio: ventas, ingresos, ticket medio, margen y valoración."""
+    return (f"{len(df_v)} ventas | ingresos {df_v.total.sum():,.2f} € | "
+            f"ticket medio {df_v.total.mean():,.2f} € | margen {df_v.gross_income.sum():,.2f} € | "
+            f"valoración media {df_v.customer_stratification_rating.mean():.2f}/10")
+
+
+# --- fuente 3: contexto operativo ---
+@tool
+def contexto_operativo() -> str:
+    """Resumen del contexto meteorológico del periodo, que afecta a la afluencia en tienda."""
+    resumen = df_c.weather.value_counts()
+    return (f"{len(df_c)} días registrados. Temperatura media {df_c.temp_max.mean():.1f} °C. "
+            f"Días por tipo de tiempo:\n" + "\n".join(f"  {k}: {v}" for k, v in resumen.items()))
+
+
+HERRAMIENTAS_SOPORTE = [soporte_reparto, soporte_tiempos, soporte_sin_resolver]
+HERRAMIENTAS_VENTAS = [ventas_por, ventas_globales]
+HERRAMIENTAS_CONTEXTO = [contexto_operativo]
+TODAS = HERRAMIENTAS_SOPORTE + HERRAMIENTAS_VENTAS + HERRAMIENTAS_CONTEXTO
+
+print(f"{len(TODAS)} herramientas en total:", [h.name for h in TODAS])
+
+#%%md
+## Fase 1 · Línea base: un solo agente
+
+Un agente con las seis herramientas y la estructura del informe en el prompt. Es lo que hay
+que batir.
+
+#%%py
+ESTRUCTURA = (
+    "Estructura obligatoria del informe:\n"
+    "## Titulares\n(3 viñetas, cada una con una cifra concreta)\n"
+    "## Cifras clave\n(tabla o lista con al menos 5 métricas y sus valores)\n"
+    "## Riesgos\n(2 riesgos identificados a partir de los datos)\n"
+    "## Recomendaciones\n(2 acciones concretas y accionables)\n"
+)
+
+from langchain.agents.middleware import ModelCallLimitMiddleware
+
+agente_unico = create_agent(
+    model=modelo,
+    tools=TODAS,
+    system_prompt=(
+        "Eres analista de negocio. Preparas el informe semanal para dirección cruzando soporte, "
+        "ventas y contexto operativo.\n"
+        "Usa las herramientas para TODAS las cifras: no inventes ni estimes ninguna.\n"
+        "Escribe en español, claro y sin relleno.\n\n" + ESTRUCTURA
+    ),
+    middleware=[ModelCallLimitMiddleware(run_limit=10, exit_behavior="end")],
+)
+
+PETICION = ("Prepara el informe semanal para dirección. Cruza el estado de la cola de soporte, "
+            "el rendimiento de ventas y el contexto operativo.")
+
+
+def ejecutar_y_medir(grafo, entrada, nombre: str, config=None) -> dict:
+    """Ejecuta y devuelve texto, tokens, llamadas y segundos."""
+    t0 = time.perf_counter()
+    salida = grafo.invoke(entrada, config or {"recursion_limit": 40})
+    seg = time.perf_counter() - t0
+
+    mensajes = salida.get("messages", [])
+    tokens = sum((getattr(m, "usage_metadata", None) or {}).get("total_tokens", 0) for m in mensajes)
+    llamadas = sum(1 for m in mensajes if m.type == "ai")
+    texto = salida.get("informe") or (mensajes[-1].text if mensajes else "")
+
+    print(f"  {nombre}: {seg:.1f} s, {llamadas} llamadas al modelo, {tokens:,} tokens")
+    return {"nombre": nombre, "texto": texto, "segundos": seg, "tokens": tokens,
+            "llamadas": llamadas, "salida": salida}
+
+
+separador("LÍNEA BASE — un solo agente")
+base = ejecutar_y_medir(agente_unico, {"messages": [HumanMessage(PETICION)]}, "agente único")
+print()
+print(base["texto"][:900])
+
+#%%md
+## Fase 2 · La rúbrica
+
+Antes de construir nada más, hay que poder **puntuar** un informe. Sin esto, la comparación
+del final sería una opinión.
+
+La rúbrica no la inventamos sobre la marcha: son criterios explícitos, y el juez tiene que
+justificar cada nota. Un "puntúa del 1 al 10" sin criterios da números que no significan nada.
+
+#%%py
+class Evaluacion(BaseModel):
+    """Evaluación de un informe de dirección contra la rúbrica."""
+
+    cobertura_fuentes: int = Field(ge=0, le=5, description="¿Usa las TRES fuentes (soporte, ventas, "
+                                                          "contexto)? 5 = las tres con cifras; 0 = solo una.")
+    densidad_cifras: int = Field(ge=0, le=5, description="¿Cuántas cifras concretas y verificables "
+                                                        "aporta? 5 = ocho o más; 0 = ninguna.")
+    estructura: int = Field(ge=0, le=5, description="¿Sigue las cuatro secciones pedidas "
+                                                   "(Titulares, Cifras clave, Riesgos, Recomendaciones)?")
+    accionabilidad: int = Field(ge=0, le=5, description="¿Las recomendaciones son concretas y ejecutables, "
+                                                       "o son generalidades? 5 = concretas con responsable "
+                                                       "o umbral; 0 = 'mejorar la eficiencia'.")
+    ausencia_de_relleno: int = Field(ge=0, le=5, description="5 = todo el texto aporta; 0 = mitad de relleno.")
+    justificacion: str = Field(description="Dos frases explicando las notas más bajas")
+
+    @property
+    def total(self) -> int:
+        return (self.cobertura_fuentes + self.densidad_cifras + self.estructura
+                + self.accionabilidad + self.ausencia_de_relleno)
+
+
+juez = modelo.with_structured_output(Evaluacion)
+
+PROMPT_JUEZ = (
+    "Eres un evaluador estricto de informes de dirección. Puntúas contra una rúbrica fija.\n"
+    "No premies la extensión ni el tono; premia cifras concretas y acciones ejecutables.\n"
+    "Sé duro: un informe correcto pero genérico no pasa de 3 en accionabilidad."
+)
+
+
+def evaluar_informe(texto: str) -> Evaluacion:
+    return juez.invoke([SystemMessage(PROMPT_JUEZ),
+                        HumanMessage(f"Evalúa este informe:\n\n{texto}")])
+
+
+eval_base = evaluar_informe(base["texto"])
+print(f"  cobertura de fuentes : {eval_base.cobertura_fuentes}/5")
+print(f"  densidad de cifras   : {eval_base.densidad_cifras}/5")
+print(f"  estructura           : {eval_base.estructura}/5")
+print(f"  accionabilidad       : {eval_base.accionabilidad}/5")
+print(f"  ausencia de relleno  : {eval_base.ausencia_de_relleno}/5")
+print(f"  TOTAL                : {eval_base.total}/25")
+print(f"\n  {eval_base.justificacion}")
+
+#%%md
+> **Un LLM como juez tiene sesgos conocidos**, y conviene tenerlos presentes: premia los
+> textos largos, premia el suyo propio frente al de otros modelos, y es sensible al orden si
+> comparas dos a la vez. Aquí los mitigamos con una **rúbrica de criterios explícitos**,
+> puntuando **un informe cada vez** y pidiendo justificación. No lo elimina; lo reduce.
+>
+> La validación de verdad es contrastarlo con notas humanas sobre una muestra. En el
+> módulo 6 lo hacemos.
+
+#%%md
+## Fase 3 · El equipo
+
+Cinco piezas:
+
+```
+        ┌── investigador_soporte ──┐
+START ──┼── investigador_ventas  ──┼──> redactor ──> critico ──> (¿aprueba?) ──> FIN
+        └── investigador_contexto ─┘                      │
+                                                          └──> redactor (una revisión)
+```
+
+Los tres investigadores **en paralelo** (son independientes), y un ciclo de revisión acotado
+entre redactor y crítico.
+
+#%%py
+investigador_soporte = create_agent(
+    model=modelo, tools=HERRAMIENTAS_SOPORTE,
+    system_prompt=("Eres analista de SOPORTE. Investiga la cola de tickets con tus herramientas y "
+                   "entrega un análisis de 4 o 5 frases con cifras exactas: volumen, distribución, "
+                   "tiempos de respuesta y sin resolver. Señala lo que te parezca anómalo. "
+                   "No hables de ventas. En español."),
+    name="inv_soporte",
+)
+
+investigador_ventas = create_agent(
+    model=modelo, tools=HERRAMIENTAS_VENTAS,
+    system_prompt=("Eres analista COMERCIAL. Investiga las ventas con tus herramientas y entrega un "
+                   "análisis de 4 o 5 frases con cifras exactas: ingresos, ticket medio, margen y "
+                   "reparto por ciudad y línea de producto. Señala lo que destaque. "
+                   "No hables de incidencias. En español."),
+    name="inv_ventas",
+)
+
+investigador_contexto = create_agent(
+    model=modelo, tools=HERRAMIENTAS_CONTEXTO,
+    system_prompt=("Eres analista de OPERACIONES. Resume el contexto del periodo en 2 o 3 frases con "
+                   "cifras, y di explícitamente qué implicaciones puede tener para el negocio. En español."),
+    name="inv_contexto",
+)
+
+
+class EstadoEquipo(TypedDict):
+    peticion: str
+    analisis: Annotated[list[str], operator.add]
+    informe: str
+    critica: str
+    revisiones: Annotated[int, operator.add]
+    bitacora: Annotated[list[str], operator.add]
+
+
+MAX_REVISIONES = 1
+
+
+def hacer_investigador(agente, nombre: str):
+    def nodo(estado: EstadoEquipo) -> dict:
+        r = agente.invoke({"messages": [HumanMessage(estado["peticion"])]}, {"recursion_limit": 20})
+        # Solo la CONCLUSIÓN llega al equipo, no la cocina interna del agente.
+        return {"analisis": [f"### Análisis de {nombre}\n{r['messages'][-1].text}"],
+                "bitacora": [f"{nombre} entregó su análisis"]}
+    return nodo
+
+
+def redactar(estado: EstadoEquipo) -> dict:
+    partes = ["Petición: " + estado["peticion"], "", *estado["analisis"]]
+    if estado["critica"]:
+        partes += ["", "### Crítica de la versión anterior (corrígela)", estado["critica"],
+                   "", "### Versión anterior", estado["informe"]]
+
+    r = modelo.invoke([
+        SystemMessage("Eres redactor de informes de dirección. Con los análisis recibidos, escribe el "
+                      "informe. Usa SOLO las cifras que aparezcan en los análisis: no inventes ni "
+                      "estimes. En español, sin relleno.\n\n" + ESTRUCTURA),
+        HumanMessage("\n".join(partes)),
+    ])
+    return {"informe": r.text, "bitacora": ["redactor entregó una versión"]}
+
+
+class Critica(BaseModel):
+    """Revisión interna del informe antes de entregarlo."""
+    aprobado: bool = Field(description="True solo si cumple las cuatro secciones y trae cifras de las "
+                                       "tres fuentes")
+    problemas: list[str] = Field(description="Qué falta o qué está mal, de forma concreta y accionable. "
+                                            "Vacía si está aprobado.")
+
+
+critico_llm = modelo.with_structured_output(Critica)
+
+
+def criticar(estado: EstadoEquipo) -> dict:
+    c = critico_llm.invoke([
+        SystemMessage("Eres el control de calidad. Revisas el informe antes de que lo vea dirección. "
+                      "Comprueba: (1) las cuatro secciones, (2) cifras de soporte, ventas y contexto, "
+                      "(3) recomendaciones concretas y no genéricas. Sé exigente pero concreto."),
+        HumanMessage(f"Análisis disponibles:\n{chr(10).join(estado['analisis'])}\n\n"
+                     f"Informe a revisar:\n{estado['informe']}"),
+    ])
+    if c.aprobado:
+        return {"critica": "", "bitacora": ["crítico: APROBADO"]}
+    return {"critica": "\n".join(f"- {p}" for p in c.problemas),
+            "bitacora": [f"crítico: {len(c.problemas)} problemas"]}
+
+
+def tras_critica(estado: EstadoEquipo) -> Literal["redactor", "__end__"]:
+    if estado["critica"] and estado["revisiones"] < MAX_REVISIONES:
+        return "redactor"
+    return END
+
+
+def contar_revision(estado: EstadoEquipo) -> dict:
+    return {"revisiones": 1}
+
+
+equipo = (
+    StateGraph(EstadoEquipo)
+    .add_node("inv_soporte", hacer_investigador(investigador_soporte, "soporte"))
+    .add_node("inv_ventas", hacer_investigador(investigador_ventas, "ventas"))
+    .add_node("inv_contexto", hacer_investigador(investigador_contexto, "contexto"))
+    .add_node("redactor", redactar, defer=True)        # espera a los tres investigadores
+    .add_node("contar", contar_revision)
+    .add_node("critico", criticar)
+    .add_edge(START, "inv_soporte").add_edge(START, "inv_ventas").add_edge(START, "inv_contexto")
+    .add_edge("inv_soporte", "redactor").add_edge("inv_ventas", "redactor")
+    .add_edge("inv_contexto", "redactor")
+    .add_edge("redactor", "contar").add_edge("contar", "critico")
+    .add_conditional_edges("critico", tras_critica, {"redactor": "redactor", END: END})
+    .compile()
+)
+
+mostrar_grafo(equipo)
+
+#%%md
+> **Por qué `contar` es un nodo aparte.** El contador de revisiones tiene que subir **una vez
+> por vuelta del ciclo**, y ponerlo dentro de `redactor` funcionaría... hasta que alguien
+> añada otra arista hacia el redactor. Como nodo independiente en el camino del ciclo, el
+> contador cuenta vueltas del ciclo, que es lo que significa. Es una separación de
+> responsabilidades pequeña que evita un fallo sutil.
+
+#%%py
+separador("EQUIPO — tres investigadores en paralelo, redactor y crítico")
+entrada_equipo = {"peticion": PETICION, "analisis": [], "informe": "", "critica": "",
+                  "revisiones": 0, "bitacora": []}
+eq = ejecutar_y_medir(equipo, entrada_equipo, "equipo", {"recursion_limit": 60})
+
+print("\nbitácora:")
+for linea in eq["salida"]["bitacora"]:
+    print("  ", linea)
+print(f"\nrevisiones: {eq['salida']['revisiones']}")
+print()
+print(eq["texto"][:1200])
+
+#%%md
+> Los tokens del equipo salen **subestimados** en la medición: `ejecutar_y_medir` solo suma
+> el `usage_metadata` de los mensajes que quedan en el estado del padre, y los investigadores
+> son agentes anidados cuyos mensajes internos no llegan ahí. La cifra real es más alta.
+>
+> Lo dejamos así a propósito, porque es un fallo de instrumentación que se comete
+> constantemente: **medir solo lo que se ve**. En el módulo 6 lo resolvemos bien, con
+> LangSmith, que instrumenta la ejecución entera incluyendo lo anidado.
+
+#%%md
+## Fase 4 · La comparativa
+
+#%%py
+eval_equipo = evaluar_informe(eq["texto"])
+
+CRITERIOS = ["cobertura_fuentes", "densidad_cifras", "estructura", "accionabilidad", "ausencia_de_relleno"]
+
+print(f"{'criterio':<24} {'agente único':>13} {'equipo':>8}")
+print("-" * 48)
+for c in CRITERIOS:
+    a, b = getattr(eval_base, c), getattr(eval_equipo, c)
+    marca = "  <-" if b > a else ("  ->" if a > b else "")
+    print(f"{c:<24} {a:>13}/5 {b:>6}/5{marca}")
+print("-" * 48)
+print(f"{'TOTAL':<24} {eval_base.total:>13}/25 {eval_equipo.total:>6}/25")
+
+print(f"\n{'métrica':<24} {'agente único':>13} {'equipo':>8}")
+print("-" * 48)
+print(f"{'segundos':<24} {base['segundos']:>13.1f} {eq['segundos']:>8.1f}")
+print(f"{'llamadas al modelo':<24} {base['llamadas']:>13} {eq['llamadas']:>8}")
+print(f"{'tokens (visibles)':<24} {base['tokens']:>13,} {eq['tokens']:>8,}")
+
+print(f"""
+Cómo leerlo:
+
+- El equipo suele ganar en COBERTURA y DENSIDAD DE CIFRAS: tres investigadores con
+  herramientas dedicadas exploran más que uno solo repartiendo su atención entre seis.
+- El agente único suele ganar en TIEMPO y COSTE si el equipo no paraleliza. Aquí sí
+  paraleliza, así que la diferencia de tiempo es mucho menor de lo que sugiere el número
+  de llamadas.
+- La ACCIONABILIDAD depende del redactor y del crítico, no del reparto. Si el equipo no
+  gana ahí, el problema está en el prompt del redactor.
+""")
+
+#%%md
+## Fase 5 · ¿Mereció la pena?
+
+Un sistema multiagente se justifica si **la mejora de calidad compensa el coste extra**. Con
+las cifras delante, la conversación deja de ser una cuestión de gustos.
+
+#%%py
+delta_calidad = eval_equipo.total - eval_base.total
+delta_llamadas = eq["llamadas"] - base["llamadas"]
+delta_segundos = eq["segundos"] - base["segundos"]
+
+print(f"  calidad : {delta_calidad:+d} puntos sobre 25")
+print(f"  llamadas: {delta_llamadas:+d}")
+print(f"  tiempo  : {delta_segundos:+.1f} s")
+
+if delta_calidad >= 3:
+    veredicto = ("El equipo aporta una mejora sustancial. Si el informe se genera una vez por "
+                 "semana, el coste extra es irrelevante frente a las dos horas de una persona.")
+elif delta_calidad > 0:
+    veredicto = ("Mejora marginal. Antes de quedarte con el equipo, prueba a mejorar el prompt "
+                 "del agente único: casi siempre es más barato que añadir agentes.")
+else:
+    veredicto = ("El equipo NO mejora la calidad y cuesta más. Es el resultado más frecuente y "
+                 "el que nadie publica. Quédate con el agente único.")
+
+print(f"\n  {veredicto}")
+
+print("""
+Y la observación que generaliza más allá de este proyecto: si el equipo gana, casi siempre
+es por la COBERTURA, no por el "razonamiento colectivo". Tres agentes con tres juegos de
+herramientas exploran más superficie que uno con seis, porque cada uno tiene el foco puesto
+en una sola cosa.
+
+Eso sugiere una alternativa mucho más barata que probar antes de montar un equipo: mantener
+un solo agente y obligarle por prompt a consultar las tres fuentes. Si eso cierra la brecha,
+no necesitas multiagente.
+""")
+
+#%%md
+## Retos para llevarlo más lejos
+
+1. **La alternativa barata.** Implementa la idea de arriba: un solo agente con una lista de
+   comprobación explícita ("antes de redactar, consulta al menos una herramienta de cada
+   fuente"). Evalúalo con la misma rúbrica. Si empata con el equipo, acabas de ahorrar un
+   sistema entero.
+
+2. **Valida al juez.** Puntúa tú mismo cinco informes y compara con las notas del LLM. Mira
+   la correlación. Si es baja, la comparativa de la fase 4 no vale y hay que arreglar la
+   rúbrica antes que el sistema.
+
+3. **Un investigador que se declare incompetente.** Añade a cada investigador la posibilidad
+   de responder "no tengo datos suficientes sobre esto" en vez de rellenar. Mide cuánto sube
+   la densidad de cifras al eliminar el relleno.
+
+4. **Streaming del progreso.** Aplica el notebook 11: emite eventos `custom` desde cada
+   investigador para que la interfaz muestre "soporte listo, ventas en curso...". Con tres
+   agentes en paralelo, saber quién va por dónde deja de ser un lujo.
+
+5. **Persistencia y HIL.** Añade un checkpointer y un `interrupt()` antes de entregar: que una
+   persona apruebe o edite el informe. Es el módulo 3 aplicado aquí, y convierte el proyecto
+   en algo que se puede desplegar.
+
+## Lo que te llevas
+
+- **Mide antes de decidir.** "El equipo es mejor" sin rúbrica es una opinión.
+- **Paraleliza lo independiente.** Tres investigadores a la vez cuestan tres llamadas pero
+  tardan lo que la más lenta.
+- **Conclusiones, no transcripciones.** Cada investigador entrega su análisis, no su historial.
+- **Los ciclos de revisión van acotados.** Una vuelta, contada en un nodo propio.
+- **Cuidado con medir solo lo visible.** Los agentes anidados esconden su consumo; para eso
+  está la instrumentación del módulo 6.
+- La ventaja del multiagente suele ser **cobertura**, no inteligencia colectiva. Y la
+  cobertura a veces se consigue mucho más barato.
+
+**Siguiente módulo:** [`../05_rag/14_rag_agentico.ipynb`](../05_rag/14_rag_agentico.ipynb)
+— recuperación con criterio y autocorrección.
