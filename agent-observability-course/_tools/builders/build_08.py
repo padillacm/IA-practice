@@ -131,6 +131,9 @@ def build_lesson() -> None:
     md(details("3 · (Módulo 07) ¿Qué ventaja da `GET /api/traces/<id>` frente a una búsqueda TraceQL para un enlace «ver traza» desde un log?",
                "Es **inmediato** (la traza está en el live-store en cuanto llega); la búsqueda tarda ≈ 15-20 s en verla. Un `trace_id` en un log siempre se puede resolver por identificador."))
 
+    md(details("4 · (Módulo 03, aplicación) En Python, dentro de un `with tracer.start_as_current_span(...)`, ¿cómo obtienes el `trace_id` del span activo como los 32 caracteres hexadecimales que verás en Tempo y en Loki?",
+               "`sc = trace.get_current_span().get_span_context()` y `format(sc.trace_id, '032x')` (el `span_id` con `'016x'`). `sc.is_valid` es `False` si no hay span activo: en ese caso el log **no** debe llevar `trace_id`. Es exactamente lo que implementarás en la sección 4 y en el TODO 1 del proyecto."))
+
     code(boot("viz,otel"))
     code(IMPORTS + SETUP)
     code(LOAD)
@@ -827,6 +830,9 @@ except NotImplementedError as e:
     | I3 | **Todos los logs** (agente y servicios, sin los de OTLP) de la petición del ticket **`T-4200004`**, a partir de su `trace_id` (`TRACE_ID` ya calculado) — structured metadata, sin parsear |
     | I4 | Llamadas a **`orders-api`** **correctas** (`status = 200`) que tardaron **más de 300 ms** |
     """)
+    md(hint(1, "Cada pregunta es un **selector** (qué stream: `{service_name=\"...\"}`) seguido de **una etapa por condición**. Antes de escribir, clasifica cada condición: ¿está en el JSON de la línea (`| json`), en un `clave=valor` de logfmt (`| logfmt`) o es *structured metadata* (se filtra directamente por su nombre, sin parsear)? Pruébalas de una en una con `run_q(...)` y mira cuántas líneas devuelve cada etapa."))
+    md(hint(2, "Plantillas: `{service_name=\"X\"} | json | campo=\"valor\"` (I1: el campo se llama `level`, en minúsculas) · `{service_name=\"X\"} | logfmt | status >= 500` (I2; compara números sin comillas) · `{service_name=~\"a|b\"} | trace_id=\"<id>\"` (I3: `=~` admite una alternativa regex; el agente y los servicios `*-access` comparten `trace_id` como metadato) · `... | logfmt | duration_ms > 300 and status = 200` (I4: dos condiciones se unen con `and`)."))
+
     code('''
 TRACE_ID = DATA["trace_ids"]["T-4200004"]
 INVESTIGATION: dict[str, str] = {
@@ -845,6 +851,9 @@ for k, q in INVESTIGATION.items():
 
     **TODO 4b.** Escribe en `METRICS` dos consultas de **métricas LogQL**: `"err_rate"`: tasa de 5xx **por ruta** (`sum by (route)`, `rate`, ventana de 1 m) y `"p95"`: p95 de `duration_ms` **por servicio** (`quantile_over_time(0.95, ... | unwrap duration_ms [2m]) by (service_name)`), ambas sobre los logs `*-access` con `logfmt`.
     """)
+    md(hint(1, "Es un histograma a mano: `bins = [0] * n_bins`; para cada línea de un stream que termina en `-access` calcula su `status` (`int(lq.parse_logfmt(e.line)[\"status\"])`), y si es ≥ 500 suma 1 en el cajón `(e.ts_ns - t0) / 60e9` truncado a entero. Es lo mismo que haría `count_over_time(... [1m])`, pero a mano (lo validaste con pandas en la sección 5.2)."))
+    md(hint(2, "Dos detalles que fallan casi siempre: (1) nanosegundos → minutos es dividir entre `60e9`, no `60`; (2) lo posterior al último cajón se «aplasta» con `min(n_bins - 1, idx)`. Para `err_rate` y `p95` copia la estructura de las consultas de métricas de la sección 5.2 de la lección y cambia solo el selector y el filtro."))
+
     code('''
 def errors_per_minute(entries, n_bins=10):
     # TODO 4a
@@ -859,6 +868,10 @@ except NotImplementedError as e:
     print("Pendiente:", e)
 for k, q in METRICS.items(): print(k, "→", q)
 ''')
+    md(observe("""
+    - Los 5xx **no se reparten por igual**: se concentran en los minutos 2-4 (`[1, 0, 6, 17, 7, 4, ...]`: el pico de la inyección de fallos). Eso es lo que verías en un panel de «errores por minuto» del módulo 10; una media global (`mean`) lo escondería.
+    - Si tu `EPM` suma menos que el nº de líneas con `status >= 500`, pierdes líneas en el último cajón: revisa el `min(n_bins - 1, ...)`.
+    """))
     md("""
     ## Autocomprobación (rúbrica)
     """)
