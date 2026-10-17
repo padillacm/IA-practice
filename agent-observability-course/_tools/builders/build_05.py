@@ -345,8 +345,8 @@ def build_lesson() -> None:
     md("""
     ## 🔁 Conexión con módulos anteriores
     """)
-    md(details("1 · (Módulo 03) Si el SDK ya tiene un `BatchSpanProcessor`, ¿por qué el Collector tiene además un procesador `batch`?",
-               "Son dos niveles: el del SDK agrupa dentro de **cada proceso** de aplicación; el del Collector agrupa lo que llega de **muchos procesos** (y de muchos SDK) antes de ir al backend. Muchas aplicaciones pequeñas generan muchas peticiones diminutas; el `batch` del Collector las junta y mejora la compresión."))
+    md(details("1 · (Módulo 03, Cálculo) 100 réplicas del agente, cada una con un `BatchSpanProcessor` por defecto (lotes de hasta 512 spans, un envío cada 5 s), producen en total 1 280 spans/s. ¿Cuántas peticiones por segundo recibe el Collector? Si su `batch` agrupa de 512 en 512, ¿cuántas peticiones por segundo salen hacia el backend y qué ganas?",
+               "Cada réplica envía ≈ 1 petición cada 5 s ⇒ 100/5 = **20 peticiones/s** de ≈ 64 spans (1280/20). El `batch` del Collector junta lotes de 512 ⇒ 1280/512 = **2,5 peticiones/s** hacia el backend: **8× menos** peticiones, más grandes, que comprimen mejor y cuestan menos al backend. Son dos niveles de agrupación: el del SDK dentro de cada proceso y el del Collector entre muchos procesos (lo medirás en 4.1)."))
     md(details("2 · (Módulo 03) ¿Qué ocurre en el SDK cuando el Collector rechaza datos con un 503?",
                "El exportador OTLP reintenta con *backoff*; si el rechazo persiste, el lote se descarta y el SDK lo registra en su log. Con el `BatchSpanProcessor`, además, la cola local se puede llenar y descartar los spans más antiguos. Hoy verás el **otro lado**: por qué el Collector devuelve ese 503."))
     md(details("3 · (Módulo 04) ¿Qué dos problemas de los spans «de otro equipo» (nombres antiguos y PII) conviene corregir en el Collector y no en cada aplicación?",
@@ -408,7 +408,7 @@ plt.show()
 
     | Patrón | Qué es | Cuándo |
     |---|---|---|
-    | **Agente** | Un Collector **junto a cada aplicación** (sidecar o DaemonSet por nodo) | Baja latencia local, enriquecer con metadatos del host/pod, aislar fallos de red |
+    | **Agente** | Un Collector **junto a cada aplicación**: *sidecar* (un contenedor extra al lado de tu app) o *DaemonSet* (Kubernetes lanza un pod por máquina/nodo; lo verás en el módulo 19: piensa en «un proceso de monitoreo por servidor») | Baja latencia local, enriquecer con metadatos del host/pod, aislar fallos de red |
     | **Gateway** | Uno o más Collectors **centrales** con un único endpoint OTLP (por clúster/región), detrás de un balanceador | Políticas centrales (redacción, muestreo, enrutado), pocas conexiones salientes a los backends |
     | **Dos niveles** | Capa 1 con el exportador `load_balancing` (por `traceID`) → capa 2 con *tail sampling* | Cuando todos los spans de una traza deben llegar al **mismo** Collector (módulo 18) |
 
@@ -830,6 +830,8 @@ ax.set_ylabel("spans (50 enviados)"); ax.set_title("memory_limiter en modo limit
     ## 4.4 La cola de envío: qué pasa cuando el backend se cae
 
     Cada exportador de red tiene una **`sending_queue`** (activada por defecto) y **`retry_on_failure`**. Lo medimos apuntando un exportador a un destino **inexistente** con una cola pequeña (10 peticiones) y un solo consumidor, mientras enviamos 30 peticiones, y vigilamos las métricas internas cada 0,2 s.
+
+    > 🤔 **Predice antes de ejecutar.** El destino no responde nunca. (a) ¿Qué código HTTP recibirá el SDK en las primeras peticiones? (b) ¿Cambia algo cuando la cola llega a 10? (c) Si fueras el SDK, ¿qué tendrías que hacer con ese cambio? Apunta las tres respuestas y contrástalas con las dos fases de la gráfica.
     """)
     code('''
 PROC_D = ("exporters:\\n  otlp_http/dead:\\n    endpoint: http://127.0.0.1:9\\n    retry_on_failure:\\n      enabled: true\\n      initial_interval: 1s\\n      max_interval: 2s\\n      max_elapsed_time: 60s\\n"
@@ -982,6 +984,8 @@ else:
                "Capa 1 (**agente** DaemonSet): `memory_limiter`, `k8s_attributes`/`resource_detection`, `batch`, exportador OTLP al gateway. Capa 2 (**gateway**): redacción de PII (`attributes`/`redaction`/`transform`) **antes** del muestreo si no quieres que la PII llegue a ningún almacén, y `load_balancing` con `routing_key: traceID` hacia la capa 3. Capa 3 (réplicas con **tail sampling**): `memory_limiter`, `tail_sampling`, `batch`, exportadores a los backends. Cada capa con `sending_queue` y alertas en `otelcol_*`."))
     md(details("7 · (Transferencia) `otelcol_exporter_queue_size` ronda el 90 % de la capacidad durante horas y `send_failed` crece levemente; la latencia del backend (Tempo) se ha duplicado. ¿Añades réplicas del Collector?",
                "Probablemente **no**: es el signo de que el destino es el cuello de botella; más Collectors le meten más presión. Primero diagnosticar y escalar/optimizar el backend (o limitar la ingesta con muestreo, módulo 18). Subir `queue_size` da margen a costa de memoria; añadir `num_consumers` solo ayuda si el destino tiene capacidad."))
+    md(details("8 · (Diagnóstico) Tu gateway acepta 10 000 spans en 5 minutos (`otelcol_receiver_accepted_spans`), el `filter` descarta 1 200 (`incoming_items − outgoing_items` del filtro) y el exportador a Tempo informa `sent_spans = 8 500`. ¿Se pierde algo? ¿Dónde miras primero?",
+               "Esperabas 10 000 − 1 200 = **8 800** enviados; faltan **300** spans. Mira por orden: `otelcol_exporter_send_failed_spans` (fallos de entrega tras reintentos), `otelcol_exporter_enqueue_failed_spans` (no cupieron en la cola ⇒ pérdida) y `otelcol_receiver_refused_spans` (rechazos por `memory_limiter`; esos no cuentan como aceptados, pero el emisor los reintenta). También puede ser que parte aún esté **en cola** (`queue_size`) o que Tempo haya rechazado datos inválidos. La conservación `aceptado − descartado por filtros = enviado` es el test más sencillo de «no pierdo datos»."))
 
     md("""
     ---
@@ -1122,6 +1126,8 @@ def otelcol_validate(cfg_text: str) -> tuple[bool, str]:
 
     **TODO 1.** Completa `CONFIG` (un YAML en una cadena) para cumplir los requisitos A-I. El esqueleto trae el receptor y la extensión; **faltan** los procesadores, los exportadores y los pipelines (y el bloque `service`).
     Aplica lo aprendido: el **orden** de la lección (sección 2), los nombres canónicos 0.162 (`otlp_grpc`, `otlp_http`), y las sintaxis de `filter` (condición OTTL sobre el nombre), `attributes` (acciones `hash`/`delete`), `resource` (`upsert`) y `transform` (OTTL con `set(...)` y `delete_key(...)`).
+
+    > 🧩 **Trabaja en tres iteraciones y ejecuta el linter (paso 2) entre ellas:** (1a) define los procesadores y comprueba que el linter solo se queja de que están sin usar; (1b) define los exportadores; (1c) escribe los tres pipelines. Un error por iteración es mucho más fácil de localizar que diez a la vez, y el linter te dice cuál es.
     """)
     md(hint(1, "Procesadores que necesitas (en este orden en los tres pipelines cuando apliquen): `memory_limiter` → `filter/health` (solo trazas) → `attributes/pii` (trazas y logs) → `resource/lab` (las tres) → `transform/semconv` (solo trazas) → `batch`. Cada uno se **define** en `processors:` y se **activa** en el pipeline."))
     md(hint(2, """Sintaxis (compruébala con `cfglint` y `otelcol_validate`):
