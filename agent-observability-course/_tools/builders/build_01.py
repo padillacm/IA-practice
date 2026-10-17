@@ -47,17 +47,25 @@ def build_lesson() -> None:
     8. **Identificar** los puntos de extensión donde se instrumentará el agente (módulo 03).
     """)
 
+    md(box("route", "Ruta núcleo vs ampliación", """
+        Este módulo tiene ≈ 75 celdas y ≈ 4 h 20 min: puedes hacerlo en **dos sesiones**.
+
+        - **Ruta núcleo (≈ 2 h 15 min, imprescindible para el módulo 03):** §1 (agente y bucle a mano), §1.5 (parada y coste), §3.1 (herramientas; error de negocio ≠ de infraestructura), §4 (tráfico), §5 (fallos inyectados), §7 (puntos de extensión) y el proyecto.
+        - **Ampliación (≈ 1 h, puedes volver más tarde):** §2 (adaptadores de proveedor y modelo de latencia del mock), §3.2 (RAG con TF-IDF y su fórmula), §6 (experimento sano vs con fallos) y los retos extra del proyecto.
+        - **Si nunca has visto un agente:** lee la sección 1.3 con el bucle a mano *ejecutándola línea a línea* antes de seguir; todo lo demás se apoya en ese `for`.
+        """))
+
     md("""
     ## 🔁 Conexión con el módulo anterior
 
-    Responde de memoria; luego abre la respuesta.
+    Escribe (o piensa) tu respuesta **antes** de abrirla: recuperar de memoria es lo que fija el aprendizaje, y estas tres ideas las usarás en todo el módulo.
     """)
-    md(details("1 · ¿Por qué «Up» en `docker compose ps` no basta para saber si Loki puede recibir logs?",
-               "Porque *arrancado* ≠ *listo*: Loki tardó ≈ 17 s en responder `200` en `/ready` (y Pyroscope ≈ 1 minuto). Se verifica con el *readiness*, idealmente con una señal canario de extremo a extremo."))
-    md(details("2 · Cita dos de las cinco «grietas» del monitoreo clásico con agentes.",
-               "Por ejemplo: la longitud de la cadena es variable (bucles de herramientas) y «200 OK» ya no significa éxito (respuestas inventadas con estado `ok`). Las otras: latencia de cola pesada, coste ∝ tokens y fallos parciales silenciosos."))
-    md(details("3 · ¿Quién habla con los backends (Tempo, Loki, Prometheus): la app o el Collector?",
-               "El **Collector**: la app solo envía OTLP al Collector (`:4317` gRPC / `:4318` HTTP) y este reparte cada señal a su backend."))
+    md(details("1 · (Diagnóstico) Acabas de lanzar `docker compose --profile core up -d`; `docker compose ps` dice «Up» para Loki pero tu primer log no aparece. ¿Qué hipótesis tienes y qué compruebas?",
+               "Puede que Loki esté *arrancado* pero **no listo**: tardó ≈ 17 s en responder `200` en `/ready` (Pyroscope ≈ 1 minuto). Compruebas el readiness (`check_stack()` o `curl :3100/ready`) y, de extremo a extremo, una señal canario buscada por su `trace_id`."))
+    md(details("2 · (Transferencia) Tu panel de «% de peticiones sin error» marca 99,5 % pero los clientes se quejan de respuestas inventadas. ¿Qué «grieta» del monitoreo clásico es y qué dos de las otras cuatro conoces?",
+               "Es la grieta 4: **«200 OK» ya no significa éxito**. Las otras: latencia de cola pesada (percentiles, no medias), cadena de longitud variable (bucles), coste ∝ tokens y concentrado, y fallos parciales silenciosos (herramienta caída + respuesta de cortesía). Aquí en el módulo 01 las verás una a una como fallos inyectados."))
+    md(details("3 · (Cálculo) En el diagrama del stack, ¿qué componentes *escriben* y cuáles *leen* telemetría? Si Grafana se apaga una hora, ¿pierdes datos?",
+               "Escriben: la app → Collector → Tempo/Loki/Prometheus. Leen: Grafana (flechas discontinuas). Con Grafana apagado **no pierdes datos**, solo la vista; si cae el Collector sí hay riesgo de pérdida porque es el único punto de salida de la app."))
 
     code(boot("viz"))
     code(IMPORTS + '''
@@ -263,6 +271,9 @@ pd.DataFrame([{"herramienta": t, "descripción": tools.get(t).description[:70], 
     md("""
     **Parada.** El bucle termina cuando el modelo responde **sin** `tool_calls` (`finish_reason="stop"`), cuando se agotan los pasos (`max_steps`) o ante un error no recuperable.
 
+    **Tokens y coste, primero con números.** Un agente de 3 llamadas. El prompt inicial (instrucciones + herramientas + pregunta) pesa 800 tokens. El modelo pide una herramienta (escribe 40 tokens) y esta devuelve 260.
+    En la 2.ª llamada se reenvía todo: 800 + 40 + 260 = **1100** tokens de entrada; si repite (+40 y +260) la 3.ª recibe **1400**. Entrada total = 800 + 1100 + 1400 = **3300**, no 3 × 800 = 2400. Eso es el efecto «el modelo no tiene memoria: se le reenvía toda la conversación». Ahora la fórmula general:
+
     **Tokens y coste.** Sea $S$ el tamaño del contexto inicial (instrucciones del sistema + definición de herramientas + mensaje del cliente), $u_j$ los tokens de los resultados de herramienta añadidos tras el paso $j$ y $o_j$ los tokens que el modelo generó en ese paso.
     En la llamada $k$ el modelo recibe:
 
@@ -307,7 +318,7 @@ c = SupportAgent(llm=MockLLM(seed=7)).run(t)
 print("misma semilla  → latencia idéntica:", a.latency_s == b.latency_s, f"({a.latency_s:.4f} s)")
 print("otra semilla   → latencia distinta:", c.latency_s != a.latency_s, f"({c.latency_s:.4f} s)")
 ''')
-    md(box("elite", "Secretos de la élite · determinismo por llamada", """
+    md(box("elite", "determinismo por llamada", """
     El mock **no usa un generador aleatorio global**: cada llamada deriva su propio RNG de `SHA-256(seed, ticket_id, nº de llamada)`. Así la latencia de la llamada 3 del ticket T-17 es la misma
     se ejecute el notebook entero, solo esa celda o en otro orden. Un `random.seed(42)` global *no* da esa garantía (cualquier llamada extra desplaza toda la secuencia). Es el mismo principio que usan los sistemas de *record/replay* para depurar agentes reales.
     """))
@@ -639,7 +650,7 @@ print("¿todos los logs comparten el trace_id de la traza?", set(lg.trace_id) ==
     - **Documentación de proveedores:** el bucle `tool_use`/`tool_result` de Anthropic y las `tools` de OpenAI son el contrato que implementan nuestros adaptadores; ambos exigen que **tu código** ejecute la herramienta y devuelva el resultado en el siguiente mensaje (por eso el coste de contexto crece con cada paso).
     - **Honeycomb** insiste (en sus artículos sobre su *Query Assistant*) en medir el éxito de las funciones con LLM con datos de uso reales y no solo con pruebas previas; es el motivo de que SupportOps nazca con *ground truth* de fallos para validar la observabilidad.
     """)
-    md(box("elite", "Secretos de la élite · agentes en producción", """
+    md(box("elite", "agentes en producción", """
     1. **La unidad de coste y de fallo es el *paso*, no la petición.** Dos peticiones idénticas pueden costar 1× y 6×. Todo presupuesto razonable tiene `max_steps` *y* un tope de tokens/coste por petición (módulo 13).
     2. **Los reintentos enmascaran fallos.** Un `llm_error` transitorio acaba en estado `ok`; si solo mides errores finales, no verás que el proveedor se degrada hasta que los reintentos se agotan. Cuenta **intentos**, no solo resultados.
     3. **Herramientas con efectos (reembolsos, escrituras) deben ser idempotentes.** Un reintento tras un timeout puede ejecutar la acción dos veces. Usa claves de idempotencia; es un riesgo que ninguna métrica te mostrará hasta que haya un cliente reembolsado dos veces.
@@ -688,7 +699,7 @@ for n in (1, 3, 6, 12):
         ("4 · (Diagnóstico) Reembolsos duplicados",
          """Aparecen reembolsos duplicados en contabilidad, pero tus dashboards muestran 0 errores. Da una hipótesis basada en lo visto y cómo la confirmas con telemetría.""",
          """Hipótesis: un **timeout** en `issue_refund` seguido de un reintento (del LLM o de la herramienta) ejecutó la acción dos veces; la herramienta no es idempotente. Confirmación: en las trazas, peticiones con **dos spans `execute_tool issue_refund`** (el primero con error/timeout) para el mismo `order_id`; en logs, mismo `order_id` aprobado dos veces."""),
-        ("5 · (Cálculo) Semillas",
+        ("5 · (Diagnóstico) Semillas",
          """Corres 1000 tickets con `seed=42` y obtienes p99 = 12,0 s. Un compañero obtiene 12,3 s con el mismo código. ¿Qué dos explicaciones razonables hay?""",
          """(1) **Distinto `SUPPORTOPS_SEED` o versión del paquete/mock** (el RNG deriva de la semilla y del código). (2) Usó otro `LLM_MODEL`/otras `fault_rates`. Si todo coincide, el resultado **debe** ser idéntico (el RNG es por llamada): una diferencia indicaría estado oculto o dependencia del orden — un bug."""),
         ("6 · (Transferencia) De tu bot actual",
@@ -697,7 +708,13 @@ for n in (1, 3, 6, 12):
         ("7 · (Transferencia) RAG en tu dominio",
          """Tu empresa tiene un RAG sobre documentación interna. ¿Qué dos señales de la recuperación incluirías como atributos de traza para detectar respuestas «con apariencia de fundamento»?""",
          """La **puntuación del mejor documento** (y la diferencia con el segundo) y el **número de documentos recuperados por encima de un umbral**; opcionalmente los *ids* de documentos. Una puntuación baja o plana indica recuperación débil: la respuesta probablemente no esté fundamentada."""),
-        ("8 · (Recuerdo) Roles y parada",
+        ("8 · (Transferencia) ¿Dónde mides los reintentos?",
+         """Quieres medir cuánto tiempo pierde el agente en reintentos al LLM (errores 5xx/429). De los tres puntos de extensión (`agent_run`, `llm_call`, `tool_call`), ¿cuál usarías y qué registrarías para distinguir una llamada normal de una reintentada?""",
+         """`llm_call`: es un span por cada llamada al modelo, así que un reintento aparece como **otro** span hijo del mismo `agent_run`. Registrarías un atributo con el número de intento (y el código de error del intento fallido) para poder contar intentos, no solo resultados finales. En `agent_run` solo verías el total, y en `tool_call` no ocurre el reintento del LLM."""),
+        ("9 · (Cálculo) Cambiar de proveedor",
+         """Quieres ejecutar el mismo agente contra un modelo local con Ollama. ¿Qué variables de entorno cambias y qué parte del código del agente tienes que tocar? ¿Por qué las rúbricas del curso siguen usando solo `mock`?""",
+         """Cambias `LLM_PROVIDER=ollama`, `LLM_MODEL=<un modelo con soporte de herramientas>` y, si no es local por defecto, `OLLAMA_HOST`. **No tocas el agente**: habla con el protocolo `LLMClient` y `get_llm()` elige el adaptador. Las rúbricas usan `mock` porque es determinista, gratis y sin red: con un modelo real las cifras variarían entre ejecuciones y no se podrían fijar umbrales."""),
+        ("10 · (Recuerdo) Roles y parada",
          """¿Qué roles tienen los mensajes de la conversación y qué tres condiciones terminan el bucle?""",
          """Roles: `system`, `user`, `assistant` (con `tool_calls`), `tool` (resultado). Terminan el bucle: respuesta sin `tool_calls` (`finish_reason=stop`), agotar `max_steps`, o error no recuperable (p. ej. `llm_error` persistente)."""),
     ]
@@ -813,7 +830,25 @@ except NotImplementedError as e:
     md("""
     ## Paso 3 · Enseñar al agente (mock) cuándo usarla
 
-    El mock decide con **reglas** (`Rule`): palabras clave → pasos de herramienta → plantilla de respuesta. Observa las reglas por defecto con `default_rules()` y añade la tuya.
+    El mock decide con **reglas** (`Rule`). Antes de escribir la tuya, estudia este **ejemplo resuelto** (la regla real `order_status`, comentada). Una regla responde a tres preguntas: *¿cuándo se activa?* (`keywords`), *¿qué herramientas llama?* (`steps`) y *¿qué contesta con sus resultados?* (`answer`):
+
+    ```python
+    Rule("order_status",                                         # nombre de la intención
+         ("pedido", "envío", "seguimiento", "estado"),            # CUÁNDO: si el ticket contiene alguna de estas subcadenas
+         [ToolStep("get_order",                                   # QUÉ herramienta llama…
+                   lambda t, r: {"order_id": _order_id(t)})],     # …y con qué argumentos: t = texto del ticket, r = resultados previos
+         _ans_order_status,                                       # QUÉ contesta: función (t, r) -> str con r["get_order"] ya ejecutada
+         needs=lambda t: bool(_order_id(t)),                      # REQUISITO: ¿el ticket trae un número de pedido?
+         missing_answer="¿Me indica su número de pedido (ORD-00000)?",   # qué responde si falta (sin llamar a ninguna herramienta)
+         priority=10)                                             # si varias reglas encajan, gana la de mayor prioridad
+    ```
+
+    Tu regla `stock` es lo mismo con otra herramienta, otros argumentos y otra respuesta. Plan sugerido: (1) 3a, (2) `answer` con sus tres casos, (3) montar la `Rule`, (4) `MockLLM(seed=SEED)` + `llm.add_rule(regla)`.
+    """)
+    md("""
+    ### TODO 3a y 3b
+
+    Observa las reglas por defecto con `default_rules()` y añade la tuya.
 
     **TODO 3a.** Implementa `sku_from_text(text)`: devuelve el SKU mencionado (`SKU-####`, usa `SKU_RE`) **o** el SKU del producto cuyo nombre aparece en el texto (ignora mayúsculas; compara con `catalog.PRODUCTS`, p. ej. «teclado mecánico K87» → `SKU-1001`; basta con que aparezca el nombre completo o su última palabra, p. ej. «K87», «M3»). Si no hay, `""`.
 
