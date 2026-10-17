@@ -82,6 +82,9 @@ def build_lesson() -> None:
     md(details("3 · (Módulo 09) ¿Por qué `ticket_id` no puede ser una etiqueta de una métrica?",
                "Cada valor distinto crea una serie temporal nueva: cardinalidad ilimitada. Los identificadores van en spans/logs; las métricas llevan etiquetas acotadas (estrato, criterio, etiqueta pass/fail, versión)."))
 
+    md(details("4 · (Módulo 13, cálculo) Cada llamada del juez cuesta el 40 % de lo que cuesta atender un ticket. Si evalúas el 10 % de los tickets, ¿qué sobrecoste añade la evaluación? ¿Y si evalúas todos?",
+               "Sobrecoste = tasa de muestreo × (coste del juez / coste del agente) = 0,10 × 0,40 = **4 %** del gasto de atender tickets; evaluándolo todo, **40 %**. Por eso en la sección 9.2 y en el TODO 6 del proyecto la tasa de muestreo es una decisión económica, no solo estadística."))
+
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_14)
     code(DATA_14)
@@ -203,7 +206,7 @@ rows = [{"atributo": k, "tipo": snap["attributes"][k]["type"], "estabilidad": sn
         for k in ("gen_ai.evaluation.name", "gen_ai.evaluation.score.value", "gen_ai.evaluation.score.label", "gen_ai.evaluation.explanation", "gen_ai.prompt.name", "gen_ai.prompt.version", "gen_ai.agent.version")]
 display(pd.DataFrame(rows).set_index("atributo"))
 ''')
-    md(box("warn", "Cuidado", """
+    md(box("warn", "", """
     Todo lo de `gen_ai.evaluation.*` es **Development**: puede cambiar de nombre o forma (hasta hace poco la evaluación se modelaba de otra manera en algunas herramientas). Aísla los nombres
     en **una** función (`build_eval_event`) y valida contra la instantánea de la spec en CI, como hicimos con el linter del módulo 04.
     """))
@@ -779,6 +782,9 @@ except NotImplementedError as e:
     - `event_attrs`: atributos del evento `gen_ai.evaluation.result`: `gen_ai.evaluation.name`, `gen_ai.evaluation.score.value` (**float**), `gen_ai.evaluation.score.label`, `gen_ai.evaluation.explanation` (recortada a **300** caracteres, solo si hay), `gen_ai.response.id` (solo si el caso lo tiene) y los propios `supportops.ticket.id`, `supportops.eval.stratum`, `supportops.eval.sample_rate`, `gen_ai.agent.version`.
     - `metric_attrs`: etiquetas **acotadas** para la métrica `supportops.eval.results`: exactamente `gen_ai.evaluation.name`, `gen_ai.evaluation.score.label`, `supportops.eval.stratum`, `gen_ai.agent.version`. **Nunca** ids, explicación ni puntuación.
     """)
+    md(hint(1, 'Son **dos diccionarios** con propósitos distintos: el evento puede llevar identificadores y explicación (vive en UNA traza); la métrica solo etiquetas **acotadas** (vive en miles de series). Construye primero `event_attrs` con las tres claves obligatorias (`name`, `score.value` como `float`, `score.label`) y añade las opcionales con `if`; `metric_attrs` es un diccionario de exactamente cuatro claves.'))
+    md(hint(2, 'Los tipos importan: `float(score)` (la función `validate_eval_event` rechaza un `int` porque la spec dice `double`); `explanation[:300]` solo si hay explicación; `case.response_id` y `case.version` salen del propio caso. Repasa la regla del módulo 09: ¿qué atributo NO puede estar en `metric_attrs`?'))
+
     code('''
 def validate_eval_event(attrs: dict) -> list:
     snap = json.load(open(ROOT / "04_genai_semconv" / "genai_semconv_snapshot.json"))
@@ -812,6 +818,9 @@ except NotImplementedError as e:
     - `verbosity_gain`: sobre los **100 primeros** casos con `truth["grounded"]`, `status == "ok"` y puntuación de relevancia del **juez de reglas** `RULE.evaluate(c).scores["relevance"].value ≤ 0,7`, la media de `relevance` del juez tras añadir `pad * 3` a la respuesta **menos** la media original.
     - `position_consistency`: sobre los **100 primeros** casos con `truth["grounded"]`, `status == "ok"` y `n_tool_calls ≥ 1`, la fracción en que el juez elige **la misma respuesta** en ambos órdenes al comparar `a = c.answer` frente a `b = c.answer + "."` con `key=str(i)` (`i` = posición en esa lista). Elegir la misma respuesta significa `(compare(q, a, b) == "A") != (compare(q, b, a) == "A")`.
     """)
+    md(hint(1, 'Una sonda de sesgo es un **experimento controlado**: cambias UNA cosa que no debería importar y miras si cambia el veredicto. Verbosidad: la misma respuesta con relleno añadido (`dataclasses.replace(c, answer=c.answer + pad * 3)`) frente a la original; posición: la misma pareja (A, B) presentada en ambos órdenes. Haz primero la lista de casos que pide el enunciado y comprueba su longitud.'))
+    md(hint(2, '`verbosity_gain` = media de `judge.evaluate(c_largo).scores["relevance"].value − judge.evaluate(c).scores["relevance"].value` sobre los casos filtrados. `position_consistency`: para cada caso `i`, `(judge.compare(q, a, b, key=str(i)) == "A") != (judge.compare(q, b, a, key=str(i)) == "A")` es `True` si elige la misma respuesta; la fracción de `True` es la consistencia. Un juez perfecto daría 1,0.'))
+
     code('''
 PAD = " Gracias por contactar con SupportOps; estamos encantados de ayudarle con todo lo que necesite y quedamos a su entera disposición para cualquier otra consulta."
 
@@ -836,6 +845,9 @@ except NotImplementedError as e:
     - `observed`: tasa de `fail` de `groundedness` del juez sobre `prod`.
     - `corrected`: `observed` corregida con Rogan–Gladen usando `sens` y `spec`.
     """)
+    md(hint(1, 'Es la matriz de confusión de la lección (sección 5.1): positivo = «el juez dice `fail`», verdad = «la respuesta de verdad está alucinada». Construye dos listas de booleanos sobre `calib` (`pred` y `truth`), pásalas a `confusion(pred, truth)` y lee de ahí `sensitivity`, `specificity`, `tp`, `fn`, `tn`, `fp`.'))
+    md(hint(2, 'Intervalos: `wilson_interval(tp, tp + fn)` para la sensibilidad y `wilson_interval(tn, tn + fp)` para la especificidad (acierto sobre positivos reales y sobre negativos reales, respectivamente). La tasa `observed` es la media de `fail` del juez sobre `prod` (que NO tiene etiquetas), y `corrected = rogan_gladen(observed, sens, spec)`.'))
+
     code('''
 def calibrate(judge, calib, prod) -> dict:
     # TODO 5
@@ -855,6 +867,9 @@ except NotImplementedError as e:
     **TODO 6.** `choose_rate(rates, judge_cost, agent_cost, n_day, max_overhead, p=0.85)` devuelve `{"rate", "overhead", "margin"}`: la **mayor** tasa de `rates` cuyo sobrecoste (coste diario del juez / coste diario del agente) no supera `max_overhead`, su sobrecoste y el margen de error del IC 95 % de la calidad
     (`1,96·√(p(1−p)/n)` con `n = rate · n_day`). Si ninguna cumple, devuelve `{"rate": None, …}` con la menor tasa evaluada.
     """)
+    md(hint(1, 'Dos cuentas separadas. Sobrecoste de evaluar al ritmo `r`: (`r · n_day · judge_cost`) / (`n_day · agent_cost`) = `r · judge_cost / agent_cost`. Margen de error: `1,96·√(p(1−p)/n)` con `n = r · n_day` (más muestra → margen menor, pero más coste: ese es el compromiso). Recorre las tasas de menor a mayor y quédate con la **última** que cumpla `overhead ≤ max_overhead`.'))
+    md(hint(2, 'Si ninguna cumple, devuelve `rate: None` y calcula `overhead` y `margin` con la **menor** tasa de `rates` (para decir «ni la mínima cabe en el presupuesto»). Cuidado con comparar flotantes con `<=`: añade una tolerancia pequeña (`+ 1e-12`).'))
+
     code('''
 def choose_rate(rates, judge_cost, agent_cost, n_day, max_overhead, p=0.85) -> dict:
     # TODO 6
