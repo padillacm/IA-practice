@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">PROYECTO P1: ARQUITECTURA DE INSTRUMENTACION.PY SIN TOCAR EL AGENTE</text>
+  <text x="48" y="69" class="subtitle">Cómo cerrar los 3 agujeros de observabilidad, aplicar la política de privacidad y responder las 5 preguntas de negocio</text>
+
+  <!-- Left Panel: Los 3 Agujeros y cómo taparlos -->
+  <rect x="28" y="98" width="600" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Auditoría Inicial vs Agente Instrumentado desde Fuera</text>
+
+  <rect x="46" y="144" width="564" height="142" class="card-red"/>
+  <text x="62" y="166" class="card-title" fill="#b91c1c">Antes: Los 3 Agujeros del Agente Original</text>
+  <text x="62" y="188" class="small-text">• <tspan font-weight="700">Agujero 1 (Raíz rota):</tspan> <tspan class="mono">atender_ticket()</tspan> no tenía <tspan class="mono">@traceable</tspan> → cada paso</text>
+  <text x="62" y="204" class="small-text">  interno creaba una traza suelta; imposible calcular latencia ni coste por ticket.</text>
+  <text x="62" y="224" class="small-text">• <tspan font-weight="700">Agujero 2 (Herramienta ciega):</tspan> <tspan class="mono">consultar_pedido()</tspan> hacía SQL/HTTP sin span;</text>
+  <text x="62" y="240" class="small-text">  sus timeouts y errores tragados por <tspan class="mono">try/except</tspan> eran invisibles.</text>
+  <text x="62" y="260" class="small-text">• <tspan font-weight="700">Agujero 3 (LLM mudo):</tspan> El clasificador usaba el SDK directo sin <tspan class="mono">run_type="llm"</tspan>;</text>
+  <text x="62" y="276" class="small-text">  no reportaba <tspan class="mono">usage_metadata</tspan> (tokens = 0 en el cuadro de mando).</text>
+
+  <line x1="328" y1="286" x2="328" y2="316" stroke="#059669" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+
+  <rect x="46" y="320" width="564" height="180" class="card-green"/>
+  <text x="62" y="342" class="card-title" fill="#047857">Después: Envoltura No Invasiva en instrumentacion.py</text>
+  <text x="62" y="364" class="mono" font-size="11" fill="#065f46">agente.consultar_pedido = traceable(run_type="tool")(agente.consultar_pedido)</text>
+  <text x="62" y="384" class="mono" font-size="11" fill="#065f46">agente.buscar_kb = traceable(run_type="retriever")(agente.buscar_kb)</text>
+  <text x="62" y="404" class="mono" font-size="11" fill="#065f46">agente.llamar_llm = traceable(run_type="llm")( envolver_con_usage(agente.llamar_llm) )</text>
+  <text x="62" y="428" class="body-text">• Un único punto de entrada <tspan class="mono">atender_con_traza(ticket)</tspan> inyecta:</text>
+  <text x="76" y="448" class="mono" font-size="11" fill="#0f172a">metadata={"thread_id": ticket.hilo, "categoria": ..., "plan": ...}</text>
+  <text x="62" y="470" class="small-text">• Registra <tspan class="mono">wait_for_all_tracers()</tspan> en <tspan class="mono">atexit</tspan> para cero pérdidas al apagar.</text>
+
+  <rect x="46" y="512" width="564" height="114" class="card-purple"/>
+  <text x="62" y="534" class="card-title" fill="#5b21b6">Política de Privacidad Verificable por Test Automático</text>
+  <text x="62" y="554" class="small-text">• Redacta <tspan class="mono">DNI/NIE, IBAN, tarjetas, emails y teléfonos</tspan> con <tspan class="mono">create_anonymizer()</tspan>.</text>
+  <text x="62" y="572" class="small-text">• Elimina claves <tspan class="mono">token_sesion / password</tspan> en <tspan class="mono">process_inputs</tspan>.</text>
+  <text x="62" y="590" class="small-text">• Test de regresión inspecciona el árbol capturado y verifica que <tspan font-weight="700">ningún</tspan> valor</text>
+  <text x="62" y="606" class="small-text">  canario prohibido aparezca en <tspan class="mono">inputs, outputs, error</tspan> ni <tspan class="mono">extra</tspan>.</text>
+
+  <!-- Right Panel: Las 5 Preguntas del Cuadro de Mando -->
+  <rect x="644" y="98" width="608" height="544" class="panel"/>
+  <text x="662" y="126" class="panel-title">2. Las 5 Preguntas que Solo el Árbol de Trazas Responde</text>
+
+  <rect x="662" y="144" width="572" height="84" class="card-blue"/>
+  <text x="678" y="166" class="card-title" fill="#1d4ed8">P1 · ¿Dónde se va realmente la latencia p95?</text>
+  <text x="678" y="186" class="small-text">Desglosa por <tspan class="mono">(run.name, run.run_type)</tspan>: descubre si el cuello de botella</text>
+  <text x="678" y="202" class="small-text">es el LLM de redacción, el retriever vectorial o los timeouts de <tspan class="mono">consultar_pedido</tspan>.</text>
+
+  <rect x="662" y="240" width="572" height="84" class="card-amber"/>
+  <text x="678" y="262" class="card-title" fill="#b45309">P2 · ¿Qué categoría de ticket nos cuesta más dinero en tokens?</text>
+  <text x="678" y="282" class="small-text">Cruza <tspan class="mono">root.metadata["categoria"]</tspan> (heredado a los hijos) con la suma de</text>
+  <text x="678" y="298" class="small-text"><tspan class="mono">usage_metadata["total_tokens"]</tspan> de todos los nodos <tspan class="mono">run_type="llm"</tspan> descendientes.</text>
+
+  <rect x="662" y="336" width="572" height="84" class="card-red"/>
+  <text x="678" y="358" class="card-title" fill="#b91c1c">P3 · ¿Cuántos fallos silenciosos ocurrieron hoy?</text>
+  <text x="678" y="378" class="small-text">Trazas cuya raíz terminó sin excepción (<tspan class="mono">root.error is None</tspan>) pero que contienen</text>
+  <text x="678" y="394" class="small-text">al menos un nodo hijo <tspan class="mono">tool / retriever</tspan> con <tspan class="mono">child.error is not None</tspan>.</text>
+
+  <rect x="662" y="432" width="572" height="84" class="card-green"/>
+  <text x="678" y="454" class="card-title" fill="#047857">P4 · ¿Qué búsquedas en la Base de Conocimiento vuelven vacías?</text>
+  <text x="678" y="474" class="small-text">Filtra runs <tspan class="mono">run_type="retriever"</tspan> donde <tspan class="mono">len(outputs["documents"]) == 0</tspan>:</text>
+  <text x="678" y="490" class="small-text">revela los temas donde el agente responde a ciegas sin soporte documental.</text>
+
+  <rect x="662" y="528" width="572" height="98" class="card-slate"/>
+  <text x="678" y="550" class="card-title">P5 · ¿Qué conversaciones necesitaron más de 2 turnos y acabaron en 👎?</text>
+  <text x="678" y="570" class="small-text">Agrupa raíces por <tspan class="mono">metadata["thread_id"]</tspan>, cuenta turnos y cruza con</text>
+  <text x="678" y="586" class="small-text"><tspan class="mono">feedback.score == 0</tspan>: identifica inmediatamente los candidatos para el Dataset Dorado.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Centraliza toda la observabilidad y privacidad en un módulo envolvente (instrumentacion.py) desacoplado de la lógica de negocio.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 01 · Proyecto P1</text>
+</svg>

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 500" width="100%" height="500">
+  <style>
+    text { stroke: none !important; font-family: 'Segoe UI', system-ui, sans-serif; text-rendering: geometricPrecision; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; }
+  </style>
+  <rect width="1040" height="500" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" />
+  <rect width="1040" height="70" rx="16" fill="#0f172a" />
+  <rect y="48" width="1040" height="22" fill="#0f172a" />
+  <text x="36" y="34" font-size="21" font-weight="700" fill="#ffffff">MÉTRICAS EN OPENTELEMETRY Y PROMETHEUS: VIEWS, EXEMPLARS E HISTOGRAMAS</text>
+  <text x="36" y="56" font-size="14" fill="#cbd5e1">Cómo controlar la cardinalidad con Views, saltar del percentil a la traza con Exemplars y elegir histogramas</text>
+
+  <!-- Panel 1: Views as Firewall -->
+  <rect x="26" y="88" width="490" height="190" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2.5" />
+  <text x="46" y="116" font-size="16" font-weight="700" fill="#1e3a8a">1. SDK Views: Cortafuegos de Cardinalidad (Sin tocar código)</text>
+  <text x="46" y="142" font-size="13" fill="#334155">Tu código emite atributos ricos, pero la View filtra antes de agregar:</text>
+  <rect x="46" y="154" width="450" height="44" rx="6" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5" />
+  <text x="58" y="181" font-size="13" font-weight="600" fill="#991b1b" class="mono">Entrada: {model="mock", status="ok", customer_id="C-99"} (¡Peligro!)</text>
+  <rect x="46" y="210" width="450" height="52" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" />
+  <text x="58" y="232" font-size="13" font-weight="700" fill="#15803d" class="mono">View(attribute_keys={"model", "status"})</text>
+  <text x="58" y="252" font-size="13" fill="#14532d">Descarta customer_id y permite cambiar límites de buckets al vuelo.</text>
+
+  <!-- Panel 2: Exemplars Reservoir -->
+  <rect x="536" y="88" width="478" height="190" rx="12" fill="#ffffff" stroke="#d97706" stroke-width="2.5" />
+  <text x="556" y="116" font-size="16" font-weight="700" fill="#78350f">2. Reservorio de Exemplars (El Puente Métrica → Traza)</text>
+  <text x="556" y="142" font-size="13" fill="#334155">Cada bucket del histograma guarda 1 ejemplo reciente con trace_id:</text>
+  <rect x="556" y="156" width="438" height="106" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5" />
+  <text x="572" y="182" font-size="13" font-weight="700" fill="#0f172a" class="mono">Bucket [0.5s .. 1.0s] → trace_id="a1b2..." (0.72s)</text>
+  <text x="572" y="208" font-size="13" font-weight="700" fill="#0f172a" class="mono">Bucket [2.0s .. 5.0s] → trace_id="c3d4..." (3.40s)</text>
+  <text x="572" y="234" font-size="13" font-weight="700" fill="#dc2626" class="mono">Bucket [5.0s .. +Inf] → trace_id="4bf9..." (8.91s) ★ Clic en Grafana</text>
+  <text x="572" y="254" font-size="12" fill="#92400e">Solo se adjunta si hay un span ACTIVO y muestreado al llamar record().</text>
+
+  <!-- Panel 3: Classic vs Native/Exponential Histograms -->
+  <rect x="26" y="296" width="988" height="178" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <text x="46" y="324" font-size="16" font-weight="700" fill="#0f172a">3. Histogramas Explícitos (Clásicos) vs. Exponenciales / Nativos</text>
+
+  <rect x="46" y="340" width="460" height="116" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" />
+  <text x="62" y="364" font-size="14" font-weight="700" fill="#1e3a8a">Histograma Clásico (`ExplicitBucketHistogram`)</text>
+  <text x="62" y="388" font-size="13" fill="#334155">• Tú defines los bordes (ej. `[0.5, 1, 2, 3, 5, 10]`). Cada bucket = 1 serie.</text>
+  <text x="62" y="410" font-size="13" fill="#334155">• Pon bordes exactos en tu umbral de SLO (ej. 3.0s) para error ~0%.</text>
+  <text x="62" y="432" font-size="13" font-weight="600" fill="#15803d">• Funciona en el 100% de pipelines OTLP + Prometheus scrape.</text>
+
+  <rect x="526" y="340" width="468" height="116" rx="8" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" />
+  <text x="542" y="364" font-size="14" font-weight="700" fill="#7c3aed">Histograma Exponencial (OTel) / Nativo (Prometheus)</text>
+  <text x="542" y="388" font-size="13" fill="#334155">• Ajusta resolución automáticamente con escala logarítmica ($2^{2^{-	ext{scale}}}$).</text>
+  <text x="542" y="410" font-size="13" fill="#334155">• 1 sola serie temporal con error relativo acotado sin elegir bordes.</text>
+  <text x="542" y="432" font-size="13" font-weight="600" fill="#dc2626">• Requiere OTLP ingesta directa en Prometheus/Mimir (no exporter :8889).</text>
+</svg>

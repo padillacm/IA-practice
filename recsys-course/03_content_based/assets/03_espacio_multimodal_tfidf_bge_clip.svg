@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 03 · CONTENIDO</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">RECOMENDACIÓN BASADA EN CONTENIDO Y FUSIÓN MULTIMODAL</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">De vectores léxicos TF-IDF a embeddings semánticos (BGE/E5) y visuales (OpenCLIP) para «Más como esta»</text>
+
+
+  <!-- Three Modality Columns -->
+  <!-- Modality 1: TF-IDF -->
+  <rect x="24" y="108" width="388" height="318" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="124" width="352" height="30" rx="8" fill="#eff6ff"/>
+  <text x="218" y="144" text-anchor="middle" fill="#1d4ed8" font-size="14" font-weight="800">1. Nivel Léxico: TF-IDF + n-gramas</text>
+  <text x="44" y="172" fill="#334155" font-size="12" font-weight="700">Entrada: Título + Géneros + Director + Tags</text>
+  <rect x="44" y="182" width="348" height="46" rx="6" fill="#0f172a"/>
+  <text x="218" y="210" text-anchor="middle" fill="#38bdf8" font-size="12" class="mono">w_{t,d} = tf(t,d) · log(1 + N / df(t))</text>
+  <text x="44" y="250" fill="#059669" font-size="12" font-weight="700">✓ Fortalezas:</text>
+  <text x="54" y="268" fill="#475569" font-size="11.5">• Precisión quirúrgica en entidades exactas</text>
+  <text x="54" y="285" fill="#475569" font-size="11.5">  («Christopher Nolan», «Pixar», «Saga Alien»).</text>
+  <text x="54" y="302" fill="#475569" font-size="11.5">• Ultrarrápido, interpretable y sin GPU.</text>
+  <text x="44" y="328" fill="#dc2626" font-size="12" font-weight="700">✗ Limitación (Vocabulary Mismatch):</text>
+  <text x="54" y="346" fill="#475569" font-size="11.5">• «Viaje interestelar» y «Odisea espacial»</text>
+  <text x="54" y="363" fill="#475569" font-size="11.5">  tienen producto escalar 0 si no comparten palabras.</text>
+  <text x="54" y="384" fill="#1e40af" font-size="11.5" font-weight="700">Dimensión: ~10,000 (disperso CSR, L2-norm)</text>
+
+  <!-- Modality 2: Dense Text BGE/E5 -->
+  <rect x="428" y="108" width="400" height="318" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="446" y="124" width="364" height="30" rx="8" fill="#f5f3ff"/>
+  <text x="628" y="144" text-anchor="middle" fill="#6d28d9" font-size="14" font-weight="800">2. Nivel Semántico: Bi-Encoders (BGE / E5)</text>
+  <text x="448" y="172" fill="#334155" font-size="12" font-weight="700">Entrada: Sinopsis narrativa + Temática</text>
+  <rect x="448" y="182" width="360" height="46" rx="6" fill="#0f172a"/>
+  <text x="628" y="210" text-anchor="middle" fill="#a78bfa" font-size="12" class="mono">e_i^{txt} = Normalize(Transformer(texto_i))</text>
+  <text x="448" y="250" fill="#059669" font-size="12" font-weight="700">✓ Fortalezas:</text>
+  <text x="458" y="268" fill="#475569" font-size="11.5">• Captura paráfrasis, arcos dramáticos y tono</text>
+  <text x="458" y="285" fill="#475569" font-size="11.5">  aunque no compartan ni una sola palabra.</text>
+  <text x="458" y="302" fill="#475569" font-size="11.5">• Soporta búsqueda cross-lingual y zero-shot.</text>
+  <text x="448" y="328" fill="#dc2626" font-size="12" font-weight="700">✗ Limitación (Anisotropía y Hubness):</text>
+  <text x="458" y="346" fill="#475569" font-size="11.5">• Todos los cosenos viven en [0.65, 0.90]; requiere</text>
+  <text x="458" y="363" fill="#475569" font-size="11.5">  centrado (restar media μ) antes de normalizar L2.</text>
+  <text x="458" y="384" fill="#5b21b6" font-size="11.5" font-weight="700">Dimensión: 384 / 768 (denso float32, L2-norm)</text>
+
+  <!-- Modality 3: Visual CLIP -->
+  <rect x="844" y="108" width="412" height="318" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="862" y="124" width="376" height="30" rx="8" fill="#fff7ed"/>
+  <text x="1050" y="144" text-anchor="middle" fill="#c2410c" font-size="14" font-weight="800">3. Nivel Visual: Pósters con OpenCLIP</text>
+  <text x="864" y="172" fill="#334155" font-size="12" font-weight="700">Entrada: Imagen del Póster + Prompt Visual</text>
+  <rect x="864" y="182" width="372" height="46" rx="6" fill="#0f172a"/>
+  <text x="1050" y="210" text-anchor="middle" fill="#fb923c" font-size="12" class="mono">e_i^{img} = ViT_ImageEncoder(poster_i)</text>
+  <text x="864" y="250" fill="#059669" font-size="12" font-weight="700">✓ Fortalezas:</text>
+  <text x="874" y="268" fill="#475569" font-size="11.5">• Captura estética visual: neón cyberpunk, animación</text>
+  <text x="874" y="285" fill="#475569" font-size="11.5">  infantil colorida, terror oscuro, blanco y negro.</text>
+  <text x="874" y="302" fill="#475569" font-size="11.5">• Espacio compartido imagen ↔ texto libre.</text>
+  <text x="864" y="328" fill="#dc2626" font-size="12" font-weight="700">✗ Limitación (Parecido Superficial):</text>
+  <text x="874" y="346" fill="#475569" font-size="11.5">• Dos pósters con una cara en primer plano sobre</text>
+  <text x="874" y="363" fill="#475569" font-size="11.5">  fondo azul pueden ser comedia y documental.</text>
+  <text x="874" y="384" fill="#9a3412" font-size="11.5" font-weight="700">Dimensión: 512 (espacio multimodal alineado)</text>
+
+  <!-- Bottom Wide Panel: Hybrid Fusion + User Profile Construction -->
+  <rect x="24" y="442" width="1232" height="204" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="46" y="470" fill="#0f172a" font-size="16" font-weight="800">4. Arquitectura Híbrida «Más Como Esta» y Perfil de Usuario Ponderado (Proyecto 03)</text>
+
+  <!-- Left box: Late Fusion -->
+  <rect x="46" y="486" width="580" height="142" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.8"/>
+  <text x="64" y="510" fill="#065f46" font-size="13.5" font-weight="800">A. Fusión Tardía (Late Fusion) de Similitudes Ítem–Ítem</text>
+  <rect x="64" y="520" width="544" height="36" rx="6" fill="#0f172a"/>
+  <text x="336" y="543" text-anchor="middle" fill="#34d399" font-size="12" class="mono">S_hyb(i,j) = w_1 · S_tfidf(i,j) + w_2 · S_bge(i,j) + w_3 · S_clip(i,j)</text>
+  <text x="64" y="576" fill="#047857" font-size="11.5">• <tspan font-weight="700">Normalización z-score por fila</tspan> antes de sumar (cada modalidad tiene distinta escala).</text>
+  <text x="64" y="596" fill="#047857" font-size="11.5">• Pesos (w_1, w_2, w_3) optimizados en validación contra la verdad de <tspan font-weight="700">co-consumo</tspan>.</text>
+  <text x="64" y="616" fill="#065f46" font-size="11.5" font-weight="700">• Resuelve al 100% el Cold-Start de estreno nuevo (día 0 sin clics).</text>
+
+  <!-- Right box: User Profile & MMR -->
+  <rect x="650" y="486" width="584" height="142" rx="10" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.8"/>
+  <text x="668" y="510" fill="#1e40af" font-size="13.5" font-weight="800">B. Perfil de Usuario en el Espacio de Contenido + Diversificación</text>
+  <rect x="668" y="520" width="548" height="36" rx="6" fill="#0f172a"/>
+  <text x="942" y="543" text-anchor="middle" fill="#38bdf8" font-size="12" class="mono">u_vec = Σ_{i ∈ I_u} (r_{ui} - r̄_u) · exp(-λ · Δt_{ui}) · e_i</text>
+  <text x="668" y="576" fill="#1e3a8a" font-size="11.5">• Pondera por <tspan font-weight="700">preferencia centrada</tspan> (resta el sesgo del usuario) y <tspan font-weight="700">decaimiento temporal</tspan>.</text>
+  <text x="668" y="596" fill="#1e3a8a" font-size="11.5">• Si un usuario ama Sci-Fi Y Comedia, un único centroide cae en tierra de nadie →</text>
+  <text x="668" y="616" fill="#1d4ed8" font-size="11.5" font-weight="700">  usa Multi-Interés (K-Means sobre su historial) o agregación Max-Sim por ítem ancla.</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">Secreto de Producción: Estandarizar por fila las matrices de similitud antes de fusionar modalidades duplica la ganancia sobre cada modalidad aislada.</text>
+</svg>

@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">PRUEBAS CON MODELO EN INTEGRACIÓN CONTINUA (PYTEST + CACHÉ) (MÓDULO 10)</text>
+  <text x="48" y="69" class="subtitle">Cómo combinar tests unitarios trazados, aserciones semánticas, caché HTTP determinista y lectura fiable en CI</text>
+
+  <!-- Panel 1: El Plugin de pytest y langsmith.expect -->
+  <rect x="28" y="98" width="400" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. @pytest.mark.langsmith y expect</text>
+
+  <rect x="46" y="144" width="364" height="190" rx="8" fill="#0f172a"/>
+  <text x="62" y="168" class="mono" font-size="11" fill="#c084fc">import pytest</text>
+  <text x="62" y="186" class="mono" font-size="11" fill="#c084fc">from langsmith import testing as t, expect</text>
+  <text x="62" y="212" class="mono" font-size="11" fill="#38bdf8">@pytest.mark.langsmith(output_keys=["esperado"])</text>
+  <text x="62" y="230" class="mono" font-size="11" fill="#e2e8f0">def test_reembolso(ticket, esperado):</text>
+  <text x="62" y="248" class="mono" font-size="11" fill="#e2e8f0">    t.log_inputs({"ticket": ticket})</text>
+  <text x="62" y="266" class="mono" font-size="11" fill="#e2e8f0">    res = atender_ticket(ticket)</text>
+  <text x="62" y="284" class="mono" font-size="11" fill="#e2e8f0">    t.log_outputs({"respuesta": res})</text>
+  <text x="62" y="302" class="mono" font-size="11" fill="#4ade80">    expect(res).to_contain("reembolso")</text>
+  <text x="62" y="320" class="mono" font-size="11" fill="#fde047">    expect.edit_distance(res, esperado) &lt; 0.35</text>
+
+  <rect x="46" y="348" width="364" height="136" class="card-blue"/>
+  <text x="62" y="370" class="card-title" fill="#1d4ed8">Qué Hace el Decorador por Debajo</text>
+  <text x="62" y="392" class="small-text">• Agrupa todos los tests del archivo en un experimento</text>
+  <text x="62" y="408" class="small-text">  de LangSmith sincronizado con tus <tspan class="mono">@pytest.mark.parametrize</tspan>.</text>
+  <text x="62" y="428" class="small-text">• Cada <tspan class="mono">expect(...)</tspan> registra además una métrica de</text>
+  <text x="62" y="444" class="small-text">  <tspan class="mono">feedback</tspan> sobre el run Y lanza <tspan class="mono">AssertionError</tspan> si falla.</text>
+  <text x="62" y="464" class="small-text">• Si no hay API key, corre localmente como pytest normal.</text>
+
+  <rect x="46" y="498" width="364" height="128" class="card-red"/>
+  <text x="62" y="520" class="card-title" fill="#b91c1c">La Trampa Documentada de expect (Sección 4)</text>
+  <text x="62" y="542" class="small-text">Los métodos que devuelven un matcher (<tspan class="mono">expect.embedding_distance</tspan></text>
+  <text x="62" y="558" class="small-text">o <tspan class="mono">expect.edit_distance</tspan>) requieren encadenar <tspan class="mono">.to_be_less_than(x)</tspan></text>
+  <text x="62" y="574" class="small-text">para disparar el <tspan class="mono">assert</tspan>. Llamarlos sin comparación o con</text>
+  <text x="62" y="590" class="small-text">operadores mal combinados pasa en verde aunque falle.</text>
+
+  <!-- Panel 2: Caché Determinista en disco -->
+  <rect x="444" y="98" width="400" height="544" class="panel"/>
+  <text x="462" y="126" class="panel-title">2. Caché de Peticiones HTTP en CI</text>
+
+  <rect x="462" y="144" width="364" height="134" class="card-green"/>
+  <text x="478" y="166" class="card-title" fill="#047857">with ls.cache(cache_path="tests/cassettes"):</text>
+  <text x="478" y="188" class="small-text">Intercepta las llamadas HTTP de los clientes LLM y</text>
+  <text x="478" y="204" class="small-text">guarda la respuesta en disco indexada por el hash de:</text>
+  <text x="478" y="226" class="mono" font-size="11" fill="#065f46">hash(modelo + messages + tools + temperature)</text>
+  <text x="478" y="248" class="small-text">• <tspan font-weight="700">1ª ejecución:</tspan> llama al proveedor (paga tokens, ~15s).</text>
+  <text x="478" y="264" class="small-text">• <tspan font-weight="700">Ejecuciones en CI:</tspan> 0 tokens, ~20 ms, 100% determinista.</text>
+
+  <rect x="462" y="292" width="364" height="166" class="card-amber"/>
+  <text x="478" y="314" class="card-title" fill="#b45309">3. Qué Cachear y Qué NUNCA Cachear</text>
+  <text x="478" y="336" class="small-text" fill="#047857" font-weight="700">✅ SÍ Cachear (Tests de Lógica y Enrutado):</text>
+  <text x="478" y="354" class="small-text">• Tests de parsers, formateo de prompts, transiciones de</text>
+  <text x="478" y="370" class="small-text">  nodos en LangGraph y manejo de errores de herramientas.</text>
+  <text x="478" y="388" class="small-text">• Si cambias el prompt en 1 carácter, el hash cambia y</text>
+  <text x="478" y="404" class="small-text">  hace cache-miss automático (te avisa que el prompt mutó).</text>
+  <text x="478" y="426" class="small-text" fill="#b91c1c" font-weight="700">❌ NO Cachear (Evaluación de Calidad del Modelo):</text>
+  <text x="478" y="442" class="small-text">• Si cacheas la llamada cuando evalúas un modelo nuevo o</text>
+  <text x="478" y="454" class="small-text">  un prompt dinámico con timestamps, medirás la cassette vieja.</text>
+
+  <rect x="462" y="472" width="364" height="154" class="card-slate"/>
+  <text x="478" y="494" class="card-title">Causa #1 de Cache-Miss Inesperado</text>
+  <text x="478" y="516" class="small-text">Incluir <tspan class="mono">datetime.now()</tspan> o un <tspan class="mono">uuid4()</tspan> dentro del</text>
+  <text x="478" y="532" class="small-text"><tspan class="mono">system_prompt</tspan>. Cada ejecución produce un prompt distinto</text>
+  <text x="478" y="548" class="small-text">y jamás acierta en la caché. Congela el reloj en los</text>
+  <text x="478" y="564" class="small-text">tests con una fixture (<tspan class="mono">fecha_fija="2026-10-17"</tspan>).</text>
+
+  <!-- Panel 3: Pirámide de CI y Lectura de Resultados -->
+  <rect x="860" y="98" width="392" height="544" class="panel"/>
+  <text x="878" y="126" class="panel-title">4. Arquitectura de CI en 2 Pisos y Consistencia</text>
+
+  <rect x="878" y="144" width="356" height="118" class="card-green"/>
+  <text x="894" y="166" class="card-title" fill="#047857">Piso 1 · En Cada Push / PR (&lt; 30 seg, $0.00)</text>
+  <text x="894" y="188" class="small-text">• <tspan class="mono">pytest</tspan> con caché activada + evaluadores de código.</text>
+  <text x="894" y="206" class="small-text">• Verifica que ningún cambio de código rompió esquemas,</text>
+  <text x="894" y="222" class="small-text">  herramientas, privacidad ni contratos de datos.</text>
+  <text x="894" y="242" class="small-text">• Si un prompt cambió → corre solo el split <tspan class="mono">smoke</tspan> (15 casos).</text>
+
+  <rect x="878" y="276" width="356" height="128" class="card-purple"/>
+  <text x="894" y="298" class="card-title" fill="#5b21b6">Piso 2 · Antes de Merge a Main / Release (~3 min)</text>
+  <text x="894" y="320" class="small-text">• <tspan class="mono">evaluate()</tspan> sin caché sobre el Conjunto Dorado completo.</text>
+  <text x="894" y="338" class="small-text">• Corre evaluadores de código + Juez LLM alineado.</text>
+  <text x="894" y="356" class="small-text">• Compara pareado por <tspan class="mono">example_id</tspan> contra la línea base</text>
+  <text x="894" y="372" class="small-text">  y bloquea el merge si <tspan class="mono">Δ + 1.96·SE &lt; 0</tspan>.</text>
+
+  <rect x="878" y="418" width="356" height="208" class="card-red"/>
+  <text x="894" y="440" class="card-title" fill="#b91c1c">Trampa al Leer Resultados desde la API en CI</text>
+  <text x="894" y="462" class="small-text">Si tu script de CI termina <tspan class="mono">evaluate()</tspan> e inmediatamente</text>
+  <text x="894" y="478" class="small-text">consulta <tspan class="mono">client.read_project( include_stats=True )</tspan></text>
+  <text x="894" y="494" class="small-text">en el servidor de LangSmith, la indexación asíncrona de</text>
+  <text x="894" y="510" class="small-text">feedback puede tardar varios segundos y devolver <tspan class="mono">None</tspan>.</text>
+  <text x="894" y="534" class="small-text" fill="#047857" font-weight="700">Solución Robusta:</text>
+  <text x="894" y="552" class="small-text">Calcula tu puerta de CI directamente sobre los objetos</text>
+  <text x="894" y="568" class="small-text">devueltos en memoria por <tspan class="mono">resultados = evaluate(..., blocking=True)</tspan></text>
+  <text x="894" y="584" class="small-text">en lugar de releer las estadísticas agregadas por HTTP.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Usa caché HTTP para tests de regresión de código en cada PR, y corre evaluate(blocking=True) en vivo sobre el Conjunto Dorado antes de producción.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 02 · Notebook 10</text>
+</svg>

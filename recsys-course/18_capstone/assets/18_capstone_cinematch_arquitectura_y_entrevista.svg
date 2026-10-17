@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 18 · CAPSTONE</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">CAPSTONE CINEMATCH END-TO-END Y SYSTEM DESIGN DE RECSYS</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">Cómo encajan los 17 módulos en una arquitectura unificada + El marco de 10 pasos para entrevistas de nivel Staff</text>
+
+
+  <!-- Left Panel: End-to-End CineMatch Blueprint -->
+  <rect x="24" y="108" width="620" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="584" height="32" rx="8" fill="#eff6ff"/>
+  <text x="334" y="147" text-anchor="middle" fill="#1d4ed8" font-size="14.5" font-weight="800">1. El Mapa Completo de CineMatch End-to-End (Proyecto 18)</text>
+
+  <!-- Layer 1: Data & Feature Store -->
+  <rect x="44" y="170" width="580" height="72" rx="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+  <text x="62" y="192" fill="#0f172a" font-size="12.5" font-weight="800">Etapa 1 · Datos y Feature Store Point-in-Time (Módulos 01, 02, 16)</text>
+  <text x="62" y="212" fill="#475569" font-size="11.5">• Split temporal estricto (Train &lt; Val &lt; Test) + Matriz CSR + Contadores históricos sin fuga.</text>
+  <text x="62" y="230" fill="#2563eb" font-size="11.5" font-weight="700">• Separa explícitamente usuarios Warm vs Cold-Start y audita con Paired Bootstrap.</text>
+
+  <line x1="334" y1="242" x2="334" y2="260" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowBlue)"/>
+
+  <!-- Layer 2: Multi-Source Candidate Generation -->
+  <rect x="44" y="262" width="580" height="96" rx="8" fill="#f5f3ff" stroke="#7c3aed" stroke-width="1.8"/>
+  <text x="62" y="284" fill="#5b21b6" font-size="12.5" font-weight="800">Etapa 2 · Unión de Generadores de Candidatos (Módulos 03, 04, 05, 08, 09, 10)</text>
+  <rect x="62" y="294" width="128" height="52" rx="6" fill="#ede9fe"/><text x="126" y="315" text-anchor="middle" fill="#5b21b6" font-size="11" font-weight="700">Two-Tower + FAISS</text><text x="126" y="333" text-anchor="middle" fill="#6d28d9" font-size="10">(Top-100 semántico)</text>
+  <rect x="200" y="294" width="128" height="52" rx="6" fill="#ede9fe"/><text x="264" y="315" text-anchor="middle" fill="#5b21b6" font-size="11" font-weight="700">EASE^R / Item-kNN</text><text x="264" y="333" text-anchor="middle" fill="#6d28d9" font-size="10">(Top-100 co-consumo)</text>
+  <rect x="338" y="294" width="128" height="52" rx="6" fill="#ede9fe"/><text x="402" y="315" text-anchor="middle" fill="#5b21b6" font-size="11" font-weight="700">SASRec Secuencial</text><text x="402" y="333" text-anchor="middle" fill="#6d28d9" font-size="10">(Top-50 sesión hoy)</text>
+  <rect x="476" y="294" width="132" height="52" rx="6" fill="#ede9fe"/><text x="542" y="315" text-anchor="middle" fill="#5b21b6" font-size="11" font-weight="700">BGE + Popularidad</text><text x="542" y="333" text-anchor="middle" fill="#6d28d9" font-size="10">(Cold-Start &amp; Fresh)</text>
+
+  <line x1="334" y1="358" x2="334" y2="376" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrowPurple)"/>
+
+  <!-- Layer 3: Heavy Multi-Objective Ranker -->
+  <rect x="44" y="378" width="580" height="82" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
+  <text x="62" y="400" fill="#9a3412" font-size="12.5" font-weight="800">Etapa 3 · Ranker Pesado con Cruces y Multi-Objetivo (Módulos 06, 07)</text>
+  <text x="62" y="420" fill="#334155" font-size="11.5">• Feature engineering sobre el pool unido (~250 candidatos): scores de cada fuente, afinidad</text>
+  <text x="62" y="438" fill="#334155" font-size="11.5">  de género, popularidad PIT y recencia → <tspan font-weight="700" fill="#c2410c">LightGBM LambdaMART / DCN-v2 / PLE</tspan>.</text>
+
+  <line x1="334" y1="460" x2="334" y2="478" stroke="#ea580c" stroke-width="2" marker-end="url(#arrowOrange)"/>
+
+  <!-- Layer 4: Re-ranking, Exploration & Serving -->
+  <rect x="44" y="480" width="580" height="150" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="62" y="502" fill="#065f46" font-size="12.5" font-weight="800">Etapa 4 · Re-Ranking (MMR + Calibración), Bandits, Serving y MLOps (Módulos 12–17)</text>
+  <text x="62" y="524" fill="#047857" font-size="11.5">• <tspan font-weight="700">Re-Ranker de Home:</tspan> combina relevancia + diversidad ILD (MMR) + calibración KL de géneros.</text>
+  <text x="62" y="544" fill="#047857" font-size="11.5">• <tspan font-weight="700">Exploración Controlada:</tspan> Bandit contextual elige artwork y reserva 1 slot para estrenos.</text>
+  <text x="62" y="564" fill="#047857" font-size="11.5">• <tspan font-weight="700">Asistente Conversacional:</tspan> agente grounded sobre el mismo motor para búsquedas en lenguaje natural.</text>
+  <text x="62" y="586" fill="#065f46" font-size="11.5" font-weight="700">• Lección de Ablación: La unión de generadores + re-ranking supera a cualquier modelo aislado.</text>
+  <text x="62" y="608" fill="#059669" font-size="11">• Guardián MLOps: monitoriza PSI, cobertura y latencia p99 con fallback automático.</text>
+
+  <!-- Right Panel: 10-Step System Design Interview Framework -->
+  <rect x="660" y="108" width="596" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="678" y="126" width="560" height="32" rx="8" fill="#0f172a"/>
+  <text x="958" y="147" text-anchor="middle" fill="#38bdf8" font-size="14.5" font-weight="800">2. Guía de Entrevistas de System Design RecSys (45 Minutos)</text>
+
+  <rect x="678" y="170" width="560" height="270" rx="10" fill="#0f172a"/>
+  <text x="696" y="194" fill="#fbbf24" font-size="12.5" font-weight="700">El Guion de 10 Pasos que Separa a un Ingeniero Senior / Staff:</text>
+  <text x="696" y="218" fill="#e2e8f0" font-size="11.5" class="mono">min 00-05 | 1. Objetivo de Negocio vs Proxies  (Retención / Watch time vs CTR)</text>
+  <text x="696" y="238" fill="#e2e8f0" font-size="11.5" class="mono">min 05-08 | 2. Restricciones de Escala y SLA   (|U|, |I|, QPS pico, p99 &lt; 60 ms)</text>
+  <text x="696" y="258" fill="#34d399" font-size="11.5" class="mono">min 08-12 | 3. Señales Positivas, Negativas y Sesgos (Skips, Position, Exposure)</text>
+  <text x="696" y="278" fill="#38bdf8" font-size="11.5" class="mono">min 12-18 | 4. Embudo Multi-Etapa: Retrieval   (Two-Tower ANN + GNN + Co-visit)</text>
+  <text x="696" y="298" fill="#a78bfa" font-size="11.5" class="mono">min 18-26 | 5. Ranking Multi-Tarea y Pérdidas  (PLE/DCN-v2, calibración, log Q)</text>
+  <text x="696" y="318" fill="#34d399" font-size="11.5" class="mono">min 26-31 | 6. Re-Ranking, Diversidad y Reglas (MMR/DPP, calibración, frescura)</text>
+  <text x="696" y="338" fill="#fbbf24" font-size="11.5" class="mono">min 31-35 | 7. Estrategia Cold-Start Explícita (Usuario nuevo vs Estreno nuevo)</text>
+  <text x="696" y="358" fill="#e2e8f0" font-size="11.5" class="mono">min 35-40 | 8. Evaluación Offline + Online     (Split temporal, Interleaving, CUPED)</text>
+  <text x="696" y="378" fill="#f87171" font-size="11.5" class="mono">min 40-45 | 9. Arquitectura Serving + Fallbacks(Feature Store, Log&amp;Wait, Caché)</text>
+  <text x="696" y="398" fill="#38bdf8" font-size="11.5" class="mono">Bonus     |10. Bucles de Feedback y Drift      (Bandits, exploración, PSI)</text>
+  <text x="696" y="424" fill="#94a3b8" font-size="11">Consejo Staff: Propón tú mismo los trade-offs antes de que el entrevistador pregunte.</text>
+
+  <!-- 3 Canonical Cases Comparison -->
+  <rect x="678" y="452" width="560" height="178" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="696" y="474" fill="#0f172a" font-size="13" font-weight="800">Diferencias Clave en los 3 Casos Clásicos de Entrevista:</text>
+  <text x="696" y="498" fill="#2563eb" font-size="11.5">• <tspan font-weight="700">Caso 1 · Home de Netflix (Canvas 2D):</tspan> Optimización conjunta en dos niveles (qué filas</text>
+  <text x="710" y="514" fill="#475569" font-size="11">mostrar y qué ítems poner dentro de cada fila sin repetir películas entre filas).</text>
+  <text x="696" y="538" fill="#7c3aed" font-size="11.5">• <tspan font-weight="700">Caso 2 · TikTok / YouTube Shorts (Feed Inmersivo):</tspan> Sin clic explícito (100% exposición);</text>
+  <text x="710" y="554" fill="#475569" font-size="11">la señal reina es <tspan class="mono">watch_time vs duración</tspan> (cuantiles) + entrenamiento streaming al minuto.</text>
+  <text x="696" y="578" fill="#059669" font-size="11.5">• <tspan font-weight="700">Caso 3 · People You May Know (LinkedIn / IG):</tspan> Recomendación recíproca (ambos deben</text>
+  <text x="710" y="594" fill="#475569" font-size="11">aceptar): <tspan class="mono">Score(u,v) = P(u invita v) · P(v acepta u)</tspan> + grafo Friends-of-Friends (2 saltos).</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">Un sistema de recomendación de élite nunca es un solo modelo gigante: es una orquesta coordinada de generadores, ranker, re-ranker y guardrails.</text>
+</svg>

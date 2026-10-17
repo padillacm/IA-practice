@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">GOBIERNO Y SEGURIDAD: JERARQUÍA, CLAVES API Y SUPERFICIES DE FUGA (MÓDULO 16)</text>
+  <text x="48" y="69" class="subtitle">Cómo aislar entornos con Workspaces, evitar fugas accidentales de API keys en las propias trazas y controlar enlaces públicos</text>
+
+  <!-- Panel 1: Jerarquía Organización -> Workspace -> Proyecto -->
+  <rect x="28" y="98" width="400" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. La Verdadera Frontera de Permisos (RBAC)</text>
+
+  <rect x="46" y="144" width="364" height="196" class="card-purple"/>
+  <text x="62" y="166" class="card-title" fill="#5b21b6">Organización → Workspace → Proyecto</text>
+  <text x="62" y="190" class="mono" font-size="11" fill="#4c1d95">🏢 Organización (Facturación, SSO, Políticas)</text>
+  <text x="76" y="212" class="mono" font-size="11" fill="#1d4ed8">├── 🛡️ Workspace PROD (Rol: Solo Servicio CI/Prod)</text>
+  <text x="92" y="232" class="mono" font-size="10.5" fill="#334155">│     ├── Project: soporte-prod</text>
+  <text x="92" y="250" class="mono" font-size="10.5" fill="#334155">│     └── Dataset: golden-set-oficial</text>
+  <text x="76" y="272" class="mono" font-size="11" fill="#047857">└── 🧪 Workspace DEV (Rol: Desarrolladores)</text>
+  <text x="92" y="292" class="mono" font-size="10.5" fill="#334155">      ├── Project: dev-carlos / staging</text>
+  <text x="92" y="310" class="mono" font-size="10.5" fill="#334155">      └── Dataset: pruebas-locales</text>
+
+  <rect x="46" y="354" width="364" height="134" class="card-amber"/>
+  <text x="62" y="376" class="card-title" fill="#b45309">Verdad Crítica: Los Proyectos NO Tienen ACLs</text>
+  <text x="62" y="398" class="small-text">Un <tspan font-weight="700">Proyecto</tspan> en LangSmith es solo una etiqueta lógica de</text>
+  <text x="62" y="414" class="small-text">agrupación, <tspan font-weight="700" fill="#b91c1c">NO una frontera de seguridad</tspan>.</text>
+  <text x="62" y="434" class="small-text">Cualquier API key con permiso en un <tspan font-weight="700">Workspace</tspan> puede</text>
+  <text x="62" y="450" class="small-text">leer y escribir en TODOS los proyectos y datasets de ese</text>
+  <text x="62" y="466" class="small-text">Workspace. Para aislar datos reales de dev → <tspan font-weight="700">usa Workspaces</tspan>.</text>
+
+  <rect x="46" y="500" width="364" height="126" class="card-blue"/>
+  <text x="62" y="522" class="card-title" fill="#1d4ed8">Cabecera Obligatoria en Claves Multi-Workspace</text>
+  <text x="62" y="544" class="small-text">Si una Personal Access Token pertenece a una cuenta que</text>
+  <text x="62" y="560" class="small-text">ve 2+ Workspaces, debes fijar explícitamente:</text>
+  <text x="62" y="582" class="mono" font-size="11" fill="#1e40af">LANGSMITH_WORKSPACE_ID = "ws-uuid-..."</text>
+  <text x="62" y="602" class="small-text">Mejor aún: usa <tspan font-weight="700">Service Keys</tspan> atadas a un único Workspace.</text>
+
+  <!-- Panel 2: Cómo se Cuela tu Propia Clave en las Trazas -->
+  <rect x="444" y="98" width="408" height="544" class="panel"/>
+  <text x="462" y="126" class="panel-title">2. Las 3 Fugas de Secretos que Saltan el RBAC</text>
+
+  <rect x="462" y="144" width="372" height="164" class="card-red"/>
+  <text x="478" y="166" class="card-title" fill="#b91c1c">Vector 1 · Captura Accidental de Config / os.environ</text>
+  <text x="478" y="188" class="small-text">Si pasas un objeto <tspan class="mono">settings</tspan> o <tspan class="mono">dict(os.environ)</tspan> a una</text>
+  <text x="478" y="204" class="small-text">función decorada con <tspan class="mono">@traceable</tspan>:</text>
+  <text x="478" y="226" class="mono" font-size="10.5" fill="#7f1d1d">@traceable def inicializar(cfg: dict): ...</text>
+  <text x="478" y="248" class="small-text">¡Tu <tspan class="mono">OPENAI_API_KEY</tspan>, <tspan class="mono">LANGSMITH_API_KEY</tspan> y contraseñas</text>
+  <text x="478" y="264" class="small-text">de base de datos quedan grabadas en claro en <tspan class="mono">run.inputs</tspan></text>
+  <text x="478" y="280" class="small-text">para cualquiera con acceso de lectura al Workspace!</text>
+
+  <rect x="462" y="322" width="372" height="148" class="card-amber"/>
+  <text x="478" y="344" class="card-title" fill="#b45309">Vector 2 · Enlaces Públicos («Share Run / Dataset»)</text>
+  <text x="478" y="366" class="small-text">Llamar a <tspan class="mono">client.share_run(run_id)</tspan> o pulsar «Share» en</text>
+  <text x="478" y="382" class="small-text">la UI genera una URL pública accesible <tspan font-weight="700" fill="#b91c1c">sin login</tspan> que</text>
+  <text x="478" y="398" class="small-text">expone el árbol entero (prompts del sistema, chunks</text>
+  <text x="478" y="414" class="small-text">internos y argumentos de herramientas).</text>
+  <text x="478" y="438" class="mono" font-size="10.5" fill="#065f46">Audita con: client.read_run_shared_link(run_id)</text>
+  <text x="478" y="454" class="mono" font-size="10.5" fill="#065f46">Revoca con: client.unshare_run(run_id)</text>
+
+  <rect x="462" y="484" width="372" height="142" class="card-slate"/>
+  <text x="478" y="506" class="card-title">Vector 3 · Artefactos de CI y Cassettes de Caché</text>
+  <text x="478" y="528" class="small-text">Al guardar cassettes de <tspan class="mono">ls.cache()</tspan> o volcados JSON de</text>
+  <text x="478" y="544" class="small-text">experimentos en el repositorio Git, asegúrate de que el</text>
+  <text x="478" y="560" class="small-text">scanner pre-commit bloquee prefijos <tspan class="mono">lsv2_pt_*</tspan>, <tspan class="mono">lsv2_sk_*</tspan></text>
+  <text x="478" y="576" class="small-text">y <tspan class="mono">sk-*</tspan> antes del commit.</text>
+
+  <!-- Panel 3: Matriz de Principio de Mínimo Privilegio -->
+  <rect x="868" y="98" width="384" height="544" class="panel"/>
+  <text x="886" y="126" class="panel-title">3. Arquitectura de Mínimo Privilegio</text>
+
+  <rect x="886" y="144" width="348" height="482" class="card-green"/>
+  <text x="902" y="168" class="card-title" fill="#047857">Las 4 Reglas de Oro de Acceso en Producción</text>
+
+  <text x="902" y="198" class="body-text" font-weight="700">1. Una Service Key por Entorno y Servicio:</text>
+  <text x="902" y="216" class="small-text">   Prod usa <tspan class="mono">lsv2_sk_...</tspan> restringida al Workspace</text>
+  <text x="902" y="232" class="small-text">   de Producción. Ningún portátil de desarrollador</text>
+  <text x="902" y="248" class="small-text">   tiene esa clave en su fichero <tspan class="mono">.env</tspan>.</text>
+
+  <text x="902" y="280" class="body-text" font-weight="700">2. Sanitización de Secretos en el Anonymizer:</text>
+  <text x="902" y="298" class="small-text">   Añade siempre el patrón regex de claves API:</text>
+  <text x="902" y="316" class="mono" font-size="10.5" fill="#065f46">r"(lsv2_(pt|sk)_[a-zA-Z0-9_]+|sk-[a-zA-Z0-9_-]{20,})"</text>
+  <text x="902" y="334" class="small-text">   al <tspan class="mono">create_anonymizer()</tspan> de tu cliente.</text>
+
+  <text x="902" y="366" class="body-text" font-weight="700">3. Bloqueo Organizacional de Enlaces Públicos:</text>
+  <text x="902" y="384" class="small-text">   Desactiva en <tspan class="mono">Organization Settings</tspan> la creación de</text>
+  <text x="902" y="400" class="small-text">   enlaces públicos de trazas, datasets y prompts.</text>
+
+  <text x="902" y="432" class="body-text" font-weight="700">4. Separación CI vs Runtime de Producción:</text>
+  <text x="902" y="450" class="small-text">   El contenedor de producción solo necesita enviar</text>
+  <text x="902" y="466" class="small-text">   trazas; el runner de CI corre en el Workspace de</text>
+  <text x="902" y="482" class="small-text">   <tspan class="mono">Staging/Eval</tspan> donde residen los datasets de prueba.</text>
+
+  <rect x="902" y="512" width="316" height="96" rx="6" fill="#0f172a"/>
+  <text x="916" y="536" class="mono" font-size="10.5" fill="#38bdf8"># Regla de Diseño para Funciones @traceable:</text>
+  <text x="916" y="558" class="mono" font-size="10.5" fill="#e2e8f0">Nunca pases el objeto cliente ni la config</text>
+  <text x="916" y="576" class="mono" font-size="10.5" fill="#e2e8f0">como argumento; pásalos por cierre/módulo</text>
+  <text x="916" y="594" class="mono" font-size="10.5" fill="#4ade80">o exclúyelos en process_inputs.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Usa Workspaces separados para aislar Producción de Desarrollo y bloquea prefijos lsv2_* y sk-* en tu anonymizer.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 05 · Notebook 16</text>
+</svg>

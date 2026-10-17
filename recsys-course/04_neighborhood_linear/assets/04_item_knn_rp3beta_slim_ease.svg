@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 04 · LINEALES</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">VECINDARIOS Y MODELOS LINEALES: DE ITEM-KNN Y RP³β A EASE^R</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">Por qué los modelos lineales auto-regresivos de forma cerrada superan a redes profundas en precisión y velocidad</text>
+
+
+  <!-- Left Panel: Item-kNN & RP3beta -->
+  <rect x="24" y="108" width="596" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="560" height="32" rx="8" fill="#eff6ff"/>
+  <text x="322" y="147" text-anchor="middle" fill="#1d4ed8" font-size="14.5" font-weight="800">1. Evolución de Vecindarios: Coseno → Shrinkage → RP³β</text>
+
+  <!-- Item-kNN -->
+  <rect x="44" y="172" width="556" height="142" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="62" y="196" fill="#0f172a" font-size="13.5" font-weight="800">A. Item-kNN con Shrinkage y Coseno Asimétrico (Amazon, 2003)</text>
+  <rect x="62" y="206" width="520" height="38" rx="6" fill="#0f172a"/>
+  <text x="322" y="230" text-anchor="middle" fill="#38bdf8" font-size="12.5" class="mono">S_{ij} = (x_i^T x_j) / ( ||x_i||^{2α} · ||x_j||^{2(1-α)} + h )</text>
+  <text x="62" y="264" fill="#334155" font-size="11.5">• <tspan font-weight="700" fill="#2563eb">Shrinkage (h &gt; 0):</tspan> Amortigua pares que coinciden en solo 2 usuarios por puro azar.</text>
+  <text x="62" y="284" fill="#334155" font-size="11.5">• <tspan font-weight="700" fill="#7c3aed">Asimetría (α ≠ 0.5):</tspan> Controla cuánto penalizas la popularidad del ítem destino j.</text>
+  <text x="62" y="302" fill="#334155" font-size="11.5">• <tspan font-weight="700" fill="#059669">Truncamiento Top-k por columna:</tspan> Mantiene S dispersa y elimina ruido de cola.</text>
+
+  <!-- RP3beta -->
+  <rect x="44" y="328" width="556" height="148" rx="10" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="62" y="352" fill="#5b21b6" font-size="13.5" font-weight="800">B. RP³β: Caminata Aleatoria de 3 Pasos en el Grafo Bipartito</text>
+  <rect x="62" y="362" width="520" height="38" rx="6" fill="#0f172a"/>
+  <text x="322" y="386" text-anchor="middle" fill="#a78bfa" font-size="12.5" class="mono">W_{ij}^{RP3β} = (P_{IU} · P_{UI})_{ij}^α / deg(j)^β</text>
+  <text x="62" y="420" fill="#334155" font-size="11.5">• Paso 1: Ítem i → Usuario u  |  Paso 2: Usuario u → Ítem j (co-ocurrencia normalizada).</text>
+  <text x="62" y="440" fill="#334155" font-size="11.5">• Dividir por <tspan class="mono" font-weight="700">deg(j)^β</tspan> (con β ≈ 0.3–0.6) hunde los super-blockbusters obvios</text>
+  <text x="62" y="460" fill="#5b21b6" font-size="11.5" font-weight="700">  y hace emerger joyas de nicho con altísimo NDCG y cobertura.</text>
+
+  <!-- Limitation of Heuristic Similarity -->
+  <rect x="44" y="490" width="556" height="138" rx="10" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="62" y="514" fill="#9a3412" font-size="13.5" font-weight="800">C. El Talón de Aquiles de kNN: La Colinealidad (Redundancia)</text>
+  <text x="62" y="536" fill="#475569" font-size="11.5">• En kNN, cada par (i, j) se calcula de forma miope e independiente del resto del catálogo.</text>
+  <text x="62" y="556" fill="#475569" font-size="11.5">• Si el usuario vio Star Wars IV y V, kNN suma dos veces la misma señal redundante</text>
+  <text x="62" y="574" fill="#475569" font-size="11.5">  en lugar de usar una regresión conjunta que desacople correlaciones parciales.</text>
+  <text x="62" y="600" fill="#c2410c" font-size="12" font-weight="700">→ Solución: Aprender la matriz de pesos B resolviendo un problema global (SLIM / EASE^R).</text>
+
+  <!-- Right Panel: SLIM & EASE^R -->
+  <rect x="636" y="108" width="620" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="654" y="126" width="584" height="32" rx="8" fill="#ecfdf5"/>
+  <text x="946" y="147" text-anchor="middle" fill="#047857" font-size="14.5" font-weight="800">2. EASE^R (Steck, WWW 2019): El Gigante en 5 Líneas de Código</text>
+
+  <!-- Optimization formulation -->
+  <rect x="654" y="172" width="584" height="126" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="672" y="196" fill="#065f46" font-size="13.5" font-weight="800">Formulación Convexa con Restricción de Cero en la Diagonal:</text>
+  <rect x="672" y="206" width="548" height="40" rx="6" fill="#0f172a"/>
+  <text x="946" y="231" text-anchor="middle" fill="#34d399" font-size="13" class="mono">min_B  || X - X·B ||_F^2 + λ·|| B ||_F^2    sujeto a   diag(B) = 0</text>
+  <text x="672" y="266" fill="#065f46" font-size="11.5">• ¿Por qué <tspan class="mono" font-weight="700">diag(B) = 0</tspan> es vital? Sin ella, la solución trivial sería B = I (cada ítem</text>
+  <text x="672" y="284" fill="#065f46" font-size="11.5">  se predice a sí mismo y no generaliza a películas no vistas).</text>
+
+  <!-- Closed-form derivation -->
+  <rect x="654" y="312" width="584" height="174" rx="10" fill="#0f172a"/>
+  <text x="674" y="336" fill="#38bdf8" font-size="13" font-weight="700">Solución Analítica Cerrada (Multiplicadores de Lagrange):</text>
+  <text x="674" y="362" fill="#e2e8f0" font-size="12" class="mono">1. G = (X.T @ X).toarray()              # Matriz de Gram (|I| × |I|)</text>
+  <text x="674" y="386" fill="#e2e8f0" font-size="12" class="mono">2. G[np.diag_indices_from(G)] += l2_reg # Regularización L2 (λ ≈ 200..1000)</text>
+  <text x="674" y="410" fill="#34d399" font-size="12" class="mono">3. P = np.linalg.inv(G)                 # Matriz de precisión</text>
+  <text x="674" y="434" fill="#fbbf24" font-size="12" class="mono">4. B = -P / np.diag(P)[None, :]         # Normaliza columnas por diagonal</text>
+  <text x="674" y="458" fill="#a78bfa" font-size="12" class="mono">5. np.fill_diagonal(B, 0.0)             # Impone diag(B) = 0 exacto</text>
+  <text x="674" y="476" fill="#94a3b8" font-size="11">Inferencia para usuario u: <tspan class="mono" fill="#fff">scores_u = x_u @ B</tspan> (un simple producto vector-matriz).</text>
+
+  <!-- Comparison Table -->
+  <rect x="654" y="500" width="584" height="128" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="674" y="522" fill="#0f172a" font-size="13" font-weight="800">Comparativa Directa (Proyecto 04 — MovieLens / CineMatch):</text>
+  <text x="674" y="546" fill="#334155" font-size="11.5" class="mono">Modelo      | Orden Co-ocurrencia | Entrenamiento | Memoria   | NDCG@10</text>
+  <line x1="674" y1="554" x2="1218" y2="554" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="674" y="572" fill="#475569" font-size="11.5" class="mono">Item-kNN    | Par a par (miope)   | ~0.5 seg      | Dispersa  | Bueno</text>
+  <text x="674" y="592" fill="#5b21b6" font-size="11.5" class="mono">SLIM (L1+L2)| Global + B ≥ 0      | Minutos (CD)  | Dispersa  | Muy alto</text>
+  <text x="674" y="612" fill="#059669" font-size="11.5" font-weight="700" class="mono">EASE^R (L2) | Global (Precisión)  | ~1.5 seg (inv)| |I|×|I|   | ★ Líder</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">Cuello de Botella de EASE^R: Invertir G cuesta O(|I|^3). Funciona de maravilla hasta |I| ≈ 40,000 ítems; más allá usa EDLAE o Factorización.</text>
+</svg>

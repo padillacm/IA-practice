@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">MEMORIA DE LARGO PLAZO: CHECKPOINTER vs. BASE STORE (09)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Cómo compartir recuerdos entre hilos (`namespace=(user_id, "memories")`) y la taxonomía Semántica, Episódica y Procedimental</text>
+
+  <!-- Left Panel: Checkpointer vs Store Comparison -->
+  <rect x="20" y="90" width="535" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="535" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#1e40af;">1. Dos Memorias Complementarias: ¿Qué va en cada una?</text>
+
+  <!-- Checkpointer Card -->
+  <rect x="36" y="140" width="503" height="175" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="50" y="152" width="250" height="24" rx="5" fill="#2563eb"/>
+  <text x="175" y="168" text-anchor="middle" class="badge">A. Checkpointer (Corto Plazo / Hilo)</text>
+  <text x="50" y="196" class="body">• <tspan style="font-weight:700;">Alcance:</tspan> Aislado dentro de un único <tspan class="mono" style="fill:#1d4ed8;">thread_id</tspan> (una conversación).</text>
+  <text x="50" y="218" class="body">• <tspan style="font-weight:700;">¿Qué guarda?</tspan> El estado paso a paso (`messages`, variables de trabajo, `interrupt`).</text>
+  <text x="50" y="240" class="body">• <tspan style="font-weight:700;">Limitación:</tspan> Si el usuario abre un chat nuevo (`thread_id` distinto), el</text>
+  <text x="50" y="260" class="body">  checkpointer empieza en blanco y no recuerda quién es el usuario.</text>
+  <text x="50" y="288" class="mono" style="font-size:11.5px;fill:#1e40af;">graph = builder.compile(checkpointer=checkpointer, store=store)</text>
+
+  <!-- Store Card -->
+  <rect x="36" y="328" width="503" height="212" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <rect x="50" y="340" width="255" height="24" rx="5" fill="#059669"/>
+  <text x="177" y="356" text-anchor="middle" class="badge">B. BaseStore (Largo Plazo / Transversal)</text>
+  <text x="50" y="384" class="body">• <tspan style="font-weight:700;">Alcance:</tspan> Jerárquico por tuplas <tspan class="mono" style="fill:#047857;">namespace = ("users", user_id, "prefs")</tspan>.</text>
+  <text x="50" y="406" class="body">• <tspan style="font-weight:700;">Cruza todos los hilos:</tspan> accesible desde cualquier conversación de ese usuario.</text>
+  <rect x="50" y="420" width="475" height="106" rx="6" fill="#0f172a"/>
+  <text x="64" y="442" class="mono" style="fill:#38bdf8;"># Las 4 operaciones del Store (dentro de nodo o herramienta):</text>
+  <text x="64" y="464" class="mono" style="fill:#4ade80;">store.put(ns, key="idioma", value={"texto": "Prefiere español"})</text>
+  <text x="64" y="484" class="mono" style="fill:#fbbf24;">item = store.get(ns, key="idioma")</text>
+  <text x="64" y="504" class="mono" style="fill:#c084fc;">hits = store.search(ns, query="formato de código", limit=3) # Vectorial</text>
+
+  <!-- Right Panel: The 3 Cognitive Memory Types & Hot vs Background Writing -->
+  <rect x="570" y="90" width="530" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#ede9fe"/>
+  <text x="586" y="114" class="panel-title" style="fill:#5b21b6;">2. Los 3 Tipos de Memoria y Escritura Caliente vs. Segundo Plano</text>
+
+  <!-- 3 Memory Types (CoALA Taxonomy) -->
+  <rect x="586" y="140" width="498" height="74" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="600" y="162" class="card-title" style="fill:#1e40af;">1. Memoria Semántica (Hechos y Preferencias del Usuario)</text>
+  <text x="600" y="182" class="body" style="font-size:12px;">Perfil o diccionario de hechos: <tspan class="mono">«Usa Python 3.12, trabaja en finanzas, odia emojis»</tspan>.</text>
+  <text x="600" y="200" class="mono" style="font-size:11px;fill:#1d4ed8;">Se actualiza por upsert (reemplazando hechos obsoletos cuando cambian).</text>
+
+  <rect x="586" y="224" width="498" height="74" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="600" y="246" class="card-title" style="fill:#5b21b6;">2. Memoria Episódica (Experiencias Pasadas / Few-Shot Dinámico)</text>
+  <text x="600" y="266" class="body" style="font-size:12px;">Tickets resueltos con éxito en el pasado que se recuperan por similitud semántica</text>
+  <text x="600" y="284" class="mono" style="font-size:11px;fill:#6d28d9;">store.search(("episodios",), query=pregunta_actual, limit=2)</text>
+
+  <rect x="586" y="308" width="498" height="74" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="600" y="330" class="card-title" style="fill:#065f46;">3. Memoria Procedimental (Reglas y System Prompt Auto-Mejorado)</text>
+  <text x="600" y="350" class="body" style="font-size:12px;">El conjunto de instrucciones o rúbrica que el agente refina a partir del feedback humano:</text>
+  <text x="600" y="368" class="mono" style="font-size:11px;fill:#047857;">store.get(("procedimientos",), "reglas_redaccion")</text>
+
+  <!-- Hot Path vs Background Consolidation -->
+  <rect x="586" y="394" width="498" height="146" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="602" y="418" class="card-title" style="fill:#92400e;">¿Cuándo escribir en el Store? En Caliente vs. Segundo Plano</text>
+  <text x="602" y="442" class="body" style="font-size:12px;">• <tspan style="font-weight:700;fill:#1d4ed8;">En Caliente (Tool `guardar_memoria`):</tspan> inmediata (el usuario dice «recuerda esto»),</text>
+  <text x="602" y="460" class="body" style="font-size:12px;">  pero añade latencia de una llamada extra de herramienta al turno actual.</text>
+  <text x="602" y="484" class="body" style="font-size:12px;">• <tspan style="font-weight:700;fill:#15803d;">En Segundo Plano (Post-turno / Cron):</tspan> 0 ms añadidos al usuario; un proceso</text>
+  <text x="602" y="502" class="body" style="font-size:12px;">  consolida la conversación finalizada, deduplica contradicciones y aplica TTL.</text>
+  <text x="602" y="524" class="mono" style="font-size:11px;fill:#b45309;">Higiene: guarda siempre created_at, source_thread y confidence para podar basura.</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Regla de Seguridad Multi-Tenant: El primer elemento del namespace en el Store DEBE ser siempre el user_id o tenant_id autenticado.</text>
+</svg>

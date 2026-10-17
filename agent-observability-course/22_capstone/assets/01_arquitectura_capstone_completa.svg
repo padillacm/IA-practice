@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arr22" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arr22g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#16a34a"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">CAPSTONE: PLATAFORMA INTEGRAL DE OBSERVABILIDAD DE SUPPORTOPS (MÓDULO 22)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Síntesis arquitectónica de los Módulos 00 al 21: Contratos GenAI, Gateway OTel, 4 Pilares LGTM+Pyroscope, FinOps, Evaluador y SLOs</text>
+
+  <!-- Column 1: Multi-Agent & MCP Application Layer -->
+  <rect x="20" y="90" width="250" height="460" rx="12" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+  <rect x="20" y="90" width="250" height="36" rx="12" fill="#2563eb"/>
+  <text x="145" y="113" text-anchor="middle" class="badge" style="font-size:13px;">1. APP SUPPORTOPS (Mód 01–12)</text>
+
+  <rect x="34" y="138" width="222" height="82" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="46" y="158" class="card-title" style="fill:#1e40af;font-size:12.5px;">Orquestador + Subagentes + MCP</text>
+  <text x="46" y="176" class="mono" style="font-size:11px;fill:#1d4ed8;">• invoke_agent / chat / execute_tool</text>
+  <text x="46" y="194" class="mono" style="font-size:11px;fill:#1d4ed8;">• W3C traceparent + baggage</text>
+  <text x="46" y="210" class="mono" style="font-size:11px;fill:#1d4ed8;">• MCP _meta + schema_hash</text>
+
+  <rect x="34" y="230" width="222" height="82" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="46" y="250" class="card-title" style="fill:#166534;font-size:12.5px;">Escudo Local SDK (Mód 13, 20)</text>
+  <text x="46" y="268" class="mono" style="font-size:11px;fill:#15803d;">• Redactor Luhn + HMAC-SHA256</text>
+  <text x="46" y="286" class="mono" style="font-size:11px;fill:#15803d;">• Guardas: max_steps / max_cost</text>
+  <text x="46" y="302" class="mono" style="font-size:11px;fill:#15803d;">• Detector Injection + Views SDK</text>
+
+  <rect x="34" y="322" width="222" height="82" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="46" y="342" class="card-title" style="fill:#5b21b6;font-size:12.5px;">Evaluador Online Async (Mód 14)</text>
+  <text x="46" y="360" class="mono" style="font-size:11px;fill:#6d28d9;">• Fuera del camino crítico (0 ms)</text>
+  <text x="46" y="378" class="mono" style="font-size:11px;fill:#6d28d9;">• Muestreo estratificado (IPW)</text>
+  <text x="46" y="394" class="mono" style="font-size:11px;fill:#6d28d9;">• SpanLink + Rogan-Gladen</text>
+
+  <rect x="34" y="414" width="222" height="122" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="46" y="434" class="card-title" style="fill:#9a3412;font-size:12.5px;">4 Señales Emitidas:</text>
+  <text x="46" y="454" class="body" style="font-size:11.5px;">1. <tspan style="font-weight:700;">Trazas OTLP</tspan> (BatchSpanProcessor)</text>
+  <text x="46" y="474" class="body" style="font-size:11.5px;">2. <tspan style="font-weight:700;">Logs OTLP</tspan> (con <tspan class="mono">trace_id/span_id</tspan>)</text>
+  <text x="46" y="494" class="body" style="font-size:11.5px;">3. <tspan style="font-weight:700;">Métricas OTLP</tspan> (con Exemplars)</text>
+  <text x="46" y="514" class="body" style="font-size:11.5px;">4. <tspan style="font-weight:700;">Perfiles CPU/Wall</tspan> (<tspan class="mono">span_id</tspan> tag)</text>
+
+  <line x1="270" y1="310" x2="298" y2="310" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arr22)"/>
+
+  <!-- Column 2: K8s DaemonSet + Gateway Collector Pipeline -->
+  <rect x="302" y="90" width="290" height="460" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2"/>
+  <rect x="302" y="90" width="290" height="36" rx="12" fill="#7c3aed"/>
+  <text x="447" y="113" text-anchor="middle" class="badge" style="font-size:13px;">2. COLLECTOR K8S (Mód 05, 18–20)</text>
+
+  <rect x="316" y="138" width="262" height="62" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="328" y="158" class="card-title" style="font-size:12.5px;">Capa 1 · DaemonSet por Nodo</text>
+  <text x="328" y="176" class="mono" style="font-size:11px;fill:#475569;">memory_limiter → k8sattributes</text>
+  <text x="328" y="192" class="mono" style="font-size:11px;fill:#6d28d9;">exporter: loadbalancing (traceID)</text>
+
+  <rect x="316" y="210" width="262" height="232" rx="8" fill="#0f172a"/>
+  <text x="330" y="232" class="card-title" style="fill:#38bdf8;font-size:13px;">Capa 2 · Gateway Pool (En Orden):</text>
+  <text x="330" y="256" class="mono" style="fill:#f87171;font-size:11.5px;">① memory_limiter (75% cgroup)</text>
+  <text x="330" y="278" class="mono" style="fill:#fbbf24;font-size:11.5px;">② resource + redaction + OTTL</text>
+  <text x="330" y="296" class="body" style="fill:#cbd5e1;font-size:11px;">   (Borra PII residual antes de exportar)</text>
+  <text x="330" y="320" class="mono" style="fill:#4ade80;font-size:11.5px;">③ Connector spanmetrics (100%)</text>
+  <text x="330" y="338" class="body" style="fill:#cbd5e1;font-size:11px;">   (Métricas exactas sin sesgo de muestreo)</text>
+  <text x="330" y="362" class="mono" style="fill:#c084fc;font-size:11.5px;">④ tail_sampling (decision_wait)</text>
+  <text x="330" y="380" class="body" style="fill:#cbd5e1;font-size:11px;">   (100% fallos/lentos/caros + 5% OK)</text>
+  <text x="330" y="404" class="mono" style="fill:#38bdf8;font-size:11.5px;">⑤ batch + sending_queue (retry)</text>
+  <text x="330" y="426" class="mono" style="fill:#94a3b8;font-size:11px;">   Multi-tenant: X-Scope-OrgID</text>
+
+  <rect x="316" y="452" width="262" height="84" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="328" y="472" class="card-title" style="fill:#991b1b;font-size:12.5px;">Verificación GitOps en CI (Mód 19):</text>
+  <text x="328" y="492" class="mono" style="font-size:11px;fill:#b91c1c;">• helm template + kubeconform</text>
+  <text x="328" y="510" class="mono" style="font-size:11px;fill:#b91c1c;">• otelcol validate / promtool check</text>
+  <text x="328" y="526" class="mono" style="font-size:11px;fill:#b91c1c;">• Contrato de atributos SemConv</text>
+
+  <line x1="592" y1="310" x2="620" y2="310" stroke="#16a34a" stroke-width="2.5" marker-end="url(#arr22g)"/>
+
+  <!-- Column 3: Storage Backends (4 Pillars) -->
+  <rect x="624" y="90" width="215" height="460" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2"/>
+  <rect x="624" y="90" width="215" height="36" rx="12" fill="#059669"/>
+  <text x="731" y="113" text-anchor="middle" class="badge" style="font-size:13px;">3. LOS 4 PILARES (Mód 07–09, 17)</text>
+
+  <rect x="638" y="140" width="187" height="90" rx="6" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="731" y="162" text-anchor="middle" class="card-title" style="fill:#1d4ed8;">Tempo 3 (Trazas)</text>
+  <text x="648" y="182" class="mono" style="font-size:11px;">• Bloques Parquet (ObjStore)</text>
+  <text x="648" y="200" class="mono" style="font-size:11px;">• TraceQL estructural (`&gt;&gt;`)</text>
+  <text x="648" y="218" class="mono" style="font-size:11px;">• Retención: 14 días</text>
+
+  <rect x="638" y="242" width="187" height="90" rx="6" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="731" y="264" text-anchor="middle" class="card-title" style="fill:#047857;">Loki 3 (Logs OTLP)</text>
+  <text x="648" y="284" class="mono" style="font-size:11px;">• Labels de baja cardinalidad</text>
+  <text x="648" y="302" class="mono" style="font-size:11px;">• Structured Metadata: trace_id</text>
+  <text x="648" y="320" class="mono" style="font-size:11px;">• Bloom Filters acelerados</text>
+
+  <rect x="638" y="344" width="187" height="90" rx="6" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="731" y="366" text-anchor="middle" class="card-title" style="fill:#b45309;">Prometheus (Métricas)</text>
+  <text x="648" y="386" class="mono" style="font-size:11px;">• Histogramas + Exemplars</text>
+  <text x="648" y="404" class="mono" style="font-size:11px;">• Recording rules SLI/Coste</text>
+  <text x="648" y="422" class="mono" style="font-size:11px;">• Control &lt; 500 series activas</text>
+
+  <rect x="638" y="446" width="187" height="90" rx="6" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="731" y="468" text-anchor="middle" class="card-title" style="fill:#5b21b6;">Pyroscope 2.x (Perfiles)</text>
+  <text x="648" y="488" class="mono" style="font-size:11px;">• CPU + Wall Flamegraphs</text>
+  <text x="648" y="506" class="mono" style="font-size:11px;">• Diff v1 vs v2 en vivo</text>
+  <text x="648" y="524" class="mono" style="font-size:11px;">• Salto desde span_id</text>
+
+  <!-- Column 4: Grafana, SLOs, Canary Gate & Incident Response -->
+  <rect x="860" y="90" width="240" height="460" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2"/>
+  <rect x="860" y="90" width="240" height="36" rx="12" fill="#ea580c"/>
+  <text x="980" y="113" text-anchor="middle" class="badge" style="font-size:13px;">4. OPERACIÓN SRE (Mód 10, 15, 16, 21)</text>
+
+  <rect x="874" y="140" width="212" height="118" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="886" y="162" class="card-title" style="fill:#9a3412;font-size:12.5px;">Grafana Golden Signals + Links</text>
+  <text x="886" y="182" class="body" style="font-size:11.5px;">• 4 Paneles: Tráfico, Errores,</text>
+  <text x="886" y="198" class="body" style="font-size:11.5px;">  Latencia (p50/p95/p99) y Coste/Calidad.</text>
+  <text x="886" y="218" class="body" style="font-size:11.5px;">• <tspan style="font-weight:700;">DataLinks:</tspan> Métrica → Traza →</text>
+  <text x="886" y="234" class="body" style="font-size:11.5px;">  Logs → Flamegraph en 3 clics.</text>
+
+  <rect x="874" y="270" width="212" height="126" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="886" y="292" class="card-title" style="fill:#991b1b;font-size:12.5px;">SLOs y Alertas Burn Rate</text>
+  <text x="886" y="312" class="mono" style="font-size:11px;fill:#b91c1c;">• Page Rápido: 14.4× (1h y 5m)</text>
+  <text x="886" y="330" class="mono" style="font-size:11px;fill:#c2410c;">• Page Medio:   6.0× (6h y 30m)</text>
+  <text x="886" y="348" class="mono" style="font-size:11px;fill:#1d4ed8;">• Ticket Lento: 1.0× (3d y 6h)</text>
+  <text x="886" y="368" class="body" style="font-size:11.5px;">• Alerta FinOps burn_rate &gt; 2.0×</text>
+  <text x="886" y="384" class="body" style="font-size:11.5px;">• Alerta CUSUM regresión / Injection</text>
+
+  <rect x="874" y="408" width="212" height="128" rx="6" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <text x="886" y="430" class="card-title" style="fill:#166534;font-size:12.5px;">Ciclo de Mejora Continua</text>
+  <text x="886" y="450" class="body" style="font-size:11.5px;">1. Incidente detectado en &lt; 5m</text>
+  <text x="886" y="470" class="body" style="font-size:11.5px;">2. Triaje con Change-Point + Lift</text>
+  <text x="886" y="490" class="body" style="font-size:11.5px;">3. Traza real → Dataset Replay</text>
+  <text x="886" y="510" class="body" style="font-size:11.5px;">4. Compuerta CI + Canario SPRT</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="566" width="1080" height="46" rx="10" fill="#0f172a"/>
+  <text x="560" y="594" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Criterio de Aceptación Capstone: 0 PII en claro, 100% de spans conformes a GenAI SemConv, &lt; 15% de trazas almacenadas y 5/5 incidentes diagnosticados.</text>
+</svg>

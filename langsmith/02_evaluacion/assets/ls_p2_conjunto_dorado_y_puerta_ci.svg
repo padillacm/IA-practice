@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">PROYECTO P2: EL CONJUNTO DORADO Y LA PUERTA DE INTEGRACIÓN CONTINUA</text>
+  <text x="48" y="69" class="subtitle">Diseño estratificado de casos, calibración de tolerancia estadística y discriminación entre regresión real y falsa alarma</text>
+
+  <!-- Panel 1: El Conjunto Dorado Estratificado -->
+  <rect x="28" y="98" width="394" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Estructura del Conjunto Dorado (Golden Set)</text>
+
+  <rect x="46" y="144" width="358" height="156" class="card-blue"/>
+  <text x="62" y="166" class="card-title" fill="#1d4ed8">Estratificación por Categoría y Riesgo</text>
+  <text x="62" y="188" class="small-text">• <tspan font-weight="700">Facturación y Reembolsos:</tspan> exige verificar importe</text>
+  <text x="62" y="204" class="small-text">  y plazo (&lt;30 días) antes de prometer devolución.</text>
+  <text x="62" y="224" class="small-text">• <tspan font-weight="700">Estado de Envío:</tspan> exige llamar a <tspan class="mono">consultar_pedido</tspan></text>
+  <text x="62" y="240" class="small-text">  y citar el estado real sin inventar fechas.</text>
+  <text x="62" y="260" class="small-text">• <tspan font-weight="700">Seguridad / Fuera de Pol.:</tspan> casos <tspan class="mono">must_pass=True</tspan></text>
+  <text x="62" y="276" class="small-text">  donde un solo fallo bloquea el despliegue.</text>
+
+  <rect x="46" y="314" width="358" height="148" class="card-green"/>
+  <text x="62" y="336" class="card-title" fill="#047857">Batería de 4 Evaluadores Ortogonales</text>
+  <text x="62" y="358" class="small-text">1. <tspan class="mono" font-weight="700">esquema_valido:</tspan> respuesta no vacía + campos clave.</text>
+  <text x="62" y="378" class="small-text">2. <tspan class="mono" font-weight="700">herramienta_correcta:</tspan> trayectoria de tools coincide</text>
+  <text x="62" y="394" class="small-text">   con <tspan class="mono">reference_outputs["tools_esperadas"]</tspan>.</text>
+  <text x="62" y="414" class="small-text">3. <tspan class="mono" font-weight="700">sin_fuga_pii:</tspan> 0 coincidencias con datos internos.</text>
+  <text x="62" y="434" class="small-text">4. <tspan class="mono" font-weight="700">correccion_juez:</tspan> fidelidad a hechos de referencia.</text>
+
+  <rect x="46" y="476" width="358" height="150" class="card-slate"/>
+  <text x="62" y="498" class="card-title">Por Qué NO Promediar Todo en un Solo Número</text>
+  <text x="62" y="520" class="small-text">Si promedias <tspan class="mono">sin_fuga_pii (0.95)</tspan> con <tspan class="mono">tono (0.95)</tspan>,</text>
+  <text x="62" y="536" class="small-text">una fuga grave de datos personales queda camuflada</text>
+  <text x="62" y="552" class="small-text">por una mejora estética en el saludo.</text>
+  <text x="62" y="576" class="mono" font-size="10.5" fill="#b91c1c">Seguridad y must_pass = umbral duro del 100%</text>
+  <text x="62" y="596" class="mono" font-size="10.5" fill="#1d4ed8">Calidad semántica = comparación estadística pareada</text>
+
+  <!-- Panel 2: Regresión de Verdad vs Falsa Alarma -->
+  <rect x="438" y="98" width="414" height="544" class="panel"/>
+  <text x="456" y="126" class="panel-title">2. Regresión Real vs Ruido Muestral</text>
+
+  <rect x="456" y="144" width="378" height="224" class="card-amber"/>
+  <text x="472" y="166" class="card-title" fill="#b45309">Candidato A: «Falsa Alarma» (Ruido Térmico)</text>
+  <text x="472" y="188" class="small-text">• Baseline: <tspan class="mono">84.0%</tspan> → Candidato A: <tspan class="mono">82.0% (Δ = -2.0%)</tspan></text>
+  <text x="472" y="208" class="small-text">• Diferencias por caso: 2 casos pasaron de 1→0 y</text>
+  <text x="472" y="224" class="small-text">  1 caso pasó de 0→1 en preguntas ambiguas.</text>
+  <text x="472" y="244" class="mono" font-size="11" fill="#78350f">IC 95% de Δ: [-6.8%, +2.8%]  (Cruza el 0)</text>
+  <text x="472" y="266" class="small-text">• <tspan class="mono">must_pass</tspan> rotos: <tspan font-weight="700">0</tspan> | Fugas PII: <tspan font-weight="700">0</tspan></text>
+  <rect x="472" y="286" width="346" height="64" rx="6" fill="#ffffff" stroke="#10b981"/>
+  <text x="486" y="308" class="body-text" fill="#047857" font-weight="700">Veredicto de la Puerta: APROBADO (No-Inferior)</text>
+  <text x="486" y="328" class="small-text">La oscilación de -2% está dentro del piso de ruido</text>
+  <text x="486" y="342" class="small-text">medido del propio baseline contra sí mismo.</text>
+
+  <rect x="456" y="384" width="378" height="242" class="card-red"/>
+  <text x="472" y="406" class="card-title" fill="#b91c1c">Candidato B: «Regresión de Verdad» (Prompt Roto)</text>
+  <text x="472" y="428" class="small-text">• Baseline: <tspan class="mono">84.0%</tspan> → Candidato B: <tspan class="mono">70.0% (Δ = -14.0%)</tspan></text>
+  <text x="472" y="448" class="small-text">• Diferencias por caso: 8 casos de reembolso pasaron</text>
+  <text x="472" y="464" class="small-text">  de 1→0 porque el nuevo prompt olvidó consultar el plazo.</text>
+  <text x="472" y="484" class="mono" font-size="11" fill="#7f1d1d">IC 95% de Δ: [-22.4%, -5.6%]  (Entero bajo 0)</text>
+  <text x="472" y="506" class="small-text">• Además rompió 2 casos marcados <tspan class="mono">must_pass=True</tspan>.</text>
+  <rect x="472" y="526" width="346" height="82" rx="6" fill="#ffffff" stroke="#ef4444"/>
+  <text x="486" y="548" class="body-text" fill="#b91c1c" font-weight="700">Veredicto de la Puerta: BLOQUEADO (Exit Code 1)</text>
+  <text x="486" y="568" class="small-text">El informe imprime exactamente los <tspan class="mono">example_id</tspan> que</text>
+  <text x="486" y="584" class="small-text">regresaron (1→0) para depuración inmediata.</text>
+
+  <!-- Panel 3: El Script de Puerta de CI (puerta_ci.py) -->
+  <rect x="868" y="98" width="384" height="544" class="panel"/>
+  <text x="886" y="126" class="panel-title">3. Las 5 Reglas de puerta_ci.py</text>
+
+  <rect x="886" y="144" width="348" height="482" rx="8" fill="#0f172a"/>
+  <text x="902" y="170" class="mono" font-size="11" fill="#38bdf8"># Checklist ordenada de ejecución en CI</text>
+
+  <text x="902" y="202" class="mono" font-size="11" fill="#4ade80">1. Integridad de Ejecución (Anti-Falso 100%)</text>
+  <text x="902" y="220" class="mono" font-size="10.5" fill="#e2e8f0">   assert n_evaluados == len(golden_set)</text>
+  <text x="902" y="238" class="mono" font-size="10.5" fill="#e2e8f0">   assert n_excepciones == 0</text>
+
+  <text x="902" y="272" class="mono" font-size="11" fill="#f87171">2. Invariantes Duros (Tolerancia Cero)</text>
+  <text x="902" y="290" class="mono" font-size="10.5" fill="#e2e8f0">   assert score_sin_pii == 1.00</text>
+  <text x="902" y="308" class="mono" font-size="10.5" fill="#e2e8f0">   assert fallos_en_must_pass == 0</text>
+
+  <text x="902" y="342" class="mono" font-size="11" fill="#c084fc">3. Presupuesto Operativo (Summary Eval)</text>
+  <text x="902" y="360" class="mono" font-size="10.5" fill="#e2e8f0">   assert latencia_p95 &lt;= 1.25 * base_p95</text>
+  <text x="902" y="378" class="mono" font-size="10.5" fill="#e2e8f0">   assert coste_total  &lt;= 1.20 * base_coste</text>
+
+  <text x="902" y="412" class="mono" font-size="11" fill="#fde047">4. Test Pareado de Calidad Semántica</text>
+  <text x="902" y="430" class="mono" font-size="10.5" fill="#e2e8f0">   diffs = [b[id] - a[id] for id in ids]</text>
+  <text x="902" y="448" class="mono" font-size="10.5" fill="#e2e8f0">   ic_sup = mean(diffs) + 1.96 * se(diffs)</text>
+  <text x="902" y="466" class="mono" font-size="10.5" fill="#e2e8f0">   assert ic_sup &gt;= 0 and mean(diffs) &gt;= -tol</text>
+
+  <text x="902" y="500" class="mono" font-size="11" fill="#38bdf8">5. Diagnóstico Accionable en Consola</text>
+  <text x="902" y="518" class="mono" font-size="10.5" fill="#94a3b8">   Lista los IDs exactos donde A=1 y B=0</text>
+  <text x="902" y="536" class="mono" font-size="10.5" fill="#94a3b8">   junto con la URL de comparación en LS.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Separa invariantes duros (100% en PII y must_pass) de métricas estocásticas (comparación pareada con banda de confianza).</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 02 · Proyecto P2</text>
+</svg>

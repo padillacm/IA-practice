@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 11 · GENERATIVO</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">RECOMENDADORES GENERATIVOS: SEMANTIC IDs (RQ-VAE), TIGER Y HSTU</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">El cambio de paradigma: de puntuar candidatos con producto escalar a generar el próximo ítem token a token</text>
+
+
+  <!-- Left Panel: RQ-VAE & Semantic IDs -->
+  <rect x="24" y="108" width="612" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="576" height="32" rx="8" fill="#f5f3ff"/>
+  <text x="330" y="147" text-anchor="middle" fill="#6d28d9" font-size="14.5" font-weight="800">1. Cuantización Vectorial Residual (RQ-VAE) → Semantic IDs (Proyecto 11)</text>
+
+  <text x="44" y="178" fill="#334155" font-size="12">¿Cómo convertir un catálogo de 10⁷ películas en un vocabulario compacto de 4×256 tokens?</text>
+
+  <!-- Step-by-step Residual Quantization pipeline -->
+  <rect x="44" y="192" width="572" height="196" rx="10" fill="#0f172a"/>
+  <text x="64" y="216" fill="#38bdf8" font-size="12.5" font-weight="700">Cascada Jerárquica de Residuos (Rajput et al., NeurIPS 2023 — TIGER):</text>
+  <text x="64" y="242" fill="#e2e8f0" font-size="11.5" class="mono">Entrada: e_i ∈ R^{768} (BGE) ──► Encoder MLP ──► z_i ∈ R^{32} (r_1 = z_i)</text>
+  <text x="64" y="268" fill="#34d399" font-size="11.5" class="mono">Nivel 1 (Grueso) : c_1 = argmin_k || r_1 - C^{(1)}_k ||_2   ──►  r_2 = r_1 - C^{(1)}_{c_1}</text>
+  <text x="64" y="292" fill="#fbbf24" font-size="11.5" class="mono">Nivel 2 (Medio)  : c_2 = argmin_k || r_2 - C^{(2)}_k ||_2   ──►  r_3 = r_2 - C^{(2)}_{c_2}</text>
+  <text x="64" y="316" fill="#a78bfa" font-size="11.5" class="mono">Nivel 3 (Fino)   : c_3 = argmin_k || r_3 - C^{(3)}_k ||_2   ──►  ẑ_i = C^{(1)}_{c_1}+C^{(2)}_{c_2}+C^{(3)}_{c_3}</text>
+  <line x1="64" y1="332" x2="596" y2="332" stroke="#334155" stroke-width="1"/>
+  <text x="64" y="354" fill="#f8fafc" font-size="12" font-weight="700">Resultado — Semantic ID de «The Matrix»: <tspan class="mono" fill="#38bdf8">(14, 89, 203, 0)</tspan></text>
+  <text x="64" y="374" fill="#94a3b8" font-size="11">El 4º dígito (sufijo 0, 1, 2...) desempata colisiones si dos películas caen en la misma celda.</text>
+
+  <!-- Hierarchical Semantics & Loss -->
+  <rect x="44" y="402" width="572" height="122" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="62" y="424" fill="#1e40af" font-size="13" font-weight="800">Por qué un Semantic ID es Infinitamente Mejor que un Atomic ID Aleatorio:</text>
+  <text x="62" y="446" fill="#334155" font-size="11.5">• <tspan font-weight="700">Comparte prefijos semánticos:</tspan> «The Matrix» <tspan class="mono">(14, 89, 203)</tspan> y «Dark City» <tspan class="mono">(14, 89, 112)</tspan></text>
+  <text x="62" y="464" fill="#334155" font-size="11.5">  comparten <tspan class="mono" font-weight="700">(14=Sci-Fi, 89=Cyberpunk)</tspan>. ¡El modelo transfiere aprendizaje entre ellas!</text>
+  <text x="62" y="486" fill="#059669" font-size="11.5" font-weight="700">• Pérdida RQ-VAE + Straight-Through Estimator (STE):</text>
+  <text x="62" y="506" fill="#1e3a8a" font-size="11.5" class="mono">L = ||e_i - Decoder(ẑ_i)||^2 + Σ_l ( ||sg[r_l] - C^{(l)}_{c_l}||^2 + β·||r_l - sg[C^{(l)}_{c_l}]||^2 )</text>
+
+  <!-- Codebook Collapse Prevention -->
+  <rect x="44" y="536" width="572" height="94" rx="10" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="62" y="558" fill="#991b1b" font-size="13" font-weight="800">Prevención del Colapso de Codebook (Uso &lt; 10% de Centroides):</text>
+  <text x="62" y="580" fill="#475569" font-size="11.5">1. Inicializa cada codebook C^{(l)} con <tspan font-weight="700">K-Means</tspan> sobre el primer batch de residuos r_l.</text>
+  <text x="62" y="600" fill="#475569" font-size="11.5">2. Audita la <tspan font-weight="700">Perplejidad del Codebook</tspan> <tspan class="mono">exp(-Σ p_k log p_k)</tspan> y reinicia códigos muertos.</text>
+
+  <!-- Right Panel: TIGER, Trie-Constrained Beam Search & HSTU -->
+  <rect x="652" y="108" width="604" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="670" y="126" width="568" height="32" rx="8" fill="#ecfdf5"/>
+  <text x="954" y="147" text-anchor="middle" fill="#047857" font-size="14.5" font-weight="800">2. De Puntuar a Generar: TIGER, Trie Beam Search y HSTU (Meta)</text>
+
+  <!-- Autoregressive Seq2Seq -->
+  <rect x="670" y="172" width="568" height="144" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="688" y="196" fill="#065f46" font-size="13.5" font-weight="800">A. Generación Autoregresiva de la Siguiente Película (TIGER)</text>
+  <text x="688" y="218" fill="#047857" font-size="11.5">El historial del usuario es una secuencia plana de códigos; predecimos los 4 tokens del siguiente ítem:</text>
+  <rect x="688" y="228" width="532" height="38" rx="6" fill="#0f172a"/>
+  <text x="954" y="252" text-anchor="middle" fill="#34d399" font-size="12" class="mono">[u_42] (14,89,203) (14,52,19) ──► Genera: ĉ_1=14 → ĉ_2=89 → ĉ_3=112 → Ítem #841</text>
+  <text x="688" y="286" fill="#065f46" font-size="11.5">• Ya NO necesitas buscar en un índice externo FAISS: la propia red neuronal decodifica</text>
+  <text x="688" y="304" fill="#065f46" font-size="11.5">  el identificador del ítem en 3–4 pasos con Beam Search de ancho K.</text>
+
+  <!-- Prefix Trie Constraint -->
+  <rect x="670" y="330" width="568" height="136" rx="10" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="688" y="354" fill="#9a3412" font-size="13.5" font-weight="800">B. ¿Y si Genera una Tupla (c_1, c_2, c_3) que No Existe en el Catálogo?</text>
+  <text x="688" y="376" fill="#475569" font-size="11.5">• Con 256³ = 16.7 millones de combinaciones posibles y solo 50,000 películas reales,</text>
+  <text x="688" y="394" fill="#475569" font-size="11.5">  la generación libre alucinaría tuplas vacías.</text>
+  <text x="688" y="416" fill="#c2410c" font-size="11.5" font-weight="700">• Solución: Beam Search Restringido por Árbol de Prefijos (Prefix Trie Masking):</text>
+  <text x="688" y="436" fill="#475569" font-size="11.5">  En cada paso l, pones <tspan class="mono">logit = -∞</tspan> a cualquier código c_l que no sea hijo válido en el</text>
+  <text x="688" y="452" fill="#475569" font-size="11.5">  Trie del catálogo activo → <tspan font-weight="700" fill="#059669">100% de recomendaciones garantizadas en catálogo.</tspan></text>
+
+  <!-- HSTU Meta Scaling Laws -->
+  <rect x="670" y="480" width="568" height="150" rx="10" fill="#0f172a"/>
+  <text x="690" y="504" fill="#38bdf8" font-size="13" font-weight="700">C. HSTU (Zhai et al., Meta ICML 2024): Leyes de Escalado (Trillones de Parámetros)</text>
+  <text x="690" y="528" fill="#e2e8f0" font-size="11.5">• Unifica Retrieval y Ranking reformulando la historia como un flujo alternado:</text>
+  <text x="704" y="548" fill="#a78bfa" font-size="11.5" class="mono">[ Ítem_1, Acción_1 (90% visto), Δt_1, Ítem_2, Acción_2 (skip), Δt_2, ... ]</text>
+  <text x="690" y="572" fill="#cbd5e1" font-size="11.5">• <tspan font-weight="700" fill="#34d399">Pointwise Aggregated Attention</tspan> (sin Softmax sobre la secuencia): conserva la intensidad</text>
+  <text x="690" y="590" fill="#cbd5e1" font-size="11.5">  absoluta de actividad del usuario y demuestra leyes de escalado tipo GPT en RecSys.</text>
+  <text x="690" y="612" fill="#fbbf24" font-size="11.5" font-weight="700">• OneRec (Kuaishou): elimina el embudo multi-etapa generando la sesión completa.</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">En el Proyecto 11 comprobarás cómo un ítem nuevo (Cold-Start) hereda recomendaciones desde el minuto 0 gracias a su prefijo RQ-VAE.</text>
+</svg>

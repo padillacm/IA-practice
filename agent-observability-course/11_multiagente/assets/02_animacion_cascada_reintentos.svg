@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 560" width="100%">
+  <defs>
+    <style>
+      
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+
+      @keyframes pulseRetry {
+        0%, 100% { opacity: 0.25; transform: scale(0.98); }
+        50% { opacity: 1; transform: scale(1.02); }
+      }
+      @keyframes zombieGlow {
+        0%, 40% { opacity: 0.2; }
+        50%, 95% { opacity: 1; }
+        100% { opacity: 0.2; }
+      }
+      @keyframes flowPacket {
+        0% { stroke-dashoffset: 160; }
+        100% { stroke-dashoffset: 0; }
+      }
+      .flow-line {
+        stroke-dasharray: 8 6;
+        animation: flowPacket 2.2s linear infinite;
+      }
+      .zombie-bar {
+        animation: zombieGlow 4s ease-in-out infinite;
+      }
+      .retry-badge {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: pulseRetry 2s ease-in-out infinite;
+      }
+    </style>
+  </defs>
+  <rect width="1120" height="560" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#7f1d1d"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">DINÁMICA DE FALLOS EN CASCADA: REINTENTOS Y TRABAJO ZOMBI (ANIMACIÓN)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#fecaca;">Cuando el Orquestador tiene un timeout más corto que la suma de reintentos del Subagente, multiplica el gasto por 3×–9×</text>
+
+  <!-- Timeline Header -->
+  <rect x="20" y="90" width="1080" height="395" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="40" y="120" class="panel-title">Línea Temporal de Ejecución Distribuida (t = 0.0s → t = 6.0s)</text>
+
+  <!-- Time grid lines -->
+  <line x1="250" y1="135" x2="250" y2="465" stroke="#e2e8f0" stroke-width="1.5"/>
+  <line x1="385" y1="135" x2="385" y2="465" stroke="#e2e8f0" stroke-width="1.5"/>
+  <line x1="520" y1="135" x2="520" y2="465" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>
+  <line x1="655" y1="135" x2="655" y2="465" stroke="#e2e8f0" stroke-width="1.5"/>
+  <line x1="790" y1="135" x2="790" y2="465" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 4"/>
+  <line x1="925" y1="135" x2="925" y2="465" stroke="#e2e8f0" stroke-width="1.5"/>
+  <line x1="1060" y1="135" x2="1060" y2="465" stroke="#e2e8f0" stroke-width="1.5"/>
+
+  <text x="250" y="132" text-anchor="middle" class="mono" style="fill:#64748b;">t=0s</text>
+  <text x="385" y="132" text-anchor="middle" class="mono" style="fill:#64748b;">t=1s</text>
+  <text x="520" y="132" text-anchor="middle" class="mono" style="fill:#dc2626;">t=2s (Timeout 1)</text>
+  <text x="655" y="132" text-anchor="middle" class="mono" style="fill:#64748b;">t=3s</text>
+  <text x="790" y="132" text-anchor="middle" class="mono" style="fill:#dc2626;">t=4s (Timeout 2)</text>
+  <text x="925" y="132" text-anchor="middle" class="mono" style="fill:#64748b;">t=5s</text>
+  <text x="1060" y="132" text-anchor="middle" class="mono" style="fill:#64748b;">t=6s</text>
+
+  <!-- Row 1: Orquestador -->
+  <text x="36" y="175" class="card-title" style="fill:#5b21b6;">1. Orquestador</text>
+  <text x="36" y="193" class="body" style="font-size:11.5px;">Timeout corto = 2.0s</text>
+  <rect x="250" y="158" width="270" height="34" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <text x="385" y="180" text-anchor="middle" class="mono" style="fill:#5b21b6;">Intento #1 (corta a los 2.0s)</text>
+
+  <rect x="525" y="158" width="265" height="34" rx="6" fill="#ede9fe" stroke="#7c3aed" stroke-width="2"/>
+  <text x="657" y="180" text-anchor="middle" class="mono" style="fill:#5b21b6;">Reintento #2 del Orquestador</text>
+
+  <!-- Row 2: Subagente Billing (Intento 1 -> Zombi) -->
+  <text x="36" y="250" class="card-title" style="fill:#0369a1;">2. Subagente A (Llamada 1)</text>
+  <text x="36" y="268" class="body" style="font-size:11.5px;">3 reintentos internos × 1.5s</text>
+  <rect x="255" y="232" width="265" height="36" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="387" y="254" text-anchor="middle" class="mono" style="fill:#1e40af;">chat retry 1 + retry 2 (Normal)</text>
+
+  <!-- ZOMBIE WORK BAR -->
+  <rect x="520" y="232" width="335" height="36" rx="6" fill="#fee2e2" stroke="#dc2626" stroke-width="2.5" class="zombie-bar"/>
+  <text x="687" y="254" text-anchor="middle" class="mono" style="fill:#991b1b;">🧟 TRABAJO ZOMBI: Sigue gastando tokens tras el timeout del padre</text>
+
+  <!-- Row 3: Subagente Billing (Intento 2 paralelo!) -->
+  <text x="36" y="325" class="card-title" style="fill:#b45309;">3. Subagente A (Llamada 2)</text>
+  <text x="36" y="343" class="body" style="font-size:11.5px;">Compite con la Llamada 1</text>
+  <line x1="525" y1="192" x2="535" y2="306" stroke="#dc2626" stroke-width="2.5" class="flow-line"/>
+  <rect x="530" y="306" width="420" height="36" rx="6" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+  <text x="740" y="328" text-anchor="middle" class="mono" style="fill:#92400e;">¡Doble ejecución concurrente! (retry 1 + retry 2 + retry 3)</text>
+
+  <!-- Row 4: Multiplicación de llamadas al LLM -->
+  <rect x="36" y="372" width="1040" height="96" rx="8" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.5"/>
+  <rect x="52" y="388" width="240" height="64" rx="8" fill="#be123c" class="retry-badge"/>
+  <text x="172" y="414" text-anchor="middle" class="card-title" style="fill:#ffffff;font-size:16px;">3 × 3 = 9 Llamadas LLM</text>
+  <text x="172" y="436" text-anchor="middle" class="body" style="fill:#ffe4e6;">Por 1 solo ticket de usuario</text>
+
+  <text x="315" y="402" class="card-title" style="fill:#881337;">¿Cómo se previene en Producción?</text>
+  <text x="315" y="424" class="body">1. <tspan style="font-weight:700;">Reintentar en UNA sola capa</tspan> (en el cliente hoja del LLM, nunca en el orquestador y en el subagente a la vez).</text>
+  <text x="315" y="446" class="body">2. <tspan style="font-weight:700;">Propagar Deadlines</tspan> (<tspan class="mono" style="fill:#be123c;">X-Deadline-Epoch-Ms</tspan> o <tspan class="mono" style="fill:#be123c;">baggage: deadline_ms</tspan>): el hijo aborta si el padre ya expiró.</text>
+
+  <!-- Footer -->
+  <rect x="20" y="498" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="525" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Huella en Tempo (TraceQL): spans hermanos del mismo subagente que se solapan en el tiempo dentro del mismo trace_id.</text>
+</svg>

@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">ANATOMÍA DE UNA TRAZA: RUN, TRACE, DOTTED_ORDER Y HERENCIA (MÓDULO 01)</text>
+  <text x="48" y="69" class="subtitle">Jerarquía de ejecución, reconstrucción lexicográfica sin relojes sincronizados y semántica de los 6 run_type</text>
+
+  <!-- Panel 1: 3 Niveles Jerárquicos -->
+  <rect x="28" y="98" width="390" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Tres Unidades que NO Significan lo Mismo</text>
+
+  <rect x="46" y="142" width="354" height="106" class="card-purple"/>
+  <text x="62" y="165" class="card-title" fill="#5b21b6">Hilo (Thread) — Conversación Multi-turno</text>
+  <text x="62" y="185" class="mono" font-size="11.5" fill="#4c1d95">metadata={"thread_id": "ticket-4821"}</text>
+  <text x="62" y="205" class="body-text">Agrupa N trazas independientes a lo largo del tiempo</text>
+  <text x="62" y="223" class="small-text">que pertenecen a la misma sesión o ticket de usuario.</text>
+  <text x="62" y="240" class="small-text" fill="#6d28d9">↳ Contiene: Trace Turno 1, Trace Turno 2, Trace Turno 3...</text>
+
+  <rect x="46" y="262" width="354" height="122" class="card-blue"/>
+  <text x="62" y="285" class="card-title" fill="#1d4ed8">Traza (Trace) — 1 Petición Completa (Árbol)</text>
+  <text x="62" y="305" class="mono" font-size="11.5" fill="#1e40af">trace_id == root_run.id (UUID v7 temporal)</text>
+  <text x="62" y="325" class="body-text">Todos los nodos del árbol comparten exactamente el</text>
+  <text x="62" y="343" class="body-text">mismo <tspan class="mono">trace_id</tspan>. El nodo raíz tiene <tspan class="mono">parent_run_id=None</tspan>.</text>
+  <text x="62" y="366" class="small-text" fill="#1d4ed8">↳ Muestreo atómico: LangSmith guarda o descarta la traza entera.</text>
+
+  <rect x="46" y="398" width="354" height="130" class="card-green"/>
+  <text x="62" y="421" class="card-title" fill="#047857">Ejecución (Run) — 1 Paso Individual (Span)</text>
+  <text x="62" y="441" class="mono" font-size="11.5" fill="#065f46">id, parent_run_id, inputs, outputs, error, extra</text>
+  <text x="62" y="461" class="body-text">Cada llamada decorada con <tspan class="mono">@traceable</tspan> o <tspan class="mono">RunTree</tspan>.</text>
+  <text x="62" y="480" class="small-text">• <tspan class="mono">tags</tspan> y <tspan class="mono">metadata</tspan> se heredan de padre a hijos.</text>
+  <text x="62" y="498" class="small-text">• <tspan class="mono">error</tspan> se registra solo si la excepción cruza el borde</text>
+  <text x="62" y="515" class="small-text">del run (un <tspan class="mono">try/except</tspan> silencioso deja el run en VERDE).</text>
+
+  <rect x="46" y="540" width="354" height="86" class="card-amber"/>
+  <text x="62" y="562" class="card-title" fill="#b45309">Trampa del Fallo Silencioso (Sección 5)</text>
+  <text x="62" y="582" class="small-text">Si el hijo lanza excepción y el padre la atrapa con <tspan class="mono">except:</tspan>,</text>
+  <text x="62" y="599" class="small-text">el hijo queda con <tspan class="mono">error != None</tspan> pero la raíz queda <tspan class="mono">OK</tspan>.</text>
+  <text x="62" y="616" class="small-text" fill="#b45309">¡Filtrar solo raíces con error oculta herramientas rotas!</text>
+
+  <!-- Panel 2: dotted_order -->
+  <rect x="434" y="98" width="420" height="544" class="panel"/>
+  <text x="452" y="126" class="panel-title">2. Reconstrucción del Árbol con dotted_order</text>
+  <text x="452" y="146" class="small-text">Los runs llegan por HTTP asíncrono y desordenados; ordenar por</text>
+  <text x="452" y="162" class="small-text">el string <tspan class="mono">dotted_order</tspan> reconstruye el recorrido en preorden exacto:</text>
+
+  <rect x="452" y="176" width="384" height="72" class="card-slate"/>
+  <text x="466" y="197" class="card-title">Anatomía de un Segmento</text>
+  <text x="466" y="218" class="mono" font-size="11.5" fill="#0f172a">20261017T131500123456Z a1b2c3d4-...</text>
+  <text x="466" y="237" class="small-text" fill="#2563eb">↑ Timestamp UTC (µs)        ↑ UUID del run (desempate)</text>
+
+  <!-- Tree visual with dotted_order -->
+  <rect x="452" y="262" width="384" height="236" rx="8" fill="#0f172a"/>
+  <text x="468" y="286" class="mono" font-size="11.5" fill="#94a3b8"># Sort lexicográfico = Preorden del Árbol</text>
+  <text x="468" y="312" class="mono" font-size="11.5" fill="#c084fc">1. responder_ticket [chain]</text>
+  <text x="484" y="330" class="mono" font-size="10.5" fill="#e2e8f0">T01.uuid_A</text>
+  <text x="468" y="356" class="mono" font-size="11.5" fill="#38bdf8">  ├── 2. buscar_base [retriever]</text>
+  <text x="500" y="374" class="mono" font-size="10.5" fill="#e2e8f0">T01.uuid_A . T02.uuid_B</text>
+  <text x="468" y="400" class="mono" font-size="11.5" fill="#4ade80">  ├── 3. llamar_modelo [llm]</text>
+  <text x="500" y="418" class="mono" font-size="10.5" fill="#e2e8f0">T01.uuid_A . T03.uuid_C</text>
+  <text x="468" y="444" class="mono" font-size="11.5" fill="#fb923c">  │     └── 4. consultar_pedido [tool]</text>
+  <text x="516" y="462" class="mono" font-size="10.5" fill="#fde047">T01.uuid_A . T03.uuid_C . T04.uuid_D</text>
+  <text x="468" y="486" class="mono" font-size="11" fill="#38bdf8">Profundidad = dotted_order.count(".")</text>
+
+  <rect x="452" y="512" width="384" height="114" class="card-blue"/>
+  <text x="468" y="534" class="card-title" fill="#1d4ed8">Consultas de Subárbol en O(1) con Prefijos</text>
+  <text x="468" y="555" class="body-text">Todo descendiente de un nodo <tspan class="mono">X</tspan> empieza con el</text>
+  <text x="468" y="573" class="body-text">prefijo <tspan class="mono">X.dotted_order + "."</tspan></text>
+  <text x="468" y="595" class="mono" font-size="11" fill="#1e40af">es_descendiente = r.dotted_order.startswith(p + ".")</text>
+  <text x="468" y="614" class="small-text">Permite aislar qué ocurrió dentro de un sub-agente sin recursión.</text>
+
+  <!-- Panel 3: Los 6 run_type -->
+  <rect x="870" y="98" width="382" height="544" class="panel"/>
+  <text x="888" y="126" class="panel-title">3. Los 6 run_type que Activan Vistas UI</text>
+  <text x="888" y="146" class="small-text">No es decorativo: un <tspan class="mono">run_type</tspan> erróneo apaga el cálculo</text>
+  <text x="888" y="162" class="small-text">de coste, el Playground o la vista de documentos RAG:</text>
+
+  <rect x="888" y="176" width="346" height="68" class="card-green"/>
+  <text x="902" y="196" class="card-title" fill="#047857">1. "llm" — Llamada a Modelo Generativo</text>
+  <text x="902" y="214" class="small-text">Activa: Render de mensajes Chat, botón «Open in Playground»</text>
+  <text x="902" y="230" class="small-text">y suma automática de tokens y coste (<tspan class="mono">usage_metadata</tspan>).</text>
+
+  <rect x="888" y="254" width="346" height="62" class="card-blue"/>
+  <text x="902" y="274" class="card-title" fill="#1d4ed8">2. "retriever" — Búsqueda Documental / RAG</text>
+  <text x="902" y="292" class="small-text">Espera <tspan class="mono">{"documents": [{"page_content", "metadata"}]}</tspan>.</text>
+  <text x="902" y="308" class="small-text">Activa tarjetas de chunks recuperados y scores de relevancia.</text>
+
+  <rect x="888" y="326" width="346" height="58" class="card-amber"/>
+  <text x="902" y="346" class="card-title" fill="#b45309">3. "tool" — Ejecución de Herramienta Externa</text>
+  <text x="902" y="364" class="small-text">Muestra argumentos de invocación y resultado estructurado;</text>
+  <text x="902" y="378" class="small-text">alimenta las métricas de tasa de fallo por herramienta.</text>
+
+  <rect x="888" y="394" width="346" height="56" class="card-purple"/>
+  <text x="902" y="414" class="card-title" fill="#5b21b6">4. "chain" — Orquestación / Paso Compuesto (Default)</text>
+  <text x="902" y="432" class="small-text">Valor por defecto de <tspan class="mono">@traceable</tspan>. Úsalo para nodos de</text>
+  <text x="902" y="445" class="small-text">LangGraph, routers y funciones de negocio que agrupan pasos.</text>
+
+  <rect x="888" y="460" width="346" height="52" class="card-slate"/>
+  <text x="902" y="480" class="card-title">5. "prompt" y 6. "parser" — Plantilla y Post-proceso</text>
+  <text x="902" y="498" class="small-text">Aíslan el formateo de variables y la validación JSON/Pydantic.</text>
+
+  <rect x="888" y="524" width="346" height="102" class="card-red"/>
+  <text x="902" y="546" class="card-title" fill="#b91c1c">Cuándo Usar RunTree Manual (Sección 7)</text>
+  <text x="902" y="566" class="small-text">Cuando el inicio y el fin viven en callbacks distintos o</text>
+  <text x="902" y="582" class="small-text">colas externas: <tspan class="mono">rt.create_child(...)</tspan> → <tspan class="mono">rt.end()</tspan> → <tspan class="mono">rt.post()</tspan>.</text>
+  <text x="902" y="600" class="small-text" fill="#b91c1c">¡Olvidar <tspan class="mono">rt.end()</tspan> deja el run «running» para siempre!</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Usa siempre el run_type específico ('llm', 'retriever', 'tool') y verifica errores en hijos aunque la raíz termine en OK.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 01 · Notebook 01</text>
+</svg>

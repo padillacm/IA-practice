@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">PROMPTS VERSIONADOS: PROMPT HUB, ETIQUETAS, CACHÉ Y GOBIERNO (MÓDULO 15)</text>
+  <text x="48" y="69" class="subtitle">Cómo desacoplar iteración de prompts y despliegues de código sin perder reproducibilidad, pruebas en CI ni resiliencia</text>
+
+  <!-- Panel 1: Commit Hash vs Environment Tags -->
+  <rect x="28" y="98" width="400" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Commits Inmutables y Etiquetas Móviles</text>
+
+  <rect x="46" y="144" width="364" height="162" class="card-purple"/>
+  <text x="62" y="166" class="card-title" fill="#5b21b6">Anatomía de pull_prompt("soporte-ticket:production")</text>
+  <text x="62" y="188" class="small-text">Igual que en Docker o Git, cada guardado en el Hub</text>
+  <text x="62" y="204" class="small-text">crea un <tspan font-weight="700">commit hash inmutable</tspan> (<tspan class="mono">a91f3c82</tspan>):</text>
+  <text x="62" y="226" class="mono" font-size="11" fill="#4c1d95">Commit c1 (8f2a...) ──┐</text>
+  <text x="62" y="244" class="mono" font-size="11" fill="#047857">Commit c2 (4b9e...) ←─┼── tag: "production"</text>
+  <text x="62" y="262" class="mono" font-size="11" fill="#1d4ed8">Commit c3 (d71c...) ←─┴── tag: "staging"</text>
+  <text x="62" y="286" class="small-text" fill="#b91c1c" font-weight="700">¡Nunca uses :latest en producción! Usa :production.</text>
+
+  <rect x="46" y="320" width="364" height="148" class="card-green"/>
+  <text x="62" y="342" class="card-title" fill="#047857">Promoción y Rollback sin Redesplegar Código</text>
+  <text x="62" y="364" class="small-text">1. Editas y creas el commit <tspan class="mono">c3</tspan> en el Hub.</text>
+  <text x="62" y="382" class="small-text">2. La CI evalúa <tspan class="mono">pull_prompt("soporte:c3")</tspan> contra el</text>
+  <text x="62" y="398" class="small-text">   Conjunto Dorado (<tspan class="mono">puerta_ci.py</tspan>).</text>
+  <text x="62" y="418" class="small-text">3. Solo si aprueba la CI, mueves el puntero</text>
+  <text x="62" y="434" class="small-text">   <tspan class="mono">:production</tspan> al commit <tspan class="mono">c3</tspan>.</text>
+  <text x="62" y="452" class="small-text">4. ¿Falla en prod? Reapuntas <tspan class="mono">:production → c2</tspan>.</text>
+
+  <rect x="46" y="482" width="364" height="144" class="card-blue"/>
+  <text x="62" y="504" class="card-title" fill="#1d4ed8">Trazabilidad Automática en el Run</text>
+  <text x="62" y="526" class="small-text">Al usar un prompt traído con <tspan class="mono">pull_prompt</tspan> (o inyectar</text>
+  <text x="62" y="542" class="small-text"><tspan class="mono">metadata={"ls_prompt_commit": commit_hash}</tspan>), cada</text>
+  <text x="62" y="558" class="small-text">traza queda vinculada al commit exacto que la generó:</text>
+  <text x="62" y="580" class="small-text">puedes comparar en Monitoring la curva de <tspan class="mono">fidelidad</tspan></text>
+  <text x="62" y="596" class="small-text">del commit <tspan class="mono">c2</tspan> contra <tspan class="mono">c3</tspan> minuto a minuto.</text>
+
+  <!-- Panel 2: La Caché de 5 Minutos y Resiliencia -->
+  <rect x="444" y="98" width="400" height="544" class="panel"/>
+  <text x="462" y="126" class="panel-title">2. La Caché TTL y el Fallback Local</text>
+
+  <rect x="462" y="144" width="364" height="176" class="card-amber"/>
+  <text x="478" y="166" class="card-title" fill="#b45309">¿Por Qué un Rollback No Es Instantáneo?</text>
+  <text x="478" y="188" class="small-text">Llamar a <tspan class="mono">client.pull_prompt()</tspan> por red en cada petición</text>
+  <text x="478" y="204" class="small-text">añadiría ~120 ms de latencia y crearía un punto único</text>
+  <text x="478" y="220" class="small-text">de fallo. Por eso se usa caché en memoria con TTL:</text>
+  <text x="478" y="244" class="mono" font-size="11" fill="#78350f">TTL típico = 300 segundos (5 minutos)</text>
+  <text x="478" y="266" class="small-text">• Durante hasta 5 minutos tras mover el tag <tspan class="mono">:production</tspan>,</text>
+  <text x="478" y="282" class="small-text">  distintos workers pueden servir <tspan class="mono">c2</tspan> y <tspan class="mono">c3</tspan> a la vez.</text>
+  <text x="478" y="300" class="small-text">• Por eso es vital registrar <tspan class="mono">prompt_commit</tspan> en la traza.</text>
+
+  <rect x="462" y="334" width="364" height="164" class="card-red"/>
+  <text x="478" y="356" class="card-title" fill="#b91c1c">Patrón de Resiliencia: Fallback en Git</text>
+  <text x="478" y="378" class="small-text">¿Qué pasa si tus contenedores arrancan (cold start) justo</text>
+  <text x="478" y="394" class="small-text">cuando la API del Hub no responde?</text>
+  <text x="478" y="416" class="mono" font-size="10.5" fill="#0f172a">try: prompt = pull_con_cache("soporte:production")</text>
+  <text x="478" y="434" class="mono" font-size="10.5" fill="#047857">except Exception: prompt = PROMPT_RESPALDO_LOCAL</text>
+  <text x="478" y="458" class="small-text">Guarda siempre una copia congelada en tu repositorio</text>
+  <text x="478" y="474" class="small-text">como paracaídas para que tu servicio nunca caiga.</text>
+
+  <rect x="462" y="512" width="364" height="114" class="card-slate"/>
+  <text x="478" y="534" class="card-title">Prompts Públicos y Seguridad corporativa</text>
+  <text x="478" y="554" class="small-text">Un prompt público expone tu lógica de negocio, nombres</text>
+  <text x="478" y="570" class="small-text">de herramientas internas y ejemplos propietarios a todo</text>
+  <text x="478" y="586" class="small-text">internet; desactiva la publicación pública a nivel de</text>
+  <text x="478" y="602" class="small-text">Organización y valida variables de plantilla al descargar.</text>
+
+  <!-- Panel 3: Quién Manda de Verdad (Hub vs Git + LangGraph) -->
+  <rect x="860" y="98" width="392" height="544" class="panel"/>
+  <text x="878" y="126" class="panel-title">3. Los 3 Modelos de Gobierno (Hub vs Git)</text>
+
+  <rect x="878" y="144" width="356" height="118" class="card-slate"/>
+  <text x="894" y="166" class="card-title">Modelo 1 · Solo Git (Código Manda)</text>
+  <text x="894" y="186" class="small-text">• Prompts en ficheros Python/YAML dentro del repo.</text>
+  <text x="894" y="204" class="small-text">• Máxima seguridad de tipos con herramientas y estado</text>
+  <text x="894" y="220" class="small-text">  de LangGraph, pero cada ajuste de texto exige deploy.</text>
+
+  <rect x="878" y="274" width="356" height="122" class="card-red"/>
+  <text x="894" y="296" class="card-title" fill="#b91c1c">Modelo 2 · Hub Libre sin Guardas (Peligroso)</text>
+  <text x="894" y="316" class="small-text">• Cualquiera edita el prompt en la UI y afecta a</text>
+  <text x="894" y="332" class="small-text">  producción al instante sin pasar tests.</text>
+  <text x="894" y="352" class="small-text" fill="#b91c1c">• Peligro: borran una variable <tspan class="mono">{contexto}</tspan> que el</text>
+  <text x="894" y="368" class="small-text" fill="#b91c1c">  nodo de LangGraph inyecta → <tspan class="mono">KeyError</tspan> masivo.</text>
+
+  <rect x="878" y="408" width="356" height="218" class="card-green"/>
+  <text x="894" y="430" class="card-title" fill="#047857">Modelo 3 · Hub Gobernado con Guardas (Ganador)</text>
+  <text x="894" y="452" class="small-text">1. Se itera rápido en Playground / Hub sobre <tspan class="mono">:staging</tspan>.</text>
+  <text x="894" y="472" class="small-text">2. Un Webhook del Hub (o PR) lanza automáticamente</text>
+  <text x="894" y="488" class="small-text">   el <tspan class="mono">Conjunto Dorado</tspan> antes de mover <tspan class="mono">:production</tspan>.</text>
+  <text x="894" y="508" class="small-text">3. <tspan font-weight="700">Guarda de Contrato en el Cliente:</tspan> al descargar</text>
+  <text x="894" y="524" class="small-text">   un prompt nuevo, el agente verifica que su conjunto</text>
+  <text x="894" y="540" class="small-text">   de <tspan class="mono">input_variables</tspan> coincida exactamente con las</text>
+  <text x="894" y="556" class="small-text">   claves del <tspan class="mono">State</tspan> de LangGraph; si no, rechaza el</text>
+  <text x="894" y="572" class="small-text">   cambio y mantiene la versión anterior en caché.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Fija siempre etiquetas de entorno (:production), valida input_variables contra tu código y mantén un fallback local en Git.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 04 · Notebook 15</text>
+</svg>

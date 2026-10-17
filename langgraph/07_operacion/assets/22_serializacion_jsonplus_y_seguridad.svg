@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">SERIALIZACIÓN DEL ESTADO: JSONPLUSSERIALIZER, PÉRDIDAS Y SEGURIDAD (22)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Qué ocurre realmente al guardar y recuperar tipos de Python en un checkpointer, la trampa de las tuplas y `pickle_fallback`</text>
+
+  <!-- Left Panel: The Round-Trip Truth Table -->
+  <rect x="20" y="90" width="555" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="555" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#1e40af;">1. La Tabla de la Verdad del Viaje de Ida y Vuelta (Round-Trip)</text>
+
+  <rect x="36" y="140" width="523" height="260" rx="8" fill="#0f172a"/>
+  <text x="52" y="164" class="mono" style="fill:#38bdf8;">Tipo al Entrar al Estado         → ¿Qué devuelve el Checkpointer al Leer?</text>
+  <text x="52" y="190" class="mono" style="fill:#4ade80;">dict / list / str / int / bool   → Idéntico (Tipos nativos msgpack/JSON)</text>
+  <text x="52" y="214" class="mono" style="fill:#4ade80;">HumanMessage / AIMessage         → Idéntico (Serializador lc_serializable)</text>
+  <text x="52" y="238" class="mono" style="fill:#fbbf24;">tuple: (10, 20)                  → ⚠️ list: [10, 20] (¡Pierde inmutabilidad!)</text>
+  <text x="52" y="262" class="mono" style="fill:#fbbf24;">dict con clave int: {1: "a"}     → ⚠️ {"1": "a"} en JSON (clave pasa a str)</text>
+  <text x="52" y="286" class="mono" style="fill:#f87171;">Pydantic BaseModel / dataclass   → ⚠️ Puede degradar a dict tras CVE-2026-28277</text>
+  <text x="52" y="310" class="mono" style="fill:#f87171;">set / datetime / Decimal / UUID  → Depende de ext msgpack; convierte a ISO/str</text>
+  <text x="52" y="334" class="mono" style="fill:#ef4444;">Generador / Socket / DB Session  → 💥 TypeError al guardar el checkpoint</text>
+  <rect x="52" y="348" width="491" height="38" rx="6" fill="#1e293b"/>
+  <text x="64" y="372" class="body" style="fill:#e2e8f0;font-size:11.5px;">💡 <tspan class="mono">InMemorySaver</tspan> también serializa con <tspan class="mono">JsonPlusSerializer</tspan>, pero valida siempre con Postgres.</text>
+
+  <!-- The Tuple & Pydantic Degradation Trap -->
+  <rect x="36" y="412" width="523" height="128" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="52" y="436" class="card-title" style="fill:#991b1b;">La Trampa Silenciosa del Segundo Turno (`state["modelo"].campo`):</text>
+  <text x="52" y="458" class="body" style="font-size:12px;">En el Turno 1, el nodo A crea `MiPydantic(x=1)` y el nodo B hace `state["m"].x` (funciona).</text>
+  <text x="52" y="478" class="body" style="font-size:12px;">En el Turno 2, al rehidratar desde el checkpointer con lista blanca estricta, `state["m"]`</text>
+  <text x="52" y="498" class="body" style="font-size:12px;">vuelve como `dict` y `state["m"].x` lanza <tspan class="mono" style="fill:#b91c1c;">AttributeError: 'dict' has no attribute 'x'</tspan>.</text>
+  <text x="52" y="522" class="mono" style="font-size:11.5px;fill:#15803d;">✅ Solución: guarda tipos primitivos/TypedDict en State, o re-instancia con Model.model_validate().</text>
+
+  <!-- Right Panel: Security (pickle_fallback) & CI Roundtrip Test -->
+  <rect x="590" y="90" width="510" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="590" y="90" width="510" height="38" rx="12" fill="#fee2e2"/>
+  <text x="606" y="114" class="panel-title" style="fill:#991b1b;">2. Seguridad (`pickle_fallback=False`) y Test de Contrato en CI</text>
+
+  <rect x="606" y="140" width="478" height="156" rx="8" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.5"/>
+  <text x="622" y="164" class="card-title" style="fill:#881337;">🚫 Por qué NUNCA debes activar `pickle_fallback=True` en Producción:</text>
+  <text x="622" y="188" class="body" style="font-size:12px;">• `pickle.loads()` permite <tspan style="font-weight:700;fill:#be123c;">Ejecución Remota de Código (RCE)</tspan> mediante `__reduce__`.</text>
+  <text x="622" y="210" class="body" style="font-size:12px;">• Además, si renombras una clase o actualizas una librería en el siguiente</text>
+  <text x="622" y="230" class="body" style="font-size:12px;">  despliegue, todos los checkpoints antiguos en Postgres quedan ilegibles.</text>
+  <text x="622" y="254" class="body" style="font-size:12px;">• Por la misma razón existe <tspan class="mono" style="fill:#881337;">CVE-2026-28277</tspan>: el deserializador bloquea la</text>
+  <text x="622" y="274" class="body" style="font-size:12px;">  instanciación arbitraria de clases fuera de la lista blanca (`allowed_msgpack_modules`).</text>
+
+  <rect x="606" y="310" width="478" height="230" rx="8" fill="#0f172a"/>
+  <text x="622" y="334" class="card-title" style="fill:#38bdf8;">El Test de 6 Líneas que Todo Proyecto LangGraph Debe Tener en CI:</text>
+  <text x="622" y="360" class="mono" style="fill:#4ade80;">def test_estado_sobrevive_roundtrip():</text>
+  <text x="622" y="382" class="mono" style="fill:#f8fafc;">    serde = JsonPlusSerializer()</text>
+  <text x="622" y="402" class="mono" style="fill:#f8fafc;">    estado_ejemplo = crear_estado_completo_de_prueba()</text>
+  <text x="622" y="422" class="mono" style="fill:#fbbf24;">    tipo, bytes_blob = serde.dumps_typed(estado_ejemplo)</text>
+  <text x="622" y="442" class="mono" style="fill:#fbbf24;">    recuperado = serde.loads_typed((tipo, bytes_blob))</text>
+  <text x="622" y="462" class="mono" style="fill:#4ade80;">    assert recuperado == estado_ejemplo</text>
+  <text x="622" y="482" class="mono" style="fill:#c084fc;">    assert len(bytes_blob) &lt; 64_000  # Presupuesto &lt; 64 KB por paso</text>
+  <text x="622" y="516" class="body" style="fill:#94a3b8;font-size:11.5px;">Vigila el tamaño en bytes: guardar PDFs o imágenes en Base64 dentro de `State`</text>
+  <text x="622" y="532" class="body" style="fill:#94a3b8;font-size:11.5px;">multiplica el tamaño por el número de super-pasos. Guarda solo la URI a S3/GCS.</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Regla de Higiene: Tu State debe contener solo JSON puro + Mensajes de LangChain. Para archivos grandes, guarda punteros (URIs).</text>
+</svg>

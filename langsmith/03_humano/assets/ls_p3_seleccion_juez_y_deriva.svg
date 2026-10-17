@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">PROYECTO P3: SELECCIÓN CIENTÍFICA DE UN JUEZ EN PRODUCCIÓN Y DERIVA</text>
+  <text x="48" y="69" class="subtitle">Evaluación de 4 candidatos en dev/holdout con frontera coste-calidad y detección de deriva (judge drift) ante nuevos fallos</text>
+
+  <!-- Panel 1: Partición y Comparativa de los 4 Candidatos -->
+  <rect x="28" y="98" width="600" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Los 4 Candidatos Evaluados sobre Split Holdout</text>
+  <text x="46" y="146" class="small-text">Partición estratificada previa: <tspan class="mono">dev (60%)</tspan> para redactar rúbrica y</text>
+  <text x="46" y="162" class="small-text">extraer ejemplos few-shot; <tspan class="mono">holdout (40%)</tspan> intocable para decidir:</text>
+
+  <!-- Table of 4 Candidates -->
+  <rect x="46" y="178" width="564" height="236" rx="8" fill="#0f172a"/>
+  <text x="62" y="204" class="mono" font-size="11" fill="#94a3b8">Candidato                   | TPR   | TNR   | Kappa | Coste / 10k trazas</text>
+  <line x1="62" y1="214" x2="594" y2="214" stroke="#334155" stroke-width="1"/>
+
+  <text x="62" y="240" class="mono" font-size="11" fill="#f87171">C1 · Mini + Rúbrica Vaga    | 0.96  | 0.32  | 0.31  | $1.20  (Complaciente)</text>
+  <text x="62" y="272" class="mono" font-size="11" fill="#fde047">C2 · Mini + Rúbrica Estricta| 0.91  | 0.74  | 0.66  | $1.45  (Salto gratis)</text>
+  <text x="62" y="304" class="mono" font-size="11" fill="#4ade80" font-weight="700">C3 · Mini + Rúbrica + 4 Shot| 0.93  | 0.86  | 0.79  | $2.10  ★ GANADOR</text>
+  <text x="62" y="336" class="mono" font-size="11" fill="#38bdf8">C4 · Modelo Grande + 4 Shot | 0.94  | 0.88  | 0.81  | $28.50 (13× más caro)</text>
+
+  <rect x="62" y="356" width="532" height="44" rx="6" fill="#1e293b"/>
+  <text x="76" y="382" class="mono" font-size="11" fill="#6ee7b7">Decisión: C3 alcanza κ=0.79 y TNR=0.86 por 1/13 del coste de C4.</text>
+
+  <rect x="46" y="428" width="564" height="198" class="card-green"/>
+  <text x="62" y="450" class="card-title" fill="#047857">Por Qué Escribir el Criterio de Aceptación ANTES de Correr</text>
+  <text x="62" y="472" class="body-text">Antes de mirar qué modelo gana, fija por contrato los umbrales mínimos:</text>
+  <text x="62" y="494" class="mono" font-size="11" fill="#065f46">1. κ_holdout &gt;= 0.70   (Acuerdo sustancial más allá del azar)</text>
+  <text x="62" y="514" class="mono" font-size="11" fill="#065f46">2. TNR_holdout &gt;= 0.80 (Detecta al menos 4 de cada 5 fallos reales)</text>
+  <text x="62" y="534" class="mono" font-size="11" fill="#065f46">3. TPR_holdout &gt;= 0.85 (Baja tasa de falsas alarmas al equipo)</text>
+  <text x="62" y="554" class="mono" font-size="11" fill="#065f46">4. Coste mensual &lt;= Presupuesto asignado al muestreo online</text>
+  <text x="62" y="580" class="small-text">Entre todos los candidatos que superan las 4 barreras, elige el de menor</text>
+  <text x="62" y="596" class="small-text">coste/latencia (Principio de Parsimonia Operativa).</text>
+
+  <!-- Panel 2: El Juez se Desalinea Solo (Judge Drift) -->
+  <rect x="644" y="98" width="608" height="544" class="panel"/>
+  <text x="662" y="126" class="panel-title">2. Por Qué un Juez Calibrado se Desalinea Solo en Producción</text>
+
+  <rect x="662" y="144" width="572" height="162" class="card-red"/>
+  <text x="678" y="166" class="card-title" fill="#b91c1c">Anatomía de la Deriva del Juez (Judge Concept Drift)</text>
+  <text x="678" y="188" class="small-text">Tu juez <tspan class="mono">C3</tspan> aprendió a cazar los fallos que existían en Octubre (inventar</text>
+  <text x="678" y="204" class="small-text">plazos de envío y olvidar pedir el ID). En Noviembre lanzas una nueva</text>
+  <text x="678" y="220" class="small-text">función de <tspan font-weight="700">cambios de talla internacionales</tspan>:</text>
+  <text x="678" y="244" class="small-text">• El agente empieza a cometer una <tspan font-weight="700" fill="#b91c1c">nueva familia de fallo</tspan> (aplicar política</text>
+  <text x="678" y="260" class="small-text">  nacional a envíos con aduana).</text>
+  <text x="678" y="278" class="small-text">• Como ni la rúbrica ni los 4 few-shots de C3 contemplan aduanas, el juez</text>
+  <text x="678" y="294" class="small-text">  les da <tspan class="mono">score=1</tspan>: <tspan font-weight="700" fill="#b91c1c">tu TNR en producción cae de 0.86 a 0.45 en silencio.</tspan></text>
+
+  <rect x="662" y="320" width="572" height="166" class="card-blue"/>
+  <text x="678" y="342" class="card-title" fill="#1d4ed8">Auditoría Continua del Juez (Canary Human Loop)</text>
+  <text x="678" y="364" class="small-text">1. Cada semana, envía una pequeña muestra (<tspan class="mono">30–50 trazas</tspan>) ya puntuadas por</text>
+  <text x="678" y="380" class="small-text">   el juez en línea a la Cola de Anotación Humana (incluyendo trazas donde el</text>
+  <text x="678" y="396" class="small-text">   juez dijo <tspan class="mono">1</tspan> pero el usuario dio 👎 o hubo recontacto).</text>
+  <text x="678" y="418" class="small-text">2. Recalcula <tspan class="mono">κ_semana</tspan> y <tspan class="mono">TNR_semana</tspan> sobre esa ventana reciente.</text>
+  <text x="678" y="440" class="small-text">3. Si <tspan class="mono">TNR_semana &lt; 0.75</tspan>, incorpora los nuevos desacuerdos al set de</text>
+  <text x="678" y="456" class="small-text">   calibración y publica la versión <tspan class="mono">juez_v2</tspan>.</text>
+
+  <rect x="662" y="500" width="572" height="126" class="card-amber"/>
+  <text x="678" y="522" class="card-title" fill="#b45309">Regla de Versionado del Propio Evaluador</text>
+  <text x="678" y="544" class="small-text">Un Juez LLM es código de producción: versiona su prompt en el Hub o en Git</text>
+  <text x="678" y="560" class="small-text">y emite su versión en la clave o metadato del feedback (<tspan class="mono">fidelidad_v2</tspan>).</text>
+  <text x="678" y="580" class="small-text">Nunca cambies el prompt de un juez en línea sin cambiar su etiqueta de versión,</text>
+  <text x="678" y="596" class="small-text">o creerás que el agente empeoró cuando en realidad endureciste al juez.</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Un Juez LLM no se calibra una sola vez: audita semanalmente su TNR con una muestra humana de trazas recientes.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 03 · Proyecto P3</text>
+</svg>

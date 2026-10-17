@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 520" width="100%" height="520">
+  <style>
+    text { stroke: none !important; font-family: 'Segoe UI', system-ui, sans-serif; text-rendering: geometricPrecision; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; }
+  </style>
+  <rect width="1040" height="520" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2" />
+  <rect width="1040" height="70" rx="16" fill="#0f172a" />
+  <rect y="48" width="1040" height="22" fill="#0f172a" />
+  <text x="36" y="34" font-size="21" font-weight="700" fill="#ffffff">CONVENCIONES SEMÁNTICAS GENAI DE OPENTELEMETRY (MÓDULO 04)</text>
+  <text x="36" y="56" font-size="14" fill="#cbd5e1">Vocabulario estándar para jerarquía de spans, niveles de requisito y contabilidad de tokens (incluyendo caché)</text>
+
+  <!-- Left Panel: Span Tree Model -->
+  <rect x="26" y="88" width="490" height="406" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" />
+  <text x="46" y="118" font-size="17" font-weight="700" fill="#0f172a">1. Jerarquía de Spans en SupportOps (Spec GenAI)</text>
+
+  <!-- Root Span -->
+  <rect x="46" y="136" width="450" height="88" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2.5" />
+  <rect x="60" y="148" width="136" height="24" rx="5" fill="#7c3aed" />
+  <text x="128" y="165" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">SPAN RAÍZ · INTERNAL</text>
+  <text x="208" y="165" font-size="15" font-weight="700" fill="#0f172a" class="mono">invoke_agent supportops-agent</text>
+  <text x="60" y="190" font-size="13" fill="#334155" class="mono">gen_ai.operation.name = "invoke_agent"</text>
+  <text x="60" y="210" font-size="13" fill="#334155" class="mono">gen_ai.agent.name = "supportops-agent"</text>
+
+  <!-- Connector lines -->
+  <path d="M 80 224 L 80 398" stroke="#64748b" stroke-width="2.5" />
+  <path d="M 80 290 L 106 290" stroke="#64748b" stroke-width="2.5" />
+  <path d="M 80 398 L 106 398" stroke="#64748b" stroke-width="2.5" />
+
+  <!-- Child 1: LLM Chat -->
+  <rect x="106" y="242" width="390" height="96" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2.5" />
+  <rect x="120" y="254" width="126" height="24" rx="5" fill="#2563eb" />
+  <text x="183" y="271" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">HIJO LLM · CLIENT</text>
+  <text x="258" y="271" font-size="15" font-weight="700" fill="#0f172a" class="mono">chat mock-small</text>
+  <text x="120" y="296" font-size="13" fill="#1e3a8a" class="mono">gen_ai.provider.name = "mock" | request.model</text>
+  <text x="120" y="314" font-size="13" fill="#1e3a8a" class="mono">gen_ai.usage.input_tokens / output_tokens</text>
+  <text x="120" y="330" font-size="13" fill="#1e3a8a" class="mono">gen_ai.response.finish_reasons = ["tool_calls"]</text>
+
+  <!-- Child 2: Execute Tool -->
+  <rect x="106" y="352" width="390" height="92" rx="10" fill="#fffbeb" stroke="#d97706" stroke-width="2.5" />
+  <rect x="120" y="364" width="136" height="24" rx="5" fill="#d97706" />
+  <text x="188" y="381" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">HIJO TOOL · INTERNAL</text>
+  <text x="268" y="381" font-size="15" font-weight="700" fill="#0f172a" class="mono">execute_tool get_order</text>
+  <text x="120" y="406" font-size="13" fill="#78350f" class="mono">gen_ai.operation.name = "execute_tool"</text>
+  <text x="120" y="426" font-size="13" fill="#78350f" class="mono">gen_ai.tool.name = "get_order" | call.id = "c1"</text>
+
+  <text x="46" y="476" font-size="13" font-weight="600" fill="#475569">Regla del nombre: "{gen_ai.operation.name} {target}" (baja cardinalidad)</text>
+
+  <!-- Right Panel: Requirement Levels & Token Trap -->
+  <rect x="536" y="88" width="478" height="406" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="2" />
+  <text x="556" y="118" font-size="17" font-weight="700" fill="#0f172a">2. Niveles de Requisito y Contabilidad de Tokens</text>
+
+  <rect x="556" y="136" width="438" height="44" rx="8" fill="#fef2f2" stroke="#dc2626" stroke-width="2" />
+  <rect x="568" y="146" width="104" height="24" rx="4" fill="#dc2626" />
+  <text x="620" y="163" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">REQUIRED</text>
+  <text x="684" y="163" font-size="13" font-weight="600" fill="#7f1d1d" class="mono">gen_ai.operation.name, gen_ai.provider.name</text>
+
+  <rect x="556" y="190" width="438" height="44" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="2" />
+  <rect x="568" y="200" width="128" height="24" rx="4" fill="#ea580c" />
+  <text x="632" y="217" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">COND. REQUIRED</text>
+  <text x="708" y="217" font-size="13" font-weight="600" fill="#7c2d12" class="mono">gen_ai.request.model, error.type (si falla)</text>
+
+  <rect x="556" y="244" width="438" height="44" rx="8" fill="#f0fdf4" stroke="#16a34a" stroke-width="2" />
+  <rect x="568" y="254" width="118" height="24" rx="4" fill="#16a34a" />
+  <text x="627" y="271" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">RECOMMENDED</text>
+  <text x="698" y="271" font-size="13" font-weight="600" fill="#14532d" class="mono">gen_ai.usage.input_tokens, output_tokens</text>
+
+  <rect x="556" y="298" width="438" height="44" rx="8" fill="#f1f5f9" stroke="#64748b" stroke-width="2" />
+  <rect x="568" y="308" width="88" height="24" rx="4" fill="#475569" />
+  <text x="612" y="325" font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">OPT-IN</text>
+  <text x="668" y="325" font-size="13" font-weight="600" fill="#334155" class="mono">gen_ai.input.messages / output.messages (PII)</text>
+
+  <!-- Token Cache Warning Box -->
+  <rect x="556" y="356" width="438" height="122" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2.5" />
+  <text x="572" y="382" font-size="15" font-weight="700" fill="#1e3a8a">⚠️ La Trampa de los Tokens de Caché en Facturación</text>
+  <text x="572" y="406" font-size="13" font-weight="600" fill="#1e40af">En la spec GenAI, input_tokens es el TOTAL de entrada:</text>
+  <text x="572" y="428" font-size="13" font-weight="700" fill="#0f172a" class="mono">input_tokens = no_cacheados + cache_read + cache_creation</text>
+  <text x="572" y="450" font-size="13" fill="#334155">• cache_read.input_tokens se cobra ~0.1× el precio base.</text>
+  <text x="572" y="468" font-size="13" fill="#334155">• cache_creation.input_tokens se cobra ~1.25× el precio base.</text>
+</svg>

@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">EVALUAR LA TRAYECTORia, NO SOLO LA RESPUESTA: AGENTEVALS (27)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Por qué un agente que acierta por casualidad en tests explota en producción: los 4 modos de coincidencia y trayectorias de nodos</text>
+
+  <!-- Left Panel: The 4 Trajectory Match Modes in agentevals -->
+  <rect x="20" y="90" width="535" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="535" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#1e40af;">1. Los 4 Modos de `trajectory_match_mode` en `agentevals`</text>
+
+  <text x="36" y="144" class="body">Referencia esperada: <tspan class="mono" style="fill:#1d4ed8;">[verificar_identidad, consultar_pedido, emitir_reembolso]</tspan></text>
+
+  <rect x="36" y="158" width="503" height="84" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="52" y="180" class="card-title" style="fill:#1e40af;">1. `strict` (Mismo orden exacto y sin llamadas extra)</text>
+  <text x="52" y="200" class="body" style="font-size:12px;">Exige igualdad 1:1 paso a paso. Ideal para flujos regulados donde el orden</text>
+  <text x="52" y="218" class="body" style="font-size:12px;">(`verificar_identidad` ANTES de `emitir_reembolso`) es una regla de seguridad.</text>
+
+  <rect x="36" y="252" width="503" height="84" rx="8" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="52" y="274" class="card-title" style="fill:#5b21b6;">2. `unordered` (Mismas herramientas, cualquier orden)</text>
+  <text x="52" y="294" class="body" style="font-size:12px;">Ideal cuando el agente debe consultar 3 fuentes independientes (`ventas`, `stock`,</text>
+  <text x="52" y="312" class="body" style="font-size:12px;">`crm`) sin que importe cuál consulte primero, pero sin llamadas basura extra.</text>
+
+  <rect x="36" y="346" width="503" height="84" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="52" y="368" class="card-title" style="fill:#065f46;">3. `subset` / `superset` (Contiene las llamadas obligatorias)</text>
+  <text x="52" y="388" class="body" style="font-size:12px;">El agente debe haber llamado <tspan style="font-weight:700;">al menos</tspan> a las herramientas de la referencia,</text>
+  <text x="52" y="406" class="body" style="font-size:12px;">aunque haya hecho una búsqueda adicional en la base de conocimiento.</text>
+
+  <!-- Tool Args Match Mode -->
+  <rect x="36" y="442" width="503" height="98" rx="8" fill="#0f172a"/>
+  <text x="52" y="466" class="card-title" style="fill:#38bdf8;">La Trampa de los Argumentos (`tool_args_match_mode`):</text>
+  <text x="52" y="490" class="mono" style="fill:#4ade80;font-size:11.5px;">• Argumentos deterministas (`order_id="P-104"`): exige exactitud (`exact`).</text>
+  <text x="52" y="512" class="mono" style="fill:#fbbf24;font-size:11.5px;">• Consultas de texto libre (`query="política devolución"`): usa `ignore` o</text>
+  <text x="52" y="530" class="mono" style="fill:#fbbf24;font-size:11.5px;">  comparador personalizado (`tool_args_match_overrides`) para evitar tests frágiles.</text>
+
+  <!-- Right Panel: Graph Node Trajectories vs Message Trajectories -->
+  <rect x="570" y="90" width="530" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#ede9fe"/>
+  <text x="586" y="114" class="panel-title" style="fill:#5b21b6;">2. Trayectorias de Grafo (Nodos) y Suite en 2 Niveles (CI vs. Pre-Prod)</text>
+
+  <text x="586" y="144" class="body">Muchos nodos de un `StateGraph` (routers, guardarraíles, subgrafos) no emiten</text>
+  <text x="586" y="164" class="body">`tool_calls`. Evalúa también la secuencia de nodos visitados:</text>
+
+  <rect x="586" y="178" width="498" height="142" rx="8" fill="#0f172a"/>
+  <text x="602" y="202" class="mono" style="fill:#38bdf8;">from agentevals.graph_trajectory.utils import (</text>
+  <text x="602" y="222" class="mono" style="fill:#38bdf8;">    extract_langgraph_trajectory_from_thread</text>
+  <text x="602" y="242" class="mono" style="fill:#38bdf8;">)</text>
+  <text x="602" y="266" class="mono" style="fill:#4ade80;">traj = extract_langgraph_trajectory_from_thread(graph, config)</text>
+  <text x="602" y="288" class="mono" style="fill:#fbbf24;"># traj["steps"] == [["__start__"], ["triaje"], ["investigar"], ["redactar"]]</text>
+  <text x="602" y="308" class="body" style="fill:#cbd5e1;font-size:11.5px;">Permite verificar invariantes duros: «Nunca pasar a `cobrar` sin pasar por `aprobacion`».</text>
+
+  <!-- Two-Tier CI Suite -->
+  <rect x="586" y="334" width="498" height="206" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="602" y="358" class="card-title">Arquitectura de la Suite de Evaluación en CI/CD:</text>
+
+  <rect x="602" y="372" width="466" height="74" rx="6" fill="#ecfdf5" stroke="#86efac" stroke-width="1.5"/>
+  <text x="616" y="394" class="card-title" style="fill:#166534;font-size:13px;">Tier 1 · En Cada Push / PR (Rápido, Determinista, $0):</text>
+  <text x="616" y="414" class="body" style="font-size:11.5px;">• `create_trajectory_match_evaluator` (`strict` / `subset`) + invariantes de nodos.</text>
+  <text x="616" y="432" class="body" style="font-size:11.5px;">• Bloquea cualquier cambio que salte una herramienta obligatoria o entre en bucle.</text>
+
+  <rect x="602" y="454" width="466" height="74" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="616" y="476" class="card-title" style="fill:#92400e;font-size:13px;">Tier 2 · Antes de Release /Cambio de Modelo (`create_trajectory_llm_as_judge`):</text>
+  <text x="616" y="496" class="body" style="font-size:11.5px;">• Evalúa casos abiertos donde existen múltiples caminos válidos para resolver el ticket.</text>
+  <text x="616" y="514" class="body" style="font-size:11.5px;">• Compara eficiencia (pasos y tokens) además de la calidad de la respuesta final.</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Un agente que dice «Reembolso procesado» sin haber llamado a emitir_reembolso pasa un test de texto, pero suspende el test de trayectoria.</text>
+</svg>

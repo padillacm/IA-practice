@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+    <marker id="arr12s" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arr12p" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">SUBGRAFOS: DOS PATRONES DE ANIDACIÓN Y MEMORIA PROPIA (12)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Esquema compartido vs. Esquema distinto (función puente), `checkpointer` heredado y salto con `Command.PARENT`</text>
+
+  <!-- Left Panel: Pattern A (Shared Keys) vs Pattern B (Different Schema Wrapper) -->
+  <rect x="20" y="90" width="535" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="20" y="90" width="535" height="38" rx="12" fill="#dbeafe"/>
+  <text x="36" y="114" class="panel-title" style="fill:#1e40af;">1. Las Dos Formas de Anidar un Subgrafo en un Grafo Padre</text>
+
+  <!-- Pattern A -->
+  <rect x="36" y="140" width="503" height="175" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <rect x="50" y="152" width="275" height="24" rx="5" fill="#2563eb"/>
+  <text x="187" y="168" text-anchor="middle" class="badge">Patrón A · Claves Compartidas (Directo)</text>
+  <text x="50" y="196" class="mono" style="fill:#1d4ed8;">parent_builder.add_node("sub", subgrafo_compilado)</text>
+  <text x="50" y="220" class="body">• Padre e hijo comparten al menos un canal (ej. <tspan class="mono">messages</tspan>).</text>
+  <text x="50" y="242" class="body">• El subgrafo puede tener canales privados adicionales que el padre no ve.</text>
+  <text x="50" y="264" class="body" style="fill:#991b1b;">⚠️ <tspan style="font-weight:700;">Cuidado:</tspan> si ambos comparten `messages` con `add_messages`, todo el ruido</text>
+  <text x="50" y="284" class="body" style="fill:#991b1b;">   interno de herramientas del subgrafo se vuelca en el historial del padre.</text>
+
+  <!-- Pattern B -->
+  <rect x="36" y="328" width="503" height="212" rx="8" fill="#f0fdf4" stroke="#10b981" stroke-width="2"/>
+  <rect x="50" y="340" width="315" height="24" rx="5" fill="#059669"/>
+  <text x="207" y="356" text-anchor="middle" class="badge">Patrón B · Esquemas Distintos (Nodo Envoltorio)</text>
+  <text x="50" y="382" class="body">• <tspan style="font-weight:700;fill:#065f46;">El favorito en Producción:</tspan> aislamiento total de contexto entre equipos.</text>
+  <rect x="50" y="396" width="475" height="96" rx="6" fill="#0f172a"/>
+  <text x="64" y="418" class="mono" style="fill:#38bdf8;">def llamar_investigador(state: ParentState) -&gt; dict:</text>
+  <text x="64" y="438" class="mono" style="fill:#4ade80;">    # 1. Traduce ParentState → SubState limpio</text>
+  <text x="64" y="458" class="mono" style="fill:#fbbf24;">    sub_out = subgrafo.invoke({"consulta": state["tema"]})</text>
+  <text x="64" y="478" class="mono" style="fill:#c084fc;">    # 2. Devuelve SOLO el resumen al padre (ahorra miles de tokens)</text>
+  <text x="50" y="516" class="body" style="font-size:12px;fill:#14532d;">✅ El padre no se entera de las 8 llamadas a herramientas que hizo el hijo.</text>
+
+  <!-- Right Panel: Checkpointer Inheritance & Command.PARENT -->
+  <rect x="570" y="90" width="530" height="465" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <rect x="570" y="90" width="530" height="38" rx="12" fill="#ede9fe"/>
+  <text x="586" y="114" class="panel-title" style="fill:#5b21b6;">2. Persistencia en Subgrafos y Salto con `Command.PARENT`</text>
+
+  <!-- Checkpointer rules table -->
+  <rect x="586" y="140" width="498" height="205" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="602" y="164" class="card-title">Regla del Checkpointer en Subgrafos (`compile(checkpointer=...)`):</text>
+
+  <rect x="602" y="178" width="466" height="50" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="614" y="198" class="mono" style="fill:#1d4ed8;">1. sub.compile()  (Por defecto: checkpointer=None)</text>
+  <text x="614" y="216" class="body" style="font-size:11.5px;">Hereda el checkpointer del padre automáticamente (permite `interrupt()` dentro del hijo).</text>
+
+  <rect x="602" y="236" width="466" height="50" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="614" y="256" class="mono" style="fill:#5b21b6;">2. sub.compile(checkpointer=True)</text>
+  <text x="614" y="274" class="body" style="font-size:11.5px;">Activa <tspan style="font-weight:700;">memoria privada con estado entre turnos</tspan> para ese subgrafo dentro del mismo hilo.</text>
+
+  <rect x="602" y="294" width="466" height="40" rx="6" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="614" y="318" class="mono" style="fill:#b45309;font-size:11.5px;">3. sub.compile(checkpointer=False) → Ejecución atómica sin checkpoints internos.</text>
+
+  <!-- Command.PARENT -->
+  <rect x="586" y="358" width="498" height="182" rx="8" fill="#0f172a"/>
+  <text x="602" y="382" class="card-title" style="fill:#38bdf8;">Saltar desde un Nodo del Hijo a otro Nodo del Padre (`Command.PARENT`):</text>
+  <text x="602" y="408" class="mono" style="fill:#4ade80;">def nodo_dentro_del_subgrafo(state: SubState) -&gt; Command:</text>
+  <text x="602" y="430" class="mono" style="fill:#f8fafc;">    return Command(</text>
+  <text x="602" y="450" class="mono" style="fill:#fbbf24;">        graph=Command.PARENT,              # Sube un nivel en la jerarquía</text>
+  <text x="602" y="470" class="mono" style="fill:#c084fc;">        update={"alerta_fraude": True},    # Actualiza canal del PADRE</text>
+  <text x="602" y="490" class="mono" style="fill:#38bdf8;">        goto="escalar_a_seguridad"         # Salta a un nodo del PADRE</text>
+  <text x="602" y="510" class="mono" style="fill:#f8fafc;">    )</text>
+  <text x="602" y="530" class="body" style="fill:#94a3b8;font-size:11.5px;">Base fundamental de los *handoffs* entre agentes especialistas en el patrón Enjambre.</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">No uses un subgrafo si no hay ni bucle propio, ni esquema aislado, ni reutilización: una simple función nodo es más fácil de depurar.</text>
+</svg>

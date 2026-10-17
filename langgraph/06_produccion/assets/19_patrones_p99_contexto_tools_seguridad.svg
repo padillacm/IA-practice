@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 630" width="100%">
+  <defs>
+    <style>
+    text {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 21px; font-weight: 800; fill: #0f172a; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #1e293b; }
+    .card-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+    .body { font-size: 12.5px; font-weight: 500; fill: #334155; }
+    .mono { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; font-weight: 600; stroke: none !important; }
+    .badge { font-size: 11.5px; font-weight: 700; fill: #ffffff; }
+</style>
+  </defs>
+  <rect width="1120" height="630" rx="16" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+  <rect x="20" y="18" width="1080" height="58" rx="10" fill="#0f172a"/>
+  <text x="40" y="44" class="title" style="fill:#ffffff;">PATRONES DEL P99: INGENIERÍA DE CONTEXTO, 100+ TOOLS Y SEGURIDAD (19)</text>
+  <text x="40" y="64" class="subtitle" style="fill:#94a3b8;">Lo que diferencia una demo que funciona el 80% de las veces de un agente en producción fiable en el percentil 99</text>
+
+  <!-- 2x2 Grid of p99 Engineering Pillars -->
+  <!-- Pillar 1: Context Engineering & Prompt Cache Hygiene -->
+  <rect x="20" y="90" width="535" height="225" rx="12" fill="#ffffff" stroke="#3b82f6" stroke-width="2"/>
+  <rect x="20" y="90" width="535" height="36" rx="12" fill="#2563eb"/>
+  <text x="36" y="113" class="badge" style="font-size:13.5px;">1. Ingeniería de Contexto y Caché de Prefijo (KV-Cache)</text>
+  <text x="36" y="144" class="body">• <tspan style="font-weight:700;">Orden inmutable del prompt:</tspan> `[System Estático + Tools Estáticas] → [Mensajes]`.</text>
+  <text x="36" y="166" class="body">• Si cambias la lista de herramientas o metes un timestamp en el System Prompt en</text>
+  <text x="36" y="184" class="body">  cada giro, invalidas la caché del proveedor (+4× latencia TTFT y +5× coste).</text>
+  <rect x="36" y="198" width="503" height="100" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="50" y="220" class="card-title" style="fill:#1e40af;font-size:12.5px;">Descarga de ToolMessages Gigantes (Offloading):</text>
+  <text x="50" y="240" class="body" style="font-size:11.5px;">Si una herramienta devuelve 40 KB de JSON, guarda el payload crudo en un canal</text>
+  <text x="50" y="258" class="body" style="font-size:11.5px;">aparte o fichero y mete en el `ToolMessage` solo un resumen + las primeras 20 filas.</text>
+  <text x="50" y="280" class="mono" style="font-size:11px;fill:#1d4ed8;">Evita el fenómeno "Lost in the Middle" y mantiene la latencia constante.</text>
+
+  <!-- Pillar 2: Scaling to 50-200 Tools -->
+  <rect x="570" y="90" width="530" height="225" rx="12" fill="#ffffff" stroke="#8b5cf6" stroke-width="2"/>
+  <rect x="570" y="90" width="530" height="36" rx="12" fill="#7c3aed"/>
+  <text x="586" y="113" class="badge" style="font-size:13.5px;">2. Escalar más allá de 20 Herramientas: Búsqueda Semántica de Tools</text>
+  <text x="586" y="144" class="body">Ningún LLM elige bien entre 120 herramientas planas. Tres soluciones probadas:</text>
+  <rect x="586" y="158" width="498" height="140" rx="6" fill="#f5f3ff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text x="600" y="182" class="body" style="font-size:12px;">1. <tspan style="font-weight:700;fill:#5b21b6;">Nodo `seleccionar_tools` previo:</tspan> indexa las descripciones de las 120 tools</text>
+  <text x="600" y="200" class="body" style="font-size:12px;">   y hace `bind_tools(top_5_relevantes)` para ese turno.</text>
+  <text x="600" y="224" class="body" style="font-size:12px;">2. <tspan style="font-weight:700;fill:#5b21b6;">Meta-Herramienta `buscar_herramientas(query)`:</tspan> el agente empieza con</text>
+  <text x="600" y="242" class="body" style="font-size:12px;">   3 tools núcleo y pide activar más herramientas bajo demanda en el estado.</text>
+  <text x="600" y="266" class="body" style="font-size:12px;">3. <tspan style="font-weight:700;fill:#5b21b6;">División por Especialistas (Mód 13):</tspan> cada subagente tiene ≤ 8 herramientas.</text>
+
+  <!-- Pillar 3: Security & Untrusted Content Boundary -->
+  <rect x="20" y="330" width="535" height="225" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="2"/>
+  <rect x="20" y="330" width="535" height="36" rx="12" fill="#dc2626"/>
+  <text x="36" y="353" class="badge" style="font-size:13.5px;">3. Seguridad: La Regla de la Tríada Letal (Simon Willison)</text>
+  <text x="36" y="384" class="body">El peligro máximo ocurre cuando un mismo agente combina a la vez:</text>
+  <rect x="36" y="396" width="503" height="72" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="50" y="418" class="mono" style="fill:#991b1b;">① Acceso a datos privados  +  ② Exposición a texto no confiable (web/email/RAG)</text>
+  <text x="50" y="440" class="mono" style="fill:#991b1b;">+ ③ Capacidad de exfiltración o acción externa (enviar email / HTTP / SQL write)</text>
+  <text x="50" y="458" class="body" style="font-size:11.5px;fill:#7f1d1d;">👉 Rompe siempre al menos un eslabón: exige `interrupt()` humano o validación determinista en ③.</text>
+  <text x="36" y="492" class="body" style="font-size:12px;">• <tspan style="font-weight:700;">Autorización en código, nunca en el prompt:</tspan> el `ToolRuntime` comprueba permisos</text>
+  <text x="36" y="512" class="body" style="font-size:12px;">  contra `runtime.context.user_id` antes de ejecutar cualquier mutación.</text>
+
+  <!-- Pillar 4: Determinism, Idempotency & Advanced Patterns -->
+  <rect x="570" y="330" width="530" height="225" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2"/>
+  <rect x="570" y="330" width="530" height="36" rx="12" fill="#059669"/>
+  <text x="586" y="353" class="badge" style="font-size:13.5px;">4. Idempotencia en Reintentos y Cuándo Usar Plan-and-Execute</text>
+  <text x="586" y="384" class="body">• <tspan style="font-weight:700;">Claves de Idempotencia:</tspan> deriva `idempotency_key = sha256(thread_id + step + call_id)`</text>
+  <text x="586" y="404" class="body">  para que un reintento de nodo nunca duplique un cargo ni cree dos tickets.</text>
+  <rect x="586" y="418" width="498" height="120" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="600" y="440" class="card-title" style="fill:#065f46;font-size:13px;">¿Cuándo compensa Reflexión o Plan-and-Execute?</text>
+  <text x="600" y="462" class="body" style="font-size:11.5px;">• <tspan style="font-weight:700;">Reflexión (Generador → Crítico):</tspan> solo cuando el verificador es <tspan style="font-weight:700;">determinista</tspan></text>
+  <text x="600" y="480" class="body" style="font-size:11.5px;">  (compilador, linter, validador SQL/JSON). Reflexionar sin señal externa solo encarece.</text>
+  <text x="600" y="502" class="body" style="font-size:11.5px;">• <tspan style="font-weight:700;">Plan-and-Execute:</tspan> tareas de +10 pasos donde un modelo Pro planifica y un</text>
+  <text x="600" y="520" class="body" style="font-size:11.5px;">  modelo Mini ejecuta cada paso del plan.</text>
+
+  <!-- Bottom Banner -->
+  <rect x="20" y="568" width="1080" height="44" rx="10" fill="#0f172a"/>
+  <text x="560" y="595" text-anchor="middle" class="body" style="fill:#f8fafc;font-weight:600;">Regla del p99: El prompt aconseja al modelo; el código del nodo y las aristas del grafo imponen la ley.</text>
+</svg>

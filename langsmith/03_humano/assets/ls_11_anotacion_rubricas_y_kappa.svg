@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+
+  <style>
+    svg {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+    }
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+      text-rendering: geometricPrecision;
+    }
+    .title { font-size: 24px; font-weight: 800; fill: #0f172a; letter-spacing: -0.3px; }
+    .subtitle { font-size: 13.5px; font-weight: 500; fill: #475569; }
+    .panel-title { font-size: 15.5px; font-weight: 700; fill: #0f172a; }
+    .card-title { font-size: 13.5px; font-weight: 700; fill: #0f172a; }
+    .body-text { font-size: 12px; font-weight: 500; fill: #334155; }
+    .small-text { font-size: 11px; font-weight: 500; fill: #475569; }
+    .badge-text { font-size: 11px; font-weight: 700; }
+    .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+    .card-blue { fill: #eff6ff; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+    .card-green { fill: #f0fdf4; stroke: #10b981; stroke-width: 1.5; rx: 8; }
+    .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 1.5; rx: 8; }
+    .card-red { fill: #fef2f2; stroke: #ef4444; stroke-width: 1.5; rx: 8; }
+    .card-purple { fill: #faf5ff; stroke: #8b5cf6; stroke-width: 1.5; rx: 8; }
+    .card-slate { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.5; rx: 8; }
+    .footer-box { fill: #0f172a; rx: 10; }
+    .footer-text { font-size: 13px; font-weight: 600; fill: #f8fafc; }
+    .footer-hl { fill: #38bdf8; font-weight: 700; }
+
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -28; }
+    }
+    @keyframes pktMoveRight {
+      0% { transform: translateX(0px); opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { transform: translateX(220px); opacity: 0; }
+    }
+    .anim-dash {
+      stroke-dasharray: 8 6;
+      animation: flowDash 1.1s linear infinite;
+    }
+    .anim-pulse {
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+  <!-- Header -->
+  <rect x="28" y="18" width="1224" height="66" rx="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="48" y="47" class="title">COLAS DE ANOTACIÓN, RÚBRICAS BINARIAS Y ACUERDO INTER-ANOTADOR (MÓDULO 11)</text>
+  <text x="48" y="69" class="subtitle">Por qué el porcentaje de acuerdo miente bajo desbalanceo y cómo calcular κ de Cohen y α de Krippendorff</text>
+
+  <!-- Panel 1: Annotation Queues & Rubric Design -->
+  <rect x="28" y="98" width="400" height="544" class="panel"/>
+  <text x="46" y="126" class="panel-title">1. Cola de Anotación vs Enlaces por Slack</text>
+
+  <rect x="46" y="144" width="364" height="122" class="card-blue"/>
+  <text x="62" y="166" class="card-title" fill="#1d4ed8">Qué Resuelve una Annotation Queue</text>
+  <text x="62" y="188" class="small-text">• <tspan font-weight="700">Reserva atómica:</tspan> dos expertos no pisan el mismo</text>
+  <text x="62" y="204" class="small-text">  caso por accidente (salvo muestra de solape deliberada).</text>
+  <text x="62" y="222" class="small-text">• <tspan font-weight="700">Esquema de feedback fijo:</tspan> obliga a rellenar las</text>
+  <text x="62" y="238" class="small-text">  claves de la rúbrica (<tspan class="mono">fidelidad: 0/1</tspan>) y el <tspan class="mono">correction</tspan>.</text>
+  <text x="62" y="256" class="small-text">• <tspan font-weight="700">Un clic a Dataset:</tspan> envía el caso curado al Golden Set.</text>
+
+  <rect x="46" y="280" width="364" height="196" class="card-green"/>
+  <text x="62" y="302" class="card-title" fill="#047857">Diseño de Rúbrica: Para que Dos Humanos Coincidan</text>
+  <text x="62" y="324" class="small-text" fill="#b91c1c" font-weight="700">❌ Mala Rúbrica: «Puntúa la calidad del 1 al 5»</text>
+  <text x="62" y="340" class="small-text">Un anotador estricto da 3 y uno laxo da 5 al mismo texto.</text>
+  <text x="62" y="364" class="small-text" fill="#047857" font-weight="700">✅ Buena Rúbrica: Dimensiones Binarias Atómicas (0 / 1)</text>
+  <text x="62" y="382" class="small-text">1. <tspan class="mono">fidelidad_hechos (0/1):</tspan> ¿Toda cifra/plazo citado</text>
+  <text x="62" y="398" class="small-text">   aparece literalmente en el output de la herramienta?</text>
+  <text x="62" y="416" class="small-text">2. <tspan class="mono">resolucion_completa (0/1):</tspan> ¿Respondió la pregunta</text>
+  <text x="62" y="432" class="small-text">   principal o ejecutó la acción pedida?</text>
+  <text x="62" y="450" class="small-text">3. <tspan class="mono">tono_adecuado (0/1):</tspan> ¿Sin disculpas robóticas ni</text>
+  <text x="62" y="464" class="small-text">   culpar al usuario?</text>
+
+  <rect x="46" y="490" width="364" height="136" class="card-amber"/>
+  <text x="62" y="512" class="card-title" fill="#b45309">La Mitad de la Rúbrica que es Código</text>
+  <text x="62" y="534" class="small-text">No pidas a un humano caro comprobar si el JSON es válido</text>
+  <text x="62" y="550" class="small-text">o si el texto supera 200 palabras. Pre-filtra con código</text>
+  <text x="62" y="566" class="small-text">y envía a la cola humana <tspan font-weight="700">solo casos que pasaron las</tspan></text>
+  <text x="62" y="582" class="small-text"><tspan font-weight="700">validaciones sintácticas</tspan>. Tampoco sumes dimensiones</text>
+  <text x="62" y="598" class="small-text">distintas en una nota compuesta opaca.</text>
+
+  <!-- Panel 2: Por qué el % de Acuerdo Miente (Cohen's Kappa) -->
+  <rect x="444" y="98" width="416" height="544" class="panel"/>
+  <text x="462" y="126" class="panel-title">2. Por Qué el % de Acuerdo Miente: κ de Cohen</text>
+
+  <rect x="462" y="144" width="380" height="168" class="card-red"/>
+  <text x="478" y="166" class="card-title" fill="#b91c1c">La Trampa de la Prevalencia Desbalanceada</text>
+  <text x="478" y="188" class="small-text">Si el 90% de tus respuestas en producción son buenas (<tspan class="mono">1</tspan>)</text>
+  <text x="478" y="204" class="small-text">y dos anotadores etiquetan al azar con 90% de unos:</text>
+  <text x="478" y="226" class="mono" font-size="11.5" fill="#7f1d1d">P_azar (p_e) = 0.90×0.90 + 0.10×0.10 = 0.82 (82%)</text>
+  <text x="478" y="248" class="body-text" fill="#b91c1c" font-weight="700">¡Obtienen 82% de acuerdo sin siquiera leer el texto!</text>
+  <text x="478" y="268" class="small-text">Un «85% de coincidencia bruta» sobre datos desbalanceados</text>
+  <text x="478" y="284" class="small-text">es casi indistinguible de tirar una moneda sesgada.</text>
+
+  <rect x="462" y="326" width="380" height="164" class="card-purple"/>
+  <text x="478" y="348" class="card-title" fill="#5b21b6">Fórmula de κ de Cohen (2 Anotadores)</text>
+  <rect x="478" y="362" width="348" height="48" rx="6" fill="#0f172a"/>
+  <text x="652" y="392" text-anchor="middle" class="mono" font-size="13" fill="#4ade80">κ = ( p_observado - p_azar ) / ( 1 - p_azar )</text>
+  <text x="478" y="428" class="small-text">• <tspan class="mono" font-weight="700">κ &lt; 0.40:</tspan> Rúbrica rota — los humanos no se entienden.</text>
+  <text x="478" y="446" class="small-text">• <tspan class="mono" font-weight="700">0.40 ≤ κ &lt; 0.65:</tspan> Moderado — refinar casos ambiguos.</text>
+  <text x="478" y="464" class="small-text" fill="#047857">• <tspan class="mono" font-weight="700">κ ≥ 0.70:</tspan> Sólido — listo para alinear un Juez LLM.</text>
+  <text x="478" y="482" class="small-text">Para ≥3 anotadores o datos con huecos → <tspan class="mono" font-weight="700">α de Krippendorff</tspan>.</text>
+
+  <rect x="462" y="502" width="380" height="124" class="card-slate"/>
+  <text x="478" y="524" class="card-title">Techo Fundamental del Juez Automático</text>
+  <text x="478" y="546" class="body-text">Ningún Juez LLM puede superar el acuerdo que tienen</text>
+  <text x="478" y="564" class="body-text">dos humanos entre sí (<tspan class="mono">κ_juez_humano ≤ κ_humano_humano</tspan>).</text>
+  <text x="478" y="586" class="small-text">Si tu juez «no sube de 0.55», primero mide <tspan class="mono">κ</tspan> entre dos</text>
+  <text x="478" y="602" class="small-text">personas: casi siempre el problema está en la rúbrica.</text>
+
+  <!-- Panel 3: Muestreo para Anotación y Uso de Desacuerdos -->
+  <rect x="876" y="98" width="376" height="544" class="panel"/>
+  <text x="894" y="126" class="panel-title">3. Qué Casos Enviar a la Cola Humana</text>
+
+  <rect x="894" y="144" width="340" height="174" class="card-green"/>
+  <text x="910" y="166" class="card-title" fill="#047857">Muestreo Estratificado por Señal de Riesgo</text>
+  <text x="910" y="188" class="small-text">No anotes una muestra 100% aleatoria (95% serán casos</text>
+  <text x="910" y="204" class="small-text">triviales bien resueltos). Reparte tu presupuesto humano:</text>
+  <text x="910" y="226" class="small-text">• <tspan font-weight="700">40% Señal negativa:</tspan> 👎 de usuario, latencia alta,</text>
+  <text x="910" y="242" class="small-text">  más de 3 turnos o reintentos de herramienta.</text>
+  <text x="910" y="262" class="small-text">• <tspan font-weight="700">40% Incertidumbre del Juez:</tspan> casos donde el juez</text>
+  <text x="910" y="278" class="small-text">  dio baja confianza o discrepó con heurísticas.</text>
+  <text x="910" y="298" class="small-text">• <tspan font-weight="700">20% Muestra aleatoria pura:</tspan> vigila falsos positivos.</text>
+
+  <rect x="894" y="332" width="340" height="154" class="card-amber"/>
+  <text x="910" y="354" class="card-title" fill="#b45309">Los Desacuerdos Son Oro Puro (Sección 5)</text>
+  <text x="910" y="376" class="small-text">Cuando Anotador A dice <tspan class="mono">1</tspan> y Anotador B dice <tspan class="mono">0</tspan>:</text>
+  <text x="910" y="396" class="small-text">1. No hagas simplemente mayoría de votos sin mirar.</text>
+  <text x="910" y="414" class="small-text">2. Ese caso revela una <tspan font-weight="700">laguna en la política de negocio</tspan></text>
+  <text x="910" y="430" class="small-text">   (ej. ¿un pedido retrasado 24h merece cupón o no?).</text>
+  <text x="910" y="450" class="small-text">3. Resuélvelo y conviértelo en ejemplo canónico (<tspan class="mono">few-shot</tspan>)</text>
+  <text x="910" y="466" class="small-text">   tanto en la guía humana como en el prompt del Juez.</text>
+
+  <rect x="894" y="500" width="340" height="126" class="card-blue"/>
+  <text x="910" y="522" class="card-title" fill="#1d4ed8">Detector de Anotador Fatigado (Spammer)</text>
+  <text x="910" y="544" class="small-text">Mide por anotador: tiempo por etiqueta (&lt;3 seg = clic</text>
+  <text x="910" y="560" class="small-text">sin leer), varianza de sus notas (<tspan class="mono">99% unos</tspan>) y acuerdo</text>
+  <text x="910" y="576" class="small-text">contra 10 casos semilla con respuesta conocida (<tspan class="mono">gold</tspan>).</text>
+
+  <!-- Footer -->
+  <rect x="28" y="656" width="1224" height="46" class="footer-box"/>
+  <text x="48" y="684" class="footer-text"><tspan class="footer-hl">Regla de Ingeniería:</tspan> Mide siempre κ de Cohen en un subconjunto de solape (30–50 casos) antes de usar etiquetas humanas para entrenar o juzgar.</text>
+  <text x="1232" y="684" text-anchor="end" class="footer-text">Módulo 03 · Notebook 11</text>
+</svg>

@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+
+  <style>
+    text {
+      stroke: none !important;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      text-rendering: geometricPrecision;
+    }
+    .mono {
+      font-family: 'Consolas', 'Courier New', monospace;
+      stroke: none !important;
+    }
+    .card {
+      rx: 14px;
+      ry: 14px;
+    }
+    .badge {
+      rx: 8px;
+      ry: 8px;
+    }
+    @keyframes flowPulse {
+      0% { stroke-dashoffset: 36; }
+      100% { stroke-dashoffset: 0; }
+    }
+    @keyframes glowNode {
+      0%, 100% { opacity: 0.88; }
+      50% { opacity: 1; }
+    }
+    @keyframes bprPull {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(-22px, 14px); }
+    }
+    @keyframes bprPush {
+      0%, 100% { transform: translate(0px, 0px); }
+      50% { transform: translate(26px, 18px); }
+    }
+    .flow-line {
+      stroke-dasharray: 10 8;
+      animation: flowPulse 1.3s linear infinite;
+    }
+    .flow-fast {
+      stroke-dasharray: 8 6;
+      animation: flowPulse 0.85s linear infinite;
+    }
+    .pull-anim {
+      animation: bprPull 2.4s ease-in-out infinite;
+    }
+    .push-anim {
+      animation: bprPush 2.4s ease-in-out infinite;
+    }
+  </style>
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <filter id="shadow" x="-3%" y="-3%" width="106%" height="108%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#059669"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#7c3aed"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#ea580c"/>
+    </marker>
+    <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bgGrad)"/>
+  <!-- Header -->
+  <rect x="24" y="18" width="1232" height="76" rx="14" fill="url(#headerGrad)" filter="url(#shadow)"/>
+  <rect x="44" y="34" width="168" height="26" rx="6" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-width="1.2"/>
+  <text x="128" y="52" text-anchor="middle" fill="#38bdf8" font-size="12" font-weight="700">MÓDULO 06 · RANKING CTR</text>
+  <text x="230" y="50" fill="#ffffff" font-size="21" font-weight="800">RANKING COMO PREDICCIÓN DE CTR: DCN-v2, DIN, GBDT Y CALIBRACIÓN</text>
+  <text x="230" y="74" fill="#cbd5e1" font-size="13.5" font-weight="500">Cruces polinómicos explícitos (Cross Network), atención al candidato (DIN), contadores Point-in-Time y Calibración Isotónica</text>
+
+
+  <!-- Left Panel: DCN-v2 + DIN Architecture -->
+  <rect x="24" y="108" width="606" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="42" y="126" width="570" height="32" rx="8" fill="#eff6ff"/>
+  <text x="327" y="147" text-anchor="middle" fill="#1d4ed8" font-size="14.5" font-weight="800">1. Arquitecturas Neuronales de Ranking: DCN-v2 + DIN</text>
+
+  <!-- Input layer -->
+  <rect x="48" y="564" width="558" height="62" rx="10" fill="#f1f5f9" stroke="#64748b" stroke-width="1.5"/>
+  <text x="327" y="586" text-anchor="middle" fill="#0f172a" font-size="12.5" font-weight="800">Capa de Entrada x_0: Embeddings Categoriales + Densas Normalizadas log(1+x)</text>
+  <text x="327" y="608" text-anchor="middle" fill="#475569" font-size="11.5" class="mono">[ e_user || e_item || e_genre || DIN_att(hist, e_item) || log1p(ctr_pit) || hora ]</text>
+
+  <!-- Cross Network Tower -->
+  <rect x="48" y="310" width="268" height="226" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+  <rect x="64" y="324" width="236" height="26" rx="6" fill="#2563eb"/>
+  <text x="182" y="342" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">TORRE CROSS (DCN-v2)</text>
+  <rect x="60" y="362" width="244" height="38" rx="6" fill="#0f172a"/>
+  <text x="182" y="386" text-anchor="middle" fill="#38bdf8" font-size="11.5" class="mono">x_{l+1} = x_0 ⊙ (W_l x_l + b_l) + x_l</text>
+  <text x="64" y="422" fill="#1e3a8a" font-size="11.5">• Cruces explícitos acotados de grado l+1</text>
+  <text x="64" y="440" fill="#1e3a8a" font-size="11.5">  (ej. <tspan font-weight="700">edad × género_cine × viernes_noche</tspan>).</text>
+  <text x="64" y="460" fill="#1e3a8a" font-size="11.5">• Un MLP normal es pésimo aproximando</text>
+  <text x="64" y="478" fill="#1e3a8a" font-size="11.5">  productos escalares multiplicativos.</text>
+  <text x="64" y="502" fill="#2563eb" font-size="11.5" font-weight="700">• Con Low-Rank W_l = U_l V_l^T: coste O(d·r).</text>
+
+  <!-- Deep MLP + DIN Tower -->
+  <rect x="338" y="310" width="268" height="226" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+  <rect x="354" y="324" width="236" height="26" rx="6" fill="#7c3aed"/>
+  <text x="472" y="342" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">TORRE DEEP MLP + DIN</text>
+  <rect x="350" y="362" width="244" height="38" rx="6" fill="#0f172a"/>
+  <text x="472" y="386" text-anchor="middle" fill="#a78bfa" font-size="11.5" class="mono">v_u(i) = Σ_{h ∈ H_u} a(e_h, e_i) · e_h</text>
+  <text x="354" y="422" fill="#4c1d95" font-size="11.5">• <tspan font-weight="700">DIN (Target Attention):</tspan> el vector del</text>
+  <text x="354" y="440" fill="#4c1d95" font-size="11.5">  usuario cambia según el candidato i.</text>
+  <text x="354" y="460" fill="#4c1d95" font-size="11.5">• Si evalúas «Toy Story 4», atiende solo a</text>
+  <text x="354" y="478" fill="#4c1d95" font-size="11.5">  las películas de animación en su historial.</text>
+  <text x="354" y="502" fill="#7c3aed" font-size="11.5" font-weight="700">• MLP no lineal con LayerNorm + ReLU.</text>
+
+  <!-- Arrows from input to towers and to output -->
+  <line x1="182" y1="564" x2="182" y2="538" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <line x1="472" y1="564" x2="472" y2="538" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arrowPurple)"/>
+  <line x1="182" y1="310" x2="280" y2="264" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrowBlue)"/>
+  <line x1="472" y1="310" x2="374" y2="264" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#arrowPurple)"/>
+
+  <!-- Top Combination Logit Head -->
+  <rect x="132" y="174" width="390" height="86" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="327" y="198" text-anchor="middle" fill="#065f46" font-size="13" font-weight="800">Cabeza de Predicción Calibrada: p̂_ctr = σ( w^T [x_L || h_M] + b )</text>
+  <text x="327" y="220" text-anchor="middle" fill="#047857" font-size="11.5">Pérdida BCE (Log-Loss) + Métricas: ROC-AUC, PR-AUC, LogLoss y ECE</text>
+  <text x="327" y="242" text-anchor="middle" fill="#065f46" font-size="11.5" font-weight="700">En tabular con features contadas: LightGBM compite codo a codo con DCN-v2</text>
+
+  <!-- Right Panel: Point-in-Time Leakage & Calibration -->
+  <rect x="646" y="108" width="610" height="538" class="card" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="664" y="126" width="574" height="32" rx="8" fill="#fef2f2"/>
+  <text x="951" y="147" text-anchor="middle" fill="#b91c1c" font-size="14.5" font-weight="800">2. Fuga en Contadores (Target Leakage) y Calibración (Proyecto 06)</text>
+
+  <!-- Leakage vs Point-in-time -->
+  <rect x="664" y="172" width="574" height="210" rx="10" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
+  <text x="682" y="196" fill="#9f1239" font-size="13.5" font-weight="800">A. El Error #1 en Producción: Contadores Globales vs Point-in-Time</text>
+  <rect x="682" y="208" width="538" height="60" rx="6" fill="#0f172a"/>
+  <text x="696" y="230" fill="#f87171" font-size="11.5" class="mono"># ✗ CON FUGA: incluye el clic actual y todos los clics del futuro</text>
+  <text x="696" y="250" fill="#fca5a5" font-size="11.5" class="mono">df['item_ctr'] = df.groupby('item_id')['label'].transform('mean')</text>
+  <rect x="682" y="278" width="538" height="64" rx="6" fill="#064e3b"/>
+  <text x="696" y="300" fill="#34d399" font-size="11.5" class="mono"># ✓ POINT-IN-TIME (solo eventos estrictamente anteriores t' &lt; t + suavizado)</text>
+  <text x="696" y="320" fill="#a7f3d0" font-size="11.5" class="mono">cum_clicks = df.groupby('item_id')['label'].cumsum() - df['label']</text>
+  <text x="696" y="336" fill="#a7f3d0" font-size="11.5" class="mono">ctr_pit    = (cum_clicks + m * prior) / (cum_impr + m)</text>
+  <text x="682" y="366" fill="#9f1239" font-size="11.5" font-weight="700">Impacto: Un contador con fuga da AUC = 0.94 offline y cae a 0.52 al servir en vivo.</text>
+
+  <!-- Calibration -->
+  <rect x="664" y="396" width="574" height="234" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="682" y="420" fill="#1e40af" font-size="13.5" font-weight="800">B. ¿Por qué no basta con un buen AUC? La Calibración de Probabilidades</text>
+  <text x="682" y="442" fill="#334155" font-size="11.5">• El AUC solo mide si el orden relativo es correcto (si multiplicas todos los scores por 10,</text>
+  <text x="682" y="460" fill="#334155" font-size="11.5">  el AUC no cambia ni una milésima, pero la probabilidad está completamente rota).</text>
+  <text x="682" y="482" fill="#1e3a8a" font-size="11.5" font-weight="700">• ¿Cuándo necesitas probabilidades reales p̂ ≈ P(y=1)?</text>
+  <text x="694" y="502" fill="#475569" font-size="11.5">1. Al hacer <tspan font-weight="700">downsampling de negativos</tspan> en entrenamiento (tasa r): debes corregir el</text>
+  <text x="708" y="520" fill="#1d4ed8" font-size="11.5" class="mono">logit_calibrado = logit_modelo + ln(r)   (o p_real = p / (p + (1-p)/r))</text>
+  <text x="694" y="540" fill="#475569" font-size="11.5">2. Al combinar múltiples objetivos en negocio: <tspan class="mono">E[watch] = P(click) × E[minutos | click]</tspan>.</text>
+  <text x="694" y="560" fill="#475569" font-size="11.5">3. Ajuste post-hoc en validación con <tspan font-weight="700">Platt Scaling</tspan> (monótono sigmoide) o <tspan font-weight="700">Isotonic Regression</tspan>.</text>
+  <rect x="682" y="576" width="538" height="38" rx="6" fill="#dbeafe"/>
+  <text x="951" y="600" text-anchor="middle" fill="#1e40af" font-size="12" font-weight="700">Métrica de auditoría: ECE (Expected Calibration Error) y COPC = Σ p̂_i / Σ y_i ≈ 1.00</text>
+
+
+  <!-- Footer Banner -->
+  <rect x="24" y="662" width="1232" height="42" rx="10" fill="#0f172a" filter="url(#shadow)"/>
+  <circle cx="48" cy="683" r="8" fill="#10b981"/>
+  <text x="68" y="688" fill="#f8fafc" font-size="13.5" font-weight="600">Regla de Oro de Ranking: Ordena SIEMPRE el dataframe por timestamp antes de calcular cualquier feature histórica y usa shift(1) / cumsum()-x.</text>
+</svg>
