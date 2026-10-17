@@ -1,0 +1,13 @@
+# Progreso: rev-tecnico-08-14
+Agente: Revisor técnico R2 · Módulos: 08–14 · Informe: agent-observability-course/_tools/REVISION_TECNICA_2.md
+- [x] 08_loki_logql (retención Loki sin compactor.retention_enabled corregida; otlp_http)
+- [x] 09_metricas (sin cambios: validado Prometheus/Collector/Grafana nativos)
+- [x] 10_grafana (sin cambios: dashboards+alertas validados en Grafana 13.2.4 efímero)
+- [x] 11_multiagente (critical_path corregido; cita arXiv v1)
+- [x] 12_mcp_tools (sin cambios: spec MCP verificada, dashboard validado)
+- [x] 13_costes_finops (matices de caché rota, FinOps Foundation, cardinalidad)
+- [x] 14_evaluacion_online (texto verbosidad, redacción)
+- [ ] check_course.py OK + informe final
+
+## Notas para retomar
+- (qué archivo/celda, decisiones tomadas, comandos largos lanzados y su resultado)

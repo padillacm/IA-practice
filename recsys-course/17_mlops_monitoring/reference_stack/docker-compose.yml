@@ -1,0 +1,112 @@
+# ---------------------------------------------------------------------------
+# CineMatch · stack MLOps de referencia (módulo 17)
+#
+#   docker compose up -d --build
+#
+# Servicios y puertos:
+#   MLflow tracking + registry ...... http://localhost:5000  (Postgres = metadatos, MinIO = artefactos S3)
+#   MinIO consola ................... http://localhost:9001  (minio / minio12345)
+#   Prefect server (UI + API) ....... http://localhost:4200
+#   Prefect worker .................. ejecuta flows/ct_flow.py según su schedule
+#   Evidently UI .................... http://localhost:8085  (proyectos/snapshots de monitoreo)
+#   Prometheus / Pushgateway ........ http://localhost:9090 / :9091
+#   Alertmanager .................... http://localhost:9093
+#   Grafana ......................... http://localhost:3000  (admin / admin)
+# Versiones de imagen fijadas a propósito: actualízalas de forma consciente.
+# ---------------------------------------------------------------------------
+x-mlflow-env: &mlflow-env
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+  AWS_ACCESS_KEY_ID: minio
+  AWS_SECRET_ACCESS_KEY: minio12345
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: {POSTGRES_USER: mlflow, POSTGRES_PASSWORD: mlflow, POSTGRES_DB: mlflow}
+    volumes: ["pg:/var/lib/postgresql/data"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U mlflow"], interval: 5s}
+
+  minio:
+    image: minio/minio:RELEASE.2024-08-17T01-24-54Z
+    command: server /data --console-address ":9001"
+    environment: {MINIO_ROOT_USER: minio, MINIO_ROOT_PASSWORD: minio12345}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio:/data"]
+
+  minio-init:
+    # Crea el bucket de artefactos una sola vez
+    image: minio/mc:RELEASE.2024-08-17T11-33-50Z
+    depends_on: [minio]
+    entrypoint: >
+      sh -c "sleep 3 && mc alias set local http://minio:9000 minio minio12345 &&
+             mc mb -p local/mlflow-artifacts && exit 0"
+
+  mlflow:
+    build: ./mlflow
+    command: >
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri postgresql://mlflow:mlflow@postgres:5432/mlflow
+      --artifacts-destination s3://mlflow-artifacts
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio12345
+    ports: ["5000:5000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      minio-init: {condition: service_completed_successfully}
+
+  prefect-server:
+    image: prefecthq/prefect:3-python3.11
+    command: prefect server start --host 0.0.0.0
+    environment:
+      PREFECT_UI_API_URL: http://localhost:4200/api
+    ports: ["4200:4200"]
+    volumes: ["prefect:/root/.prefect"]
+
+  prefect-runner:
+    # `flow.serve()` registra el deployment con su cron y ejecuta las corridas en este contenedor.
+    # En Kubernetes usarías `flow.deploy()` con un work pool de tipo kubernetes y una imagen versionada.
+    build: ./mlflow           # reutilizamos la imagen con mlflow/evidently/pandera instalados
+    command: python /flows/ct_flow.py --serve
+    environment:
+      <<: *mlflow-env
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PUSHGATEWAY: pushgateway:9091
+      DATA_DIR: /data
+    volumes: ["./flows:/flows", "./monitoring:/monitoring", "./data:/data"]
+    depends_on: [prefect-server, mlflow]
+
+  evidently-ui:
+    build: ./mlflow
+    command: evidently ui --host 0.0.0.0 --port 8085 --workspace /workspace
+    ports: ["8085:8085"]
+    volumes: ["evidently:/workspace"]
+
+  pushgateway:
+    # Los jobs batch (flows de monitoreo) empujan métricas aquí; Prometheus las raspa.
+    image: prom/pushgateway:v1.9.0
+    ports: ["9091:9091"]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports: ["9090:9090"]
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    volumes: ["./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"]
+    ports: ["9093:9093"]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment: {GF_SECURITY_ADMIN_PASSWORD: admin}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+
+volumes: {pg: {}, minio: {}, prefect: {}, evidently: {}}

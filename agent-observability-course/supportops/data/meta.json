@@ -1,0 +1,43 @@
+{
+  "seed": 42,
+  "n_tickets": 240,
+  "provider": "mock",
+  "model": "mock-small",
+  "start_unix_s": 1788253200.0,
+  "incidents": [
+    {
+      "name": "llm_provider_degraded",
+      "kind": "llm_error",
+      "start_s": 1200,
+      "end_s": 1800,
+      "prob": 0.7,
+      "params": {
+        "status": 503,
+        "persistent": true
+      }
+    },
+    {
+      "name": "tools_slow",
+      "kind": "latency_spike",
+      "start_s": 2400,
+      "end_s": 2900,
+      "prob": 0.8,
+      "params": {
+        "factor": 8.0,
+        "target": "tool"
+      }
+    }
+  ],
+  "fault_rates": {
+    "latency_spike": 0.05,
+    "llm_error": 0.03,
+    "tool_error": 0.04,
+    "tool_timeout": 0.01,
+    "hallucination": 0.04,
+    "tool_loop": 0.02,
+    "pii_leak": 0.02
+  },
+  "n_spans": 970,
+  "n_logs": 568,
+  "median_latency_s": 1.58
+}

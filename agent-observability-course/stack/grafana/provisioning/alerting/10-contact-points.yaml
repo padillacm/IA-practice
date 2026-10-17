@@ -1,0 +1,14 @@
+# Puntos de contacto (provisioning de alertas). Se cargan al arrancar Grafana (o con POST /api/admin/provisioning/alerting/reload).
+# En el laboratorio el «on-call» es un webhook hacia el endpoint de salud del Collector (existe en la red de Compose y responde 200):
+# así la notificación se ENTREGA de verdad sin depender de servicios externos. En producción: PagerDuty/Slack/e-mail (nunca claves en el repo).
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: supportops-oncall
+    receivers:
+      - uid: sp-oncall-webhook
+        type: webhook
+        disableResolveMessage: false
+        settings:
+          url: http://otel-collector:13133/
+          httpMethod: POST

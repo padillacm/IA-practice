@@ -1,0 +1,7 @@
+apiVersion: v2
+name: supportops
+description: SupportOps - agente de soporte de laboratorio que emite trazas, logs y métricas OTLP (curso de observabilidad de agentes, módulo 19)
+type: application
+version: 0.1.0
+appVersion: "0.1.0-m19"
+keywords: [observabilidad, opentelemetry, agentes]

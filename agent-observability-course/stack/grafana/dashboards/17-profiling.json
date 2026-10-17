@@ -1,0 +1,291 @@
+{
+  "uid": "profiling",
+  "title": "17 · Profiling continuo (Pyroscope)",
+  "description": "Cuarto pilar: perfiles de CPU de SupportOps en Pyroscope, comparación lenta vs rápida y salto traza ↔ perfil.",
+  "tags": [
+    "curso",
+    "profiling",
+    "pyroscope"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "text",
+      "title": "Cómo leer este dashboard",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "transparent": false,
+      "options": {
+        "mode": "markdown",
+        "content": "Los perfiles los envía el notebook del módulo 17 (`pyroscope-io`, etiquetas `service_name=supportops-agent`, `variant=slow|fast`, `span_id`, `trace_id`). **Ancho = tiempo de CPU** (muestras); el eje vertical es la profundidad de la pila; lo que está ARRIBA y ANCHO es lo que consume. El panel de series muestra cuánta CPU consume cada variante; desde las trazas lentas puedes saltar al perfil de ese `span_id`."
+      },
+      "id": 1
+    },
+    {
+      "type": "row",
+      "id": 2,
+      "title": "CPU por variante del código",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 3,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU de perfil por variante (muestras/s agregadas)",
+      "description": "Valor total del perfil de CPU de `supportops-agent` agrupado por la etiqueta `variant` (slow = ingenuo, fast = corregido).",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-pyroscope-datasource",
+            "uid": "pyroscope"
+          },
+          "refId": "A",
+          "queryType": "metrics",
+          "profileTypeId": "process_cpu:cpu:nanoseconds:cpu:nanoseconds",
+          "labelSelector": "{service_name=\"supportops-agent\"}",
+          "groupBy": [
+            "variant"
+          ],
+          "maxNodes": 1024
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "grafana-pyroscope-datasource",
+        "uid": "pyroscope"
+      },
+      "id": 3
+    },
+    {
+      "type": "row",
+      "id": 4,
+      "title": "Flamegraphs",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "flamegraph",
+      "title": "Flamegraph · variant=slow (ingenuo)",
+      "description": "Perfil de CPU de la versión ingenua: serialización del historial, escaneo de PII carácter a carácter y embeddings sin caché dominan.",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 14
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-pyroscope-datasource",
+            "uid": "pyroscope"
+          },
+          "refId": "A",
+          "queryType": "profile",
+          "profileTypeId": "process_cpu:cpu:nanoseconds:cpu:nanoseconds",
+          "labelSelector": "{service_name=\"supportops-agent\",variant=\"slow\"}",
+          "groupBy": [],
+          "maxNodes": 1024
+        }
+      ],
+      "options": {},
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "datasource": {
+        "type": "grafana-pyroscope-datasource",
+        "uid": "pyroscope"
+      },
+      "id": 5
+    },
+    {
+      "type": "flamegraph",
+      "title": "Flamegraph · variant=fast (corregido)",
+      "description": "Perfil tras las correcciones: el trabajo propio del agente deja de ser el cuello de botella.",
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 14
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-pyroscope-datasource",
+            "uid": "pyroscope"
+          },
+          "refId": "A",
+          "queryType": "profile",
+          "profileTypeId": "process_cpu:cpu:nanoseconds:cpu:nanoseconds",
+          "labelSelector": "{service_name=\"supportops-agent\",variant=\"fast\"}",
+          "groupBy": [],
+          "maxNodes": 1024
+        }
+      ],
+      "options": {},
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "datasource": {
+        "type": "grafana-pyroscope-datasource",
+        "uid": "pyroscope"
+      },
+      "id": 6
+    },
+    {
+      "type": "row",
+      "id": 7,
+      "title": "Traza ↔ perfil",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Trazas del agente con perfil asociado (`pyroscope.profile.id`)",
+      "description": "Spans raíz marcados por `PyroscopeSpanProcessor` con `pyroscope.profile.id` (=span_id). Abre una traza y usa «Profiles for this span» para ver su flamegraph.",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"supportops-agent\" && span.pyroscope.profile.id != \"\" }",
+          "limit": 20,
+          "tableType": "traces",
+          "filters": [],
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "id": 8
+    }
+  ]
+}

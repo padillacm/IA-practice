@@ -1,0 +1,17 @@
+route:
+  receiver: recsys-slack
+  group_by: [alertname, team]
+  group_wait: 1m
+  repeat_interval: 4h
+  routes:
+    - matchers: [severity="page"]
+      receiver: recsys-pager
+receivers:
+  - name: recsys-slack
+    slack_configs:
+      - api_url: https://hooks.slack.com/services/REEMPLAZA/ESTE/WEBHOOK
+        channel: "#cinematch-recsys-alerts"
+        send_resolved: true
+  - name: recsys-pager
+    webhook_configs:
+      - url: http://pager-bridge.internal/alert   # PagerDuty/Opsgenie en un entorno real

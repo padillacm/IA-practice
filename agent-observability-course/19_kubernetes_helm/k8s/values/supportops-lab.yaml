@@ -1,0 +1,11 @@
+# Valores de laboratorio del chart supportops.
+replicaCount: 2
+otlp:
+  endpoint: http://otel-agent.observability.svc.cluster.local:4318
+traffic:
+  ratePerSecond: 4
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70

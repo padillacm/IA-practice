@@ -1,0 +1,147 @@
+# Gateway del Collector (Deployment): span_metrics ANTES del muestreo, tail_sampling, exporta a Tempo/Loki/Prometheus. chart opentelemetry-collector 0.176.0 (app 0.162.0)
+# Generado por _tools/builders/build_19.py (config como código en Python → YAML). Los `null` borran claves heredadas del chart (semántica de Helm).
+fullnameOverride: otel-gateway
+mode: deployment
+replicaCount: 2
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: 0.162.0
+command:
+  name: otelcol-contrib
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+extraManifests:
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: otel-gateway-headless
+    spec:
+      clusterIP: None
+      selector:
+        app.kubernetes.io/name: opentelemetry-collector
+        app.kubernetes.io/instance: otel-gateway
+      ports:
+        - name: otlp-grpc
+          port: 4317
+          targetPort: 4317
+        - name: metrics
+          port: 8888
+          targetPort: 8888
+config:
+  receivers:
+    jaeger: null
+    zipkin: null
+    prometheus: null
+  connectors:
+    forward: {}
+    span_metrics:
+      histogram:
+        explicit:
+          buckets:
+            - 100ms
+            - 500ms
+            - 1s
+            - 2s
+            - 5s
+            - 10s
+      metrics_flush_interval: 15s
+  processors:
+    tail_sampling:
+      decision_wait: 10s
+      num_traces: 20000
+      expected_new_traces_per_sec: 50
+      policies:
+        - name: errors
+          type: status_code
+          status_code:
+            status_codes:
+              - ERROR
+        - name: slow
+          type: latency
+          latency:
+            threshold_ms: 5000
+        - name: costly
+          type: ottl_condition
+          ottl_condition:
+            error_mode: ignore
+            span:
+              - "attributes[\"supportops.cost_usd\"] > 0.0005"
+        - name: baseline
+          type: probabilistic
+          probabilistic:
+            sampling_percentage: 10
+  exporters:
+    debug: null
+    otlp_grpc/tempo:
+      endpoint: "tempo.observability.svc.cluster.local:4317"
+      tls:
+        insecure: true
+    otlp_http/loki:
+      endpoint: "http://loki.observability.svc.cluster.local:3100/otlp"
+    otlp_http/prometheus:
+      endpoint: "http://prometheus.observability.svc.cluster.local:9090/api/v1/otlp"
+  service:
+    pipelines:
+      traces: null
+      traces/in:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+        exporters:
+          - forward
+          - span_metrics
+      traces/sampled:
+        receivers:
+          - forward
+        processors:
+          - memory_limiter
+          - tail_sampling
+          - batch
+        exporters:
+          - otlp_grpc/tempo
+      metrics:
+        receivers:
+          - otlp
+          - span_metrics
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - otlp_http/prometheus
+      logs:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - otlp_http/loki

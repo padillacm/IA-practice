@@ -38,7 +38,7 @@ jobs:
         run: uv run _tools/validar.py
 
       - name: langgraph.json es válido
-        run: uv run langgraph validate
+        run: uv run --project .. langgraph validate
         working-directory: langgraph/despliegue
 
   pruebas:

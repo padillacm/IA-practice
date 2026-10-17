@@ -1,0 +1,11 @@
+# opentelemetry-operator (chart 0.126.0, operator 0.161.0). Requiere Helm 4+ (README del chart).
+# Los CRDs van PLANTILLADOS en el chart (no se pueden saltar con --skip-crds): crds.create=false si ya los gestionas aparte.
+manager:
+  collectorImage:
+    repository: otel/opentelemetry-collector-contrib      # el chart exige elegir la distribución del Collector que lanzará el operador
+admissionWebhooks:
+  certManager:
+    enabled: false                  # sin cert-manager: el propio chart genera un certificado autofirmado
+  autoGenerateCert:
+    enabled: true
+replicaCount: 1

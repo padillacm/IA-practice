@@ -1,0 +1,19 @@
+# Ranker MLP exportado a ONNX en la lección (artifacts/ranker.onnx → copiar a ranker/1/model.onnx)
+name: "ranker"
+backend: "onnxruntime"
+max_batch_size: 4096
+input [
+  { name: "x", data_type: TYPE_FP32, dims: [ 7 ] }   # 7 features de RANK_FEATS de la lección (orden fijo: ¡contrato!)
+]
+output [
+  # El ONNX devuelve shape [batch] (squeeze(-1)). Triton exige rango ≥ 1 en dims y antepone el batch:
+  # se declara [1] y se reinterpreta como escalar por elemento con reshape (patrón de la documentación de Triton).
+  { name: "p", data_type: TYPE_FP32, dims: [ 1 ], reshape: { shape: [ ] } }
+]
+# Junta peticiones de distintos usuarios hasta 500 µs para aprovechar la GPU
+dynamic_batching {
+  preferred_batch_size: [ 512, 1024 ]
+  max_queue_delay_microseconds: 500
+}
+instance_group [ { kind: KIND_GPU, count: 2 } ]
+# Para tree models (LightGBM/XGBoost) existe el backend FIL: backend: "fil"

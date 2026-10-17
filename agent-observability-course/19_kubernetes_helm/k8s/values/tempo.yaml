@@ -1,0 +1,20 @@
+# Tempo 3.1.0 monolítico (chart grafana-community/tempo 3.2.0)
+# Generado por _tools/builders/build_19.py (config como código en Python → YAML). Los `null` borran claves heredadas del chart (semántica de Helm).
+tempo:
+  registry: docker.io
+  repository: grafana/tempo
+  tag: 3.1.0
+  reportingEnabled: false
+  streamOverHttpEnabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 768Mi
+  liveStore:
+    max_block_duration: 5m
+    wal:
+      ingestion_time_range_slack: 15m
+persistence:
+  enabled: false

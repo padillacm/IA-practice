@@ -1,0 +1,618 @@
+# Alertas de SLO de SupportOps (módulo 16): burn rate MULTIVENTANA con ventanas comprimidas de laboratorio (larga 5 min + corta 1 min = página; 15 + 3 min = ticket).
+# Generado por _tools/builders/build_16.py con supportops.slo.grafana_burn_rule. Cada regla: A (burn largo) B (burn corto) -> reduce C/D -> math E ($C > f && $D > f) -> umbral F.
+# interval: múltiplo de 10 s (tick del planificador de Grafana; 15s hace que NO arranque). El vínculo alerta-panel va en annotations.__dashboardUid__ / __panelId__.
+apiVersion: 1
+groups:
+- orgId: 1
+  name: supportops-slo
+  folder: Curso observabilidad de agentes
+  interval: 30s
+  rules:
+  - uid: slo-availability-fast-burn
+    title: SLO availability · fast-burn (×14.4)
+    condition: F
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(supportops_agent_requests_total{service_name="supportops-agent",supportops_status=~"ok|escalated"}[5m])) / sum(rate(supportops_agent_requests_total{service_name="supportops-agent"}[5m])))) / 0.01
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(supportops_agent_requests_total{service_name="supportops-agent",supportops_status=~"ok|escalated"}[1m])) / sum(rate(supportops_agent_requests_total{service_name="supportops-agent"}[1m])))) / 0.01
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 14.4 && $D > 14.4
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '12'
+      summary: 'SLO availability: burn rate ≥ 14.4× en 5m y 1m'
+      description: 'El SLO «El ticket termina `ok` o `escalated` (no error, degradado ni max_steps)» (objetivo 99.00%) consume presupuesto a ≥ 14.4× el ritmo sostenible en la ventana larga (5m) y en la corta (1m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-availability-fast-burn.md
+    labels:
+      severity: page
+      team: plataforma
+      service: supportops-agent
+      slo: availability
+  - uid: slo-availability-slow-burn
+    title: SLO availability · slow-burn (×3)
+    condition: F
+    for: 1m
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(supportops_agent_requests_total{service_name="supportops-agent",supportops_status=~"ok|escalated"}[15m])) / sum(rate(supportops_agent_requests_total{service_name="supportops-agent"}[15m])))) / 0.01
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(supportops_agent_requests_total{service_name="supportops-agent",supportops_status=~"ok|escalated"}[3m])) / sum(rate(supportops_agent_requests_total{service_name="supportops-agent"}[3m])))) / 0.01
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 3 && $D > 3
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '12'
+      summary: 'SLO availability: burn rate ≥ 3× en 15m y 3m'
+      description: 'El SLO «El ticket termina `ok` o `escalated` (no error, degradado ni max_steps)» (objetivo 99.00%) consume presupuesto a ≥ 3× el ritmo sostenible en la ventana larga (15m) y en la corta (3m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-availability-fast-burn.md
+    labels:
+      severity: ticket
+      team: plataforma
+      service: supportops-agent
+      slo: availability
+  - uid: slo-latency-fast-burn
+    title: SLO latency · fast-burn (×14.4)
+    condition: F
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name="supportops-agent",le="5.0"}[5m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name="supportops-agent"}[5m])))) / 0.03
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name="supportops-agent",le="5.0"}[1m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name="supportops-agent"}[1m])))) / 0.03
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 14.4 && $D > 14.4
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '13'
+      summary: 'SLO latency: burn rate ≥ 14.4× en 5m y 1m'
+      description: 'El SLO «El ticket se resuelve en ≤ 5 s (extremo a extremo, `invoke_agent`)» (objetivo 97.00%) consume presupuesto a ≥ 14.4× el ritmo sostenible en la ventana larga (5m) y en la corta (1m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-availability-fast-burn.md
+    labels:
+      severity: page
+      team: plataforma
+      service: supportops-agent
+      slo: latency
+  - uid: slo-latency-slow-burn
+    title: SLO latency · slow-burn (×3)
+    condition: F
+    for: 1m
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name="supportops-agent",le="5.0"}[15m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name="supportops-agent"}[15m])))) / 0.03
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name="supportops-agent",le="5.0"}[3m])) / sum(rate(gen_ai_invoke_agent_duration_seconds_count{service_name="supportops-agent"}[3m])))) / 0.03
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 3 && $D > 3
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '13'
+      summary: 'SLO latency: burn rate ≥ 3× en 15m y 3m'
+      description: 'El SLO «El ticket se resuelve en ≤ 5 s (extremo a extremo, `invoke_agent`)» (objetivo 97.00%) consume presupuesto a ≥ 3× el ritmo sostenible en la ventana larga (15m) y en la corta (3m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-availability-fast-burn.md
+    labels:
+      severity: ticket
+      team: plataforma
+      service: supportops-agent
+      slo: latency
+  - uid: slo-quality-fast-burn
+    title: SLO quality · fast-burn (×14.4)
+    condition: F
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness",gen_ai_evaluation_score_label="pass"}[5m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness"}[5m])))) / 0.05
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness",gen_ai_evaluation_score_label="pass"}[1m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness"}[1m])))) / 0.05
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 14.4 && $D > 14.4
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '14'
+      summary: 'SLO quality: burn rate ≥ 14.4× en 5m y 1m'
+      description: 'El SLO «La respuesta evaluada está fundamentada (groundedness ≥ 0,5) en una muestra uniforme del 25 %» (objetivo 95.00%) consume presupuesto a ≥ 14.4× el ritmo sostenible en la ventana larga (5m) y en la corta (1m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-quality-slow-burn.md
+    labels:
+      severity: page
+      team: plataforma
+      service: supportops-agent
+      slo: quality
+  - uid: slo-quality-slow-burn
+    title: SLO quality · slow-burn (×3)
+    condition: F
+    for: 1m
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness",gen_ai_evaluation_score_label="pass"}[15m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness"}[15m])))) / 0.05
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness",gen_ai_evaluation_score_label="pass"}[3m])) / sum(rate(supportops_eval_results_total{gen_ai_evaluation_name="groundedness"}[3m])))) / 0.05
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 3 && $D > 3
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '14'
+      summary: 'SLO quality: burn rate ≥ 3× en 15m y 3m'
+      description: 'El SLO «La respuesta evaluada está fundamentada (groundedness ≥ 0,5) en una muestra uniforme del 25 %» (objetivo 95.00%) consume presupuesto a ≥ 3× el ritmo sostenible en la ventana larga (15m) y en la corta (3m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-quality-slow-burn.md
+    labels:
+      severity: ticket
+      team: plataforma
+      service: supportops-agent
+      slo: quality
+  - uid: slo-cost-fast-burn
+    title: SLO cost · fast-burn (×14.4)
+    condition: F
+    for: 0s
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name="supportops-agent",le="0.0005"}[5m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name="supportops-agent"}[5m])))) / 0.02
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name="supportops-agent",le="0.0005"}[1m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name="supportops-agent"}[1m])))) / 0.02
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 14.4 && $D > 14.4
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '15'
+      summary: 'SLO cost: burn rate ≥ 14.4× en 5m y 1m'
+      description: 'El SLO «El ticket cuesta ≤ 0,0005 USD (precios ilustrativos)» (objetivo 98.00%) consume presupuesto a ≥ 14.4× el ritmo sostenible en la ventana larga (5m) y en la corta (1m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-availability-fast-burn.md
+    labels:
+      severity: page
+      team: plataforma
+      service: supportops-agent
+      slo: cost
+  - uid: slo-cost-slow-burn
+    title: SLO cost · slow-burn (×3)
+    condition: F
+    for: 1m
+    noDataState: OK
+    execErrState: Error
+    isPaused: false
+    data:
+    - refId: A
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: A
+        expr: (1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name="supportops-agent",le="0.0005"}[15m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name="supportops-agent"}[15m])))) / 0.02
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: B
+      relativeTimeRange:
+        from: 600
+        to: 0
+      datasourceUid: prometheus
+      model:
+        refId: B
+        expr: (1 - (sum(rate(supportops_agent_request_cost_USD_bucket{service_name="supportops-agent",le="0.0005"}[3m])) / sum(rate(supportops_agent_request_cost_USD_count{service_name="supportops-agent"}[3m])))) / 0.02
+        instant: true
+        intervalMs: 15000
+        maxDataPoints: 43200
+    - refId: C
+      datasourceUid: __expr__
+      model:
+        refId: C
+        type: reduce
+        expression: A
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: D
+      datasourceUid: __expr__
+      model:
+        refId: D
+        type: reduce
+        expression: B
+        reducer: last
+        settings:
+          mode: dropNN
+    - refId: E
+      datasourceUid: __expr__
+      model:
+        refId: E
+        type: math
+        expression: $C > 3 && $D > 3
+    - refId: F
+      datasourceUid: __expr__
+      model:
+        refId: F
+        type: threshold
+        expression: E
+        conditions:
+        - evaluator:
+            type: gt
+            params:
+            - 0
+    annotations:
+      __dashboardUid__: slo-agente
+      __panelId__: '15'
+      summary: 'SLO cost: burn rate ≥ 3× en 15m y 3m'
+      description: 'El SLO «El ticket cuesta ≤ 0,0005 USD (precios ilustrativos)» (objetivo 98.00%) consume presupuesto a ≥ 3× el ritmo sostenible en la ventana larga (15m) y en la corta (3m). Burn rate largo: {{ humanize $values.C.Value }}×.'
+      runbook_url: https://github.com/padillacm/IA-practice/blob/master/agent-observability-course/16_slos_alertas_incidentes/runbooks/slo-availability-fast-burn.md
+    labels:
+      severity: ticket
+      team: plataforma
+      service: supportops-agent
+      slo: cost

@@ -1,0 +1,138 @@
+# Reglas de alerta de SupportOps (módulo 10): alertas sobre SÍNTOMAS (RED), no sobre causas. Las de SLO/burn-rate son el módulo 16.
+# Cada regla = consulta A -> reduce B -> umbral C. Ventana de rate explícita ([2m]): en alertas NO hay un panel que fije $__rate_interval.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: supportops-sintomas
+    folder: Curso observabilidad de agentes
+    interval: 10s            # múltiplo de 10 s: es el «tick» del planificador de Grafana (15s hace que Grafana NO arranque)
+    rules:
+      - uid: sp-error-ratio-high
+        title: "SupportOps · tasa de error alta"
+        condition: C
+        for: 30s
+        noDataState: OK
+        execErrState: Error
+        isPaused: false
+        data:
+          - refId: A                       # consulta (PromQL, instantánea: un valor por serie)
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(rate(supportops_agent_requests_total{service_name="supportops-agent",supportops_status=~"error|max_steps"}[2m])) / sum(rate(supportops_agent_requests_total{service_name="supportops-agent"}[2m]))'
+              instant: true
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: B                       # reduce: de la serie temporal a UN número (el último valor no nulo)
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: {mode: dropNN}
+          - refId: C                       # umbral: la condición que dispara la alerta
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [0.1]}
+        annotations:
+          __dashboardUid__: salud-agente          # enlace de la alerta al dashboard…
+          __panelId__: "3"                 # …y al panel concreto (el on-call llega a la gráfica que importa)
+          summary: "Más del 10 % de los tickets terminan en error"
+          description: "La tasa de error de los últimos 2 min es {{ humanizePercentage $values.B.Value }}. Mira el panel «Trazas con error» del dashboard Salud del agente."
+          runbook_url: "https://example.com/runbooks/supportops-error-ratio"
+        labels:
+          severity: page
+          team: plataforma
+          service: supportops-agent
+      - uid: sp-latency-p95-high
+        title: "SupportOps · p95 del agente alto"
+        condition: C
+        for: 30s
+        noDataState: OK
+        execErrState: Error
+        isPaused: false
+        data:
+          - refId: A                       # consulta (PromQL, instantánea: un valor por serie)
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'histogram_quantile(0.95, sum by (le) (rate(gen_ai_invoke_agent_duration_seconds_bucket{service_name="supportops-agent"}[2m])))'
+              instant: true
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: B                       # reduce: de la serie temporal a UN número (el último valor no nulo)
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: {mode: dropNN}
+          - refId: C                       # umbral: la condición que dispara la alerta
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: gt, params: [6]}
+        annotations:
+          __dashboardUid__: salud-agente          # enlace de la alerta al dashboard…
+          __panelId__: "4"                 # …y al panel concreto (el on-call llega a la gráfica que importa)
+          summary: "p95 del agente por encima de 6 s"
+          description: "El p95 de invoke_agent de los últimos 2 min es {{ humanizeDuration $values.B.Value }}. Revisa si el LLM o una herramienta es la lenta (fila 2 del dashboard)."
+          runbook_url: "https://example.com/runbooks/supportops-latency"
+        labels:
+          severity: ticket
+          team: plataforma
+          service: supportops-agent
+      - uid: sp-agent-idle
+        title: "SupportOps · el agente no recibe tráfico"
+        condition: C
+        for: 5m
+        noDataState: Alerting
+        execErrState: Error
+        isPaused: true
+        data:
+          - refId: A                       # consulta (PromQL, instantánea: un valor por serie)
+            relativeTimeRange: {from: 300, to: 0}
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: 'sum(rate(supportops_agent_requests_total{service_name="supportops-agent"}[5m]))'
+              instant: true
+              intervalMs: 15000
+              maxDataPoints: 43200
+          - refId: B                       # reduce: de la serie temporal a UN número (el último valor no nulo)
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: {mode: dropNN}
+          - refId: C                       # umbral: la condición que dispara la alerta
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: {type: lt, params: [0.001]}
+        annotations:
+          __dashboardUid__: salud-agente          # enlace de la alerta al dashboard…
+          __panelId__: "2"                 # …y al panel concreto (el on-call llega a la gráfica que importa)
+          summary: "Sin peticiones durante 5 minutos"
+          description: "Sin tráfico (o sin métricas): puede ser un incidente aguas arriba o un fallo de la telemetría. NoData cuenta como alerta (Alerting)."
+          runbook_url: "https://example.com/runbooks/supportops-idle"
+        labels:
+          severity: ticket
+          team: plataforma
+          service: supportops-agent

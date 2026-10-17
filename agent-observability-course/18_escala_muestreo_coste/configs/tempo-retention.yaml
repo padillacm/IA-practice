@@ -1,0 +1,28 @@
+# Tempo 3.x: retención de bloques (verificado con `tempo -config.verify=true` en 3.1.0). En Tempo 3 el compactor pasó al `backend_scheduler`.
+stream_over_http_enabled: true
+server:
+  http_listen_port: 3200
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        compaction_window: 1h
+        block_retention: 168h           # 7 días por defecto
+        compacted_block_retention: 10m
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+overrides:
+  defaults:
+    compaction:
+      block_retention: 72h              # un tenant concreto puede tener menos (o más) que el valor global
