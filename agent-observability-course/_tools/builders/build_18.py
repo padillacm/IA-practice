@@ -893,7 +893,7 @@ def run_rubric(docker=DOCKER):
     R = {}
     def chk(name, fn):
         try:
-            R[name] = bool(fn())
+            v = fn(); R[name] = None if v is None else bool(v)
         except NotImplementedError:
             R[name] = None
         except Exception as e:

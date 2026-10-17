@@ -1472,7 +1472,7 @@ def run_rubric(live=LIVE_RENDER, docker=DOCKER):
         cr["spec"]["config"]["service"]["pipelines"]["traces/in"]  # existe
         r = API_LAB.apply([cr], dry_run=True)
         return ok and r.returncode == 0
-    chk("R7 operator_cr: CR v1beta1 con autoscaler y PDB derivados de los values; el API server real lo acepta (--dry-run=server)", r7)
+    chk("R7 operator_cr: CR v1beta1 con autoscaler y PDB derivados de los values" + ("; el API server real lo acepta (--dry-run=server)" if (live and docker) else " [solo la estructura: sin Docker/helm no hay --dry-run=server]"), r7)
     chk("R8 verify_flow: aprueba el flujo medido y suspende un flujo roto", lambda: all(verify_flow(REC["flow"]).values()) and not all(verify_flow({**REC["flow"], "loki_lines": 0, "traces_in_tempo": 290}).values()))
     ok = sum(v is True for v in R.values()); tot = sum(v is not None for v in R.values())
     for k, v in R.items():

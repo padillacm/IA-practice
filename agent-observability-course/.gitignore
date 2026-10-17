@@ -5,3 +5,5 @@ data/
 .env
 *.egg-info/
 !supportops/data/
+*.executed.ipynb
+*.nbconvert.ipynb

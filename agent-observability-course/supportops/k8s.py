@@ -343,10 +343,13 @@ class ApiServerLab:
     def __enter__(self) -> "ApiServerLab":
         cmd = ["docker", "run", "-d", "--name", self.name, "--privileged", "--tmpfs", "/run", "--tmpfs", "/var/run", "-p", f"127.0.0.1:{self.port or ''}:6443", self.IMAGE,
                "server", "--disable=traefik", "--disable=metrics-server", "--disable=servicelb", "--disable=local-storage", "--tls-san=127.0.0.1"]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        if r.returncode:
-            raise RuntimeError(r.stderr[:400])
-        self.port = int(subprocess.run(["docker", "port", self.name, "6443/tcp"], capture_output=True, text=True).stdout.splitlines()[0].split(":")[-1])
+        from .sampling import _docker_run, _host_port      # reintentos con plazo (carrera «docker run → docker port» y puertos ocupados)
+        _docker_run(cmd[3:])
+        try:
+            self.port = _host_port(self.name, 6443)
+        except Exception:
+            self.__exit__()
+            raise
         t0 = time.time()
         while time.time() - t0 < 120:
             r = subprocess.run(["docker", "exec", self.name, "cat", "/etc/rancher/k3s/k3s.yaml"], capture_output=True, text=True)
@@ -454,13 +457,14 @@ class FlowLab:
             cmd += ["-e", f"{k}={v}"]
         if user:
             cmd += ["--user", user]
-        r = subprocess.run(cmd + [image, *args], capture_output=True, text=True)
-        if r.returncode:
-            raise RuntimeError(f"{name}: {r.stderr[:400]}")
+        from .sampling import _docker_run, _host_port
+        try:
+            _docker_run([*cmd[3:], image, *args])
+        except RuntimeError as e:
+            raise RuntimeError(f"{name}: {e}") from None
         self.names.append(cname)
         for p in publish:
-            out = subprocess.run(["docker", "port", cname, f"{p}/tcp"], capture_output=True, text=True).stdout.splitlines()
-            self.ports[f"{name}:{p}"] = int(out[0].split(":")[-1])
+            self.ports[f"{name}:{p}"] = _host_port(cname, p)
         return cname
 
     def _dir(self, key: str) -> pathlib.Path:
@@ -624,13 +628,11 @@ class AffinityLab:
             cmd += ["-v", f"{out}:/out"]
         for p in publish:
             cmd += ["-p", f"127.0.0.1::{p}"]
-        r = subprocess.run(cmd + ["otel/opentelemetry-collector-contrib:0.162.0", "--config=/c.yaml"], capture_output=True, text=True)
-        if r.returncode:
-            raise RuntimeError(r.stderr[:400])
+        from .sampling import _docker_run, _host_port
+        _docker_run([*cmd[3:], "otel/opentelemetry-collector-contrib:0.162.0", "--config=/c.yaml"])
         self.names.append(f"{name}-{self.id}")
         for p in publish:
-            o = subprocess.run(["docker", "port", f"{name}-{self.id}", f"{p}/tcp"], capture_output=True, text=True).stdout.splitlines()
-            self.ports[f"{name}:{p}"] = int(o[0].split(":")[-1])
+            self.ports[f"{name}:{p}"] = _host_port(f"{name}-{self.id}", p)
 
     def __enter__(self) -> "AffinityLab":
         subprocess.run(["docker", "network", "create", self.net], capture_output=True, check=True)
@@ -642,6 +644,9 @@ class AffinityLab:
             if all("Everything is ready" in self.logs(n) for n in self.names):
                 break
             time.sleep(1)
+        else:
+            self.__exit__()
+            raise RuntimeError("los Collectors del laboratorio de afinidad no estuvieron listos en 60 s")
         return self
 
     def logs(self, name: str) -> str:
