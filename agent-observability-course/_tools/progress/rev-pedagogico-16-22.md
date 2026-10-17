@@ -6,7 +6,7 @@ Agente: Revisor pedagógico P3 · Módulos: 16–22 + GUIA_DE_ESTUDIO.md · Info
 - [x] 19_kubernetes_helm
 - [x] 20_privacidad_seguridad
 - [x] 21_elite_playbook
-- [ ] 22_capstone
+- [x] 22_capstone
 - [ ] GUIA_DE_ESTUDIO.md (ruta, tiempos, mapa mermaid, glosario ES/EN; tras leer los informes P1 y P2)
 - [ ] check_course.py OK + informe final
 
@@ -18,3 +18,4 @@ Agente: Revisor pedagógico P3 · Módulos: 16–22 + GUIA_DE_ESTUDIO.md · Info
 - 19: GRAN HALLAZGO: no se enseñaba Kubernetes (alumno parte de cero) -> añadida §0 'Kubernetes mínimo' (tabla Compose->K8s, manifiesto anotado, Helm~Jinja/Hydra); 🧭 header vs caja unificado; prereq 00 y sin 17; 🔁 +Q módulo 00.
 - 20: faltaba 🧭 (84 celdas) -> añadida; Luhn a mano, HMAC glosado, ROC/FPR analogía ML; 🔁 Q4 transfer (severidad); pistas Paso 2,5,6,7. Doc: Paso 6 (ventana/umbral) sigue siendo abierto.
 - 21: faltaba 🧭 (78 celdas, compendio 74) -> añadida; prereqs reales (03,09,11,13,15,16,18,20); 🔁 +Q módulo 03 (caso E); predice-mira-compara; protocolo de mesa (15 min/incidente, orden B,D,A,E,C). Mesa: alertas neutrales y cambios con ruido OK (verificado). Caveat: Pista 2 de INC-C/E casi algorítmica.
+- 22: tabla 'Qué reutilizas de cada módulo' en proyecto; pistas Paso 2,5,6,7,8; ADR corto resuelto en §9; 🔁 +Q módulo 21; prereqs concretos.

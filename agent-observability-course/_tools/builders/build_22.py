@@ -255,7 +255,7 @@ def build_lesson() -> None:
     | **Duración estimada** | ≈ 4 h 30 min (guía y plataforma de referencia ≈ 2 h 30 min + entrega final ≈ 2 h) |
     | **Servicios de Compose** | Opcional: `--profile core --profile metrics` (sección 11, ≈ 4 min: el Collector del capstone se conecta al stack). Docker para validar el Collector y el *Collector real* efímero. Sin Docker, modo degradado |
     | **RAM aproximada** | < 700 MB sin stack · ≈ 1,3 GB con `core` + `metrics` + el gateway efímero |
-    | **Prerrequisitos** | Todo el curso (00-21). **No hay conceptos nuevos**: es integración |
+    | **Prerrequisitos** | Todo el curso (00-21), pero sobre todo 05 (Collector), 09 y 16 (métricas y SLOs), 11 (multi-agente y coste en hojas), 14 (Wilson), 18 (muestreo), 19 (despliegue), 20 (redacción) y 21 (mesa). **No hay conceptos nuevos**: es integración |
     | **Hilo conductor** | El agente de SupportOps empezó siendo un bucle de 80 líneas. Hoy es un **sistema multi-agente observado, con SLOs, calidad, costes, privacidad, muestreo y despliegue**, con un *scorecard* que lo prueba y una revisión de arquitectura que lo defiende |
 
     > ⚠️ **Honestidad sobre el laboratorio.** Todo es simulado y determinista (`mock`, semilla 42): el tráfico (≈ 4 tickets/min), el incidente del proveedor y el análisis de muestreo y coste (corpus del módulo 18, de **agente único**; el multi-agente aporta los contratos, el SLO y la privacidad).
@@ -285,6 +285,8 @@ def build_lesson() -> None:
                "Burn rate multiventana: ventana larga (¿es grave?) y corta (¿sigue ocurriendo?). 14,4× en 1 h/5 min para páginas y 1× en 3 d/6 h para tickets; en el laboratorio, ventanas comprimidas."))
     md(details("4 · (Módulo 11) ¿Cómo se cuenta el coste en un árbol de agentes?",
                "Solo en las hojas `chat`: los `invoke_agent` repiten el total de sus hijos; sumar todos los spans multiplica el coste."))
+    md(details("5 · (Módulo 21) ¿Qué incidente de la mesa habría detectado un contrato «una traza por ticket» y por qué sale casi gratis en CI?",
+               "El caso E (trazas partidas): al perderse el contexto cada ticket produce varias trazas y `n_traces / n_tickets` salta por encima de 1. Es una división sobre datos que ya tienes; la mesa completa se convierte aquí en el plan de pruebas de aceptación."))
 
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_22)
@@ -598,6 +600,14 @@ print(CK["estado"].value_counts().to_dict())
 
     La entrega final es una **revisión de arquitectura** (`platform/architecture-review-template.md`): un documento corto que otro ingeniero pueda **atacar**. Estructura: contexto y objetivos, requisitos medibles, arquitectura, **decisiones con alternativas descartadas**, **riesgos con detección y mitigación**, coste con sensibilidad, plan de despliegue y pruebas, y preguntas abiertas.
     Una **tabla de riesgos** buena enlaza cada riesgo con la **señal** que lo detecta (de este mismo curso):
+
+    **✏️ Ejemplo resuelto de una decisión (ADR corto).** Así se documenta *una* decisión con sus alternativas y consecuencias medibles (formato de Nygard); tu revisión tendrá varias como esta:
+
+    > **ADR-004 · Muestreo por cola con métricas RED previas** · *Estado:* aceptado
+    > **Contexto:** 2 M tickets/día; finanzas fija un tope de ≈ 25 % de los bytes generados (módulo 18), pero los errores (≈ 2,6 % de las trazas) y las trazas lentas o caras son lo que debe poder depurarse.
+    > **Decisión:** `tail_sampling` con políticas `errors` + `slow` + `costly` + 10 % de base, **después** de calcular `span_metrics` en `traces/in`.
+    > **Alternativas descartadas:** head sampling al 10 % (pierde ≈ 90 % de los errores); tail sampling sin RED previo (la tasa de error del panel pasa de 2,6 % a ≈ 12 %: módulo 18).
+    > **Consecuencias (con números):** se conserva el 100 % de lo interesante con ≈ 23 % de los bytes; el gateway necesita memoria ∝ tráfico × `decision_wait` (200 trazas/s y 30 s ⇒ `num_traces` ≈ 9 000); lo «normal» es solo una muestra del 10 % (estadísticas con pesos 1/π); paga la RAM del gateway y exige afinidad por `traceID` si escala (módulo 19).
     """)
     code('''
 RISKS = pd.DataFrame([
@@ -803,7 +813,7 @@ def build_project() -> None:
     | **Duración estimada** | ≈ 2 h |
     | **Servicios de Compose** | Ninguno. Docker opcional para validar tu Collector con `otelcol validate` (se marca si no hay) |
     | **RAM aproximada** | < 700 MB |
-    | **Prerrequisitos** | Lección `22_capstone` y todo el curso |
+    | **Prerrequisitos** | Lección `22_capstone` y todo el curso (la tabla «Qué reutilizas de cada módulo» de abajo dice dónde mirar en cada paso) |
     | **Conexión** | Integra los proyectos 03-21: lo que construiste por separado, ahora **en una sola plataforma**, medida con su propia telemetría y defendida por escrito |
 
     ## Contexto de negocio
@@ -814,6 +824,21 @@ def build_project() -> None:
     ## Datos
 
     El **Paso 0** ejecuta la plataforma completa (multi-agente, `mock`, semilla 42, 480 tickets en 30 min, caída parcial de `get_order` del `billing-agent` entre los minutos 10 y 20) y te da `MESH`, `TICKETS`, `RES`, el corpus de muestreo `C` y los resultados de referencia. Todo en memoria.
+
+    ## Qué reutilizas de cada módulo (y dónde releer si te atascas)
+
+    Este proyecto es la fase **independiente** del curso: en la lección viste la plataforma resuelta y aquí la reconstruyes pieza a pieza. Cada paso es, en realidad, un trozo que ya hiciste en otro módulo:
+
+    | Paso | Qué haces | Lo reutilizas de… | Relee |
+    |---|---|---|---|
+    | 1 | Gateway del Collector | 05 (pipelines), 18 (tail sampling y `span_metrics` antes), 20 (`redaction`), 19 (validar con binario) | lección 22 §3 · proyectos 05 y 18 |
+    | 2 | Contratos de telemetría | 03 (propagación), 11 (hojas = árbol), 20 (PII residual), 21 (caso E: trazas partidas) | lección 22 §2 · lección 21 §6 |
+    | 3 | SLO y alerta multiventana | 09 (histogramas), 16 (burn rate) | proyecto 16, pasos 2-3 |
+    | 4 | Calidad con intervalo | 14 (muestra uniforme, Wilson), 15 | lección 14 · lección 22 §5 |
+    | 5 | Muestreo y sesgo | 18 (políticas, cobertura, pesos 1/π) | proyecto 18, pasos 3 y 5 |
+    | 6 | Coste por agente | 11 (coste solo en hojas), 13 (tokens → USD) | lección 11 · lección 22 §2 |
+    | 7 | Checklist honesto | 16 (postmortem y guardia), 19 (qué NO se verificó), 21 (game days) | lección 22 §7-8 |
+    | 8 | Revisión de arquitectura | todo el curso; ADR y tabla de riesgos | lección 22 §9 (ejemplo de ADR resuelto) |
 
     ## Entregables y criterios de evaluación (rúbrica integral)
 
@@ -881,6 +906,7 @@ except NotImplementedError as e:
     - `sin_pii_sin_nombres`: ninguna PII (con `P.pii_exposure`, ignorando `name`) en los atributos de los spans ni en el cuerpo y atributos de los logs;
     - `workflow_raiz`: toda traza tiene exactamente una raíz y se llama `invoke_workflow …`.
     """)
+    md(hint(1, "Son cinco comprobaciones independientes y cada una reutiliza una consulta que ya hiciste: tus contratos de la lección (§2), el `P.pii_exposure` del módulo 20 y la regla «una raíz por traza» del caso E del módulo 21. Para `workflow_raiz`: agrupa los spans por `trace_id` (`collections.defaultdict(list)`) y busca los que no tienen padre **dentro de esa traza**; debe haber exactamente uno y llamarse `invoke_workflow …`."))
     code('''
 def telemetry_contracts(spans, logs, tickets, results) -> dict:
     # TODO 2
@@ -934,6 +960,7 @@ except NotImplementedError as e:
     **TODO 5.** `sampling_report(corpus, policies) -> dict` ejecuta `S.TailSampler(policies, decision_wait_s=10, num_traces=50_000)` sobre `corpus.traces`, y devuelve `{"recall_error", "kept_pct", "error_rate_truth", "error_rate_naive", "error_rate_weighted"}`: `recall_error` y `kept_pct` de `S.coverage(kept, corpus)`
     (`recall_error_pct`, `kept_traces_pct`); las tasas con `S.estimate_metrics`: verdad (todas las trazas), ingenua (solo las guardadas) y ponderada con `S.inclusion_weights(kept, lambda t: t.interesting, 0.10)`.
     """)
+    md(hint(1, "Es el flujo del módulo 18 en tres líneas: `TailSampler(...).run(...).kept` → `S.coverage(kept, corpus)` → `S.estimate_metrics(...)`. Calcula la tasa tres veces: sobre todas las trazas (la verdad), sobre las guardadas (ingenua) y sobre las guardadas con `S.inclusion_weights` (lo interesante pesa 1; la base, 1/0,10)."))
     code('''
 def sampling_report(corpus, policies) -> dict:
     # TODO 5
@@ -951,6 +978,7 @@ except NotImplementedError as e:
     **TODO 6.** `cost_report(spans) -> dict` devuelve `{"by_service", "total_leaf", "total_naive"}`: `by_service` con `supportops.multiagent.cost_rollup(spans)` (solo hojas `chat`); `total_leaf` = suma de sus `cost_usd`;
     `total_naive` = el coste que saldría de sumar **todos** los spans con `gen_ai.usage.input_tokens/output_tokens` (usa `cost_usd(modelo, in, out)` con `gen_ai.response.model` o `gen_ai.request.model`, y `"mock-small"` si faltan).
     """)
+    md(hint(1, "`cost_rollup` ya suma solo las hojas `chat` (módulo 11). Para el coste ingenuo recorre **todos** los spans que traen tokens (los `invoke_agent` repiten los de sus hijos) y suma `cost_usd(modelo, entrada, salida)`; la diferencia entre ambos totales es el doble conteo."))
     code('''
 def cost_report(spans) -> dict:
     # TODO 6
@@ -968,6 +996,7 @@ except NotImplementedError as e:
     **TODO 7.** `checklist_status(items, measured_ok, measured_all, evidence_ids) -> list[dict]` clasifica cada ítem de `platform/production-checklist.yaml`: si `automatica`: `"medido"` si su `id` está en `measured_ok`, `"falla"` si está en `measured_all` pero no en `measured_ok`, `"sin medir"` si no está en `measured_all`;
     si no es automática: `"evidencia"` si su `id` está en `evidence_ids` y `"pendiente"` en otro caso. Devuelve los ítems con una clave `estado` añadida.
     """)
+    md(hint(1, "Hay cinco estados posibles. Primero separa por `it[\"automatica\"]`; en las automáticas distingue `medido` (en `measured_ok`), `falla` (medida pero no ok) y `sin medir`; en las manuales, `evidencia` o `pendiente`. Devuelve `{**it, \"estado\": ...}` para no perder las demás claves."))
     code('''
 CHECKLIST = yaml.safe_load((PLATFORM / "production-checklist.yaml").read_text())["items"]
 EVID = {"I2", "I4", "I5", "I7", "C4", "C5", "S3", "Q1", "Q2", "K2", "P3", "P4", "D2", "D3"}      # artefactos entregados por el curso (tuyos al terminar los módulos)
@@ -989,6 +1018,8 @@ except NotImplementedError as e:
     (`platform/architecture-review-template.md`: Contexto y objetivos, Requisitos y restricciones, Arquitectura propuesta, Decisiones clave, Riesgos y modos de fallo, Coste, Plan de despliegue y de pruebas, Preguntas abiertas), una **tabla de riesgos con ≥ 6 filas** (riesgo | señal que lo detecta | mitigación),
     una sección de **coste con sensibilidad** (menciona `×2` de tráfico) con cifras de `facts["cost"]`, y un plan de pruebas que mencione la **mesa de incidentes**. Usa cifras reales de `facts`, no inventadas.
     """)
+    md(hint(1, "Lee primero `platform/architecture-review-template.md` y copia sus ocho encabezados `## `. Construye una lista de líneas `L` y devuelve `\"\\n\".join(L)`. Las cifras salen de `facts` (por ejemplo `facts[\"slo\"][\"availability\"]`, `facts[\"quality\"][\"lo\"]`): ninguna inventada."))
+    md(hint(2, "La tabla de riesgos es una lista de tuplas `(riesgo, señal, mitigación)` con al menos seis filas: parte de la tabla de la lección §9 y de la mesa del módulo 21. En la sección de coste menciona la sensibilidad `×2` de tráfico (qué se duplica y qué no) y en el plan de pruebas nombra la **mesa de incidentes** como criterio de aceptación."))
     code('''
 def architecture_review(facts: dict) -> str:
     # TODO 8
