@@ -5,7 +5,7 @@ Agente: Revisor pedagógico P2 · Módulos: 08–15 · Informe: agent-observabil
 - [x] 10_grafana (ruta corregida: variables/alerta sí son núcleo; pistas TODO 4 y 6; 🔁 Q4 TraceQL)
 - [x] 11_multiagente (ruta A/B alineada con el proyecto, 🔁 Q4 LogQL, cabeceras de cajas)
 - [x] 12_mcp_tools (ruta A/B, duración 5 h, 🔁 Q4 hilos, pista TODO 6)
-- [ ] 13_costes_finops
+- [x] 13_costes_finops (ejemplo resuelto a mano 1.1 antes de la fórmula, predicción, 🔁 Q4)
 - [ ] 14_evaluacion_online
 - [ ] 15_calidad_regresion
 - [ ] check_course.py OK + informe final

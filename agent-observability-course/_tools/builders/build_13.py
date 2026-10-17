@@ -70,6 +70,9 @@ def build_lesson() -> None:
     md(details("3 · (Módulo 04) ¿Los tokens de caché son un extra o un subconjunto de `gen_ai.usage.input_tokens`?",
                "**Subconjunto**: según la spec GenAI (estado *Development*), `input_tokens` incluye los tokens servidos desde caché y los escritos en caché; `cache_read.input_tokens` y `cache_write.input_tokens` son subconjuntos de la entrada."))
 
+    md(details("4 · (Módulo 10, aplicación) Para un panel «USD por hora» sobre un contador de coste acumulado, ¿qué función de PromQL usas y qué ventana pones en Grafana? ¿Por qué no pintar el contador tal cual?",
+               "`sum(rate(<serie_coste_total>[$__rate_interval])) * 3600`. Un contador solo crece (y se reinicia a 0 al reiniciar el proceso): su valor bruto no dice a qué ritmo se gasta; `rate()` lo convierte en USD/s y gestiona los reinicios. `$__rate_interval` adapta la ventana al *scrape* y al zoom del panel. Lo usarás en la sección 9 y en el TODO 6 del proyecto."))
+
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_13 + '''
 TEL = setup_telemetry("supportops-agent", mode="otlp" if LIVE else "memory", set_global=False, metric_interval_s=2.0, resource_attrs={"deployment.environment.name": "lab"})
@@ -118,6 +121,21 @@ plt.tight_layout(); plt.show()
     - La curva de concentración está por encima de la diagonal: el 5 % de los tickets más caros se lleva más del doble de lo que le tocaría (≈ 13 %). Con precios y tráfico de laboratorio la cola es moderada; en producción, con más fallos y contextos largos, suele ser mucho más pesada. Vigilar solo la **media** es ceguera: el dinero está en la cola.
     - Este panorama es **sin caché**; en la sección 5 veremos cuánto lo cambia. Y los precios son ilustrativos: lo importante son las **proporciones**.
     """))
+
+    # ------------------------------------------------------------------------------------------------------------- 1b
+    md("""
+    ## 1.1 · Un ejemplo diminuto a mano (antes de la fórmula)
+
+    Un ticket que necesita **3 llamadas** al LLM. Como el contexto se reenvía en cada paso, la entrada **crece**: 400, 700 y 1 000 tokens de entrada; la salida de cada llamada es de 100, 100 y 150 tokens. Precios ilustrativos del curso (USD por millón de tokens): `mock-small` = 0,25 de entrada y 1,25 de salida; `mock-large` = 3,00 y 15,00.
+
+    1. Tokens totales de **entrada**: 400 + 700 + 1 000 = **2 100**; de **salida**: 100 + 100 + 150 = **350**.
+    2. Con `mock-large`: 2 100 × 3,00 / 10⁶ = 0,0063 USD de entrada, y 350 × 15,00 / 10⁶ = 0,00525 USD de salida → **0,01155 USD** por ticket.
+    3. Con `mock-small`: 2 100 × 0,25 / 10⁶ + 350 × 1,25 / 10⁶ = 0,000525 + 0,0004375 = **0,0009625 USD**.
+
+    La salida pesa poco en tokens, pero cuesta **5×** más por token que la entrada; y el modelo grande sale **12×** más caro que el pequeño para el mismo ticket. Eso es toda la idea; la sección 2 solo añade la caché de prompts a esta cuenta.
+    """)
+    md(details("🧪 Predice antes de abrir: si un bucle de herramientas repite 6 veces el paso 3 (entrada 1 000, salida 150), ¿cuánto cuesta ahora el ticket en `mock-large`? ¿Y qué proporción del coste añade el bucle?",
+               "El paso 3 cuesta 1 000 × 3,00 / 10⁶ + 150 × 15,00 / 10⁶ = 0,003 + 0,00225 = 0,00525 USD. Con 6 repeticiones (5 extra) el ticket pasa de 0,01155 a 0,01155 + 5 × 0,00525 = **0,0378 USD**, es decir ×3,3: el bucle añade el **69 %** del coste final. Un solo ticket «malo» cuesta como tres normales: por eso en la sección 7 vigilaremos la cola (p99), no la media. (En la práctica el contexto sigue creciendo en cada repetición, así que el bucle real cuesta aún más.)"))
 
     # ------------------------------------------------------------------------------------------------------------- 2
     md("""
@@ -576,7 +594,7 @@ if LIVE:
     - **Costes del propio stack**: la telemetría de coste también cuesta (cada span extra, cada serie). El módulo 18 trata el presupuesto de observabilidad.
     """)
 
-    md(box("elite", "Secretos de la élite", """
+    md(box("elite", "", """
     1. **La entrada incluye la caché… según quién.** La spec GenAI define `gen_ai.usage.input_tokens` como el total (con caché); la API de Anthropic devuelve `input_tokens` **sin** caché y suma aparte `cache_read`/`cache_creation`. Copiar el campo sin normalizar infravalora la entrada y rompe el invariante `cache_read + cache_write ≤ input`. Valida ese invariante en una prueba de contrato (`Usage4` lo exige).
     2. **Los multiplicadores de caché no son constantes.** Escritura 1,25× o 2× según el TTL, lectura 0,1× o menos según el modelo y mínimos cacheables de 512 a 4 096 tokens según el modelo (documentación de *prompt caching* de Anthropic). Hardcodear «0,1×» es un bug latente: pon los multiplicadores **en la tabla** y versiona la tabla.
     3. **La caché rota no cambia la calidad y multiplica el coste.** Una marca de tiempo, un id de petición o un orden de herramientas no determinista al principio del prompt hace que cada petición escriba un prefijo nuevo (con recargo) y nadie lo lea: en la simulación, 3-4× el coste sano, y más caro que no usar caché en las peticiones de una sola llamada. Vigila el **hit ratio** como una SLI: una caída brusca tras un despliegue es un incidente de coste.
@@ -590,7 +608,7 @@ if LIVE:
     11. **Más gasto compra calidad, y por eso el coste solo no es una métrica de salud.** Anthropic midió que los agentes consumen ≈ 4× los tokens de un chat y los sistemas multi-agente ≈ 15×, y que el uso de tokens por sí solo explicaba el 80 % de la varianza de rendimiento en su evaluación BrowseComp. Un coste por ticket que sube con la calidad que sube puede ser sano; uno que sube con la calidad plana es el desperdicio de los bucles. Grafica **coste frente a calidad** (módulos 14-15), no el coste a solas. *Fuente: Anthropic Engineering, «How we built our multi-agent research system» (2025).*
     """))
 
-    md(box("warn", "⚠️ Errores comunes", """
+    md(box("warn", "Errores comunes", """
     - **Presentar los precios de ejemplo como reales.** Una tabla ilustrativa en un panel de dirección se convierte en «la factura»: etiquétala, versiona y reconcilia con la factura del proveedor.
     - **Sumar `gen_ai.usage.*` de todos los spans** (raíz + hojas): doble contabilidad (módulos 11 y 13).
     - **Etiquetar métricas con `customer_id`/`ticket_id`.**
