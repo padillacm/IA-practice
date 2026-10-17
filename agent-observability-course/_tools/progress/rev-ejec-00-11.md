@@ -12,7 +12,7 @@ Agente: Revisor de ejecutabilidad E1 · Módulos: 00–11 · Informe: agent-obse
 - [x] 09_metricas
 - [x] 10_grafana
 - [x] 11_multiagente
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - Entorno de trabajo (scratchpad ... /scratchpad/ej): venv (extras completos), venv2 (solo ipykernel+nbclient, "limpio"), repo/ y repo2/ = copias de archivos versionados (sin data/). Scripts: run.sh NN tag, batch_deg.sh, stack_pass.sh (flock+compose core+metrics+TEMPO_CONFIG=tempo-metrics.yaml+down -v), cmp.py, rub.py.
@@ -21,3 +21,4 @@ Agente: Revisor de ejecutabilidad E1 · Módulos: 00–11 · Informe: agent-obse
 - HALLAZGO 1: boot cell (pip install -e) en venv limpio -> `import supportops` falla en la celda siguiente (kernel no ve el editable recién instalado). Arreglo: sys.path.insert(ROOT)+invalidate_caches en BOOT de _a1_common.py (afecta a TODOS los builders; regenerar 00-11 hecho por mí, 12-22 por el otro revisor).
 
 - Venv limpio (venv3, solo ipykernel+nbclient+nbformat): 00-11 ejecutan sin errores tras el arreglo de BOOT (cl2). Pendiente: st3 (core solo + tempo.yaml por defecto: 03,05,07,08), informe, nota al otro revisor.
+- st3 (core + tempo.yaml por defecto: 03,05,07,08): sin errores, rúbricas OK. Informe REVISION_EJECUTABILIDAD_1.md escrito. Tarea terminada.
