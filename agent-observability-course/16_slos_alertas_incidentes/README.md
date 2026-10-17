@@ -1,6 +1,6 @@
 # Módulo 16 · SLOs, alertas e incidentes de agentes de IA
 
-🔴 **Experto** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
 
 > ⚠️ Tráfico e incidentes **simulados y deterministas** (`mock`, semilla 42): el agente real procesa 24 h de tickets con un fallo del proveedor LLM y una regresión de prompt inyectados, así que conocemos la verdad de cada alerta.
 > Las ventanas del laboratorio en vivo están **comprimidas** (minutos); las de producción (1 h/5 min, 6 h/30 min, 3 d/6 h) se tratan con simulación y aritmética.

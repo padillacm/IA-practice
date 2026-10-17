@@ -201,7 +201,7 @@ def build_lesson() -> None:
 
     | | |
     |---|---|
-    | **Nivel** | 🔴 Experto |
+    | **Nivel** | 🟠 Avanzado |
     | **Duración estimada** | ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min) |
     | **Servicios de Compose** | Opcional: `--profile core --profile metrics` (sección 7.1, ≈ 3 min en vivo). Sin Docker todo funciona en **modo degradado** (simulaciones del agente en memoria). Funciona en Colab |
     | **RAM aproximada** | < 500 MB sin stack · ≈ 1,2 GB con `core` + `metrics` |
@@ -230,9 +230,11 @@ def build_lesson() -> None:
     md("## 🔁 Conexión con módulos anteriores")
     md(details("1 · (Módulo 10) ¿Por qué el intervalo de un grupo de alertas de Grafana debe ser múltiplo de 10 s y cómo se enlaza una alerta con un panel?",
                "Porque el planificador de Grafana evalúa en ticks de 10 s: un intervalo como `15s` hace que Grafana no arranque. El enlace va en `annotations.__dashboardUid__` y `annotations.__panelId__` (el on-call llega a la gráfica que importa)."))
-    md(details("2 · (Módulo 14) ¿Por qué la calidad se mide con una muestra y qué implica para un SLI de calidad?",
+    md(details("2 · (Módulo 09) ¿Qué hace `rate()` sobre un *counter* de Prometheus y por qué el burn rate se calcula con cocientes de `rate()` y no con el valor bruto del contador?",
+               "`rate()` convierte un contador monótono en «eventos por segundo» en una ventana; el contador bruto solo crece y no dice nada del ritmo actual. El SLI es `rate(buenos)/rate(totales)` sobre la ventana de la alerta (igual que en ML calculas una tasa por lote, no el acumulado histórico)."))
+    md(details("3 · (Módulo 14) ¿Por qué la calidad se mide con una muestra y qué implica para un SLI de calidad?",
                "Porque evaluar cuesta (≈ 9× el coste de atender). Implica **poco volumen** por ventana: el SLI de calidad es ruidoso y necesita ventanas más largas y un mínimo de eventos."))
-    md(details("3 · (Módulo 15) ¿Qué señal delató la regresión silenciosa y por qué ninguna alerta de latencia/errores la vio?",
+    md(details("4 · (Módulo 15) ¿Qué señal delató la regresión silenciosa y por qué ninguna alerta de latencia/errores la vio?",
                "La caída de groundedness por versión y la huella de comportamiento (menos herramientas por ticket). Latencia y errores no la ven porque la petición termina bien y más rápido."))
 
     code(boot("viz,otel"))
@@ -286,6 +288,10 @@ plt.show()
     **Burn rate** (ritmo de consumo) en una ventana \(w\): \( \text{burn}(w) = \dfrac{1-\text{SLI}(w)}{B} \). Un burn de 1 consume exactamente el presupuesto en \(T\); de 14,4 lo agota en \(T/14{,}4\).
 
     **Presupuesto consumido** manteniendo un burn \(r\) durante \(w\): \( \dfrac{r\cdot w}{T} \). El 14,4 de la quema rápida sale de fijar **«el 2 % del presupuesto de un mes en 1 hora»**: \( r = 0{,}02\cdot 720\,\text{h}/1\,\text{h} = 14{,}4 \).
+
+    **✏️ Ejemplo resuelto (a mano, antes de ver código).** SupportOps atiende 2 tickets/min ≈ 86 400 al mes y fija un objetivo del 99 %: \(B\) = 1 % → **864 tickets malos al mes** como máximo.
+    Una hora con 120 tickets de los que 24 fallan: SLI = 96 / 120 = 0,80 → malos = 20 % → burn = 0,20 / 0,01 = **20** (≥ 14,4). Si ese ritmo se mantuviera, el presupuesto duraría 720 h / 20 = **36 h**, y esa sola hora ya consumió 20 / 720 ≈ **2,8 %** del mes.
+    Compruébalo con la tabla de la celda siguiente y repite la cuenta con un objetivo de 99,9 %: el mismo 20 % de fallos sería burn = 200.
     """)
     code('''
 rows = []
@@ -790,7 +796,7 @@ def build_project() -> None:
 
     | | |
     |---|---|
-    | **Nivel** | 🔴 Experto |
+    | **Nivel** | 🟠 Avanzado |
     | **Duración estimada** | ≈ 1 h 45 min |
     | **Servicios de Compose** | Ninguno (todo en memoria). Opcional: `core` + `metrics` para ver tus reglas en Grafana (paso final) |
     | **RAM aproximada** | < 500 MB |
@@ -848,6 +854,7 @@ print({k: (v.description, v.objective, v.threshold) for k, v in DEFAULT_SLOS.ite
     - `cost`: bueno si `cost_usd <= threshold`.
     - `quality`: **válidos** solo los que tienen `quality_good` distinto de `None` (los evaluados); bueno si `quality_good` es `True`.
     """)
+    md(hint(1, "Es el mismo patrón en los cuatro casos: construye una lista de booleanos «¿este evento es bueno?» sobre los **eventos válidos** y devuelve `(sum(lista), len(lista))`. Solo cambia qué filas son válidas (en calidad, las evaluadas)."))
     code('''
 def sli_counts(rows: list, slo: dict) -> tuple:
     # TODO 1
@@ -893,6 +900,7 @@ except NotImplementedError as e:
     - `burn = (1 − buenos/totales)/(1 − objective)`.
     """)
     md(hint(1, "Suma móvil con `np.cumsum`: `c = np.cumsum(np.insert(x, 0, 0))`; la suma de los últimos `w` hasta `i` es `c[i+1] - c[max(i+1-w, 0)]`."))
+    md(hint(2, "Escribe una función interna `burn(w)` que, para todos los minutos `i = np.arange(len(good))`, calcule `g` y `t` con esa resta, ponga `NaN`/0 donde `t < min_events` y devuelva `(1 - g/t)/(1 - objective)`. El resultado es `(burn(long_min) >= factor) & (burn(short_min) >= factor)`. Compáralo con tu `burn_by_hand` de la lección §4."))
     code('''
 def multiwindow_fire(good, total, objective, factor, long_min, short_min, min_events=5):
     # TODO 3
@@ -918,6 +926,8 @@ except NotImplementedError as e:
 
     **TODO 4b.** `provision_group(rules, interval)` devuelve `{"apiVersion": 1, "groups": [{"orgId": 1, "name": "supportops-slo", "folder": "Curso observabilidad de agentes", "interval": interval, "rules": rules}]}` y lanza `ValueError` si `interval` no termina en `s` o no es múltiplo de 10 s.
     """)
+    md(hint(1, "No inventes la estructura: es la misma regla que la lección imprimió en §7 (`r0[\"data\"]` y la tabla de piezas A-F). Reprodúcela como un `dict` y comprueba con `[d[\"refId\"] for d in R[\"data\"]]`. Escribe antes una función pequeña `expr(w)` que devuelva el PromQL del burn para una ventana `w` y reutilízala para A y B."))
+    md(hint(2, "`A` y `B` son consultas (`datasourceUid=\"prometheus\"`, `model` con `expr` e `instant=True`); `C` y `D` son `reduce` con `reducer=\"last\"` sobre A y B; `E` es un `math` con `$C > f && $D > f` y `F` un `threshold` `gt 0` sobre E. Los `dict` de `annotations` y `labels` salen del enunciado tal cual (`__panelId__` es `str(panel_id)`)."))
     code('''
 def alert_rule(name, objective, threshold_sli, factor, long_w, short_w, severity, dashboard_uid, panel_id) -> dict:
     # TODO 4a
@@ -947,6 +957,8 @@ except NotImplementedError as e:
     - `budget_month_pct`: `100 · bad_tickets / ((1 − objective) · total.sum() · 30)` (el día se repite 30 veces).
     - `false_minutes`: minutos con `fire` verdadero fuera de `[start_min − 5, end_min + 60)`.
     """)
+    md(hint(1, "Con `fire` booleano: el primer minuto que dispara dentro del incidente es `np.argmax(fire[start_min:]) `; el último minuto que dispara es `np.where(fire)[0].max()`. Los tickets malos son `int((total - good)[start_min:end_min].sum())`."))
+    md(hint(2, "`false_minutes`: `m = np.ones(len(fire), bool); m[max(start_min-5, 0):end_min+60] = False` y cuenta `fire & m`. Es la misma idea de «alertas fuera del incidente» que viste en la comparación de estrategias (§4)."))
     code('''
 def incident_report(good, total, fire, start_min, end_min, objective) -> dict:
     # TODO 5
@@ -972,6 +984,7 @@ except NotImplementedError as e:
     - **Sin culpa**: ni `root_cause` ni `contributing` contienen «culpa», «negligen», «error humano», «debería haber» ni «se olvidó».
     """)
     md(hint(1, "Puedes reutilizar la estructura de la lección (§9). Para la hora de alerta usa `f'{(O0 + report[\"ttd_min\"]) // 60:02d}:{(O0 + report[\"ttd_min\"]) % 60:02d}'`."))
+    md(hint(2, "Parte del `pm` de la lección: cambia solo lo que depende de `report` (cifras del resumen y la hora de la alerta) y revisa que cada acción tenga la forma `(acción, equipo, plazo, tipo)` y que haya al menos una de `prevenir`, `detectar` y `mitigar`. Evita en causa raíz las palabras prohibidas: describe el **sistema** (un único proveedor, ausencia de reserva), no a una persona."))
     code('''
 def write_postmortem(report: dict) -> dict:
     # TODO 6
@@ -1162,7 +1175,7 @@ display(run_rubric())
 def build_readme() -> None:
     readme = """# Módulo 16 · SLOs, alertas e incidentes de agentes de IA
 
-🔴 **Experto** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
+🟠 **Avanzado** · ≈ 4 h 30 min (lección ≈ 2 h 45 min + proyecto ≈ 1 h 45 min)
 
 > ⚠️ Tráfico e incidentes **simulados y deterministas** (`mock`, semilla 42): el agente real procesa 24 h de tickets con un fallo del proveedor LLM y una regresión de prompt inyectados, así que conocemos la verdad de cada alerta.
 > Las ventanas del laboratorio en vivo están **comprimidas** (minutos); las de producción (1 h/5 min, 6 h/30 min, 3 d/6 h) se tratan con simulación y aritmética.
