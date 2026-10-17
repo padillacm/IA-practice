@@ -123,17 +123,25 @@ def build_lesson() -> None:
     7. **Reconocer** los límites de la consulta de trazas: resultados «los primeros N», no determinismo, frontera live-store/backend, cardinalidad del metrics-generator.
     """)
 
+    md(box("route", "Ruta núcleo vs ampliación", """
+        Este módulo tiene ≈ 77 celdas y es denso: haz **dos sesiones**.
+
+        - **Núcleo (≈ 3 h con el proyecto):** §1 (preguntarle a un árbol), §3 completa (el mini motor, las tres trampas, estructurales, agregados y el relato del lote), §4 (contrastar con Tempo real), §5 (TraceQL metrics), §7 (manual de diagnóstico) y el proyecto.
+        - **Ampliación:** §2 (arquitectura de Tempo 3, Parquet y el experimento de retraso: léela como contexto), §4.1-4.2 (resultados «los primeros N» y bytes inspeccionados), §6 (metrics-generator) y los secretos 🧠 7-11.
+        - **Lo mínimo que no puedes saltarte:** (1) una consulta se evalúa **por traza**; (2) `{A} && {B}` ≠ `{A && B}`; (3) `UNSET` ≠ `OK`; (4) los operadores estructurales devuelven el lado **derecho**.
+        """))
+
     md("""
     ## 🔁 Conexión con módulos anteriores
     """)
-    md(details("1 · (Módulo 05) ¿Por dónde entran los spans a Tempo en este laboratorio y qué exportador del Collector se usa?",
-               "SDK → OTLP/HTTP `:4318` → Collector (`memory_limiter → resource/lab → batch`) → exportador `otlp_grpc/tempo` → Tempo `:4317` (solo dentro de la red de Compose)."))
-    md(details("2 · (Módulo 04) ¿Qué *kind* tiene el span `chat` y por qué importa para un *service graph*?",
-               "`CLIENT`. El service graph construye aristas emparejando un span CLIENT con el span SERVER que es su hijo en otro servicio; sin pares CLIENT/SERVER no hay aristas."))
-    md(details("3 · (Módulo 03) ¿Cómo sabe un servicio remoto a qué traza pertenece una petición?",
-               "Por la cabecera W3C `traceparent` (`trace_id` + `parent span_id`), que se inyecta en el cliente y se extrae en el servidor. En este módulo `llm-gateway`, `orders-api` y `kb-search` lo hacen con `propagate.inject/extract`."))
-    md(details("4 · (Módulo 06) ¿Por qué `status = ok` no devolverá casi nada en SupportOps?",
-               "Por convención de OpenTelemetry los spans correctos quedan en `UNSET`; `OK` solo si el código lo pone explícitamente. Para «no falló» se usa `status != error`."))
+    md(details("1 · (Módulo 05, Diagnóstico) Reenvías un lote con horas de hace 8 minutos. El Collector responde 200 a todo, `GET /api/traces/<id>` encuentra las trazas, pero una búsqueda por rango temporal solo devuelve la mitad. Antes de leer §8 (secreto 1), ¿qué hipótesis tienes sobre dónde se pierden y por qué el 200 no lo impide?",
+               "El 200 solo prueba que el Collector *aceptó* el dato (módulo 00/05); la traza existe en Tempo, de ahí que la lectura por id funcione. Lo que falla es **dónde se busca**: Tempo usa la hora de los *spans* para decidir en qué bloque mirar y, si llegan con mucho retraso respecto al reloj, el rango temporal de su bloque no los cubre (holgura `ingestion_time_range_slack`, 2 min por defecto). Lo medirás en este módulo."))
+    md(details("2 · (Módulo 04, Predicción) Si instrumentaras la llamada al LLM como `INTERNAL` en vez de `CLIENT`, ¿qué arista dejaría de aparecer en el *service graph* de §6 y por qué?",
+               "La arista `supportops-agent → llm-gateway`: el service graph construye aristas **emparejando un span CLIENT con el span SERVER hijo** en otro servicio. Sin el CLIENT, el SERVER del gateway queda sin par y no hay arista (se cuenta como span sin emparejar). Por eso el *kind* del módulo 04 tiene consecuencias aguas abajo."))
+    md(details("3 · (Módulo 03, Diagnóstico) `orders-api` crea su span SERVER pero olvida hacer `extract` de `traceparent`. ¿Qué verías con `{ resource.service.name = \"orders-api\" }` y cómo se distingue de una traza sana?",
+               "Aparecerían trazas **separadas** cuyo span raíz es un `SERVER` de `orders-api` (`trace:rootService = \"orders-api\"`), sin padre del agente; en una traza sana la raíz es `invoke_agent` en `supportops-agent` y `orders-api` cuelga de una herramienta. TraceQL permite detectar este fallo con `{ trace:rootService = \"orders-api\" }` (la raíz de una traza de usuario nunca debería ser un servicio interno)."))
+    md(details("4 · (Módulo 03, Predicción) ¿Qué devolverá `{ status = ok }` sobre las trazas de SupportOps? ¿Y qué consulta usarías para «los spans que no fallaron»?",
+               "Casi nada: por convención de OpenTelemetry los spans correctos quedan en `UNSET`; `OK` solo si el código lo fija explícitamente. «No falló» se escribe `status != error`. Es la segunda de las tres trampas de §3.1."))
 
     code(boot("viz,otel"))
     code(IMPORTS + SETUP)
@@ -154,7 +162,24 @@ def build_lesson() -> None:
     | **Backend** | `SELECT ... WHERE` sobre spans + un `EXISTS` sobre sus descendientes; el equivalente de buscar por tags en Jaeger/Zipkin, pero con estructura y agregados |
     | **SRE** | PromQL para trazas: `{ ... } | rate() by (...)` produce series temporales; la misma consulta que localiza una traza concreta alimenta un panel |
 
-    La misma traza de SupportOps con **tres consultas distintas** (en rojo, los spans que devuelve cada una):
+    **Primero, a mano con una traza diminuta** (4 spans; entre corchetes el servicio y, a la derecha, el estado):
+
+    ```text
+    invoke_agent                  [supportops-agent]                       UNSET
+    └─ execute_tool get_order     [supportops-agent]                       ERROR
+       └─ GET /orders/{id}        [orders-api, SERVER]                     ERROR
+          └─ SELECT               [orders-api, db.system = postgresql]     UNSET
+    ```
+
+    Antes de abrir la respuesta, ¿qué spans devuelve cada consulta? (a) `{ status = error }` · (b) `{ status = error } >> { span.db.system = "postgresql" }` · (c) `{ span.db.system = "postgresql" && status = error }`
+
+    <details>
+    <summary>Ver respuestas</summary>
+
+    (a) **Dos spans**: la herramienta y el `GET`, los que cumplen la condición. (b) **La `SELECT`**: `>>` significa «descendiente» y devuelve el lado **derecho**: las `SELECT` que cuelgan de un span con error. (c) **Nada**: pide que *un mismo span* sea de PostgreSQL *y* esté en error, y la `SELECT` no falló. Con `{ span.db.system = "postgresql" } && { status = error }` (dos spansets en la misma traza) sí devolvería resultados: es la trampa nº 1 de §3.1.
+    </details>
+
+    Ahora la figura con una traza real de SupportOps y **tres consultas distintas** (en rojo, los spans que devuelve cada una):
     """)
     code('''
 def matched(query, spans):
@@ -305,6 +330,8 @@ print({k: info.get(k) for k in ("version", "revision", "branch", "goVersion")})
     md("""
     ## 2.2 · Experimento: ¿cuánto tarda una traza en poder buscarse?
     Enviamos el lote de SupportOps al stack (con `generate_tickets(..., start_s="live")`, ventana que termina ahora) y medimos, para 10 trazas, el tiempo hasta que **(a)** se recupera por identificador (`/api/traces/<id>`) y **(b)** aparece en una búsqueda TraceQL (`{ trace:id = "…" }`).
+
+    > 🤔 **Predice antes de ejecutar.** ¿Cuál tardará más: recuperar una traza **por su id** o encontrarla con una **búsqueda TraceQL**? Estima ambos tiempos (¿décimas de segundo, unos segundos, medio minuto?) y, según la tabla de configuración de arriba, ¿qué parámetro crees que domina la diferencia?
     """)
     code('''
 if HAVE_TEMPO:
@@ -825,7 +852,11 @@ truth.loc[[i for i in ORDER if i in truth.index]]
                "Los spans de la **derecha** (las SELECT descendientes de una herramienta). Con el operador de unión `&>>` devolvería **ambos lados** (herramienta y SELECT). `&>>` y los negados `!>>` no están en el mini motor; los negados son experimentales y pueden dar falsos positivos."))
     md(details("7 · (Diagnóstico) Un compañero cuenta incidentes con `limit=20` en la búsqueda y dice que «siempre hay 20». ¿Qué le explicas?",
                "Que `limit` es un **tope de resultados devueltos, no el número de coincidencias**, y la búsqueda toma los primeros que llegan de varios trabajos en paralelo (no determinista). Para contar o ver la tasa: `{ ... } | count_over_time()` / `rate()` con TraceQL metrics, o span metrics."))
-    md(details("8 · (Transferencia) ¿Qué atributos de SupportOps declararías «obligatorios» para poder hacer todas las preguntas de este módulo, y cuáles NO convertirías en dimensión de span metrics?",
+    md(details("8 · (Diagnóstico) Un panel refresca cada 10 s la consulta `{ .http.route = \"/kb/search\" } && { .http.request.method = \"GET\" }` sobre 24 h de trazas y Tempo va lento. Aplica las reglas de ajuste de §4.2 y reescríbela.",
+               "Reglas: (1) **ámbito explícito** (`span.`, `resource.`): sin él Tempo mira en span y resource; (2) filtra primero por **resource o intrínsecos de traza** (columnas pequeñas); (3) **`&&` dentro de un selector** permite empujar el filtro a Parquet; (4) **pocos atributos**. Por ejemplo: `{ resource.service.name = \"kb-search\" && span.http.route = \"/kb/search\" && span.http.request.method = \"GET\" }`. Y si se repite cada 10 s para mucha gente, mejor un panel de **span metrics** (§6) que releer spans en cada refresco."))
+    md(details("9 · (Transferencia) Te avisan de que «el bot va lento desde las 15:00». Escribe, de lo grueso a lo fino, las tres primeras consultas que lanzarías y qué esperas de cada una.",
+               "(1) *¿Cuánto y cuándo?* — TraceQL metrics: `{ span.gen_ai.operation.name = \"invoke_agent\" } | quantile_over_time(duration, .95)` (o span metrics en Prometheus) para ver el escalón en el tiempo. (2) *¿Dónde?* — `{ } | quantile_over_time(duration, .95) by (resource.service.name)` o el service graph para localizar el servicio. (3) *¿Qué forma tiene?* — una consulta estructural/agregada sobre ese servicio, p. ej. `{ resource.service.name = \"orders-api\" } >> { duration > 500ms }` o `| count() > 3` si sospechas bucles. Después, abrir una traza concreta del escalón para confirmar la causa. Es el manual de §7."))
+    md(details("10 · (Transferencia) ¿Qué atributos de SupportOps declararías «obligatorios» para poder hacer todas las preguntas de este módulo, y cuáles NO convertirías en dimensión de span metrics?",
                "Obligatorios: `service.name`, `deployment.environment.name`, `service.version` (resource); `gen_ai.operation.name`, `gen_ai.agent.name`, `gen_ai.tool.name`, `gen_ai.request.model`, `error.type`, `supportops.status`, `supportops.attempt` (span). **No** dimensión: `supportops.ticket.id`, `supportops.customer.id`, `trace_id`, rutas con IDs (cardinalidad ilimitada); sí `gen_ai.tool.name` y `gen_ai.request.model` (valores acotados)."))
 
     md("""
@@ -951,6 +982,8 @@ answer('{ status = error }')[:5]
 ''')
     md("""
     ## Paso 1 · Las ocho preguntas
+    **Ejemplo resuelto (pregunta 0, no puntúa).** *«¿Qué tickets recibieron un error 429 del proveedor?»* Proceso: (1) **¿en qué span queda la evidencia?** En el span HTTP del gateway; (2) **¿qué atributo?** `span.http.response.status_code`; (3) **¿hace falta estructura, agregado o varios spans?** No: un solo span, un solo atributo. Consulta: `{ span.http.response.status_code = 429 }`. Para cada pregunta de abajo haz estas tres preguntas en orden: *¿qué span?*, *¿qué atributo(s) y ámbito?*, *¿necesito `&&` entre spansets, un operador estructural o un agregado?*
+
     **TODO 1.** Rellena `QUERIES` (cada valor es una consulta TraceQL **completa**; se evalúa por traza y se compara el conjunto de tickets):
 
     | # | Pregunta |
@@ -1014,6 +1047,11 @@ try:
 except NotImplementedError as e:
     TL = None; print("Pendiente:", e)
 ''')
+    md(observe("""
+        - Con tu `incident_timeline` correcta, la serie de Q1 es `[0, 0, 3, 10, 2, 0, 0, 1, 0, 0]`: casi todas las trazas con 5xx del gateway caen en los minutos **2-4**, la ventana del proveedor LLM degradado (3:00-4:30); el `1` del minuto 7 es **fondo** de fallos aleatorios, no el incidente.
+        - Una consulta por *estructura* (qué) más un histograma por *tiempo* (cuándo) distingue **incidente** de **ruido**: eso es lo que no distingue la búsqueda por sí sola (lección §3.4).
+        - Si tu barra aparece desplazada o suma menos de 16, revisa el índice de intervalo (`min(n_bins - 1, ...)`) y que el `t0` sea el del span más antiguo del lote.
+        """))
     md("""
     ## Paso 4 · Consultas para el dashboard
     **TODO 4.** Escribe en `METRICS`:
@@ -1021,6 +1059,8 @@ except NotImplementedError as e:
     - `"tool_p95"`: TraceQL metrics, **p95 de la duración de los spans `execute_tool`** por herramienta (`span.gen_ai.tool.name`) con `quantile_over_time`.
     - `"promql_p95"`: PromQL de **span metrics**: p95 de latencia por `service` con `histogram_quantile` sobre `traces_spanmetrics_latency_bucket`.
     """)
+    md(hint(1, "Las tres son de la forma «selector | función por grupo». Para TraceQL metrics: `{ selector } | rate() by (atributo)`; una **razón** es `( {A} | rate() by (g) ) / ( {B} | rate() by (g) )`, con el mismo `by` en ambos lados (§5 de la lección). Para el percentil: `quantile_over_time(duration, .95) by (atributo)`."))
+    md(hint(2, "`error_rate`: numerador `{ status = error }`, denominador `{ }` (todos los spans). `tool_p95`: selector `{ span.gen_ai.operation.name = \"execute_tool\" }` y agrupa por `span.gen_ai.tool.name`. `promql_p95`: `histogram_quantile(0.95, sum by (le, service) (rate(traces_spanmetrics_latency_bucket[5m])))`, es decir, suma las tasas de los *buckets* conservando `le` y `service` (módulo 02, sección 6: los histogramas se agregan sumando buckets)."))
     code('''
 METRICS: dict[str, str] = {
     # "error_rate": '...',

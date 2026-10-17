@@ -7,7 +7,7 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - [x] 04_genai_semconv
 - [x] 05_collector
 - [x] 06_autoinstrumentacion
-- [ ] 07_tempo_traceql
+- [x] 07_tempo_traceql
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar
@@ -22,3 +22,5 @@ Agente: Revisor pedagógico P1 · Módulos: 00–07 · Informe: agent-observabil
 - 04: conexión aplicada (sampler, kind, doble conteo), ejemplo a mano (span con 3 desviaciones, verificado con el linter real) antes de la tabla de reglas, autoeval +1 (spec vigente), Pista 3 en TODO migrate. Solo markdown.
 - 05: conexión Q1 como cálculo, gloss DaemonSet/sidecar, predicción 4.4, autoeval +1 (conservación), plan en 3 iteraciones en TODO 1. Solo markdown (el builder re-verificó la solución con Docker: OK).
 - 06: conexión con predicción/transferencia, 🧭 ruta núcleo (74 celdas), predicción antes de exp. 1, autoeval +1 (cálculo matriz) y etiquetas, 2 pistas en TODO 6a/6b. Solo markdown.
+- 07: conexión aplicada (4), ejemplo a mano de 4 spans, predicción 2.2, 🧭 ruta núcleo, autoeval +2 (ajuste de consulta, manual de diagnóstico), proyecto: ejemplo resuelto Q0, pistas METRICS, 👀 timeline. Consultas verificadas con traceql_mini; proyecto ejecutado con nbclient OK.
+- Pendiente: informe REVISION_PEDAGOGICA_1.md + check_course.py
