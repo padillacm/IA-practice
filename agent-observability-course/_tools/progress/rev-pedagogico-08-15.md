@@ -7,7 +7,7 @@ Agente: Revisor pedagógico P2 · Módulos: 08–15 · Informe: agent-observabil
 - [x] 12_mcp_tools (ruta A/B, duración 5 h, 🔁 Q4 hilos, pista TODO 6)
 - [x] 13_costes_finops (ejemplo resuelto a mano 1.1 antes de la fórmula, predicción, 🔁 Q4)
 - [x] 14_evaluacion_online (pistas TODO 3-6, 🔁 Q4 cálculo coste de evaluar)
-- [ ] 15_calidad_regresion
+- [x] 15_calidad_regresion (pistas TODO 2,3,5,6; 🔁 Q4 transferencia versión)
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar

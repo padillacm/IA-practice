@@ -85,6 +85,9 @@ def build_lesson() -> None:
     md(details("3 · (Módulo 07) ¿Qué selector de TraceQL devuelve los `invoke_agent` sin ninguna llamada a herramienta?",
                "Por atributos del span raíz: `{ name =~ \"invoke_agent.*\" && span.supportops.tool_calls = 0 }`. O estructural: trazas con `chat` pero sin hijos `execute_tool` (con `!>`/`count()` según versión de Tempo). Hoy lo usaremos para localizar la regresión."))
 
+    md(details("4 · (Módulo 08/09, transferencia) Vas a etiquetar cada evaluación con la versión del agente (`v1`, `v2`, `v3-canary`…). ¿Cómo la guardas en una métrica de Prometheus y cómo en Loki? ¿Qué te preocupa a largo plazo?",
+               "En la **métrica** es una etiqueta de baja cardinalidad (`gen_ai_agent_version`: unas pocas versiones vivas a la vez) y es justo lo que permite comparar versiones en el mismo panel. En **Loki** es mejor *structured metadata* que etiqueta de stream: cada release crearía streams nuevos para siempre. La preocupación: una versión nueva por *commit* o por *deploy* haría crecer las series sin límite, así que usa la versión **semántica del prompt/modelo**, no el hash del despliegue."))
+
     code(boot("viz,otel"))
     code(IMPORTS + IMPORTS_15)
     code(DATA_15)
@@ -706,6 +709,9 @@ except NotImplementedError as e:
     **TODO 2.** `compare_versions(base, cand, margin=0.03)` recibe dos listas de filas de `replay(...)` (dicts con `case_id`, `passed`, …) de **los mismos casos** y devuelve `{"b", "c", "diff", "p_value", "decision"}`:
     `b` = casos que pasan con la base y fallan con la candidata, `c` = al revés, `diff` = calidad candidata − calidad base, `p_value` = `mcnemar_exact(b, c)` y `decision` = `"block"` si `diff < -margin` **y** `p_value < 0,05` (si no, `"ship"`). Lanza `ValueError` si las listas no tienen los mismos `case_id` en el mismo orden.
     """)
+    md(hint(1, '«Apareada» significa que cada caso se compara **consigo mismo** en las dos versiones. Los casos que pasan (o fallan) en ambas no informan sobre cuál es mejor; solo cuentan los **discordantes**: `b` = pasa con la base y falla con la candidata, `c` = al revés. McNemar exacto compara `b` y `c` (lo viste en la sección 4). Valida primero que los `case_id` coinciden y en el mismo orden (`ValueError` si no).'))
+    md(hint(2, "`b = sum(x['passed'] and not y['passed'] for x, y in zip(base, cand))` y `c` análogo; `diff` = media de `passed` de la candidata − media de la base; `p = mcnemar_exact(b, c)`. La decisión necesita **las dos condiciones a la vez**: `diff < -margin` (la caída es relevante) y `p < 0,05` (no es ruido)."))
+
     code('''
 GOLD = select_golden(CASES1, VERD1, FB1, n_total=120, tools_by_ticket=TOOLS1)        # (lo da el paquete: úsalo en los pasos 2 y 3 aunque tu build_golden aún no esté)
 GT = golden_to_tickets(GOLD, SRC)
@@ -729,6 +735,9 @@ except NotImplementedError as e:
 
     **TODO 3b.** `drift_flags(ref, cur)` recibe dos huellas y devuelve la **lista ordenada alfabéticamente** de métricas «marcadas»: `no_tool_rate` si sube más de **0,05** (absoluto); `error_rate` si sube más de **0,02**; y cualquier otra si cambia más de un **15 %** en relativo (`abs(cur-ref)/ref > 0,15`, ignorando `ref == 0`).
     """)
+    md(hint(1, '`fingerprint` es un resumen de una población: una **media por campo** (en ML, la «huella» de la distribución de salida de un modelo). `no_tool_rate` y `error_rate` son medias de booleanos (fracción de filas con `n_tool_calls == 0` o con `status` en `{error, max_steps}`). Un truco: `m = lambda k: sum(float(r[k]) for r in rows) / len(rows)`.'))
+    md(hint(2, '`drift_flags`: recorre las claves de la huella de referencia. Dos claves tienen regla **absoluta** (`no_tool_rate` > +0,05; `error_rate` > +0,02) y el resto una regla **relativa** (`abs(cur - ref) / ref > 0,15`, saltándote `ref == 0`). Fíjate en que los absolutos solo marcan **subidas**. Devuelve `sorted(...)`.'))
+
     code('''
 def fingerprint(rows: list) -> dict:
     # TODO 3a
@@ -777,6 +786,9 @@ except NotImplementedError as e:
     **TODO 5.** `canary_decision(fails, p0, p1, alpha=0.05, beta=0.2)` recibe una lista de booleanos (`True` = fallo de calidad en cada evaluación del canario, en orden) y devuelve `(decisión, n)`: tras cada observación `i` (1-based) calcula
     \\( \\Lambda_i = k\\ln\\frac{p_1}{p_0} + (i-k)\\ln\\frac{1-p_1}{1-p_0} \\) y devuelve `("rollback", i)` si \\( \\Lambda_i \\ge \\ln\\frac{1-\\beta}{\\alpha} \\), `("promote", i)` si \\( \\Lambda_i \\le \\ln\\frac{\\beta}{1-\\alpha} \\); si termina sin cruzar ninguna cota, `("continue", len(fails))`.
     """)
+    md(hint(1, 'Calcula las dos cotas **una vez**, fuera del bucle: `upper = ln((1−β)/α)` y `lower = ln(β/(1−α))`. Dentro del bucle lleva la cuenta de fallos `k` y, con `i` observaciones, evalúa \\( \\Lambda_i \\). Es una prueba de razón de verosimilitudes acumulada: cada fallo la **sube** (porque `p1 > p0`) y cada éxito la **baja**.'))
+    md(hint(2, 'Comprueba primero `rollback` (Λ ≥ cota superior) y luego `promote` (Λ ≤ cota inferior); devuelve `(decisión, i)` en cuanto cruces una. Si terminas el bucle sin cruzar, `("continue", len(fails))`: «todavía no hay datos suficientes», que es una respuesta legítima y no un error.'))
+
     code('''
 def canary_decision(fails: list, p0: float, p1: float, alpha: float = 0.05, beta: float = 0.2) -> tuple:
     # TODO 5
@@ -804,6 +816,9 @@ except NotImplementedError as e:
     7. **Trazas sospechosas (Tempo)**: contiene `span.gen_ai.agent.version` y `span.supportops.tool_calls = 0`.
     8. **Evaluaciones fallidas por versión (Loki)**: contiene `gen_ai_evaluation_score_label="fail"` y `gen_ai_agent_version`.
     """)
+    md(hint(1, 'Es el mismo ejercicio del módulo 10, con otras consultas: `Dashboard(uid, titulo, tags=[...], description=...)` y `d.add(timeseries(titulo, [prom(expr, leyenda)], unit=..., w=..., description=...), ...)`. Las consultas de Prometheus están en la lista del enunciado; para las de Tempo y Loki usa `traces_table(...)` y `logs(...)`. Termina con `return d.to_dict()` y comprueba con `lint(D)` (la celda de prueba ya lo hace).'))
+    md(hint(2, 'Para los cocientes («herramientas por ticket», «coste por ticket») usa `sum(rate(X_sum[5m])) / sum(rate(X_count[5m]))`; para la calidad, `pass` dividido entre el total de evaluaciones, ambos `sum by (gen_ai_agent_version)`. Exige 8 paneles **con `description`**: escribe una frase que diga qué mide y cómo se lee (qué sube/baja cuando hay regresión).'))
+
     code('''
 def build_regression_dashboard() -> dict:
     # TODO 6
