@@ -50,12 +50,12 @@ def build_lesson() -> None:
     md("""
     ## 🔁 Conexión con módulos anteriores
     """)
-    md(details("1 · (Módulo 00) ¿Qué trae el Collector en una petición OTLP/HTTP de trazas: dónde van `traceId` y los tiempos y en qué formato?",
-               "En `POST :4318/v1/traces`, JSON jerárquico `resourceSpans → scopeSpans → spans`; `traceId` (32 hex) y `spanId` (16 hex) en **hexadecimal**, y `startTimeUnixNano`/`endTimeUnixNano` como **strings** de nanosegundos."))
-    md(details("2 · (Módulo 01) ¿Por qué una alucinación es *más barata y rápida* que una respuesta correcta y qué implica para el monitoreo?",
-               "Porque no llama herramientas (1 paso, ≈ 350 tokens frente a 5 pasos, ≈ 1300). Implica que una «mejora» de latencia/coste puede ser una regresión: hay que vigilar pasos/herramientas por petición y la calidad, no solo latencia y coste."))
-    md(details("3 · (Módulo 01) ¿Qué punto de extensión del agente permite instrumentarlo y qué tres operaciones envuelve?",
-               "El `Instrumentor` con context managers: `agent_run` (span raíz `invoke_agent`), `llm_call` (`chat`) y `tool_call` (`execute_tool`), más `log(...)`."))
+    md(details("1 · (Módulo 00, Diagnóstico) Tu `POST /v1/traces` al Collector devuelve 200 pero Tempo no encuentra la traza 5 minutos después. Da dos hipótesis y di qué campo del JSON OTLP comprobarías primero.",
+               "(1) El Collector *aceptó* el dato pero falla la salida hacia Tempo (mira `otelcol_exporter_send_failed_*` en `:8888/metrics`); (2) el dato es inválido para el backend: `traceId` que no son 32 hex, o tiempos antiguos/en formato incorrecto. En OTLP/JSON los ids van en **hexadecimal** (`traceId` 32, `spanId` 16) y `startTimeUnixNano`/`endTimeUnixNano` como **strings** de nanosegundos; la jerarquía es `resourceSpans → scopeSpans → spans`."))
+    md(details("2 · (Módulo 01, Transferencia) En el módulo 01 viste que `tool_timeout` termina en estado `degraded` y no en `error`, y que un `llm_error` transitorio acaba en `ok`. Si alertas solo con la «tasa de error de la petición raíz», ¿qué incidentes se te escapan y por qué?",
+               "Se escapan los fallos que el agente **absorbe**: herramientas caídas con respuesta de cortesía (`degraded`) y errores del proveedor cubiertos por reintentos. La raíz sale «ok» aunque un span hijo esté en error. Esa observación es la hipótesis que este módulo contrasta en el proyecto: para verlos necesitas errores *por tipo de span* y contar reintentos."))
+    md(details("3 · (Módulo 01, Cálculo) Un agente reenvía todo el historial en cada llamada: 800 tokens de prompt y +300 por paso. ¿Cuántos tokens de entrada acumula con 4 llamadas y por qué una métrica de «peticiones por segundo» no lo refleja?",
+               "800 + 1100 + 1400 + 1700 = **5000** tokens de entrada (no 4 × 800). Una métrica de peticiones/s cuenta *peticiones*, pero la unidad de coste y de fallo es el **paso**: dos peticiones iguales pueden costar 1× y 6×. Por eso este módulo añade tokens, pasos y coste a las *golden signals*."))
 
     code(boot("viz"))
     code(IMPORTS + '''
@@ -558,6 +558,8 @@ plt.tight_layout(); plt.show()
     El percentil **no es lineal**: el p95 de la unión de dos conjuntos **no** es la media de sus p95. Un tablero que «promedia p95 de varias instancias» o «el p95 medio por minuto» da números sin significado estadístico.
     Lo correcto es **agregar los histogramas** (sumar los recuentos por bucket) y calcular el percentil sobre el histograma combinado.
 
+    > 🤔 **Predice antes de ejecutar.** Mira el experimento que sigue: tres instancias con el 90 %, 9 % y 1 % del tráfico; la tercera es lenta (p95 ≈ 11 s) y las otras dos rápidas (p95 ≈ 2-3 s). Antes de ver el gráfico, ¿cuál será el p95 *global* real: ≈ 3 s, ≈ 5 s o ≈ 8 s? ¿Y el «promedio de los tres p95»? Escribe ambos números y compáralos.
+
     $$ p_{95}\\big(A\\cup B\\big)\\;\\neq\\;\\tfrac{1}{2}\\big(p_{95}(A)+p_{95}(B)\\big)\\qquad\\text{pero}\\qquad \\text{hist}(A\\cup B)=\\text{hist}(A)+\\text{hist}(B) $$
 
     Tres instancias del agente con tráfico muy desigual (la tercera es lenta pero casi no recibe peticiones):
@@ -654,7 +656,7 @@ ax.set_title("HIPÓTESIS de detectabilidad (la mediremos en el proyecto)"); ax.g
     - **Grafana Tempo 3.0** (notas de la versión) incorpora en el metrics-generator el *span multiplier* «para entornos con muestreo» y limitación de cardinalidad por etiqueta: el propio backend reconoce que las métricas derivadas de trazas muestreadas hay que corregirlas y acotarlas (ver 🧠 #10 y #1).
     - **OpenTelemetry:** especifica el modelo de datos de las tres señales y de **correlación** entre ellas (trace_id en logs, exemplars en métricas). Los atributos específicos de GenAI (`gen_ai.*`) están en estado *Development*: úsalos con versión fijada (módulo 04).
     """)
-    md(box("elite", "Secretos de la élite · los tres pilares", """
+    md(box("elite", "los tres pilares", """
     1. **Cardinalidad = coste (y caídas).** Cada combinación de etiquetas es una serie. Los IDs (cliente, ticket, `trace_id`) pertenecen a trazas y logs; en métricas, pocas dimensiones acotadas (modelo, intención, estado, tier). Controla la cardinalidad con *views* del SDK o el Collector (módulos 05 y 18).
     2. **Los percentiles no se agregan; los histogramas sí.** Elige los *buckets* alrededor de tus umbrales de SLO: la documentación de Prometheus advierte de que el cálculo de la fracción «≤ umbral» solo es exacto si hay un límite de bucket exactamente en el umbral y, si no, se **interpola**. Los histogramas **exponenciales** de OpenTelemetry (si tu backend los soporta) dan buena precisión con pocos parámetros — compruébalo en tu backend antes de adoptarlos.
     3. **El muestreo sesga las métricas.** Si calculas «tasa de error» solo con las trazas que sobreviven al *tail sampling* (que conserva errores y lentas), tu tasa sale inflada. Las métricas RED deben calcularse **antes** de muestrear (span metrics del Collector, o instrumentos de métricas en la app).
@@ -720,7 +722,13 @@ print(f"ponderada por 1/p       : {weighted:.2%}")
         ("7 · (Transferencia) Del ML a los agentes",
          """En un modelo de recomendación monitorizas CTR (agregado) y revisas casos individuales cuando cae. ¿A qué señal corresponde cada cosa en un agente de soporte?""",
          """El CTR agregado ≈ **métricas** (tasa de resolución, p95, coste); revisar casos individuales ≈ **trazas** (el recorrido del agente) con **logs** correlacionados y, para la calidad de la respuesta, **evaluación online** (equivalente a las etiquetas tardías)."""),
-        ("8 · (Transferencia) Una API de pagos",
+        ("8 · (Diagnóstico) De la alerta a la causa",
+         """Salta una alerta de métricas: «p95 de `agent_request_duration_seconds` > 8 s». Describe el camino para llegar a la causa raíz indicando, en cada salto, **qué identificador** une una señal con la siguiente.""",
+         """(1) La métrica avisa *que* hay un problema; el **exemplar** del bucket lento guarda el `trace_id` de una petición concreta → (2) abres esa **traza** y lees su cascada: el span con más *tiempo propio* (p. ej. un `execute_tool` de 5 s) dice *dónde* → (3) con ese `trace_id` (y el `span_id`) buscas sus **logs**, que dicen *qué* pasó (el mensaje de error). Los tres saltos usan `trace_id`; el recurso común (`service.name`) une las señales del mismo servicio. Si los logs no llevan `trace_id`, el camino se corta en el paso 3."""),
+        ("9 · (Cálculo) ¿Resource, scope o atributo de span?",
+         """Clasifica estos datos en *resource*, *instrumentation scope* o *atributo de span*, y justifica con la regla «¿cambia por operación o por emisor?»: `service.name`, `gen_ai.tool.name`, `deployment.environment.name`, la librería `opentelemetry.instrumentation.openai`, `supportops.ticket.id`.""",
+         """*Resource* (describen **al emisor**, no cambian en la vida del proceso y viajan con todas las señales): `service.name`, `deployment.environment.name`. *Scope* (**qué librería** midió): `opentelemetry.instrumentation.openai`. *Atributo de span* (describen **esa operación**, cambian por petición): `gen_ai.tool.name`, `supportops.ticket.id`. Consecuencia práctica: ponerlos bien permite filtrar logs, métricas y trazas por `service.name` y no repetir datos comunes en cada span."""),
+        ("10 · (Transferencia) Una API de pagos",
          """Aplica *golden signals* a una API de pagos con LLM antifraude. ¿Qué cambia respecto a SupportOps?""",
          """Latencia (con SLO estricto), tráfico, errores y saturación siguen valiendo; **sube la importancia** de: errores *silenciosos* (falsos negativos del modelo antifraude), de la **auditoría** (logs inmutables con retención y PII redactada) y de la **calidad** medida con etiquetas tardías (contracargos). Cardinalidad: `merchant_id` en trazas, no en métricas."""),
     ]
@@ -897,6 +905,8 @@ except NotImplementedError as e:
 
     md("""
     **TODO 3.** `phase_features(inc)` devuelve un `dict` con las 9 características + `slow_share`, `purity` y `culprit` (el nombre más frecuente, o `None`). Te damos como ayuda el mapa `trace → fase` y los tiempos de A.
+
+    > 🧩 **Divide y vencerás.** Es el TODO más largo; hazlo en cuatro tramos y comprueba cada uno imprimiendo valores antes de seguir: (1) las 6 características de **métricas** salen de `runs` (fase B menos/entre fase A); (2) la de **logs** necesita unir `logs.trace_id` con la fase de su ticket; (3) las 2 de **trazas** salen de agrupar `spans` por `trace_id`; (4) `slow_share`, `purity` y `culprit` reutilizan tu `culprit_name`. Si el resultado de `llm_outage` tiene `err_delta ≈ 0,56`, vas bien.
     """)
     md(hint(1, "Mapas útiles: `t2p` (trace_id → fase) se obtiene uniendo los spans raíz con `runs` por el atributo `supportops.ticket.id`. Para logs: `logs['phase'] = logs.trace_id.map(t2p)`."))
     md(hint(2, "Por traza: `has_err_child = ((g.status == 'ERROR') & g.parent_span_id.notna()).any()`; `repeat = (g[g.name.str.startswith('execute_tool')].name.value_counts() >= 3).any()`; duración de la raíz = `g[g.parent_span_id.isna()].dur.iloc[0]`. Agrupa con `spans.groupby('trace_id')`."))
@@ -922,6 +932,8 @@ except NotImplementedError as e:
     - **T** si `child_err_delta ≥ 0,10` **o** `repeat_share_delta ≥ 0,10` **o** (`slow_share ≥ 0,25` **y** `purity ≥ 0,7`).
 
     *(Reflexiona: ¿por qué las reglas de M incluyen umbrales «≤»? ¿Qué incidente los necesita?)*
+
+    > 🤔 **Predice antes de ejecutar.** Con lo visto en la sección 8 de la lección, apunta qué incidentes crees que serán **invisibles para M** y cuál **no activará ninguna señal**. Compara tu predicción con la matriz que obtengas: si falla, ¿qué supuesto estaba mal?
     """)
     code('''
 def fires(f: dict) -> set:
@@ -1181,6 +1193,11 @@ for n, c in [("tool_errors", viz.PALETTE["warn"]), ("llm_slow", viz.PALETTE["err
 axes[1].axvline(30, color="k", ls="--"); axes[1].set_xlabel("minuto"); axes[1].set_ylabel("relativo a la media de la fase A"); axes[1].legend(fontsize=8); axes[1].set_title("Lo que ve un dashboard de RED en tres incidentes (inicio del incidente: línea discontinua)")
 plt.tight_layout(); plt.show()
 ''')
+    md(observe("""
+        - **Matriz (izquierda):** `pii_leak` no activa ninguna señal (fila vacía) y `tool_errors` y `retry_storm` no activan **M** (solo logs y trazas): son los puntos ciegos que pedía R6. `hallucination`, `cost_drift` y `traffic_spike` solo los ve **M**, y cada uno por una característica distinta (menos pasos, más coste, más tráfico).
+        - **Series (derecha):** `llm_slow` multiplica el p95 relativo (≈ ×5) sin cambiar el tráfico; `traffic_spike` triplica el tráfico pero la latencia casi no se mueve; `tool_errors` apenas altera ninguna de las dos. Un dashboard RED por sí solo detecta dos de los tres.
+        - Conclusión para el proyecto 03: para cubrir lo que M no ve, hay que **instrumentar** (trazas con error por span, logs con `trace_id`); para `pii_leak` hace falta mirar contenido (módulo 20).
+        """))
     nb.save(out)
 
 
