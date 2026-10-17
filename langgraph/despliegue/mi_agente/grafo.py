@@ -17,7 +17,14 @@ from langgraph.runtime import Runtime
 from mi_agente.estado import ContextoPeticion, EstadoSoporte
 from mi_agente.herramientas import HERRAMIENTAS
 
-MODELO = os.environ.get("MODELO_AGENTE", "openai:gpt-4o-mini")
+MODELO = os.environ.get("MODELO_AGENTE", "openai:gpt-6-luna")
+
+#: Modelos de razonamiento (o1/o3/o4, gpt-5, gpt-6) rechazan cualquier
+#: `temperature` distinto de su valor por defecto con un 400 unsupported_value.
+#: Además, con Chat Completions el tool-calling (bind_tools de más abajo) solo
+#: funciona con `reasoning_effort="none"`, así que se fija ese en vez de la
+#: temperatura para estos modelos.
+_ES_MODELO_RAZONAMIENTO = MODELO.split(":")[-1].startswith(("o1", "o3", "o4", "gpt-5", "gpt-6"))
 
 INSTRUCCIONES = {
     "es": ("Eres un asistente de soporte técnico. Usa las herramientas para dar cifras exactas. "
@@ -33,7 +40,8 @@ def _modelo():
     try:
         return _CACHE
     except NameError:
-        _CACHE = init_chat_model(MODELO, temperature=0).bind_tools(HERRAMIENTAS)
+        kwargs = {"reasoning_effort": "none"} if _ES_MODELO_RAZONAMIENTO else {"temperature": 0}
+        _CACHE = init_chat_model(MODELO, **kwargs).bind_tools(HERRAMIENTAS)
         return _CACHE
 
 
