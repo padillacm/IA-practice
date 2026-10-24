@@ -126,7 +126,7 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
 
 ## 6. WP6 · Integration
 
-- [ ] 6.1 Add `.github/workflows/verify-netflix-interview.yml`: it installs `requirements.txt` and runs `check_simulator.py`, `test_check_simulator.py` and `test_sim.py`. It is triggered by changes in `netflix-ml-interview/**`, `.claude/agents/netflix-*.md`, `.claude/skills/netflix-ml-interview/**`, `.gitignore` and the workflow itself. Verify that it passes on the PR.
+- [x] 6.1 Add `.github/workflows/verify-netflix-interview.yml`: it installs `requirements.txt` and runs `check_simulator.py`, `test_check_simulator.py` and `test_sim.py`. It is triggered by changes in `netflix-ml-interview/**`, `.claude/agents/netflix-*.md`, `.claude/skills/netflix-ml-interview/**`, `.gitignore` and the workflow itself. Verify that it passes on the PR.
 - [x] 6.2 Link the simulator from the root `README.md` and from `recsys-course/README.md`. Verify that the relative links resolve.
 - [ ] 6.3 End-to-end smoke test with three sessions: an `rs` L5 in English (abbreviated VO1), an `mle` with cut and `ai-assisted-coding`, and a standalone `ds` stage with `lang=es`. Check: isolation between stages, absence of live feedback, time flags, verified quotes, decision according to the rule, links to `recsys-course/` and clean `git status`. Record the findings in `netflix-ml-interview/examples/smoke-test.md`, without data from real sessions.
 
