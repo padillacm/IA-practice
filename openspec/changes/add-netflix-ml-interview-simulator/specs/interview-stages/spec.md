@@ -2,180 +2,180 @@
 
 ## Purpose
 
-Define el catálogo de etapas del proceso de entrevistas de ML de Netflix y el comportamiento observable de los entrevistadores simulados en cada una, alineado con la información pública recogida en `research.md`.
+Defines the catalog of stages of the Netflix ML interview process and the observable behavior of the simulated interviewers in each one, aligned with the public information collected in `research.md`.
 
 ## ADDED Requirements
 
-### Requirement: Catálogo de etapas
-El sistema SHALL ofrecer 14 etapas: `recruiter-screen`, `hm-screen`, `technical-screen`, `presentation`, `coding`, `ai-assisted-coding`, `ml-fundamentals`, `ml-system-design`, `experimentation`, `culture`, `ml-depth`, `project-deep-dive`, `partnership` y `hm-onsite`. De cada una SHALL declarar fase por defecto, duración, variantes con su valor por defecto por rol, competencias, persona y estilo.
+### Requirement: Stage catalog
+The system SHALL offer 14 stages: `recruiter-screen`, `hm-screen`, `technical-screen`, `presentation`, `coding`, `ai-assisted-coding`, `ml-fundamentals`, `ml-system-design`, `experimentation`, `culture`, `ml-depth`, `project-deep-dive`, `partnership` and `hm-onsite`. For each one it SHALL declare default phase, duration, variants with their per-role default, competencies, persona and style.
 
-#### Scenario: Validación del catálogo
-- **WHEN** se ejecuta la validación del simulador
-- **THEN** las 14 etapas tienen todos sus campos, y cada entrada de los loops apunta a una etapa y una variante existentes y compatibles con el rol
+#### Scenario: Catalog validation
+- **WHEN** the simulator validation is run
+- **THEN** the 14 stages have all their fields, and each loop entry points to an existing stage and variant compatible with the role
 
-### Requirement: Fuentes y aviso de variabilidad
-Cada etapa SHALL documentar las fuentes públicas en que se basa, con su nivel de confianza, y marcar como supuestos las duraciones y los descriptores de nivel extrapolados. Al iniciar una sesión, el sistema SHALL avisar de que los loops reales varían por equipo y nivel.
+### Requirement: Sources and variability notice
+Each stage SHALL document the public sources it is based on, with their confidence level, and mark as assumptions the durations and the extrapolated level descriptors. When starting a session, the system SHALL warn that real loops vary by team and level.
 
-#### Scenario: Aviso al iniciar
-- **WHEN** se muestra el resumen de configuración
-- **THEN** incluye una línea que indica que el loop simulado es una aproximación y que la estructura real hay que confirmarla con el recruiter
+#### Scenario: Notice at start
+- **WHEN** the configuration summary is shown
+- **THEN** it includes a line stating that the simulated loop is an approximation and that the real structure must be confirmed with the recruiter
 
-### Requirement: Variantes de technical-screen
-`technical-screen` SHALL ofrecer:
-- `ml-coding` (MLE): unos 20' de preguntas de ML y unos 40' de coding práctico de dificultad media.
+### Requirement: Technical-screen variants
+`technical-screen` SHALL offer:
+- `ml-coding` (MLE): about 20' of ML questions and about 40' of practical coding of medium difficulty.
 - `ml-framing-coding` (RS).
-- `sql` y `stats` (DS).
-- Opcionales: `fundamentals-pr-review`, `intern-project-coding` (20' de proyecto + 40' de coding, formato reportado en prácticas) y `oa`.
+- `sql` and `stats` (DS).
+- Optional: `fundamentals-pr-review`, `intern-project-coding` (20' of project + 40' of coding, format reported for internships) and `oa`.
 
 #### Scenario: PR review
-- **WHEN** un `mle` hace `technical-screen@fundamentals-pr-review`
-- **THEN** tras los fundamentos (p. ej. attention con Q/K/V o KV cache), el entrevistador muestra un PR cuyos tests pasan y pide analizar qué fallaría en producción; después discute cómo servir esos features con distintas latencias
+- **WHEN** an `mle` does `technical-screen@fundamentals-pr-review`
+- **THEN** after the fundamentals (e.g. attention with Q/K/V or KV cache), the interviewer shows a PR whose tests pass and asks what would fail in production; then discusses how to serve those features with different latencies
 
-#### Scenario: Stats de DS
-- **WHEN** un `ds` hace `technical-screen@stats`
-- **THEN** la etapa cubre interpretación de regresión, errores tipo I/II, pruebas múltiples y FDR, CLT y t-stat, bootstrap, potencia y MDE y, opcionalmente, inferencia causal (ATE, IV/LATE)
+#### Scenario: DS stats
+- **WHEN** a `ds` does `technical-screen@stats`
+- **THEN** the stage covers regression interpretation, type I/II errors, multiple testing and FDR, CLT and t-stat, bootstrap, power and MDE and, optionally, causal inference (ATE, IV/LATE)
 
-### Requirement: Variantes de las etapas del onsite
-Las etapas del onsite SHALL tener estas variantes:
-- `presentation`: `research-talk` (RS, 45') y `take-home` (DS).
-- `coding`: `practical` (MLE), `ml-coding` (RS), `sql-pandas` (DS) y `lc-style` (opcional).
-- `ml-fundamentals`: `breadth` y `modeling-case` (DS, opcional, sin evidencia directa).
-- `ml-system-design`: `design` (MLE) y `problem-framing` (RS).
-- `experimentation`: `design-case` y `analysis-case`.
+### Requirement: Onsite stage variants
+The onsite stages SHALL have these variants:
+- `presentation`: `research-talk` (RS, 45') and `take-home` (DS).
+- `coding`: `practical` (MLE), `ml-coding` (RS), `sql-pandas` (DS) and `lc-style` (optional).
+- `ml-fundamentals`: `breadth` and `modeling-case` (DS, optional, no direct evidence).
+- `ml-system-design`: `design` (MLE) and `problem-framing` (RS).
+- `experimentation`: `design-case` and `analysis-case`.
 
-#### Scenario: Experimentación de DS
-- **WHEN** un `ds` hace el loop completo
-- **THEN** la VO1 incluye un caso de diseño de experimento y otro de análisis de resultados (cuantiles, efectos heterogéneos, ajuste por covariables)
+#### Scenario: DS experimentation
+- **WHEN** a `ds` does the full loop
+- **THEN** VO1 includes an experiment design case and a results analysis case (quantiles, heterogeneous effects, covariate adjustment)
 
-### Requirement: Materiales previos para presentation
-Para `presentation`, el sistema SHALL entregar el encargo antes de la etapa: un take-home con dataset sintético (DS) o la consigna de una research talk sobre el propio trabajo (RS). La sesión SHALL quedar en pausa hasta que el candidato diga que está listo.
+### Requirement: Prior materials for presentation
+For `presentation`, the system SHALL deliver the assignment before the stage: a take-home with a synthetic dataset (DS) or the prompt for a research talk about the candidate's own work (RS). The session SHALL stay paused until the candidate says they are ready.
 
 #### Scenario: Take-home
-- **WHEN** un `ds` llega a `presentation`
-- **THEN** el sistema genera el enunciado y el dataset en el espacio local de la sesión, pausa y, al reanudar, el panel escucha la presentación y luego pregunta
+- **WHEN** a `ds` reaches `presentation`
+- **THEN** the system generates the statement and the dataset in the session's local space, pauses and, on resuming, the panel listens to the presentation and then asks questions
 
-### Requirement: Coding en dos partes
-En `coding`, el entrevistador SHALL plantear un problema práctico y pedir al candidato que escriba sus propios tests. Si sobra tiempo, SHALL extenderlo con al menos un follow-up de producción: escala, almacenamiento o concurrencia. La optimalidad de la solución SHALL quedar registrada.
+### Requirement: Two-part coding
+In `coding`, the interviewer SHALL pose a practical problem and ask the candidate to write their own tests. If time remains, it SHALL extend it with at least one production follow-up: scale, storage or concurrency. The optimality of the solution SHALL be recorded.
 
-#### Scenario: Follow-up de producción
-- **WHEN** el candidato resuelve el problema principal con tiempo de sobra
-- **THEN** el entrevistador pregunta cómo funcionaría con varios hilos o a escala de producción
+#### Scenario: Production follow-up
+- **WHEN** the candidate solves the main problem with time to spare
+- **THEN** the interviewer asks how it would work with multiple threads or at production scale
 
-### Requirement: Coding ejecutable
-En `coding`, en `ai-assisted-coding` y en la parte de coding de `technical-screen`, el sistema SHALL aceptar la solución pegada en el chat o escrita en un archivo del espacio local de la sesión. Si está en un archivo, el orquestador (no el entrevistador) SHALL ejecutar los tests del problema y los del candidato, a la vista del candidato, y pasarle el resultado al entrevistador.
+### Requirement: Executable coding
+In `coding`, in `ai-assisted-coding` and in the coding part of `technical-screen`, the system SHALL accept the solution pasted in the chat or written to a file in the session's local space. If it is in a file, the orchestrator (not the interviewer) SHALL run the problem's tests and the candidate's tests, in plain view of the candidate, and pass the result to the interviewer.
 
-#### Scenario: Solución en archivo
-- **WHEN** el candidato escribe su solución en el archivo indicado y dice "done"
-- **THEN** se ejecutan los tests, el resultado queda en la transcripción y el entrevistador pregunta por complejidad, casos borde y optimalidad
+#### Scenario: Solution in a file
+- **WHEN** the candidate writes their solution in the indicated file and says "done"
+- **THEN** the tests are run, the result is recorded in the transcript and the interviewer asks about complexity, edge cases and optimality
 
-### Requirement: Ronda AI-assisted coding
-`ai-assisted-coding` SHALL dar al candidato un codebase pequeño y un asistente de IA invocable con `::ai <prompt>`. El asistente devuelve propuestas sin aplicarlas, y `::apply` las aplica. Por diseño, puede cometer entre 0 y 2 errores plausibles por repo. Se evalúan la descomposición del trabajo, las instrucciones, la verificación, la capacidad de rebatir los errores y el resultado.
+### Requirement: AI-assisted coding round
+`ai-assisted-coding` SHALL give the candidate a small codebase and an AI assistant invocable with `::ai <prompt>`. The assistant returns proposals without applying them, and `::apply` applies them. By design, it can make between 0 and 2 plausible mistakes per repo. The following are evaluated: work decomposition, instructions, verification, the ability to push back on the mistakes and the result.
 
-#### Scenario: Error del asistente
-- **WHEN** el asistente propone un cambio que pasa los tests existentes pero introduce un bug sutil
-- **THEN** la transcripción registra si el candidato lo detectó, y el entrevistador pregunta por su estrategia de verificación sin revelar el error
+#### Scenario: Assistant mistake
+- **WHEN** the assistant proposes a change that passes the existing tests but introduces a subtle bug
+- **THEN** the transcript records whether the candidate detected it, and the interviewer asks about their verification strategy without revealing the bug
 
-### Requirement: Un entrevistador independiente por etapa
-Cada instancia SHALL estar conducida por un agente propio, con contexto propio, que no conoce las transcripciones de otras etapas. Todos reciben el mismo perfil del candidato (background o `hm-screen`), y cada entrevistador de deep dive se centra en una parte distinta de ese perfil.
+### Requirement: One independent interviewer per stage
+Each instance SHALL be conducted by its own agent, with its own context, which does not know the transcripts of other stages. All receive the same candidate profile (background or `hm-screen`), and each deep-dive interviewer focuses on a different part of that profile.
 
-#### Scenario: Aislamiento entre etapas
-- **WHEN** el candidato pasa de `coding` a `ml-fundamentals`
-- **THEN** el nuevo entrevistador se presenta como una persona nueva y no hace referencia a lo ocurrido en `coding`
+#### Scenario: Isolation between stages
+- **WHEN** the candidate moves from `coding` to `ml-fundamentals`
+- **THEN** the new interviewer introduces themselves as a new person and makes no reference to what happened in `coding`
 
-### Requirement: Personas realistas del loop
-Cada etapa SHALL tener la persona que ocupa ese papel en Netflix:
+### Requirement: Realistic loop personas
+Each stage SHALL have the persona that fills that role at Netflix:
 - recruiter;
-- HM: cordial y vendiendo Netflix en `hm-screen`, exigente en `hm-onsite`;
-- ingeniero o científico senior;
-- panel de dos en `presentation`;
-- manager o director de un equipo socio en `partnership`;
-- director en `culture` ("Dream Team").
+- HM: cordial and selling Netflix in `hm-screen`, demanding in `hm-onsite`;
+- senior engineer or scientist;
+- panel of two in `presentation`;
+- manager or director of a partner team in `partnership`;
+- director in `culture` ("Dream Team").
 
-Los directores SHALL reservar tiempo para las preguntas del candidato.
+Directors SHALL reserve time for the candidate's questions.
 
-#### Scenario: Director en cultura
-- **WHEN** empieza `culture`
-- **THEN** el entrevistador se presenta como director, hace preguntas intensas sobre escala, accountability y riesgo, y reserva tiempo para las preguntas del candidato
+#### Scenario: Director in culture
+- **WHEN** `culture` begins
+- **THEN** the interviewer introduces themselves as a director, asks intense questions about scale, accountability and risk, and reserves time for the candidate's questions
 
-### Requirement: Estilos de entrevistador variables
-Cada persona SHALL tener un estilo declarado (conversacional, conciso o incisivo), porque en Netflix las entrevistas no están estandarizadas. El estilo cambia el tono, no el rigor.
+### Requirement: Variable interviewer styles
+Each persona SHALL have a declared style (conversational, concise or incisive), because at Netflix interviews are not standardized. The style changes the tone, not the rigor.
 
-#### Scenario: Estilo conciso
-- **WHEN** la persona de `ml-depth` tiene estilo conciso
-- **THEN** hace preguntas cortas y repreguntas directas, con los mismos temas y el mismo presupuesto de tiempo
+#### Scenario: Concise style
+- **WHEN** the `ml-depth` persona has a concise style
+- **THEN** it asks short questions and direct follow-ups, with the same topics and the same time budget
 
-### Requirement: Contrato de turno del entrevistador
-Cada turno del entrevistador SHALL terminar con exactamente un bloque visible para el candidato y un bloque de metadatos factuales, sin nada después. El entrevistador no SHALL escribir ni suponer respuestas del candidato, ni usar herramientas después de su primer turno.
+### Requirement: Interviewer turn contract
+Each interviewer turn SHALL end with exactly one block visible to the candidate and one block of factual metadata, with nothing after. The interviewer SHALL NOT write or assume candidate answers, nor use tools after its first turn.
 
-#### Scenario: Turno mal formado
-- **WHEN** una respuesta del entrevistador no trae los dos bloques
-- **THEN** el orquestador le pide reformatearla una vez y, si vuelve a fallar, muestra el texto en bruto y lo marca en la transcripción
+#### Scenario: Malformed turn
+- **WHEN** an interviewer response does not include both blocks
+- **THEN** the orchestrator asks it to reformat once and, if it fails again, shows the raw text and flags it in the transcript
 
-### Requirement: Control del ritmo por el entrevistador
-El entrevistador SHALL interrumpir con cortesía y pasar al siguiente punto cuando ya tenga la señal del actual. Si el candidato se extiende en partes poco relevantes, SHALL redirigirle. Los puntos de señal que queden sin cubrir SHALL registrarse.
+### Requirement: Pacing control by the interviewer
+The interviewer SHALL politely interrupt and move to the next point once it has the signal for the current one. If the candidate dwells on parts that are not very relevant, it SHALL redirect them. Signal points left uncovered SHALL be recorded.
 
-#### Scenario: Señal obtenida
-- **WHEN** en `ml-system-design` el candidato ya explicó bien la asignación de recursos y sigue profundizando
-- **THEN** el entrevistador le interrumpe y pasa a monitorización o crash handling
+#### Scenario: Signal obtained
+- **WHEN** in `ml-system-design` the candidate has already explained resource allocation well and keeps going deeper
+- **THEN** the interviewer interrupts them and moves on to monitoring or crash handling
 
-#### Scenario: Diseño sin terminar
-- **WHEN** se agota el tiempo de `ml-system-design` sin un diseño completo
-- **THEN** la transcripción registra qué puntos de señal quedaron sin cubrir
+#### Scenario: Unfinished design
+- **WHEN** the time in `ml-system-design` runs out without a complete design
+- **THEN** the transcript records which signal points were left uncovered
 
-### Requirement: Realismo sin feedback en vivo
-Durante una etapa, el entrevistador SHALL mantener su persona y hacer una pregunta o repregunta por turno. No SHALL revelar la rúbrica, las puntuaciones, respuestas modelo ni si una respuesta es correcta. Puede dar como máximo una pista por cada bloqueo, registrada con su nivel: nudge o substantive.
+### Requirement: Realism without live feedback
+During a stage, the interviewer SHALL keep its persona and ask one question or follow-up per turn. It SHALL NOT reveal the rubric, scores, model answers or whether an answer is correct. It may give at most one hint per blockage, recorded with its level: nudge or substantive.
 
-#### Scenario: Candidato pide la respuesta
-- **WHEN** el candidato pregunta "¿esto está bien?" en mitad de `ml-fundamentals`
-- **THEN** el entrevistador le pide que razone o que siga, sin confirmar ni corregir
+#### Scenario: Candidate asks for the answer
+- **WHEN** the candidate asks "Is this right?" in the middle of `ml-fundamentals`
+- **THEN** the interviewer asks them to reason it through or continue, without confirming or correcting
 
-#### Scenario: Candidato atascado
-- **WHEN** el candidato dice que está bloqueado en `coding`
-- **THEN** el entrevistador da como máximo una pista neutral y la registra con su nivel y la competencia afectada
+#### Scenario: Candidate stuck
+- **WHEN** the candidate says they are blocked in `coding`
+- **THEN** the interviewer gives at most one neutral hint and records it with its level and the affected competency
 
-### Requirement: Preguntas adaptadas a rol, nivel y dominio
-El orquestador SHALL elegir preguntas o problemas del banco compatibles con el rol, el nivel, la variante y el dominio. Mientras queden alternativas, excluirá los ya usados en sesiones locales anteriores. Los bancos SHALL basarse en temas reportados públicamente y en prácticas publicadas por Netflix, sin preguntar cifras concretas de esas publicaciones.
+### Requirement: Questions adapted to role, level and domain
+The orchestrator SHALL choose questions or problems from the bank compatible with the role, level, variant and domain. While alternatives remain, it will exclude those already used in previous local sessions. The banks SHALL be based on publicly reported topics and on practices published by Netflix, without asking for specific figures from those publications.
 
-#### Scenario: Segunda vez en coding
-- **WHEN** el candidato repite `coding` con el mismo rol y nivel
-- **THEN** el problema principal es distinto del de la vez anterior
+#### Scenario: Second time in coding
+- **WHEN** the candidate repeats `coding` with the same role and level
+- **THEN** the main problem is different from the previous time's
 
-#### Scenario: Nivel senior
-- **WHEN** la sesión es L6 en `ml-system-design`
-- **THEN** el entrevistador exige además trade-offs a escala, disponibilidad, seguridad, validación online y alcance entre equipos
+#### Scenario: Senior level
+- **WHEN** the session is L6 in `ml-system-design`
+- **THEN** the interviewer additionally demands trade-offs at scale, availability, safety, online validation and cross-team scope
 
-#### Scenario: Repregunta
-- **WHEN** el candidato menciona "I'd use a two-tower model for retrieval"
-- **THEN** el entrevistador repregunta sobre ese punto (negative sampling, cold start o serving) antes de cambiar de tema
+#### Scenario: Follow-up question
+- **WHEN** the candidate mentions "I'd use a two-tower model for retrieval"
+- **THEN** the interviewer follows up on that point (negative sampling, cold start or serving) before changing topic
 
-### Requirement: Presupuesto de tiempo
-Cada etapa SHALL tener un presupuesto de tiempo activo, escalado por `time_scale` y sin contar las pausas. Al 80 % el entrevistador SHALL avisar, al 90 % pasar a las preguntas del candidato y al 100 % cerrar la etapa.
+### Requirement: Time budget
+Each stage SHALL have an active-time budget, scaled by `time_scale` and not counting pauses. At 80 % the interviewer SHALL give a warning, at 90 % move to the candidate's questions and at 100 % close the stage.
 
-#### Scenario: Tiempo agotado
-- **WHEN** el tiempo activo escalado alcanza el presupuesto
-- **THEN** el entrevistador cierra el tema en curso y termina la etapa
+#### Scenario: Time exhausted
+- **WHEN** the scaled active time reaches the budget
+- **THEN** the interviewer closes the current topic and ends the stage
 
-#### Scenario: Pausa
-- **WHEN** el candidato pausa 10 minutos y luego reanuda
-- **THEN** esos 10 minutos no cuentan en el presupuesto
+#### Scenario: Pause
+- **WHEN** the candidate pauses for 10 minutes and then resumes
+- **THEN** those 10 minutes do not count toward the budget
 
-### Requirement: Cultura basada en el memo vigente
-La etapa `culture` SHALL evaluar 3–4 valores por sesión del memo vigente de Netflix (selflessness, judgment, candor, creativity, courage, inclusion, curiosity, resilience) y sus conceptos: keeper test, context not control, informed captain, farming for dissent y disagree then commit. Lo hará con preguntas conductuales que exigen casos concretos con impacto medible.
+### Requirement: Culture based on the current memo
+The `culture` stage SHALL evaluate 3–4 values per session from Netflix's current memo (selflessness, judgment, candor, creativity, courage, inclusion, curiosity, resilience) and its concepts: keeper test, context not control, informed captain, farming for dissent and disagree then commit. It will do so with behavioral questions that require concrete cases with measurable impact.
 
-#### Scenario: Respuesta genérica
-- **WHEN** el candidato responde con generalidades
-- **THEN** el entrevistador pide un caso real: qué pasó, qué hizo, el resultado medible y qué haría distinto
+#### Scenario: Generic answer
+- **WHEN** the candidate answers with generalities
+- **THEN** the interviewer asks for a real case: what happened, what they did, the measurable result and what they would do differently
 
-### Requirement: Señales de cultura en todas las etapas
-Todos los entrevistadores SHALL registrar las señales de cultura que observen. Cuando encaje con el tema de la etapa, SHOULD hacer una repregunta que las revele (p. ej. cómo defendería un trade-off ante un stakeholder).
+### Requirement: Culture signals in all stages
+All interviewers SHALL record the culture signals they observe. When it fits the stage's topic, they SHOULD ask a follow-up that reveals them (e.g. how they would defend a trade-off to a stakeholder).
 
-#### Scenario: Señal observada en system design
-- **WHEN** el candidato menciona espontáneamente que pidió opiniones contrarias antes de decidir
-- **THEN** el entrevistador lo registra como señal del valor correspondiente
+#### Scenario: Signal observed in system design
+- **WHEN** the candidate spontaneously mentions that they asked for contrary opinions before deciding
+- **THEN** the interviewer records it as a signal of the corresponding value
 
-### Requirement: Mantener el idioma de la sesión
-El entrevistador SHALL conducir la etapa en el idioma de la sesión aunque el candidato cambie de idioma. El cambio SHALL anotarse sin penalizar.
+### Requirement: Keep the session language
+The interviewer SHALL conduct the stage in the session language even if the candidate switches language. The switch SHALL be noted without penalty.
 
-#### Scenario: Cambio de idioma del candidato
-- **WHEN** el idioma es inglés y el candidato responde una vez en español
-- **THEN** el entrevistador sigue en inglés y el cambio queda anotado
+#### Scenario: Candidate language switch
+- **WHEN** the language is English and the candidate answers once in Spanish
+- **THEN** the interviewer continues in English and the switch is noted

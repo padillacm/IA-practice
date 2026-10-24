@@ -2,68 +2,68 @@
 
 ## Purpose
 
-Guarda cada sesión de entrevista simulada solo en la máquina local, fuera del control de versiones, y resume la evolución del candidato entre sesiones de forma comparable.
+Stores each simulated interview session only on the local machine, outside version control, and summarizes the candidate's evolution across sessions in a comparable way.
 
 ## ADDED Requirements
 
-### Requirement: Registro local de cada sesión
-El sistema SHALL guardar cada sesión en un directorio propio dentro del directorio local de sesiones, identificado por fecha y un id corto. Contendrá:
-- la configuración y el estado de cada instancia;
-- una transcripción y un scorecard por instancia;
-- los materiales (código, take-homes);
-- las decisiones de corte y de debrief, si existen.
+### Requirement: Local record of each session
+The system SHALL store each session in its own directory inside the local sessions directory, identified by date and a short id. It will contain:
+- the configuration and the state of each instance;
+- one transcript and one scorecard per instance;
+- the materials (code, take-homes);
+- the cut and debrief decisions, if any.
 
-#### Scenario: Sesión completada
-- **WHEN** termina una sesión de dos instancias con debrief
-- **THEN** su directorio contiene la configuración, dos transcripciones, dos scorecards y la decisión
+#### Scenario: Completed session
+- **WHEN** a session of two instances with a debrief ends
+- **THEN** its directory contains the configuration, two transcripts, two scorecards and the decision
 
-### Requirement: Sesiones fuera del repositorio
-El directorio de sesiones SHALL estar en `.gitignore`. El sistema no SHALL añadir al índice, commitear ni subir archivos de sesiones, ni ofrecer hacerlo. Antes de escribir, SHALL comprobar que el directorio está ignorado y que ninguno de sus archivos está rastreado; si no se cumple, no escribirá.
+### Requirement: Sessions outside the repository
+The sessions directory SHALL be in `.gitignore`. The system SHALL NOT stage, commit or push session files, nor offer to do so. Before writing, it SHALL check that the directory is ignored and that none of its files is tracked; if this does not hold, it will not write.
 
-#### Scenario: Directorio ignorado
-- **WHEN** se crea una sesión
-- **THEN** `git status` no muestra ningún archivo de la sesión
+#### Scenario: Ignored directory
+- **WHEN** a session is created
+- **THEN** `git status` shows no session file
 
-#### Scenario: Ignore ausente
-- **WHEN** el directorio de sesiones no está ignorado o contiene archivos rastreados
-- **THEN** el sistema no escribe la sesión, avisa e indica cómo corregirlo
+#### Scenario: Missing ignore
+- **WHEN** the sessions directory is not ignored or contains tracked files
+- **THEN** the system does not write the session, warns and states how to fix it
 
-#### Scenario: Fuera de un repositorio git
-- **WHEN** el simulador se ejecuta fuera de un repositorio git
-- **THEN** el sistema escribe la sesión y avisa de que no hay control de versiones que proteger
+#### Scenario: Outside a git repository
+- **WHEN** the simulator runs outside a git repository
+- **THEN** the system writes the session and warns that there is no version control to protect
 
-### Requirement: Aviso en entornos efímeros
-Si detecta que corre en un entorno remoto efímero, el sistema SHALL avisar al iniciar que el historial local se pierde al reciclarse el entorno.
+### Requirement: Warning in ephemeral environments
+If it detects that it is running in an ephemeral remote environment, the system SHALL warn at start that the local history is lost when the environment is recycled.
 
-#### Scenario: Claude Code en la web
-- **WHEN** la sesión empieza en un contenedor remoto de Claude Code
-- **THEN** el resumen de configuración incluye ese aviso
+#### Scenario: Claude Code on the web
+- **WHEN** the session starts in a remote Claude Code container
+- **THEN** the configuration summary includes that warning
 
-### Requirement: Guardado incremental
-El sistema SHALL persistir cada turno en la transcripción y actualizar el estado de la instancia, incluido el tiempo activo, tras cada turno. Así una interrupción no pierde la etapa en curso y se puede reconstruir al entrevistador.
+### Requirement: Incremental saving
+The system SHALL persist each turn in the transcript and update the instance state, including active time, after each turn. This way an interruption does not lose the stage in progress and the interviewer can be rebuilt.
 
-#### Scenario: Conversación interrumpida
-- **WHEN** la conversación se corta en mitad de una etapa
-- **THEN** la transcripción tiene todos los turnos hasta el último, y la instancia queda "in progress" con su tiempo consumido
+#### Scenario: Interrupted conversation
+- **WHEN** the conversation is cut off in the middle of a stage
+- **THEN** the transcript has all the turns up to the last one, and the instance stays "in progress" with its time consumed
 
-### Requirement: Resumen de progreso comparable
-El sistema SHALL mantener, en el directorio local, un resumen de progreso que agrupe las puntuaciones por etapa, variante e id de competencia en orden cronológico, mostrando en cada punto el nivel y la versión de la rúbrica. "No evidence" no se representará como una puntuación baja, y las etapas de práctica se marcarán como tales.
+### Requirement: Comparable progress summary
+The system SHALL maintain, in the local directory, a progress summary that groups scores by stage, variant and competency id in chronological order, showing at each point the level and the rubric version. "No evidence" will not be represented as a low score, and practice stages will be marked as such.
 
-#### Scenario: Repetir una etapa
-- **WHEN** el candidato completa `ml-system-design@design` por segunda vez
-- **THEN** el resumen muestra las dos puntuaciones de cada competencia en orden cronológico
+#### Scenario: Repeat a stage
+- **WHEN** the candidate completes `ml-system-design@design` for the second time
+- **THEN** the summary shows the two scores for each competency in chronological order
 
-#### Scenario: Distinto nivel o versión
-- **WHEN** la repetición es a otro nivel o con otra versión de la rúbrica
-- **THEN** el resumen lo indica en esos puntos y marca la ruptura de comparabilidad
+#### Scenario: Different level or version
+- **WHEN** the repetition is at another level or with another rubric version
+- **THEN** the summary indicates it at those points and marks the break in comparability
 
-#### Scenario: Consultar progreso
-- **WHEN** el candidato invoca `/netflix-ml-interview progress`
-- **THEN** el sistema muestra el resumen sin iniciar ninguna sesión
+#### Scenario: Check progress
+- **WHEN** the candidate invokes `/netflix-ml-interview progress`
+- **THEN** the system shows the summary without starting any session
 
-### Requirement: Historial de preguntas usadas
-El estado de cada sesión SHALL registrar las preguntas y problemas usados en cada instancia, para que la selección de sesiones futuras pueda excluirlos.
+### Requirement: History of used questions
+The state of each session SHALL record the questions and problems used in each instance, so that the selection for future sessions can exclude them.
 
-#### Scenario: Registro de preguntas
-- **WHEN** termina una instancia
-- **THEN** su estado lista los ids de las preguntas o del problema usados
+#### Scenario: Question record
+- **WHEN** an instance ends
+- **THEN** its state lists the ids of the questions or problem used

@@ -2,52 +2,52 @@
 
 ## Why
 
-Preparar un loop de entrevistas de Machine Learning en Netflix exige practicar etapas muy distintas: screens, coding práctico, fundamentos, ML system design, experimentación, presentaciones, deep dive y cultura. Hoy no hay forma de ensayarlas con entrevistadores realistas, una evaluación independiente y un registro del progreso. El repo ya tiene el curso `recsys-course/` ("de cero a nivel Netflix") y el flujo multi-agente de `course-builder`. Un simulador en Claude Code, alineado con lo que se sabe públicamente del proceso (ver `research.md`), cierra el ciclo: estudiar, practicar, recibir feedback y volver a estudiar.
+Preparing for a Machine Learning interview loop at Netflix requires practicing very different stages: screens, practical coding, fundamentals, ML system design, experimentation, presentations, deep dive and culture. Today there is no way to rehearse them with realistic interviewers, an independent evaluation and a record of progress. The repo already has the `recsys-course/` course ("from zero to Netflix level") and the multi-agent `course-builder` flow. A simulator in Claude Code, aligned with what is publicly known about the process (see `research.md`), closes the loop: study, practice, receive feedback and go back to studying.
 
 ## What Changes
 
-- **Nueva skill de Claude Code `/netflix-ml-interview`** que orquesta una sesión de entrevista simulada.
-  - El candidato elige rol, nivel, idioma, dominio del equipo y **qué etapas simular**: el loop por defecto de su rol, una fase, una sola etapa o cualquier selección.
+- **New Claude Code skill `/netflix-ml-interview`** that orchestrates a simulated interview session.
+  - The candidate chooses role, level, language, team domain and **which stages to simulate**: the default loop for their role, a phase, a single stage or any selection.
   - Roles: ML Engineer; Research / ML / Applied Scientist; Data Scientist (experimentation & analytics).
-  - Niveles: L4–L6, con L5 por defecto.
-  - Opcionalmente, el candidato puede aportar su CV o background.
-- **Idioma**: todo en inglés por defecto (entrevista, scorecards y decisión final). `lang=es` lo pasa **todo a español**.
-- **Catálogo de 14 etapas en tres fases**, basado en la investigación:
-  - **Screens**: recruiter, HM y technical screen (con variantes por rol, incluida la revisión de un PR de producción).
-  - **VO1** (general): presentation, coding, AI-assisted coding, ML fundamentals, ML system design, experimentation y culture ("Dream Team" con un director).
-  - **VO2** (del equipo): ML depth, project deep dive, partnership y HM onsite.
-  - Cada rol tiene su loop por defecto. El corte entre VO1 y VO2 está activo para MLE y es opcional en los demás roles.
-- **17 subagentes**, todos sin Bash ni escritura:
-  - Un entrevistador por etapa, con persona, estilo, banco de preguntas, repreguntas y presupuesto de tiempo, sin dar feedback durante la etapa.
-  - Un evaluador que puntúa a ciegas, con citas verificadas y reglas pedagógicas explícitas.
-  - Un debrief del hiring manager. Netflix no tiene hiring committee, así que el debrief simula la discusión del panel (pass / fail, buscando consenso) y la decisión del HM como "informed captain": Hire con nivel, No Hire, o "not a fit for this team, referred".
-  - Un asistente "AI pair" para la ronda de AI-assisted coding.
-- **Helper `sim.py` (stdlib)**: hace todo lo determinista. Eso incluye el guard de git, el estado de la sesión, el tiempo activo, la selección de preguntas, la ejecución de tests, la verificación de citas, la reconstrucción de entrevistadores y el progreso.
-- **Sesiones solo en local**: se guardan en un directorio ignorado por git, y el sistema nunca las añade ni las commitea.
-- **Base de conocimiento versionada** (`netflix-ml-interview/`) con catálogo, bancos, rúbricas, fuentes y un gold set de evaluación, separada de los prompts.
+  - Levels: L4–L6, with L5 as the default.
+  - Optionally, the candidate can provide their CV or background.
+- **Language**: everything in English by default (interview, scorecards and final decision). `lang=es` switches **everything to Spanish**.
+- **Catalog of 14 stages in three phases**, based on the research:
+  - **Screens**: recruiter, HM and technical screen (with per-role variants, including the review of a production PR).
+  - **VO1** (general): presentation, coding, AI-assisted coding, ML fundamentals, ML system design, experimentation and culture ("Dream Team" with a director).
+  - **VO2** (team): ML depth, project deep dive, partnership and HM onsite.
+  - Each role has its default loop. The cut between VO1 and VO2 is active for MLE and optional for the other roles.
+- **17 subagents**, all without Bash or write access:
+  - One interviewer per stage, with persona, style, question bank, follow-ups and time budget, giving no feedback during the stage.
+  - An evaluator that scores blind, with verified quotes and explicit pedagogical rules.
+  - A hiring manager debrief. Netflix has no hiring committee, so the debrief simulates the panel discussion (pass / fail, seeking consensus) and the HM's decision as "informed captain": Hire with level, No Hire, or "not a fit for this team, referred".
+  - An "AI pair" assistant for the AI-assisted coding round.
+- **`sim.py` helper (stdlib)**: does everything deterministic. That includes the git guard, session state, active time, question selection, test execution, quote verification, interviewer rebuilding and progress.
+- **Local-only sessions**: they are stored in a git-ignored directory, and the system never adds or commits them.
+- **Versioned knowledge base** (`netflix-ml-interview/`) with catalog, banks, rubrics, sources and an evaluation gold set, separate from the prompts.
 
 ## Capabilities
 
 ### New Capabilities
-- `interview-session`: configuración y orquestación de una sesión (rol, nivel, idioma, dominio, background, selección de etapas y fases), instancias de etapa, corte entre fases, comandos `::`, pausa, reanudación y modo degradado.
-- `interview-stages`: catálogo de etapas y variantes, y comportamiento observable del entrevistador (persona, estilo, contrato de turno, ritmo, tiempo, coding ejecutable, AI-assisted coding, cultura).
-- `interview-evaluation`: rúbricas versionadas, evaluación independiente con evidencia verificable, regla pedagógica de recomendación, pesos por rol, corte, debrief, plan de estudio y calidad del evaluador.
-- `interview-history`: registro local de sesiones fuera de git, guardado incremental y progreso comparable.
+- `interview-session`: session configuration and orchestration (role, level, language, domain, background, stage and phase selection), stage instances, cut between phases, `::` commands, pause, resume and degraded mode.
+- `interview-stages`: catalog of stages and variants, and observable interviewer behavior (persona, style, turn contract, pacing, time, executable coding, AI-assisted coding, culture).
+- `interview-evaluation`: versioned rubrics, independent evaluation with verifiable evidence, pedagogical recommendation rule, per-role weights, cut, debrief, study plan and evaluator quality.
+- `interview-history`: local session record outside git, incremental saving and comparable progress.
 
 ### Modified Capabilities
-<!-- Ninguna: el repo no tiene specs previos. -->
+<!-- None: the repo has no previous specs. -->
 
 ## Impact
 
-- **Nuevos archivos**:
-  - `.claude/skills/netflix-ml-interview/` (skill y protocolo de relevo);
-  - `.claude/agents/netflix-*.md` (17 agentes);
-  - `netflix-ml-interview/` (base de conocimiento, `sim.py` y validador);
-  - `.gitignore` raíz con `netflix-ml-interview/sessions/`;
-  - `.claude/settings.json` con un permiso para `sim.py`.
-- **Dependencias**: ninguna en tiempo de ejecución, aparte de Claude Code y Python 3 (stdlib). El contenido de algunos problemas de coding usa numpy y pandas (`requirements.txt`). CI los instala y el validador los salta con un aviso si faltan.
-- **CI**: un workflow en `.github/workflows/` que ejecuta el validador y los tests de `sim.py`. El comportamiento conversacional se verifica a mano, con el gold set y los smoke tests.
-- **Contenido existente**: `recsys-course/` solo se lee, para enlazar el plan de estudio.
-- **Limitaciones**:
-  - Es una simulación basada en información pública, y buena parte de la evidencia viene de loops de SWE. Los loops reales varían por equipo, los descriptores L4 y L6 están extrapolados y no hay afiliación con Netflix.
-  - En entornos efímeros (Claude Code en la web), las sesiones locales se pierden cuando se recicla el contenedor.
+- **New files**:
+  - `.claude/skills/netflix-ml-interview/` (skill and handoff protocol);
+  - `.claude/agents/netflix-*.md` (17 agents);
+  - `netflix-ml-interview/` (knowledge base, `sim.py` and validator);
+  - root `.gitignore` with `netflix-ml-interview/sessions/`;
+  - `.claude/settings.json` with a permission for `sim.py`.
+- **Dependencies**: none at runtime, apart from Claude Code and Python 3 (stdlib). The content of some coding problems uses numpy and pandas (`requirements.txt`). CI installs them and the validator skips them with a warning if they are missing.
+- **CI**: a workflow in `.github/workflows/` that runs the validator and the `sim.py` tests. Conversational behavior is verified by hand, with the gold set and smoke tests.
+- **Existing content**: `recsys-course/` is only read, to link the study plan.
+- **Limitations**:
+  - It is a simulation based on public information, and much of the evidence comes from SWE loops. Real loops vary by team, the L4 and L6 descriptors are extrapolated and there is no affiliation with Netflix.
+  - In ephemeral environments (Claude Code on the web), local sessions are lost when the container is recycled.
