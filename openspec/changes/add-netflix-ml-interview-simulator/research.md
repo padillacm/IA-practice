@@ -1,19 +1,19 @@
 # Research: el proceso de entrevistas de ML en Netflix
 
-Documento de soporte del change (no es un artefacto del schema). Recoge lo que se sabe públicamente, con qué confianza y qué decisiones de diseño se derivan. Última actualización: 2026-10-24 (tercera pasada, desde el PC del usuario).
+Documento de soporte del change (no es un artefacto del schema). Recoge lo que se sabe públicamente, con qué confianza y qué decisiones de diseño se derivan. Última actualización: 2026-10-24 (tercera pasada, desde el PC del usuario, con Claude in Chrome).
 
 **Método.** Tres pasadas:
 1. Búsquedas web amplias: guías, Glassdoor, Blind, PracHub, Levels.fyi, Netflix Tech Blog, Netflix Research y prensa.
 2. **Lectura directa** (curl) de: el memo de cultura en jobs.netflix.com, la guía de interviewing.io, la de Interview101, research.netflix.com, Levels.fyi, 12 hilos de Blind y 9 experiencias de PracHub (2025–2026).
 
-3. **Tercera pasada (PC del usuario, solo WebFetch; sin navegador disponible).** Leída directamente: la guía de Exponent/Aced (`aced.io`, a donde redirige tryexponent.com) y un resumen de ZenML del post GenRec. **Siguen sin poder leerse** Glassdoor (las 4 páginas, 403), Reddit (la herramienta lo bloquea), Interview Query MLE/RS/AI Engineer (429), netflixtechblog.com (403: ni interleaving ni experimentation analysis) y 1point3acres (403). Dos reintentos con otras cabeceras fueron denegados por el clasificador de permisos como elusión de bloqueo anti-bot y no se insistió. Pendiente para quien tenga un navegador (Claude in Chrome): esas fuentes y los hilos de Blind nuevos.
+3. **Tercera pasada (PC del usuario, con Claude in Chrome; el usuario resolvió a mano la verificación anti-bot de Cloudflare de Glassdoor).** Leído directamente en el navegador: **las 4 páginas de entrevistas de Glassdoor** (MLE 5 relatos; ML Intern 4; Senior DS 10 de 12; DS US 10 de 16, todos de 2018–2026; páginas posteriores no leídas), **Interview Query** (guías MLE y Research Scientist), los posts del **Netflix TechBlog** sobre interleaving (2017), experimentation analysis (2019) y **GenRec** (30 jul 2026), y la guía de **Exponent** (aced.io, vía WebFetch). **No se pudo leer:** Reddit (la extensión lo bloquea por restricciones de seguridad: no se intentó rodearlo), 1point3acres (403 por WebFetch) y Blind (no se buscaron hilos nuevos). Dos reintentos por WebFetch/curl con cabeceras de navegador fueron denegados por el clasificador de permisos como elusión de anti-bot y no se repitieron.
 
-**No legibles desde el entorno (pasadas 1–2, y siguen igual):**
+**No legibles desde el entorno en las pasadas 1–2 (Glassdoor, Interview Query y el TechBlog se leyeron después, en la pasada 3; Reddit sigue sin poder leerse):**
 - Glassdoor, Reddit y netflixtechblog.com responden 403 (anti-bot).
 - Exponent/Aced: el proxy los rechaza.
 - Interview Query: límite de peticiones (429).
 
-Para esas fuentes se usan los extractos del buscador.
+Para esas fuentes se usaron los extractos del buscador hasta la pasada 3, en la que se leyeron directamente (ver arriba).
 
 **Confianza.** **Alta** = fuente primaria de Netflix, o varios relatos de primera mano coincidentes. **Media** = varias fuentes de terceros coinciden o hay un relato de primera mano. **Baja** = una sola fuente o fuentes contradictorias. Netflix publica poco sobre su proceso: casi todo es anecdótico y **varía por equipo**.
 
@@ -44,7 +44,8 @@ Para esas fuentes se usan los extractos del buscador.
 - Algunos loops tienen HMs de dos equipos ([PracHub DS 11 rondas]).
 
 ### Technical screen (45–60 min) — Alta
-- **MLE, formato A** (Glassdoor, feb 2026): 20' de proyecto previo + 40' de ML coding ([Glassdoor ML Intern/MLE]).
+- **Formato A** (Glassdoor, **ML Intern**, feb 2026; corrige la pasada anterior, que lo atribuía a MLE): 20 min de proyecto previo + 40 min de ML coding; onsite virtual con panel presentation de 1 h, HM 15 min y potential mentor 30 min; "no preguntaron conceptos de ML"; 5 semanas ([Glassdoor ML Intern]). Es un loop de prácticas: para MLE full-time no hay un relato directo de este formato.
+- **MLE full-time en Glassdoor** (5 relatos leídos): ago 2026, OA y luego entrevistas con "LeetCode medium y hard" más system design de un recomendador; ene 2025, preguntas generales de ML y un LC medio, y luego ghosting; jul 2024 (L5), 4 entrevistas: 1 coding, 1 de experiencia previa y 2 con directores (uno del equipo y otro de un equipo "partner", para hablar de cómo trabajas con otros) ([Glassdoor MLE]). Confirma directores y partner (Media-Alta) y que el coding varía según el equipo.
 - **MLE, formato B** (organización de GenAI aplicada, sep 2026): 30' de ML fundamentals (KV cache, attention con el cálculo de Q/K/V, normalización L1 vs L2) + 30' de **revisión en vivo de un PR de un feature pipeline**. Los tests pasan y hay que detectar qué fallaría en producción; luego se discute cómo servir esos features con distintos requisitos de tiempo real ([PracHub MLE PR review]).
 - **RS** (recsys, 2022): "ML fundamentals + coding (language of your choice)"; en general, "1–2 rondas de ML (problem framing y fundamentals), coding y otra según el equipo" ([Blind RS recsys]).
 - **ML Scientist L5** (2025): "ML knowledge screens, a coding screen, and problem framing" ([Blind ML Scientist]).
@@ -74,17 +75,24 @@ Para esas fuentes se usan los extractos del buscador.
 
 ### ML depth (dominio del equipo) — Media
 - Netflix Research no centraliza la investigación: los equipos trabajan junto al negocio. Áreas: Analytics, CV & Graphics, Consumer Insights, Encoding & Quality, **Experimentation & Causal Inference, Machine Learning, ML Platform, NLP & Conversations, Recommendations** ([Netflix Research]).
-- **GenRec** (2026, resumen secundario de ZenML; el post original no se pudo leer): ranker LLM-nativo en dos fases (adaptar un LLM abierto a datos de Netflix y post-entrenar para ranking con pesos por recompensa), historial convertido a texto con un "feature budget" que reduce tokens ~⅓, pérdida multiobjetivo, inferencia en modo prefill puntuando todos los candidatos en un forward pass (vLLM), A/B con ~10 % del tráfico durante ~4 semanas ([ZenML GenRec]; Baja hasta leer el post). Ancla útil para preguntas de system design de recsys con LLM.
+- **GenRec** (post de Netflix del 30 jul 2026, **leído directamente**, Alta; los números son los que Netflix publica). Ranker LLM-nativo que post-entrena un LLM interno en dos fases (Fase 1, base adaptada que se actualiza poco; Fase 2, ranking, que se refresca más). Verbaliza historial, contexto y metadatos como texto; la ventana de contexto es el nuevo "feature budget" (retener señales fuertes, omitir las débiles, comprimir repeticiones como el binge, elaborar títulos nuevos) y baja a ~⅓ de tokens sin degradación notable. Cabeza de scoring sobre el catálogo (embedding por título), pérdida multiobjetivo (ranking con entropía cruzada, language modeling y **pérdida ponderada por recompensa** con proxies de satisfacción a largo plazo y rebalanceo de contenido; sin RL completo, GRPO queda como trabajo futuro). Servido con vLLM en **modo prefill-only**: un forward pass puntúa todos los candidatos. Resultados: ~+1,6 % de MRR offline con ~40 veces menos ejemplos de Fase 2; A/B en superficies de cómputo por lotes con ~10 % del tráfico durante ~4 semanas, con mejoras significativas a corto y largo plazo (sin magnitudes). Ablaciones: el backbone de ~1B a ~10B mejora el MRR; Fase 1 frente a un LLM abierto, +10–20 %; Fase 2 frente a Fase 1, +35–50 % (≈80 % tras 2 semanas de envejecimiento). Motivación declarada: el stack actual depende de miles de features hechas a mano y es caro incorporar nuevos tipos de contenido. Limitaciones de los LLM off-the-shelf que cita: sobrerrecomiendan lo popular, alucinan títulos fuera del catálogo e ignoran restricciones de negocio. Ancla para system design y ml-depth de recsys con LLM.
 - Publicaciones recientes que anclan el contenido: LLM recommendation con semantic IDs (beam search autoregresivo vs multi-token prediction, oct 2026), integración del Foundation Model en la homepage y la búsqueda (feb 2026), artwork personalization vía LLM post-training (feb 2026) ([Netflix Research]).
 
 ### Experimentación y A/B testing — Alta en DS
 - Diseño, power, peeking, interferencia, efectos heterogéneos, varianza y bootstrap; caso práctico: diseñar y dimensionar un experimento de **frequency cap de anuncios** ([Glassdoor Senior DS], [PracHub DS 11 rondas], [Prepfully DS]).
+- **Glassdoor DS (leído directamente).** Jul 2026, oferta aceptada, ~4 semanas: screen técnico de SQL (títulos que impulsaron nuevos registros), luego A/B testing de un modelo personalizado y métricas de éxito; prompt: diseñar un A/B de un **modelo de ordenación personalizada de filas** en la homepage, con solapamiento entre filas y retención como resultado a largo plazo. Ene 2026: regresión (coeficientes, R², error tipo I/II), A/B multiclase y FDR. Ene 2026 (otra reseña, Baja: una reseña y resumen suelto): tras recruiter y screen técnico/manager, **dos rondas onsite** sobre técnica y "Dream Team", con decisión del HM y aprobación unánime del equipo. 2024: presentar tu investigación y luego **2 case studies** de diseñar todo el experimento; SQL y Python. 2021 (Senior DS, Member UI): bootstrap, ajuste por covariables, efectos heterogéneos y un take-home de analítica de producto con métricas nuevas. Las reseñas de 2015–2022 insisten en ML detallado en el screen (L1/L2, word2vec, ReLU), a veces sin preguntas de experimentación pese al rol ([Glassdoor DS], [Glassdoor Senior DS]). El caso de **frequency cap de anuncios** no aparece en las páginas leídas (10 de 12 y 10 de 16 relatos); sigue respaldado solo por [PracHub DS 11 rondas] y [Prepfully DS].
 - Prácticas documentadas por Netflix: interleaving como primera etapa, CUPED / post-estratificación, quasi-experimentos geográficos ([Netflix TechBlog interleaving], [Netflix CUPED paper], [arXiv 1910.03878]).
+- **Interleaving, leído en el post original (2017, Alta).** Proceso de dos etapas: una poda rápida con interleaving de rankers y luego un A/B tradicional sobre los candidatos. Usa una variante de team draft: se sortea quién elige primero y los rankers alternan con su video mejor posicionado aún disponible; las horas vistas se atribuyen al ranker que aportó el video. Por el sesgo de posición, en cada posición un video debe ser igual de probable de A o de B. Requiere más de 100 veces menos usuarios que la métrica A/B más sensible para 95 % de potencia y se correlaciona con ella. Límites: implementación compleja, la lógica de negocio interfiere, y es una **medida relativa** que no mide retención directamente, por eso hace falta la segunda etapa.
+- **Experimentation analysis, leído en el post original (2019, Alta).** Plataforma ABlaze; tres pilares: Metrics Repo (SQL generado), Causal Models (Python/R con compresión de datos) y visualizaciones con Plotly. Ejemplo de un test de encodes donde un tratamiento sube la media de play delay pero baja la mediana, por lo que se miran cuantiles. Técnicas que cita: interleaving, quantile bootstrapping, quasi-experimentos, quantile regression y efectos heterogéneos. Un usuario puede estar en varios tests a la vez (artwork, algoritmo, encoding).
 
 ### Loop final según Exponent — Media
 - Tras el technical screen, **hasta 6 rondas de 30 min**: una técnica (ML, A/B tests, ML system design y a veces código) y rondas de cultura con RR. HH., el hiring manager y casi siempre un **manager "partner" de otro equipo**. Suele pedirse una **charla de 10–15 min** sobre un tema técnico a elección del candidato. Las rondas de cultura se evalúan con rúbrica explícita ([Exponent MLE], leído directamente en aced.io; guía comercial, coincide con interviewing.io y PracHub en el partner manager).
 - Preguntas de ejemplo: CF, árboles vs redes, descomposición sesgo-varianza, función que devuelve una clave aleatoria con probabilidad proporcional a sus pesos, predecir la puntuación de una reseña a partir del texto, qué métricas monitorizar tras desplegar, "diseña un sistema como Netflix"; conductuales: la vez que fuiste honesto en el trabajo, feedback difícil a un compañero, qué dicen de ti tus compañeros ([Exponent MLE]).
 - Consejo repetido: no citar el salario como motivación, los managers lo ven como señal de alerta ([Exponent MLE]; Baja, una sola fuente).
+
+### Guías de Interview Query (leídas directamente, mar 2026) — Baja
+- Las guías de MLE y Research Scientist son genéricas y **contradicen fuentes primarias**: hablan de un "hiring committee" semanal y de un "centralized packet review" con scores en 24 h, y de un take-home de modelado para MLE. Netflix describe lo contrario (decisión del HM como informed captain, sin comité) en [Netflix culture memo] e [interviewing.io]. No se usan para la estructura del proceso.
+- Lo aprovechable son los temas: ML coding, SQL, system design de recomendación y de autocompletado de búsqueda, ad breaks, y que en niveles senior se añade un deep-dive de arquitectura de ML. RS: 30 min de presentación de investigación en niveles altos ([Interview Query MLE], [Interview Query RS]).
 
 ### Presentation — Media
 - RS / research intern: **panel presentation de 1 h** sobre la propia investigación ([Glassdoor ML Intern 2026]).
@@ -148,8 +156,9 @@ Opcionales en cualquier rol: `ai-assisted-coding`, y las etapas que no estén en
 **Primarias (Netflix)**
 - [Netflix culture memo]: https://jobs.netflix.com/culture (leído directamente) · PDF: https://jobs.netflix.com/netflix-culture.pdf
 - [Netflix Research]: https://research.netflix.com/ (leído directamente) · archivo: https://research.netflix.com/archive
-- [Netflix TechBlog interleaving]: https://netflixtechblog.com/using-interleaving-in-online-experiments-to-accelerate-algorithm-innovation-at-netflix-a04ee392ec55
-- [Netflix TechBlog experimentation analysis]: https://netflixtechblog.com/reimagining-experimentation-analysis-at-netflix-71356393af21
+- [Netflix TechBlog interleaving]: https://netflixtechblog.com/interleaving-in-online-experiments-at-netflix-a04ee392ec55 (leído directamente; 2017)
+- [Netflix TechBlog experimentation analysis]: https://netflixtechblog.com/reimagining-experimentation-analysis-at-netflix-71356393af21 (leído directamente; 2019)
+- [Netflix TechBlog GenRec]: https://netflixtechblog.com/genrec-towards-llm-native-recommendation-at-netflix-f20be6f643e3 (leído directamente; 30 jul 2026)
 - [Netflix CUPED paper]: https://www.researchgate.net/publication/305997925_Improving_the_Sensitivity_of_Online_Controlled_Experiments_Case_Studies_at_Netflix
 - [arXiv 1910.03878]: https://arxiv.org/html/1910.03878 · [arXiv 2601.02764]: https://arxiv.org/pdf/2601.02764
 - [ResearchGate artwork]: https://www.researchgate.net/publication/327953121_Artwork_personalization_at_netflix
@@ -175,7 +184,7 @@ Opcionales en cualquier rol: `ai-assisted-coding`, y las etapas que no estén en
 - [PracHub data platform]: https://prachub.com/interview-experiences/netflix-software-engineer-interview-experience-data-platform-loop-rejected-after-the-final-system-design-round
 - [PracHub SWE open-book]: https://prachub.com/interview-experiences/netflix-software-engineer-interview-experience-an-open-book-coding-screen-that-still-ended-in-rejection
 
-**Primera mano (solo extractos del buscador; 403)**
+**Primera mano de Glassdoor (leído directamente en el navegador el 2026-10-24; no todas las páginas de relatos)**
 - [Glassdoor MLE]: https://www.glassdoor.com/Interview/Netflix-Machine-Learning-Engineer-Interview-Questions-EI_IE11891.0,7_KO8,33.htm
 - [Glassdoor ML Intern]: https://www.glassdoor.com/Interview/Netflix-Machine-Learning-Intern-Interview-Questions-EI_IE11891.0,7_KO8,31.htm
 - [Glassdoor Senior DS]: https://www.glassdoor.com/Interview/Netflix-Senior-Data-Scientist-Interview-Questions-EI_IE11891.0,7_KO8,29.htm
@@ -186,8 +195,7 @@ Opcionales en cualquier rol: `ai-assisted-coding`, y las etapas que no estén en
 - [Interview101]: https://www.interview101.com/interviews/netflix/machine-learning-engineer (leído directamente; comercial)
 - [Levels.fyi MLE]: https://www.levels.fyi/companies/netflix/salaries/software-engineer/title/machine-learning-engineer (leído directamente)
 - [Exponent MLE]: https://www.tryexponent.com/guides/netflix-machine-learning-engineer-interview → https://www.aced.io/guides/netflix-machine-learning-engineer-interview (leído directamente, 2026-10-24)
-- [ZenML GenRec]: https://www.zenml.io/llmops-database/llm-native-recommendation-system-at-scale (resumen secundario leído directamente; el post de Netflix no)
-- [Interview Query MLE]: https://www.interviewquery.com/interview-guides/netflix-machine-learning-engineer · [Interview Query RS]: https://www.interviewquery.com/interview-guides/netflix-research-scientist
+- [Interview Query MLE]: https://www.interviewquery.com/interview-guides/netflix-machine-learning-engineer · [Interview Query RS]: https://www.interviewquery.com/interview-guides/netflix-research-scientist (ambas leídas directamente; Baja, ver arriba)
 - [Interview Kickstart MLE]: https://interviewkickstart.com/interview-questions/companies/netflix/machine-learning-engineer
 - [Dataford MLE]: https://dataford.io/interview-guides/netflix/machine-learning-engineer
 - [Prepfully DS]: https://prepfully.com/interview-guides/netflix-data-scientist
