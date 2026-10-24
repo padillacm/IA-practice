@@ -50,7 +50,7 @@ El orquestador toma `date -u +%s` al empezar la etapa y en cada turno, y antepon
 |---|---|---|---|---|---|---|
 | recruiter-screen | screen | 30 | ● | ● | ● | Recruiter |
 | hm-screen | screen | 30 | ● | ● | ● | HM (cordial, vende Netflix) |
-| technical-screen | screen | 60 | ● `project-ml-coding` / `fundamentals-pr-review` | ● `ml-framing-coding` | ● `sql` + ● `stats` | Senior MLE / RS / DS |
+| technical-screen | screen | 60 | ● `ml-coding` / `fundamentals-pr-review` | ● `ml-framing-coding` | ● `sql` + ● `stats` | Senior MLE / RS / DS |
 | presentation | VO1 | 60 | ○ | ● `research-talk` | ● `take-home` | Panel de 2 |
 | coding | VO1 | 60 | ● `practical` | ● `ml-coding` | ● `sql-pandas` | Senior MLE / DS |
 | ai-assisted-coding | VO1 | 60 | ○ | ○ | ○ | Senior engineer |

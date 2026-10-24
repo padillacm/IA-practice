@@ -22,11 +22,15 @@ Cada etapa SHALL documentar las fuentes públicas en las que se basa su formato,
 
 ### Requirement: Variantes de technical-screen
 `technical-screen` SHALL ofrecer estas variantes:
-- `project-ml-coding` (MLE): unos 20' de proyecto previo + unos 40' de ML coding.
+- `ml-coding` (MLE, por defecto): preguntas de ML + coding práctico de dificultad media.
 - `fundamentals-pr-review` (MLE en equipos de GenAI aplicada): 30' de fundamentos + 30' de revisión de un PR de un feature pipeline.
 - `ml-framing-coding` (RS).
 - `sql` (Applied/DS): SQL ejecutable.
 - `stats` (Applied/DS): estadística e inferencia causal conceptual.
+
+#### Scenario: ML coding de MLE
+- **WHEN** un ML Engineer hace `technical-screen@ml-coding`
+- **THEN** la etapa combina preguntas generales de ML con un problema de coding práctico; opcionalmente empieza con unos 20 minutos sobre un proyecto previo
 
 #### Scenario: PR review
 - **WHEN** un ML Engineer hace `technical-screen@fundamentals-pr-review`
