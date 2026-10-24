@@ -30,7 +30,7 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
 
 ## 2. WP2 · Stage content (in English; 2a–2e in parallel, each owning its directories)
 
-- [ ] 2.1 (2a) Write `recruiter-screen`, `hm-screen`, `hm-onsite`, `culture` and `partnership` (brief, questions and rubric). They must include:
+- [x] 2.1 (2a) Write `recruiter-screen`, `hm-screen`, `hm-onsite`, `culture` and `partnership` (brief, questions and rubric). They must include:
   - "Why Netflix" and "personal top of market", with the warning not to cite salary as motivation (Low);
   - self-promotion with metrics;
   - questions about the memo, where not having read it "is a fail";
@@ -40,7 +40,7 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
   - in `hm-onsite`: domain fit, and for L6, cross-team scope.
 
   Verify with `check_simulator.py`.
-- [ ] 2.2 (2b) Write `coding` with:
+- [x] 2.2 (2b) Write `coding` with:
   - at least 6 `practical` problems: row-based homepage dedup, duplicates in viewing history, billboard rotation, weighted random key, sliding window over events and NDCG@K/P@K;
   - 2 `ml-coding`: CF with cosine on a sparse matrix and sparse matrix multiplication;
   - 3 `sql-pandas` on `sqlite3`: window functions, cohort retention and sessionization;
@@ -56,13 +56,13 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
   - `oa`.
 
   Verify that `check_simulator.py` runs the tests against the references and they pass.
-- [ ] 2.3 (2c) Write `ai-assisted-coding` with at least 3 repos (e.g. a feature service with a cache, an offline evaluation job and a catalog deduplicator). Each has `workspace/` with passing tests, `tasks.md`, `notes.md` and `flaws.yaml` with 0, 1 and 2 bugs respectively, each bug with its `hidden_test`. Verify with `check_simulator.py`.
-- [ ] 2.4 (2d) Write `ml-fundamentals` with two variants:
+- [x] 2.3 (2c) Write `ai-assisted-coding` with at least 3 repos (e.g. a feature service with a cache, an offline evaluation job and a catalog deduplicator). Each has `workspace/` with passing tests, `tasks.md`, `notes.md` and `flaws.yaml` with 0, 1 and 2 bugs respectively, each bug with its `hidden_test`. Verify with `check_simulator.py`.
+- [x] 2.4 (2d) Write `ml-fundamentals` with two variants:
   - `breadth`: bias-variance, L1/L2, GBDT and early stopping, co-watch embeddings, cold start, popularity bias, ranking metrics (P@K, R@K, MAP, NDCG, coverage, diversity), CF, trees vs networks, post-deploy monitoring, Bayes, forward pass, KNN, KV cache and attention;
   - `modeling-case`.
 
   Also write `ml-depth` per domain: recsys (with foundation model, GenRec, semantic IDs and artwork personalization), experimentation, causal-inference, rl-bandits, cv, nlp-llm, ads and ml-platform. Brief with the rule: "GenRec and the other publications are discussion context; figures are never asked." For L6, architecture deep dive. Verify with `check_simulator.py`.
-- [ ] 2.5 (2d) Write `ml-system-design` with:
+- [x] 2.5 (2d) Write `ml-system-design` with:
   - `design` variant, with at least 10 prompts tagged by domain: homepage rows, artwork personalization, personalized search, search autocomplete, Continue Watching, title cold start, daily retraining, ML job scheduler, compute allocation, ML portal and real-time feature serving;
   - `problem-framing` variant (RS).
 
@@ -72,7 +72,7 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
   - both with interleaving, CUPED, quasi-experiments and peeking.
 
   Verify with `check_simulator.py`.
-- [ ] 2.6 (2e) Write:
+- [x] 2.6 (2e) Write:
   - `presentation`: 45' `research-talk` and `take-home` with at least 2 take-homes whose `generate_data.py` uses a seed;
   - `project-deep-dive`, as "reverse system design" with assignable parts of the background.
 
@@ -87,7 +87,7 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
   - that the `<say>`/`<meta>` contract is respected over 5 turns.
 
   Document the results in `.claude/skills/netflix-ml-interview/references/relay-protocol.md` (the D1 state machine) and adjust D1–D3 if anything is not confirmed.
-- [ ] 3.1 Write a common prompt skeleton for the interviewers. It must include the literal D2 contract, the persona and style from the catalog, pacing control, obedience to the time flags, realism without feedback, leveled hints, the culture log, the language rule, reading the *launch packet* on the first turn and the prohibition on reading `rubric.md`. With that skeleton, generate the 14 `.claude/agents/netflix-<stage>.md`. Verify with `check_simulator.py`.
+- [x] 3.1 Write a common prompt skeleton for the interviewers. It must include the literal D2 contract, the persona and style from the catalog, pacing control, obedience to the time flags, realism without feedback, leveled hints, the culture log, the language rule, reading the *launch packet* on the first turn and the prohibition on reading `rubric.md`. With that skeleton, generate the 14 `.claude/agents/netflix-<stage>.md`. Verify with `check_simulator.py`.
 - [ ] 3.2 Write `.claude/agents/netflix-ai-pair.md`: it returns an explanation plus a diff and triggers the `flaws.yaml` bugs when the prompt touches that zone, reporting it in `<meta>`. Verify by invoking it directly with two fixed prompts on a repo (one touches the zone and the other does not) and applying the `hidden_test`.
 - [ ] 3.3 Write `.claude/agents/netflix-evaluator.md`, which implements the D7 pedagogical rule: `{turn_id, quote}` evidence from candidate turns, effect of hints, `end_reason`, "no evidence", model Yes answer and study plan. Also write `.claude/agents/netflix-hm-debrief.md` with its `cut` and `final` modes: deterministic step 1, step 2 with justified override, culture by value, catalog order and no new evidence. Verify with 4.2.
 
