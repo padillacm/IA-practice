@@ -1,12 +1,14 @@
 # Research: el proceso de entrevistas de ML en Netflix
 
-Documento de soporte del change (no es un artefacto del schema). Recoge lo que se sabe públicamente, con qué confianza y qué decisiones de diseño se derivan. Última actualización: 2026-10-24.
+Documento de soporte del change (no es un artefacto del schema). Recoge lo que se sabe públicamente, con qué confianza y qué decisiones de diseño se derivan. Última actualización: 2026-10-24 (tercera pasada, desde el PC del usuario).
 
 **Método.** Dos pasadas:
 1. Búsquedas web amplias: guías, Glassdoor, Blind, PracHub, Levels.fyi, Netflix Tech Blog, Netflix Research y prensa.
 2. **Lectura directa** (curl) de: el memo de cultura en jobs.netflix.com, la guía de interviewing.io, la de Interview101, research.netflix.com, Levels.fyi, 12 hilos de Blind y 9 experiencias de PracHub (2025–2026).
 
-**No legibles desde el entorno:**
+3. **Tercera pasada (PC del usuario, solo WebFetch; sin navegador disponible).** Leída directamente: la guía de Exponent/Aced (`aced.io`, a donde redirige tryexponent.com) y un resumen de ZenML del post GenRec. **Siguen sin poder leerse** Glassdoor (las 4 páginas, 403), Reddit (la herramienta lo bloquea), Interview Query MLE/RS/AI Engineer (429), netflixtechblog.com (403: ni interleaving ni experimentation analysis) y 1point3acres (403). Dos reintentos con otras cabeceras fueron denegados por el clasificador de permisos como elusión de bloqueo anti-bot y no se insistió. Pendiente para quien tenga un navegador (Claude in Chrome): esas fuentes y los hilos de Blind nuevos.
+
+**No legibles desde el entorno (pasadas 1–2, y siguen igual):**
 - Glassdoor, Reddit y netflixtechblog.com responden 403 (anti-bot).
 - Exponent/Aced: el proxy los rechaza.
 - Interview Query: límite de peticiones (429).
@@ -72,11 +74,17 @@ Para esas fuentes se usan los extractos del buscador.
 
 ### ML depth (dominio del equipo) — Media
 - Netflix Research no centraliza la investigación: los equipos trabajan junto al negocio. Áreas: Analytics, CV & Graphics, Consumer Insights, Encoding & Quality, **Experimentation & Causal Inference, Machine Learning, ML Platform, NLP & Conversations, Recommendations** ([Netflix Research]).
+- **GenRec** (2026, resumen secundario de ZenML; el post original no se pudo leer): ranker LLM-nativo en dos fases (adaptar un LLM abierto a datos de Netflix y post-entrenar para ranking con pesos por recompensa), historial convertido a texto con un "feature budget" que reduce tokens ~⅓, pérdida multiobjetivo, inferencia en modo prefill puntuando todos los candidatos en un forward pass (vLLM), A/B con ~10 % del tráfico durante ~4 semanas ([ZenML GenRec]; Baja hasta leer el post). Ancla útil para preguntas de system design de recsys con LLM.
 - Publicaciones recientes que anclan el contenido: LLM recommendation con semantic IDs (beam search autoregresivo vs multi-token prediction, oct 2026), integración del Foundation Model en la homepage y la búsqueda (feb 2026), artwork personalization vía LLM post-training (feb 2026) ([Netflix Research]).
 
 ### Experimentación y A/B testing — Alta en DS
 - Diseño, power, peeking, interferencia, efectos heterogéneos, varianza y bootstrap; caso práctico: diseñar y dimensionar un experimento de **frequency cap de anuncios** ([Glassdoor Senior DS], [PracHub DS 11 rondas], [Prepfully DS]).
 - Prácticas documentadas por Netflix: interleaving como primera etapa, CUPED / post-estratificación, quasi-experimentos geográficos ([Netflix TechBlog interleaving], [Netflix CUPED paper], [arXiv 1910.03878]).
+
+### Loop final según Exponent — Media
+- Tras el technical screen, **hasta 6 rondas de 30 min**: una técnica (ML, A/B tests, ML system design y a veces código) y rondas de cultura con RR. HH., el hiring manager y casi siempre un **manager "partner" de otro equipo**. Suele pedirse una **charla de 10–15 min** sobre un tema técnico a elección del candidato. Las rondas de cultura se evalúan con rúbrica explícita ([Exponent MLE], leído directamente en aced.io; guía comercial, coincide con interviewing.io y PracHub en el partner manager).
+- Preguntas de ejemplo: CF, árboles vs redes, descomposición sesgo-varianza, función que devuelve una clave aleatoria con probabilidad proporcional a sus pesos, predecir la puntuación de una reseña a partir del texto, qué métricas monitorizar tras desplegar, "diseña un sistema como Netflix"; conductuales: la vez que fuiste honesto en el trabajo, feedback difícil a un compañero, qué dicen de ti tus compañeros ([Exponent MLE]).
+- Consejo repetido: no citar el salario como motivación, los managers lo ven como señal de alerta ([Exponent MLE]; Baja, una sola fuente).
 
 ### Presentation — Media
 - RS / research intern: **panel presentation de 1 h** sobre la propia investigación ([Glassdoor ML Intern 2026]).
@@ -177,7 +185,8 @@ Opcionales en cualquier rol: `ai-assisted-coding`, y las etapas que no estén en
 - [interviewing.io]: https://interviewing.io/guides/hiring-process/netflix (leído directamente; basado en entrevistadores de Netflix, orientado a SWE)
 - [Interview101]: https://www.interview101.com/interviews/netflix/machine-learning-engineer (leído directamente; comercial)
 - [Levels.fyi MLE]: https://www.levels.fyi/companies/netflix/salaries/software-engineer/title/machine-learning-engineer (leído directamente)
-- [Exponent MLE]: https://www.tryexponent.com/guides/netflix-machine-learning-engineer-interview
+- [Exponent MLE]: https://www.tryexponent.com/guides/netflix-machine-learning-engineer-interview → https://www.aced.io/guides/netflix-machine-learning-engineer-interview (leído directamente, 2026-10-24)
+- [ZenML GenRec]: https://www.zenml.io/llmops-database/llm-native-recommendation-system-at-scale (resumen secundario leído directamente; el post de Netflix no)
 - [Interview Query MLE]: https://www.interviewquery.com/interview-guides/netflix-machine-learning-engineer · [Interview Query RS]: https://www.interviewquery.com/interview-guides/netflix-research-scientist
 - [Interview Kickstart MLE]: https://interviewkickstart.com/interview-questions/companies/netflix/machine-learning-engineer
 - [Dataford MLE]: https://dataford.io/interview-guides/netflix/machine-learning-engineer
