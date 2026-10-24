@@ -1,0 +1,53 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: mlsd-borderline
+transcript: mlsd-borderline.md
+stage: ml-system-design
+variant: design
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [borderline, en, hint-nudge]
+expected_scores:
+  problem_framing_requirements: Y
+  architecture_data_flow: Y
+  modeling_choices: Y
+  scale_reliability_security: N
+  online_validation_monitoring: Y
+  culture_signals: no_evidence
+expected_recommendation: pass   # D7 rule (derive_recommendation)
+hints:
+  - {id: h1, level: nudge, competency: scale_reliability_security}   # caps at Y; expected score is N anyway
+notes: "Edge case: exactly one core competency (scale_reliability_security) at N; culture_signals is non-core so its no_evidence does not make the stage insufficient_signal; recommendation is pass. Tolerance caution: if an evaluator also scores a second core at N the recommendation flips to fail, which counts as a decision mismatch."
+rationale:
+  problem_framing_requirements:
+    turns: [2]
+    quotes:
+      - {turn_id: 2, quote: "long-term retention is the goal and play-starts followed by at least two minutes of watching are my proxy"}
+    why: "Goal vs proxy, numeric assumptions, two guardrails and a constraint; scope confirmed. Meets Y."
+  architecture_data_flow:
+    turns: [4, 4]
+    quotes:
+      - {turn_id: 4, quote: "a feature store with the same feature definitions for training and serving"}
+      - {turn_id: 4, quote: "if the cache misses we compute candidates on the fly"}
+    why: "Batch/nearline/online, feature consistency, one traced request with a fallback. Technology class per hop is thin but present."
+  modeling_choices:
+    turns: [6, 6]
+    quotes:
+      - {turn_id: 6, quote: "I would compare gradient boosted trees against a deep model with a sequence encoder"}
+      - {turn_id: 6, quote: "I know the position of the title affects clicks so I would add position as a feature"}
+    why: "Two options against the latency constraint, loss and offline metric stated, position bias noted. Exposure bias and exploration for training data are missing, so Y with no SY."
+  scale_reliability_security:
+    turns: [8]
+    quotes:
+      - {turn_id: 8, quote: "We should have redundancy and good monitoring so that failures are handled."}
+    why: "Generic answer at T8; concrete content (99.9%, cached page, sensitive history) only after a nudge at T9. Only one degraded mode, no access-control design, no cost driver. Below the L5 bar: N."
+  online_validation_monitoring:
+    turns: [12]
+    quotes:
+      - {turn_id: 12, quote: "Interleaving only tells me which ranker members prefer in a relative sense, not retention"}
+    why: "Interleaving then A/B, relative-measure caveat, disagreement reason, monitoring list, rollback. Explore/exploit mechanism absent, so Y at the low edge."
+  culture_signals:
+    turns: []
+    quotes: []
+    why: "The culture probe was never asked (the stage closed at 50m without a stakeholder challenge) and the candidate never defended a trade-off, named a changing-mind condition or said I do not know. No candidate quote shows the L5 behaviors, so no_evidence is expected (not Y)."

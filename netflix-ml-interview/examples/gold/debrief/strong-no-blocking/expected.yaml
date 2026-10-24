@@ -1,0 +1,19 @@
+# Debrief gold case: strong-no-blocking
+# Blocking Strong No: coding and culture pass, but a core Strong No in a high-weight stage forces No Hire (D7 step 1).
+case: strong-no-blocking
+role: mle
+target_level: L5
+lang: en
+stages_considered:
+  - {instance: "05-coding@practical", scorecard: "scorecards/05-coding@practical.md", transcript: "../../coding-strong.md", recommend: pass}
+  - {instance: "08-ml-system-design@design", scorecard: "scorecards/08-ml-system-design@design.md", transcript: "../../mlsd-weak.md", recommend: fail}
+  - {instance: "10-culture@default", scorecard: "scorecards/10-culture@default.md", transcript: "../../culture-strong.md", recommend: pass}
+complete: false          # only the VO1 stages are present
+provisional_outcome: no_hire
+outcome: no_hire
+level: none
+override: false
+culture_verdict: positive
+must_cite:
+  - "08-ml-system-design@design modeling_choices SN (hint h1 substantive) and online_validation_monitoring SN"
+rationale: "ml-system-design is a high-weight stage and has core competencies at Strong No (modeling_choices, online_validation_monitoring), so step 1 gives no_hire however strong coding and culture are. Strengths elsewhere cannot cancel a blocking Strong No. An override to hire would need scorecard citations that contradict the Strong No and is not expected."

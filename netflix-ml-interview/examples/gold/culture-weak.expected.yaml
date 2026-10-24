@@ -1,0 +1,46 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: culture-weak
+transcript: culture-weak.md
+stage: culture
+variant: default
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [weak, en]
+expected_scores:
+  culture_signals: SN
+  impact_with_metrics: N
+  high_stakes_judgment: SN
+  candor_and_disagreement: SN
+  candidate_questions: N
+expected_recommendation: fail   # D7 rule (derive_recommendation)
+hints: []
+notes: "Clear fail with several core at SN (N tolerated by +-1)."
+rationale:
+  culture_signals:
+    turns: [2, 8]
+    quotes:
+      - {turn_id: 2, quote: "I did most of the work myself because the team was not strong."}
+      - {turn_id: 8, quote: "my previous manager was incompetent"}
+    why: "Takes credit, blames others, no credit to named colleagues: contradicts the bar."
+  impact_with_metrics:
+    turns: [4]
+    quotes:
+      - {turn_id: 4, quote: "Engagement went up a lot. I do not have the numbers with me."}
+    why: "No metric, baseline or method."
+  high_stakes_judgment:
+    turns: [6]
+    quotes:
+      - {turn_id: 6, quote: "If the data is not there, I wait."}
+    why: "Avoids the premise (decision under uncertainty) and takes no accountability."
+  candor_and_disagreement:
+    turns: [8]
+    quotes:
+      - {turn_id: 8, quote: "I told everyone on the team about it, though not him."}
+    why: "Talks behind the manager's back, blames a colleague: the opposite of candor and ownership."
+  candidate_questions:
+    turns: [10]
+    quotes:
+      - {turn_id: 10, quote: "No, I think you covered everything."}
+    why: "No questions."

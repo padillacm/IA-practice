@@ -1,0 +1,51 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: mlsd-long-shallow
+transcript: mlsd-long-shallow.md
+stage: ml-system-design
+variant: design
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [long-shallow, en, must-not-outscore:mlsd-strong]
+expected_scores:
+  problem_framing_requirements: N
+  architecture_data_flow: N
+  modeling_choices: N
+  scale_reliability_security: N
+  online_validation_monitoring: N
+  culture_signals: N
+expected_recommendation: fail   # D7 rule (derive_recommendation)
+hints: []
+notes: "Verbose, buzzword-dense candidate with no commitments. Candidate words are about 3x the concise borderline answer but substance is zero. Must NOT outscore mlsd-strong or mlsd-borderline on any competency; any Y here is a calibration failure. Expected recommendation fail (five core at N)."
+rationale:
+  problem_framing_requirements:
+    turns: [4]
+    quotes:
+      - {turn_id: 4, quote: "the right numbers would be defined together with the stakeholders as the project evolves"}
+    why: "Three long answers but no committed metric, no number, no guardrail, no constraint even when asked. Length is not evidence: N."
+  architecture_data_flow:
+    turns: [6]
+    quotes:
+      - {turn_id: 6, quote: "The architecture would be modern, cloud-native, microservice-based and scalable."}
+    why: "A list of component names with no hops, no batch/real-time separation, no consistency story, no request trace: N."
+  modeling_choices:
+    turns: [8]
+    quotes:
+      - {turn_id: 8, quote: "We would use state of the art deep learning, like transformers, possibly with attention, embeddings and multi-task learning"}
+    why: "Names techniques without comparing options, loss, label generation or bias: N."
+  scale_reliability_security:
+    turns: [10]
+    quotes:
+      - {turn_id: 10, quote: "we would have redundancy, fault tolerance, graceful degradation and monitoring and alerting"}
+    why: "Slogans without target, specific degraded mode, access control or cost driver: N."
+  online_validation_monitoring:
+    turns: [10]
+    quotes:
+      - {turn_id: 10, quote: "we would run experiments, A/B tests and analyze the results with statistical rigor"}
+    why: "Mentions A/B only; no interleaving, no offline/online gap, no explore/exploit, no monitoring list: N."
+  culture_signals:
+    turns: [10]
+    quotes:
+      - {turn_id: 10, quote: "I am confident that with a great team we can build something amazing"}
+    why: "Generic praise, no trade-off defended, no changing-mind condition, no I do not know: N."

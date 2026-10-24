@@ -1,0 +1,57 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: mlsd-strong-es
+transcript: mlsd-strong-es.md
+stage: ml-system-design
+variant: design
+level: L5
+role: mle
+lang: es
+tolerance: 1
+tags: [strong, es, lang-twin-of:mlsd-strong]
+expected_scores:
+  problem_framing_requirements: Y
+  architecture_data_flow: Y
+  modeling_choices: SY
+  scale_reliability_security: Y
+  online_validation_monitoring: Y
+  culture_signals: Y
+expected_recommendation: pass   # D7 rule (derive_recommendation)
+hints: []
+notes: "Spanish twin of mlsd-strong (same content, lang=es). Scores and recommendation must equal the English run (language must not change the scores); report any divergence larger than one step in RESULTS.md."
+rationale:
+  problem_framing_requirements:
+    turns: [2, 2]
+    quotes:
+      - {turn_id: 2, quote: "Separaría el objetivo de negocio, la satisfacción del miembro a largo plazo medida con retención, del proxy que puedo optimizar día a día"}
+      - {turn_id: 2, quote: "un presupuesto p99 de 300 ms para la petición de la página"}
+    why: "Same content as mlsd-strong T2 in Spanish."
+  architecture_data_flow:
+    turns: [4, 4]
+    quotes:
+      - {turn_id: 4, quote: "Las features offline y online salen de las mismas definiciones"}
+      - {turn_id: 4, quote: "Si el ranker excede 150 ms servimos la última página buena en caché de ese perfil"}
+    why: "Same as mlsd-strong T4."
+  modeling_choices:
+    turns: [6, 6]
+    quotes:
+      - {turn_id: 6, quote: "Comparo dos opciones."}
+      - {turn_id: 6, quote: "reservo una pequeña fracción epsilon de tráfico de exploración aleatoria para obtener datos sin sesgo"}
+    why: "Same as mlsd-strong T6."
+  scale_reliability_security:
+    turns: [8, 8]
+    quotes:
+      - {turn_id: 8, quote: "Objetivo de disponibilidad: 99,95% para cargas de página"}
+      - {turn_id: 8, quote: "los títulos no estrenados solo son visibles para perfiles internos marcados"}
+    why: "Same as mlsd-strong T8."
+  online_validation_monitoring:
+    turns: [10, 10]
+    quotes:
+      - {turn_id: 10, quote: "es una medida relativa: me dice qué ranker prefieren los miembros dentro de la misma lista y no dice nada sobre retención"}
+      - {turn_id: 10, quote: "Disparador de rollback: un guardarraíl roto o una tasa de fallback superior al 5% durante diez minutos."}
+    why: "Same as mlsd-strong T10."
+  culture_signals:
+    turns: [12, 12]
+    quotes:
+      - {turn_id: 12, quote: "Todavía no sé cuánta obsolescencia notan realmente los miembros"}
+      - {turn_id: 12, quote: "Lo que me haría cambiar: una prueba donde el brazo en tiempo real mejore la retención"}
+    why: "Same as mlsd-strong T12."

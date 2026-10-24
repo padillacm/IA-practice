@@ -1,0 +1,50 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: culture-strong
+transcript: culture-strong.md
+stage: culture
+variant: default
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [strong, en]
+expected_scores:
+  culture_signals: Y
+  impact_with_metrics: Y
+  high_stakes_judgment: Y
+  candor_and_disagreement: Y
+  candidate_questions: Y
+expected_recommendation: pass   # D7 rule (derive_recommendation)
+hints: []
+notes: "Strong L5 culture round with specific, costed events. Culture_signals is the most variable score (+-1)."
+rationale:
+  culture_signals:
+    turns: [8, 8]
+    quotes:
+      - {turn_id: 8, quote: "I made sure the review named her."}
+      - {turn_id: 8, quote: "My reservation is the keeper test"}
+    why: "Specific events with stakes and cost, connects to memo mechanisms (context not control, keeper test) and states one reservation; credits a named colleague."
+  impact_with_metrics:
+    turns: [2, 2]
+    quotes:
+      - {turn_id: 2, quote: "The treatment lifted them by 2.1% with a 95% interval of 1.4% to 2.8%"}
+      - {turn_id: 2, quote: "What I look for next is owning long-term satisfaction metrics end to end"}
+    why: "Favorite, latest and most significant project with metric, baseline, method, personal decisions, and what is next."
+  high_stakes_judgment:
+    turns: [4, 4]
+    quotes:
+      - {turn_id: 4, quote: "set the criterion in advance"}
+      - {turn_id: 4, quote: "I was accountable for the call to my director"}
+    why: "Options, criteria, who was consulted, accountability and a lesson."
+  candor_and_disagreement:
+    turns: [6, 6]
+    quotes:
+      - {turn_id: 6, quote: "I wrote my objection in the decision doc, and once decided I committed"}
+      - {turn_id: 6, quote: "I told the team in the channel the same day"}
+    why: "Disagreed with a senior with evidence, disagreed and committed, shared own mistake promptly."
+  candidate_questions:
+    turns: [10, 10]
+    quotes:
+      - {turn_id: 10, quote: "What does success look like at this level in the first year?"}
+      - {turn_id: 10, quote: "what does the memo not say about the team's day-to-day?"}
+    why: "Questions match the rubric examples (disagreement handling, success at level, what the memo does not say)."

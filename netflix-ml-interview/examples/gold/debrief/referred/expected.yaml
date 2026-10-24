@@ -1,0 +1,22 @@
+# Debrief gold case: referred
+# Referred: VO1 passes with positive culture; fails only in ml-depth and hm-onsite.
+case: referred
+role: mle
+target_level: L5
+lang: en
+stages_considered:
+  - {instance: "05-coding@practical", scorecard: "scorecards/05-coding@practical.md", transcript: "../../coding-strong.md", recommend: pass}
+  - {instance: "08-ml-system-design@design", scorecard: "scorecards/08-ml-system-design@design.md", transcript: "../../mlsd-strong.md", recommend: pass}
+  - {instance: "10-culture@default", scorecard: "scorecards/10-culture@default.md", transcript: "../../culture-strong.md", recommend: pass}
+  - {instance: "11-ml-depth@default", scorecard: "scorecards/11-ml-depth@default.md", transcript: "transcripts/mldepth-weak.md", recommend: fail}
+  - {instance: "14-hm-onsite@default", scorecard: "scorecards/14-hm-onsite@default.md", transcript: "transcripts/hmonsite-weak-fit.md", recommend: fail}
+complete: false          # project-deep-dive and partnership were not run in this fixture
+provisional_outcome: referred
+outcome: referred
+level: L5
+override: false
+culture_verdict: positive
+must_cite:
+  - "11-ml-depth@default domain_depth N and first_principles_reasoning N"
+  - "14-hm-onsite@default team_domain_fit N and technical_vision_scope N"
+rationale: "All high-weight VO1 stages pass, culture is positive and the only fails are ml-depth and hm-onsite (weak domain fit), which is exactly the Referred condition. The debrief should offer repeating VO2 with a different domain (ml-depth plus hm-onsite). Level L5 comes from the high-weight VO1 stages."

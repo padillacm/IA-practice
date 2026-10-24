@@ -1,0 +1,77 @@
+# Study map: <stage>.<competency_id> -> recsys-course modules, practice stage or resource (format frozen in design.md D10).
+# course: [] means the course does not cover it; practice_stage is a stage id (variant noted in resource when relevant).
+
+recruiter-screen.motivation_why_netflix: {course: [recsys-course/00_intro/, recsys-course/18_capstone/], practice_stage: recruiter-screen, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+recruiter-screen.background_clarity: {course: [recsys-course/18_capstone/], practice_stage: recruiter-screen, resource: "Write a 2-minute career arc with one quantified outcome and a forward-looking why-now"}
+recruiter-screen.memo_awareness: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+recruiter-screen.role_fit_logistics: {course: [], practice_stage: recruiter-screen, resource: "Prepare logistics, other active processes and a compensation expectation tied to role and location"}
+recruiter-screen.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+hm-screen.role_background_fit: {course: [recsys-course/18_capstone/, recsys-course/19_elite_playbook/], practice_stage: hm-screen, resource: "Map two of your skills to the team's named needs; the team's public tech blog"}
+hm-screen.impact_with_metrics: {course: [recsys-course/02_evaluation/, recsys-course/15_online_experimentation/], practice_stage: hm-screen, resource: "Prepare two outcomes with metric, baseline and measurement method"}
+hm-screen.technical_curiosity: {course: [recsys-course/19_elite_playbook/, recsys-course/11_generative_recsys/], practice_stage: hm-screen, resource: "Netflix Tech Blog: jobs.netflix.com/culture and netflixtechblog.com"}
+hm-screen.candidate_questions_quality: {course: [], practice_stage: hm-screen, resource: "Prepare questions on what the team will not solve this year, how decisions are made and how impact is evaluated"}
+hm-screen.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+technical-screen.technical_knowledge: {course: [recsys-course/02_evaluation/, recsys-course/15_online_experimentation/], practice_stage: technical-screen, resource: "Statistics refresher: t-test, MDE, Benjamini-Hochberg, Bayesian posterior by hand"}
+technical-screen.coding_execution: {course: [], practice_stage: coding, resource: "Practice hidden-suite problems (sliding window, deque, rank-sum) and SQL window functions"}
+technical-screen.problem_framing_communication: {course: [recsys-course/18_capstone/], practice_stage: technical-screen, resource: "State the plan and the baseline cost before writing code"}
+technical-screen.verification_testing: {course: [], practice_stage: coding, resource: "Write brute-force oracles and randomized comparison tests"}
+technical-screen.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+presentation.communication_structure: {course: [recsys-course/18_capstone/], practice_stage: presentation, resource: "Question, decision, method, result, limits; one figure per claim"}
+presentation.technical_depth_rigor: {course: [recsys-course/02_evaluation/, recsys-course/15_online_experimentation/], practice_stage: presentation, resource: "Report baselines, assumptions and intervals"}
+presentation.impact_and_insight: {course: [recsys-course/15_online_experimentation/, recsys-course/18_capstone/], practice_stage: presentation, resource: "Separate your contribution from the team's and state a guardrail next to the gain"}
+presentation.qa_handling: {course: [], practice_stage: presentation, resource: "Practice answering in the first sentence and conceding valid limits"}
+presentation.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+coding.problem_solving: {course: [], practice_stage: coding, resource: "Practice clarifying questions and stating the brute-force baseline before coding"}
+coding.code_quality_correctness: {course: [], practice_stage: coding, resource: "Small functions, explicit edge cases (empty, ties, boundaries)"}
+coding.testing_verification: {course: [], practice_stage: coding, resource: "Write tests before declaring done, plus a randomized oracle comparison"}
+coding.complexity_optimality: {course: [], practice_stage: coding, resource: "State time and space complexity unprompted"}
+coding.production_followups: {course: [recsys-course/16_production_serving/], practice_stage: coding, resource: "Scale and concurrency follow-ups: partition keys, snapshots, offline vs online split"}
+coding.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+ai-assisted-coding.task_decomposition: {course: [], practice_stage: ai-assisted-coding, resource: "Read the code and write an ordered plan before prompting"}
+ai-assisted-coding.ai_direction: {course: [], practice_stage: ai-assisted-coding, resource: "Prompt with the contract, edge cases and what must not change"}
+ai-assisted-coding.verification_of_ai_output: {course: [], practice_stage: ai-assisted-coding, resource: "Read every diff and write your own boundary tests"}
+ai-assisted-coding.challenging_ai_errors: {course: [], practice_stage: ai-assisted-coding, resource: "Practice spotting flawed assumptions in AI diffs"}
+ai-assisted-coding.outcome_quality: {course: [], practice_stage: ai-assisted-coding, resource: "Finish all parts, keep default behavior unchanged, state what you chose not to handle"}
+ai-assisted-coding.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+ml-fundamentals.ml_theory: {course: [recsys-course/05_matrix_factorization/, recsys-course/06_ctr_ranking/], practice_stage: ml-fundamentals, resource: "Bias-variance, regularization, optimization: derive, name assumptions and failure cases"}
+ml-fundamentals.metrics_evaluation: {course: [recsys-course/02_evaluation/, recsys-course/13_beyond_accuracy/], practice_stage: ml-fundamentals}
+ml-fundamentals.practical_modeling_judgment: {course: [recsys-course/01_data/, recsys-course/06_ctr_ranking/, recsys-course/17_mlops_monitoring/], practice_stage: ml-fundamentals}
+ml-fundamentals.communication_precision: {course: [], practice_stage: ml-fundamentals, resource: "Answer in two sentences first, then justify with units and shapes"}
+ml-fundamentals.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+ml-system-design.problem_framing_requirements: {course: [recsys-course/00_intro/, recsys-course/18_capstone/, recsys-course/19_elite_playbook/], practice_stage: ml-system-design}
+ml-system-design.architecture_data_flow: {course: [recsys-course/16_production_serving/, recsys-course/08_deep_retrieval_ann/], practice_stage: ml-system-design}
+ml-system-design.modeling_choices: {course: [recsys-course/06_ctr_ranking/, recsys-course/07_learning_to_rank_multitask/, recsys-course/08_deep_retrieval_ann/, recsys-course/09_sequential/], practice_stage: ml-system-design}
+ml-system-design.scale_reliability_security: {course: [recsys-course/16_production_serving/, recsys-course/17_mlops_monitoring/], practice_stage: ml-system-design}
+ml-system-design.online_validation_monitoring: {course: [recsys-course/15_online_experimentation/, recsys-course/14_bandits_rl_ope/, recsys-course/17_mlops_monitoring/], practice_stage: ml-system-design}
+ml-system-design.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+experimentation.experiment_design: {course: [recsys-course/15_online_experimentation/], practice_stage: experimentation}
+experimentation.metrics_and_power: {course: [recsys-course/15_online_experimentation/, recsys-course/02_evaluation/], practice_stage: experimentation}
+experimentation.analysis_inference: {course: [recsys-course/15_online_experimentation/], practice_stage: experimentation}
+experimentation.variance_reduction_advanced: {course: [recsys-course/15_online_experimentation/], practice_stage: experimentation}
+experimentation.decision_communication: {course: [recsys-course/15_online_experimentation/, recsys-course/18_capstone/], practice_stage: experimentation, resource: "Conditional recommendations and explanations for non-technical stakeholders"}
+experimentation.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+culture.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+culture.impact_with_metrics: {course: [recsys-course/02_evaluation/, recsys-course/15_online_experimentation/], practice_stage: culture, resource: "Prepare favorite, latest and most significant projects with metric, baseline and method"}
+culture.high_stakes_judgment: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture (judgment, courage)"}
+culture.candor_and_disagreement: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture (candor, farming for dissent, informed captain)"}
+culture.candidate_questions: {course: [], practice_stage: culture, resource: "Prepare questions on handling disagreement and what success looks like at your level; Netflix culture memo: jobs.netflix.com/culture"}
+ml-depth.domain_depth: {course: [recsys-course/06_ctr_ranking/, recsys-course/07_learning_to_rank_multitask/, recsys-course/08_deep_retrieval_ann/, recsys-course/09_sequential/, recsys-course/11_generative_recsys/, recsys-course/14_bandits_rl_ope/], practice_stage: ml-depth}
+ml-depth.first_principles_reasoning: {course: [recsys-course/14_bandits_rl_ope/, recsys-course/02_evaluation/, recsys-course/05_matrix_factorization/], practice_stage: ml-depth, resource: "Derive estimator variance and regret from the objective; check limiting cases"}
+ml-depth.connection_to_practice: {course: [recsys-course/15_online_experimentation/, recsys-course/14_bandits_rl_ope/, recsys-course/17_mlops_monitoring/], practice_stage: ml-depth}
+ml-depth.architecture_depth: {course: [recsys-course/16_production_serving/, recsys-course/08_deep_retrieval_ann/, recsys-course/18_capstone/], practice_stage: ml-depth}
+ml-depth.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+project-deep-dive.ownership_scope: {course: [recsys-course/18_capstone/], practice_stage: project-deep-dive, resource: "Separate what you owned from team decisions"}
+project-deep-dive.technical_decisions_tradeoffs: {course: [recsys-course/19_elite_playbook/, recsys-course/18_capstone/], practice_stage: project-deep-dive, resource: "Name two alternatives and the constraint that decided it"}
+project-deep-dive.scale_and_operations: {course: [recsys-course/16_production_serving/, recsys-course/17_mlops_monitoring/], practice_stage: project-deep-dive}
+project-deep-dive.retrospective_learning: {course: [], practice_stage: project-deep-dive, resource: "Blameless postmortem practice: root cause and the change in your practice"}
+project-deep-dive.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+partnership.cross_team_collaboration: {course: [], practice_stage: partnership, resource: "Prepare a story where you led work across two or more teams"}
+partnership.stakeholder_influence: {course: [], practice_stage: partnership, resource: "Disagree and commit; Netflix culture memo: jobs.netflix.com/culture"}
+partnership.dependency_conflict_handling: {course: [], practice_stage: partnership, resource: "Slipped dependency: options on scope, date and resources"}
+partnership.communication_clarity: {course: [], practice_stage: partnership, resource: "Conclusion first, decision and deadline, under two minutes"}
+partnership.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}
+hm-onsite.team_domain_fit: {course: [recsys-course/18_capstone/, recsys-course/19_elite_playbook/], practice_stage: hm-onsite}
+hm-onsite.technical_vision_scope: {course: [recsys-course/19_elite_playbook/, recsys-course/18_capstone/], practice_stage: hm-onsite, resource: "Write a one-year plan with prioritized bets, what you would not do and success metrics"}
+hm-onsite.cross_team_leadership_scope: {course: [], practice_stage: partnership}
+hm-onsite.motivation_and_growth: {course: [], practice_stage: hm-onsite, resource: "Name the scope you want in a year and the feedback shaping it"}
+hm-onsite.culture_signals: {course: [], practice_stage: culture, resource: "Netflix culture memo: jobs.netflix.com/culture"}

@@ -1,0 +1,22 @@
+# Debrief gold case: mixed-signals
+# Mixed signals: strong technical stages, a repeated culture weakness (counted once by memo value), culture verdict mixed.
+case: mixed-signals
+role: mle
+target_level: L5
+lang: en
+stages_considered:
+  - {instance: "05-coding@practical", scorecard: "scorecards/05-coding@practical.md", transcript: "../../coding-borderline.md", recommend: pass}
+  - {instance: "08-ml-system-design@design", scorecard: "scorecards/08-ml-system-design@design.md", transcript: "../../mlsd-halo.md", recommend: pass}
+  - {instance: "10-culture@default", scorecard: "scorecards/10-culture@default.md", transcript: "transcripts/culture-mixed.md", recommend: pass}
+complete: false          # only the VO1 stages are present
+provisional_outcome: hire
+outcome: hire
+level: L5
+override: false
+culture_verdict: mixed
+accepted_variants:
+  - {outcome: no_hire, override: true, requires: "justification citing mlsd-halo culture_signals N (T12) and culture-mixed culture_signals N (T8) by scorecard"}
+must_cite:
+  - "08-ml-system-design@design culture_signals N: dismisses the stakeholder"
+  - "10-culture@default culture_signals N: credit-taking and no reservation about the memo"
+rationale: "Every VO1 stage is pass, so the deterministic rule gives hire. The culture signal is mixed: one weakness (credit-taking and dismissing others, memo values selflessness and inclusion) shows in two stages and counts once, backed by both pieces of evidence. The verdict is mixed rather than negative, so step 1 does not trigger No Hire. A hiring-manager override to no_hire is a legitimate step 2 only with the citations above and override: true; any other disagreement between outcome and provisional_outcome without override: true is a defect. Level is the minimum observed level in high-weight stages (L5)."

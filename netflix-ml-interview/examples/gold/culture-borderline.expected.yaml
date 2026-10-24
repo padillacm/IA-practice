@@ -1,0 +1,47 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: culture-borderline
+transcript: culture-borderline.md
+stage: culture
+variant: default
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [borderline, en]
+expected_scores:
+  culture_signals: N
+  impact_with_metrics: N
+  high_stakes_judgment: Y
+  candor_and_disagreement: N
+  candidate_questions: N
+expected_recommendation: fail   # D7 rule (derive_recommendation)
+hints: []
+notes: "Edge case: exactly two core competencies (culture_signals, candor_and_disagreement) at N, which fails under D7 (two or more core at N). A +-1 shift on either one flips the recommendation to pass, so the decision may legitimately differ in one of three runs; record it in RESULTS.md as a boundary case."
+rationale:
+  culture_signals:
+    turns: [8]
+    quotes:
+      - {turn_id: 8, quote: "I prefer to keep the team harmonious."}
+    why: "No specific event with stakes for any sampled value, no reservation about the memo; the answer favors harmony over candor. N."
+  impact_with_metrics:
+    turns: [2, 4]
+    quotes:
+      - {turn_id: 2, quote: "engagement improved a few percent"}
+      - {turn_id: 4, quote: "I do not remember the interval"}
+    why: "Metric given only after a follow-up, partial baseline and method, personal decision named; no latest/favorite distinction. Between N and Y; N expected, Y within tolerance."
+  high_stakes_judgment:
+    turns: [6]
+    quotes:
+      - {turn_id: 6, quote: "I recommended shipping, and I told my director I took responsibility"}
+    why: "Options, who was consulted, accountability and a lesson, although the criteria are thin. Y at the lower edge."
+  candor_and_disagreement:
+    turns: [8, 10]
+    quotes:
+      - {turn_id: 8, quote: "I cannot think of a specific time right now."}
+      - {turn_id: 10, quote: "I try not to make mistakes that affect others."}
+    why: "No example of disagreeing with a senior or of committing to an opposed decision, no shared mistake: N."
+  candidate_questions:
+    turns: [12]
+    quotes:
+      - {turn_id: 12, quote: "What are the benefits and the vacation policy?"}
+    why: "Questions are logistics only: N (non-core)."

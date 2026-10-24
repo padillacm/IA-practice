@@ -1,0 +1,53 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: mlsd-weak
+transcript: mlsd-weak.md
+stage: ml-system-design
+variant: design
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [weak, en, hint-substantive]
+expected_scores:
+  problem_framing_requirements: N
+  architecture_data_flow: N
+  modeling_choices: SN
+  scale_reliability_security: N
+  online_validation_monitoring: SN
+  culture_signals: N
+expected_recommendation: fail   # D7 rule (derive_recommendation)
+hints:
+  - {id: h1, level: substantive, competency: modeling_choices}   # caps at N
+notes: "Clear fail. Any core at SN fails the stage; modeling_choices is capped at N by the substantive hint, but the leakage error justifies SN regardless (cap only limits upward)."
+rationale:
+  problem_framing_requirements:
+    turns: [4]
+    quotes:
+      - {turn_id: 4, quote: "Accuracy of the click prediction, I think. Scale is big, so we use Spark and a big GPU cluster. Latency should be fast."}
+    why: "Optimizes click accuracy (proxy as goal), no numbers, no guardrails, no constraints. Below the bar; N (SN also tolerable)."
+  architecture_data_flow:
+    turns: [6]
+    quotes:
+      - {turn_id: 6, quote: "the model gets the user's history from the database, and it returns the top 10 movies"}
+    why: "Single synchronous path, no batch/real-time split, no feature consistency, no cache or fallback."
+  modeling_choices:
+    turns: [6, 8]
+    quotes:
+      - {turn_id: 6, quote: "we split the logs randomly into train and test sets"}
+      - {turn_id: 8, quote: "all the other movies in the catalog are negatives"}
+    why: "Random split of logs (leakage), unexposed titles as negatives, no model comparison, no bias treatment even after a substantive hint: serious errors, SN."
+  scale_reliability_security:
+    turns: [10]
+    quotes:
+      - {turn_id: 10, quote: "We have servers in the cloud so they should not go down."}
+    why: "No target, no degraded mode, no security or cost: N."
+  online_validation_monitoring:
+    turns: [10]
+    quotes:
+      - {turn_id: 10, quote: "if it is higher than the old one we deploy it"}
+    why: "Deploys on offline accuracy alone, no online test, no monitoring: contradicts the bar, SN (N tolerated by +-1)."
+  culture_signals:
+    turns: [10]
+    quotes:
+      - {turn_id: 10, quote: "Honestly, the interviewer's question about the page layout is not something I have seen before."}
+    why: "Admits not knowing but proposes no way to find out and defends nothing; non-core, N."

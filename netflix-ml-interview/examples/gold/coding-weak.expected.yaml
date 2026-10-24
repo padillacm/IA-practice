@@ -1,0 +1,51 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: coding-weak
+transcript: coding-weak.md
+stage: coding
+variant: practical
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [weak, en, hint-substantive]
+expected_scores:
+  problem_solving: N
+  code_quality_correctness: SN
+  testing_verification: N
+  complexity_optimality: N
+  production_followups: no_evidence
+  culture_signals: N
+expected_recommendation: fail   # D7 rule (derive_recommendation)
+hints:
+  - {id: h1, level: substantive, competency: problem_solving}   # caps at N
+notes: "Clear fail: code_quality_correctness at SN (N tolerated) already fails; additionally two or more core at N."
+rationale:
+  problem_solving:
+    turns: [2]
+    quotes:
+      - {turn_id: 2, quote: "OK I will write it now."}
+    why: "Starts coding with no clarifying questions or baseline; assumptions only after a substantive hint (cap N)."
+  code_quality_correctness:
+    turns: [6]
+    quotes:
+      - {turn_id: 6, quote: "Maybe I need to subtract the ones that are later? I am not sure."}
+    why: "Counts future events, fails 5 of 12 even after a fix, no validation: contradicts the bar (SN; N tolerated)."
+  testing_verification:
+    turns: [8]
+    quotes:
+      - {turn_id: 8, quote: "the remaining ones are edge cases that would not happen in practice"}
+    why: "Writes no tests, dismisses failing cases."
+  complexity_optimality:
+    turns: [4]
+    quotes:
+      - {turn_id: 4, quote: "Complexity is O(n) I think, there are two loops but they are simple."}
+    why: "Wrong complexity (O(n^2)) for a nested loop."
+  production_followups:
+    turns: []
+    quotes: []
+    why: "Never reached: the interviewer did not get to scale questions and the candidate raised nothing. no_evidence (non-core)."
+  culture_signals:
+    turns: [8]
+    quotes:
+      - {turn_id: 8, quote: "the interviewer should tell me what the expected output is"}
+    why: "Deflects ownership of verification to the interviewer; no reasoned position, no openness to evidence: N."

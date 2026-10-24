@@ -1,0 +1,54 @@
+# Expected scores for the gold case; compare with tolerance of one step (SN<N<Y<SY). no_evidence must match exactly.
+case: coding-borderline
+transcript: coding-borderline.md
+stage: coding
+variant: practical
+level: L5
+role: mle
+lang: en
+tolerance: 1
+tags: [borderline, en, hint-nudge]
+expected_scores:
+  problem_solving: Y
+  code_quality_correctness: Y
+  testing_verification: N
+  complexity_optimality: Y
+  production_followups: N
+  culture_signals: no_evidence
+expected_recommendation: pass   # D7 rule (derive_recommendation)
+hints:
+  - {id: h1, level: nudge, competency: testing_verification}   # caps at Y; expected score is N anyway
+notes: "One core (testing_verification) at N, others Y: pass at the edge. Non-core no_evidence does not trigger insufficient_signal. If an evaluator scores code_quality_correctness N as well the stage flips to fail (decision mismatch)."
+rationale:
+  problem_solving:
+    turns: [2, 4]
+    quotes:
+      - {turn_id: 2, quote: "Is the window exclusive on the left?"}
+      - {turn_id: 4, quote: "It could be improved with a deque."}
+    why: "Asks the boundary question and states the baseline cost but skips ties and validation; reaches the deque only after the suite feedback. Lower edge of Y."
+  code_quality_correctness:
+    turns: [6, 6]
+    quotes:
+      - {turn_id: 6, quote: "I forgot the sorted check."}
+      - {turn_id: 6, quote: "while live[0][0] <= ts - window:"}
+    why: "Final solution passes the full suite on the second run, handles empty/ties/boundary; first version lacked validation and was not optimal. Y (N tolerated)."
+  testing_verification:
+    turns: [8, 10]
+    quotes:
+      - {turn_id: 8, quote: "These pass. I think the solution is fine."}
+      - {turn_id: 10, quote: "I did not write a brute force check."}
+    why: "Two example tests only, no boundary, ties or oracle even after a nudge (h1). Capped at Y by the nudge, scored N on content."
+  complexity_optimality:
+    turns: [6]
+    quotes:
+      - {turn_id: 6, quote: "Time is O(n) amortized, space O(live events)."}
+    why: "Reaches the expected O(n) with a stated complexity (though only after feedback, and no remaining inefficiency named). Y at the lower edge."
+  production_followups:
+    turns: [12]
+    quotes:
+      - {turn_id: 12, quote: "Hmm, I have not thought much about it. We could use Kafka maybe."}
+    why: "No concrete design step: N (non-core)."
+  culture_signals:
+    turns: []
+    quotes: []
+    why: "No disagreement or challenge occurred in the round; no evidence of defending or changing a position: no_evidence."
