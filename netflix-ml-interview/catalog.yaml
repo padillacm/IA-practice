@@ -1,0 +1,454 @@
+# Netflix ML interview simulator - catalog (format frozen in design.md D10).
+# Parsed with scripts/_yamlish.py (YAML subset): no anchors, no multi-line flow collections.
+# Loop entries are "stage" (stages without variants) or "stage@variant".
+# weights keys are "stage" or "stage@variant" (the variant key wins); values: high|normal|low.
+# minutes are ASSUMPTIONS (see sources.md); a variant may override the stage minutes.
+# variant.materials lists sub-directories of stages/<stage>/ that must hold content.
+version: 1
+domains: [recsys, experimentation, causal-inference, rl-bandits, cv, nlp-llm, ads, ml-platform]
+roles:
+  mle:
+    label: ML Engineer
+    cut: true
+    default_domain: recsys
+    loop:
+      screen: [recruiter-screen, hm-screen, technical-screen@ml-coding]
+      vo1: [coding@practical, ml-system-design@design, culture]
+      vo2: [ml-depth, project-deep-dive, partnership, hm-onsite]
+    weights:
+      recruiter-screen: low
+      hm-screen: low
+      technical-screen: normal
+      coding: low
+      ml-system-design: high
+      culture: high
+      ml-depth: high
+      project-deep-dive: normal
+      partnership: normal
+      hm-onsite: normal
+  rs:
+    label: Research / ML / Applied Scientist
+    cut: false
+    default_domain: recsys
+    loop:
+      screen: [recruiter-screen, hm-screen, technical-screen@ml-framing-coding]
+      vo1:
+        - presentation@research-talk
+        - ml-system-design@problem-framing
+        - ml-fundamentals@breadth
+        - coding@ml-coding
+        - culture
+      vo2: [ml-depth, partnership, hm-onsite]
+    weights:
+      recruiter-screen: low
+      hm-screen: low
+      technical-screen: normal
+      presentation: high
+      ml-system-design: high
+      ml-fundamentals: normal
+      coding: normal
+      culture: high
+      ml-depth: high
+      partnership: normal
+      hm-onsite: normal
+  ds:
+    label: Data Scientist (experimentation & analytics)
+    cut: false
+    default_domain: experimentation
+    loop:
+      screen: [recruiter-screen, hm-screen, technical-screen@sql, technical-screen@stats]
+      vo1:
+        - presentation@take-home
+        - experimentation@design-case
+        - experimentation@analysis-case
+        - coding@sql-pandas
+        - culture
+      vo2: [partnership, hm-onsite]
+    weights:
+      recruiter-screen: low
+      hm-screen: low
+      technical-screen: normal
+      technical-screen@stats: high
+      presentation: normal
+      experimentation: high
+      coding: normal
+      culture: high
+      partnership: normal
+      hm-onsite: normal
+stages:
+  - id: recruiter-screen
+    order: 1
+    default_phase: screen
+    minutes: 30
+    persona:
+      name: Maya Okafor
+      title: Senior Technical Recruiter, Machine Learning
+      style: conversational
+    agent: netflix-recruiter-screen
+    variants: []
+    competencies:
+      - id: motivation_why_netflix
+        core: true
+      - id: background_clarity
+        core: true
+      - id: memo_awareness
+        core: true
+      - id: role_fit_logistics
+        core: false
+      - id: culture_signals
+        core: false
+  - id: hm-screen
+    order: 2
+    default_phase: screen
+    minutes: 30
+    persona:
+      name: Daniel Reyes
+      title: Engineering Manager, Personalization ML (cordial, sells Netflix)
+      style: conversational
+    agent: netflix-hm-screen
+    variants: []
+    competencies:
+      - id: role_background_fit
+        core: true
+      - id: impact_with_metrics
+        core: true
+      - id: technical_curiosity
+        core: false
+      - id: candidate_questions_quality
+        core: false
+      - id: culture_signals
+        core: false
+  - id: technical-screen
+    order: 3
+    default_phase: screen
+    minutes: 60
+    persona:
+      name: Priya Nair
+      title: Senior MLE, Research Scientist or Data Scientist (matches the role)
+      style: concise
+    agent: netflix-technical-screen
+    variants:
+      - id: ml-coding
+        roles: [mle]
+        materials: [problems]
+      - id: ml-framing-coding
+        roles: [rs]
+        materials: [problems]
+      - id: sql
+        roles: [ds]
+        materials: [datasets]
+      - id: stats
+        roles: [ds]
+      - id: fundamentals-pr-review
+        roles: [mle]
+        materials: [prs]
+      - id: intern-project-coding
+        roles: [mle, rs, ds]
+      - id: oa
+        roles: [mle, rs, ds]
+        minutes: 75
+    variant_by_role:
+      mle: ml-coding
+      rs: ml-framing-coding
+      ds: sql
+    competencies:
+      - id: technical_knowledge
+        core: true
+      - id: coding_execution
+        core: true
+      - id: problem_framing_communication
+        core: true
+      - id: verification_testing
+        core: false
+      - id: culture_signals
+        core: false
+  - id: presentation
+    order: 4
+    default_phase: vo1
+    minutes: 45
+    persona:
+      name: Lena Hoffmann and Marcus Idowu
+      title: "Two-person panel: Senior Research Scientist and Senior Data Scientist"
+      style: incisive
+    agent: netflix-presentation
+    variants:
+      - id: research-talk
+        roles: [rs, mle]
+        minutes: 45
+      - id: take-home
+        roles: [ds]
+        minutes: 60
+        materials: [takehomes]
+    variant_by_role:
+      mle: research-talk
+      rs: research-talk
+      ds: take-home
+    competencies:
+      - id: communication_structure
+        core: true
+      - id: technical_depth_rigor
+        core: true
+      - id: impact_and_insight
+        core: true
+      - id: qa_handling
+        core: false
+      - id: culture_signals
+        core: false
+  - id: coding
+    order: 5
+    default_phase: vo1
+    minutes: 60
+    persona:
+      name: Arjun Mehta
+      title: Senior Software Engineer
+      style: concise
+    agent: netflix-coding
+    variants:
+      - id: practical
+        roles: [mle, rs, ds]
+        materials: [problems]
+      - id: ml-coding
+        roles: [mle, rs]
+        materials: [problems]
+      - id: sql-pandas
+        roles: [ds]
+        materials: [problems]
+      - id: lc-style
+        roles: [mle, rs, ds]
+        materials: [problems]
+    variant_by_role:
+      mle: practical
+      rs: ml-coding
+      ds: sql-pandas
+    competencies:
+      - id: problem_solving
+        core: true
+      - id: code_quality_correctness
+        core: true
+      - id: testing_verification
+        core: true
+      - id: complexity_optimality
+        core: false
+      - id: production_followups
+        core: false
+      - id: culture_signals
+        core: false
+  - id: ai-assisted-coding
+    order: 6
+    default_phase: vo1
+    minutes: 60
+    persona:
+      name: Jordan Ellis
+      title: Senior Software Engineer
+      style: conversational
+    agent: netflix-ai-assisted-coding
+    variants: []
+    competencies:
+      - id: task_decomposition
+        core: true
+      - id: ai_direction
+        core: true
+      - id: verification_of_ai_output
+        core: true
+      - id: challenging_ai_errors
+        core: false
+      - id: outcome_quality
+        core: true
+      - id: culture_signals
+        core: false
+  - id: ml-fundamentals
+    order: 7
+    default_phase: vo1
+    minutes: 45
+    persona:
+      name: Wei Zhang
+      title: Research Scientist (Senior Data Scientist for modeling-case)
+      style: incisive
+    agent: netflix-ml-fundamentals
+    variants:
+      - id: breadth
+        roles: [mle, rs, ds]
+      - id: modeling-case
+        roles: [ds]
+    variant_by_role:
+      mle: breadth
+      rs: breadth
+      ds: modeling-case
+    competencies:
+      - id: ml_theory
+        core: true
+      - id: metrics_evaluation
+        core: true
+      - id: practical_modeling_judgment
+        core: true
+      - id: communication_precision
+        core: false
+      - id: culture_signals
+        core: false
+  - id: ml-system-design
+    order: 8
+    default_phase: vo1
+    minutes: 60
+    persona:
+      name: Elena Vasquez
+      title: Staff ML Engineer
+      style: incisive
+    agent: netflix-ml-system-design
+    variants:
+      - id: design
+        roles: [mle, rs, ds]
+      - id: problem-framing
+        roles: [rs, mle, ds]
+    variant_by_role:
+      mle: design
+      rs: problem-framing
+      ds: design
+    competencies:
+      - id: problem_framing_requirements
+        core: true
+      - id: architecture_data_flow
+        core: true
+      - id: modeling_choices
+        core: true
+      - id: scale_reliability_security
+        core: true
+      - id: online_validation_monitoring
+        core: true
+      - id: culture_signals
+        core: false
+  - id: experimentation
+    order: 9
+    default_phase: vo1
+    minutes: 45
+    persona:
+      name: Sofia Lindqvist
+      title: Senior Data Scientist
+      style: incisive
+    agent: netflix-experimentation
+    variants:
+      - id: design-case
+        roles: [ds, mle, rs]
+      - id: analysis-case
+        roles: [ds]
+    variant_by_role:
+      mle: design-case
+      rs: design-case
+      ds: design-case
+    competencies:
+      - id: experiment_design
+        core: true
+      - id: metrics_and_power
+        core: true
+      - id: analysis_inference
+        core: true
+      - id: variance_reduction_advanced
+        core: false
+      - id: decision_communication
+        core: false
+      - id: culture_signals
+        core: false
+  - id: culture
+    order: 10
+    default_phase: vo1
+    minutes: 45
+    persona:
+      name: Rachel Goldberg
+      title: Director of Engineering ('Dream Team' interview)
+      style: incisive
+    agent: netflix-culture
+    variants: []
+    competencies:
+      - id: culture_signals
+        core: true
+      - id: impact_with_metrics
+        core: true
+      - id: high_stakes_judgment
+        core: true
+      - id: candor_and_disagreement
+        core: true
+      - id: candidate_questions
+        core: false
+  - id: ml-depth
+    order: 11
+    default_phase: vo2
+    minutes: 45
+    persona:
+      name: Kavya Raman
+      title: Senior Research Scientist, domain expert
+      style: concise
+    agent: netflix-ml-depth
+    variants: []
+    competencies:
+      - id: domain_depth
+        core: true
+      - id: first_principles_reasoning
+        core: true
+      - id: connection_to_practice
+        core: false
+      - id: architecture_depth
+        core: false
+      - id: culture_signals
+        core: false
+  - id: project-deep-dive
+    order: 12
+    default_phase: vo2
+    minutes: 45
+    persona:
+      name: Sam Okonkwo
+      title: Senior ML Engineer ('reverse system design')
+      style: incisive
+    agent: netflix-project-deep-dive
+    variants: []
+    competencies:
+      - id: ownership_scope
+        core: true
+      - id: technical_decisions_tradeoffs
+        core: true
+      - id: scale_and_operations
+        core: true
+      - id: retrospective_learning
+        core: false
+      - id: culture_signals
+        core: false
+  - id: partnership
+    order: 13
+    default_phase: vo2
+    minutes: 45
+    persona:
+      name: Carmen Delgado
+      title: Engineering Manager of a partner team
+      style: conversational
+    agent: netflix-partnership
+    variants: []
+    competencies:
+      - id: cross_team_collaboration
+        core: true
+      - id: stakeholder_influence
+        core: true
+      - id: dependency_conflict_handling
+        core: false
+      - id: communication_clarity
+        core: false
+      - id: culture_signals
+        core: false
+  - id: hm-onsite
+    order: 14
+    default_phase: vo2
+    minutes: 45
+    persona:
+      name: Victor Almeida
+      title: Senior Engineering Manager (hiring manager, demanding)
+      style: incisive
+    agent: netflix-hm-onsite
+    variants: []
+    competencies:
+      - id: team_domain_fit
+        core: true
+      - id: technical_vision_scope
+        core: true
+      - id: cross_team_leadership_scope
+        core: false
+      - id: motivation_and_growth
+        core: false
+      - id: culture_signals
+        core: false

@@ -1,0 +1,31 @@
+# Template for sessions/<YYYY-MM-DD>-<shortid>/session.yaml (format frozen in design.md D10).
+# `sim.py new` loads this file for its defaults and fills in the rest. Enums stay in English.
+id: YYYY-MM-DD-xxxxxx
+created: "1970-01-01T00:00:00Z"
+role: mle                  # mle | rs | ds
+level: L5                  # L4 | L5 | L6
+lang: en                   # en | es
+domain: recsys             # one of catalog domains
+time_scale: 1.5            # 1.0 disables the typing allowance
+python: python             # command that works on this machine: python | python3 | py
+env_ephemeral: false       # true when CLAUDE_CODE_REMOTE=true
+feedback: immediate        # immediate | deferred
+mode: normal               # normal | practice | degraded
+# Optional keys, added when they exist:
+#   background_path: path/to/background.md
+#   candidate_profile: "profile text extracted from the background or hm-screen"
+#   cut: {outcome: continue, reason: "all high-weight VO1 stages passed"}   # continue | stop
+#   final: {outcome: hire, level: L5, override: false}                      # hire | no_hire | referred
+instances:
+  - instance_id: 01-recruiter-screen@default
+    stage: recruiter-screen
+    variant: default
+    phase: screen
+    status: pending            # pending | in_progress | done | skipped
+    # end_reason: completed    # completed | time_up | uncovered | candidate_end | interrupted | skipped
+    segments: []               # [{start: ISO, end: ISO|null, last: ISO}] active-time segments
+    agent_name: iv-01-recruiter-screen-default-YYYY-MM-DD-xxxxxx-1
+    attempt: 1
+    question_ids: []
+    # problem_id: practical-dedup-rows
+    # scorecard: scorecards/01-recruiter-screen@default.md

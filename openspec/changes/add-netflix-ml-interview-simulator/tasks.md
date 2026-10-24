@@ -4,11 +4,11 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
 
 ## 1. WP1 · Foundations: repo, catalog, validator and helper
 
-- [ ] 1.1 Create the root `.gitignore` with `netflix-ml-interview/sessions/` and `.claude/settings.json` with permissions for `Bash(python netflix-ml-interview/scripts/sim.py:*)`, `Bash(python3 netflix-ml-interview/scripts/sim.py:*)` and `Bash(py netflix-ml-interview/scripts/sim.py:*)`. Verify that `git check-ignore -q netflix-ml-interview/sessions/.probe` returns 0 and that the JSON is valid.
-- [ ] 1.2 Create `netflix-ml-interview/` with the D6 tree, an English `README.md` and `requirements.txt` (numpy, pandas). The README must cover: usage, `::` commands, `lang`, honor rule, pedagogical scale, extrapolated L4/L6 levels, one phase per conversation and that sessions are local. Verify with `find netflix-ml-interview -maxdepth 2` that the tree matches D6.
-- [ ] 1.3 Write `catalog.yaml` according to D10, with the 14 stages, the variants, `variant_by_role`, the loops of the 3 roles with their phase per entry, `cut`, `default_domain`, per-role weights, the domains, the personas with style and the competencies with `core`. Also write `sources.md`, with confidence per stage and durations marked as assumptions, based on `research.md`. Verify with 1.5.
-- [ ] 1.4 Write `templates/session.yaml`, `templates/scorecard.md` and `templates/debrief.md` with the D10 formats and the notice "Recommendation derived by the simulator's pedagogical rule; Netflix does not use a company-wide scale." Verify that `sim.py` (1.6) loads them.
-- [ ] 1.5 Implement `scripts/check_simulator.py` (stdlib) with these checks:
+- [x] 1.1 Create the root `.gitignore` with `netflix-ml-interview/sessions/` and `.claude/settings.json` with permissions for `Bash(python netflix-ml-interview/scripts/sim.py:*)`, `Bash(python3 netflix-ml-interview/scripts/sim.py:*)` and `Bash(py netflix-ml-interview/scripts/sim.py:*)`. Verify that `git check-ignore -q netflix-ml-interview/sessions/.probe` returns 0 and that the JSON is valid.
+- [x] 1.2 Create `netflix-ml-interview/` with the D6 tree, an English `README.md` and `requirements.txt` (numpy, pandas). The README must cover: usage, `::` commands, `lang`, honor rule, pedagogical scale, extrapolated L4/L6 levels, one phase per conversation and that sessions are local. Verify with `find netflix-ml-interview -maxdepth 2` that the tree matches D6.
+- [x] 1.3 Write `catalog.yaml` according to D10, with the 14 stages, the variants, `variant_by_role`, the loops of the 3 roles with their phase per entry, `cut`, `default_domain`, per-role weights, the domains, the personas with style and the competencies with `core`. Also write `sources.md`, with confidence per stage and durations marked as assumptions, based on `research.md`. Verify with 1.5.
+- [x] 1.4 Write `templates/session.yaml`, `templates/scorecard.md` and `templates/debrief.md` with the D10 formats and the notice "Recommendation derived by the simulator's pedagogical rule; Netflix does not use a company-wide scale." Verify that `sim.py` (1.6) loads them.
+- [x] 1.5 Implement `scripts/check_simulator.py` (stdlib) with these checks:
   - the catalog schema, and that each loop entry is compatible with its role and has a weight;
   - per stage: `brief.md` with sources, `questions.md` according to D10 with a minimum of 2 `main` per applicable role × variant, and `rubric.md` according to D10 (version, 3–6 competencies with unique ids and at least one core, culture with `memo_values`, distinct L4/L5/L6 bars free of blacklisted adjectives);
   - the 17 agents: `name` equal to the file name, tools without Bash/Write and model according to D5;
@@ -19,7 +19,7 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
   - the `.gitignore` entry, and that the skill contains no `git add`, `commit` or `push`.
 
   Verify that it fails with clear messages on the empty tree and that `scripts/test_check_simulator.py` passes.
-- [ ] 1.6 Implement `scripts/sim.py` (stdlib, with `pathlib` and portable to Windows) with the D6 subcommands: `guard` (D8), `new`, `select`, `turn` (segments, `time_scale` and 80/90/100 % flags), `log`, `pause`, `run-tests`, `apply`, `verify-scorecard`, `rebuild`, `state`, `progress` and `info`. Verify with `scripts/test_sim.py`, which must cover:
+- [x] 1.6 Implement `scripts/sim.py` (stdlib, with `pathlib` and portable to Windows) with the D6 subcommands: `guard` (D8), `new`, `select`, `turn` (segments, `time_scale` and 80/90/100 % flags), `log`, `pause`, `run-tests`, `apply`, `verify-scorecard`, `rebuild`, `state`, `progress` and `info`. Verify with `scripts/test_sim.py`, which must cover:
   - the guard in a temporary repo: ignored, not ignored, with tracked files and without a repo;
   - empty `git status --porcelain` after creating a session;
   - time computation with pauses;

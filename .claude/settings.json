@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python netflix-ml-interview/scripts/sim.py:*)",
+      "Bash(python3 netflix-ml-interview/scripts/sim.py:*)",
+      "Bash(py netflix-ml-interview/scripts/sim.py:*)"
+    ]
+  }
+}
