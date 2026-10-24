@@ -1,0 +1,78 @@
+diff --git a/features/rolling_watch.py b/features/rolling_watch.py
+new file mode 100644
+--- /dev/null
++++ b/features/rolling_watch.py
+@@ -0,0 +1,35 @@
++"""Rolling watch features for the title-click ranker (7-day window)."""
++import pandas as pd
++
++WINDOW_DAYS = 7
++
++
++def build_features(events: pd.DataFrame, labels: pd.DataFrame) -> pd.DataFrame:
++    """Return one row per label with rolling watch features.
++
++    events: user_id, title_id, played_at (client-local timestamp string), minutes
++    labels: user_id, label_ts (UTC impression time), clicked
++    """
++    events["played_at"] = pd.to_datetime(events["played_at"])
++    labels["label_ts"] = pd.to_datetime(labels["label_ts"]).dt.tz_localize(None)
++
++    joined = labels.merge(events, on="user_id", how="left")
++    start = joined["label_ts"].dt.normalize() - pd.Timedelta(days=WINDOW_DAYS)
++    in_window = (joined["played_at"].dt.normalize() >= start) & (
++        joined["played_at"].dt.normalize() <= joined["label_ts"].dt.normalize()
++    )
++    window = joined[in_window]
++
++    grouped = window.groupby(["user_id", "label_ts"])
++    feats = grouped.agg(
++        watch_minutes_7d=("minutes", "sum"),
++        distinct_titles_7d=("title_id", "nunique"),
++        last_play=("played_at", "max"),
++    ).reset_index()
++    feats["days_since_last_play"] = (feats["label_ts"] - feats["last_play"]).dt.days
++
++    out = labels.merge(feats, on=["user_id", "label_ts"], how="left")
++    out[["watch_minutes_7d", "distinct_titles_7d", "days_since_last_play"]] = out[
++        ["watch_minutes_7d", "distinct_titles_7d", "days_since_last_play"]
++    ].fillna(0)
++    return out.drop(columns=["last_play"])
+diff --git a/features/__init__.py b/features/__init__.py
+index 3b1f2a7..9c0d4e1 100644
+--- a/features/__init__.py
++++ b/features/__init__.py
+@@ -1,5 +1,6 @@
+ from features.base import Feature
+ 
+ REGISTRY = {
++    "rolling_watch": "features.rolling_watch.build_features",
+     "genre_affinity": "features.genre_affinity.build_features",
+ }
+diff --git a/tests/test_rolling_watch.py b/tests/test_rolling_watch.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_rolling_watch.py
+@@ -0,0 +1,22 @@
++import pandas as pd
++
++from features.rolling_watch import build_features
++
++
++def test_basic_window():
++    events = pd.DataFrame(
++        {
++            "user_id": [1, 1, 2],
++            "title_id": [10, 11, 10],
++            "played_at": ["2026-03-01 20:00:00", "2026-03-05 21:00:00", "2026-02-01 10:00:00"],
++            "minutes": [30, 45, 60],
++        }
++    )
++    labels = pd.DataFrame(
++        {"user_id": [1, 2], "label_ts": ["2026-03-06 12:00:00", "2026-03-06 12:00:00"], "clicked": [1, 0]}
++    )
++    out = build_features(events, labels).set_index("user_id")
++    assert out.loc[1, "watch_minutes_7d"] == 75
++    assert out.loc[1, "distinct_titles_7d"] == 2
++    assert out.loc[2, "watch_minutes_7d"] == 0
++    assert out.loc[1, "days_since_last_play"] == 0

@@ -1,0 +1,61 @@
+diff --git a/jobs/backfill_popularity.py b/jobs/backfill_popularity.py
+new file mode 100644
+--- /dev/null
++++ b/jobs/backfill_popularity.py
+@@ -0,0 +1,27 @@
++"""Backfill daily title popularity into the feature warehouse table."""
++from datetime import datetime
++
++import pandas as pd
++from sklearn.preprocessing import LabelEncoder
++
++
++def backfill(conn, start, end):
++    """Recompute title_popularity_daily for every day in [start, end]."""
++    for day in pd.date_range(start, end):
++        d = day.strftime("%Y-%m-%d")
++        plays = pd.read_sql(
++            f"SELECT title_id, user_id FROM plays WHERE play_date = '{d}'", conn
++        )
++        meta = pd.read_sql("SELECT title_id, genre FROM titles_history", conn)
++
++        daily = plays.groupby("title_id").size().rename("plays").reset_index()
++        daily = daily.merge(meta, on="title_id")
++
++        overall = pd.read_sql("SELECT AVG(plays) AS m FROM title_popularity_daily", conn)["m"][0]
++        daily["plays"] = daily["plays"].fillna(overall)
++        daily["pop_norm"] = daily["plays"] / daily["plays"].max()
++        daily["title_code"] = LabelEncoder().fit_transform(daily["title_id"])
++        daily["day"] = d
++        daily["computed_at"] = datetime.utcnow()
++
++        daily.to_sql("title_popularity_daily", conn, if_exists="append", index=False)
+diff --git a/tests/test_backfill_popularity.py b/tests/test_backfill_popularity.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_backfill_popularity.py
+@@ -0,0 +1,24 @@
++import sqlite3
++
++import pandas as pd
++
++from jobs.backfill_popularity import backfill
++
++
++def make_conn():
++    conn = sqlite3.connect(":memory:")
++    conn.execute("CREATE TABLE plays(title_id INT, user_id INT, play_date TEXT)")
++    conn.execute("CREATE TABLE titles_history(title_id INT, genre TEXT, valid_from TEXT)")
++    conn.execute("CREATE TABLE title_popularity_daily(title_id INT, plays INT, genre TEXT, pop_norm REAL, title_code INT, day TEXT, computed_at TEXT)")
++    conn.executemany("INSERT INTO plays VALUES (?,?,?)", [(1, 1, "2026-03-01"), (1, 2, "2026-03-01"), (2, 3, "2026-03-01")])
++    conn.executemany("INSERT INTO titles_history VALUES (?,?,?)", [(1, "drama", "2020-01-01"), (2, "comedy", "2020-01-01")])
++    conn.execute("INSERT INTO title_popularity_daily VALUES (0, 1, 'x', 1.0, 0, '2026-02-28', '2026-02-28')")
++    return conn
++
++
++def test_backfill_one_day():
++    conn = make_conn()
++    backfill(conn, "2026-03-01", "2026-03-01")
++    out = pd.read_sql("SELECT * FROM title_popularity_daily WHERE day = '2026-03-01' ORDER BY title_id", conn)
++    assert list(out["plays"]) == [2, 1]
++    assert list(out["pop_norm"]) == [1.0, 0.5]
