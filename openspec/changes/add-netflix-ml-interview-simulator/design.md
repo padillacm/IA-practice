@@ -184,11 +184,11 @@ netflix-ml-interview/
 - **Debrief** (cut and final), in two steps:
   1. **Deterministic rule** → `provisional_outcome`:
      - **No Hire**: a core at Strong No in a `high` stage, or a negative culture verdict, or a `high` stage at fail.
-     - **Referred**: all `high` stages of VO1 at pass, positive culture and fails only in `ml-depth`/`hm-onsite` or due to weak domain fit.
+     - **Referred**: all `high` stages of VO1 at pass, positive culture and fails only in `ml-depth`/`hm-onsite` or due to weak domain fit. When the only `high`-stage fail (and the only `none` level) comes from `ml-depth`, Referred takes precedence over the No Hire triggers "`high` stage at fail" and "minimum level none"; the SN-core and negative-culture triggers always apply.
      - **Hire**: the rest, with a weighted majority at pass.
      - **Level**: the minimum of the observed levels in the `high` stages.
   2. **Override**: the HM, as informed captain, may disagree, but only with a justification that cites scorecards (`override: true`).
-- **Culture**: it is aggregated **by memo value** across stages, without summing per stage.
+- **Culture**: it is aggregated **by memo value** across stages, without summing per stage. Verdict: `negative` if the `culture` stage's core `culture_signals` is N or SN, or one value is weak with evidence in two or more stages; `mixed` if a single value is weak on one piece of evidence; `positive` otherwise. A value with no evidence is "no signal", not weak.
 - **Debrief simulation**:
   - It reads the scorecards in catalog order.
   - A simulated interviewer who "changes their mind" can only cite evidence that is already in a scorecard.

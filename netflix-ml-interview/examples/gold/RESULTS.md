@@ -53,3 +53,18 @@ Scope: 7 cases × 3 runs = 21 evaluator runs (mlsd-borderline, mlsd-weak, coding
   - `coding-borderline`: culture_signals no_evidence → N; recommendation pass → fail (two non-core N).
 - **Design note for review:** the D7 rule fails a stage when a non-core competency is SN or two non-core are N, even with all core competencies at Y (`mlsd-halo`). This matches Netflix's weight on culture, but it means a technical round can be failed on culture alone. Revisit if practice sessions show it is too harsh.
 - **Packet nit:** gold transcripts keep their original instance ids (`08-…`) while the scratch session uses `01-…`; evaluators noticed and used the config id. Harmless for gold runs.
+
+## Debrief round 1 (2026-10-24)
+
+3 cases × 3 runs of `netflix-hm-debrief` (opus), mode final. Raw outputs: `runs/2026-10-24/debrief/<case>/run<k>.md`.
+
+| Case | Expected outcome | Run 1 | Run 2 | Run 3 | Culture verdict (3 runs) | Override | Verdict |
+|---|---|---|---|---|---|---|---|
+| strong-no-blocking | no_hire | no_hire | no_hire | no_hire | mixed ×3 | false ×3 | PASS |
+| mixed-signals | no_hire (revised from hire) | no_hire | no_hire | no_hire | negative ×3 | false ×3 | PASS after revision |
+| referred | referred | referred | referred | referred | positive ×3 | false ×3 | PASS |
+
+Findings:
+- Same outcome, culture verdict and override in all 3 runs of every case; panel quotes come only from the scorecards.
+- **Rule gap fixed:** for `mle`, `ml-depth` is high weight, so "a high-weight stage at fail" would make `referred` impossible. All runs resolved it the intended way; design D7 and the agent prompt now state that `referred` takes precedence when the only high-weight fail comes from `ml-depth`.
+- **Fixture corrected:** `mixed-signals` expected `hire` with a `mixed` culture verdict, but the culture stage's core `culture_signals` is N, which the D7 definition (now written in design.md) makes `negative`, hence `no_hire`. The debrief applied the written rule consistently.

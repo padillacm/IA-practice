@@ -89,12 +89,12 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
   Document the results in `.claude/skills/netflix-ml-interview/references/relay-protocol.md` (the D1 state machine) and adjust D1–D3 if anything is not confirmed.
 - [x] 3.1 Write a common prompt skeleton for the interviewers. It must include the literal D2 contract, the persona and style from the catalog, pacing control, obedience to the time flags, realism without feedback, leveled hints, the culture log, the language rule, reading the *launch packet* on the first turn and the prohibition on reading `rubric.md`. With that skeleton, generate the 14 `.claude/agents/netflix-<stage>.md`. Verify with `check_simulator.py`.
 - [ ] 3.2 Write `.claude/agents/netflix-ai-pair.md`: it returns an explanation plus a diff and triggers the `flaws.yaml` bugs when the prompt touches that zone, reporting it in `<meta>`. Verify by invoking it directly with two fixed prompts on a repo (one touches the zone and the other does not) and applying the `hidden_test`.
-- [ ] 3.3 Write `.claude/agents/netflix-evaluator.md`, which implements the D7 pedagogical rule: `{turn_id, quote}` evidence from candidate turns, effect of hints, `end_reason`, "no evidence", model Yes answer and study plan. Also write `.claude/agents/netflix-hm-debrief.md` with its `cut` and `final` modes: deterministic step 1, step 2 with justified override, culture by value, catalog order and no new evidence. Verify with 4.2.
+- [x] 3.3 Write `.claude/agents/netflix-evaluator.md`, which implements the D7 pedagogical rule: `{turn_id, quote}` evidence from candidate turns, effect of hints, `end_reason`, "no evidence", model Yes answer and study plan. Also write `.claude/agents/netflix-hm-debrief.md` with its `cut` and `final` modes: deterministic step 1, step 2 with justified override, culture by value, catalog order and no new evidence. Verify with 4.2.
 
 ## 4. WP4 · Evaluation quality
 
-- [ ] 4.1 Write `study-map.yaml`: each `<stage>.<competency_id>` points to a `recsys-course/` module or to an alternative (`practice_stage` or `resource`). Verify with `check_simulator.py`.
-- [ ] 4.2 Create a gold set in `netflix-ml-interview/examples/gold/` for `ml-system-design`, `coding` and `culture`. It must have strong, borderline and weak transcripts, long-shallow, with halo, with manipulation and the same one in EN/ES, with the expected scores (±1) and the recommendation. Add 3 debrief cases: blocking Strong No, mixed signals and referred. Verify by scoring each case 3 times, checking with `sim.py verify-scorecard` and recording the results in `RESULTS.md`. The recommendation and the decision must match across all 3 runs.
+- [x] 4.1 Write `study-map.yaml`: each `<stage>.<competency_id>` points to a `recsys-course/` module or to an alternative (`practice_stage` or `resource`). Verify with `check_simulator.py`.
+- [x] 4.2 Create a gold set in `netflix-ml-interview/examples/gold/` for `ml-system-design`, `coding` and `culture`. It must have strong, borderline and weak transcripts, long-shallow, with halo, with manipulation and the same one in EN/ES, with the expected scores (±1) and the recommendation. Add 3 debrief cases: blocking Strong No, mixed signals and referred. Verify by scoring each case 3 times, checking with `sim.py verify-scorecard` and recording the results in `RESULTS.md`. The recommendation and the decision must match across all 3 runs.
 
 ## 5. WP5 · Orchestrator skill
 
@@ -127,7 +127,7 @@ Organized into work packages (WP), each with its own files. The D10 formats (des
 ## 6. WP6 · Integration
 
 - [ ] 6.1 Add `.github/workflows/verify-netflix-interview.yml`: it installs `requirements.txt` and runs `check_simulator.py`, `test_check_simulator.py` and `test_sim.py`. It is triggered by changes in `netflix-ml-interview/**`, `.claude/agents/netflix-*.md`, `.claude/skills/netflix-ml-interview/**`, `.gitignore` and the workflow itself. Verify that it passes on the PR.
-- [ ] 6.2 Link the simulator from the root `README.md` and from `recsys-course/README.md`. Verify that the relative links resolve.
+- [x] 6.2 Link the simulator from the root `README.md` and from `recsys-course/README.md`. Verify that the relative links resolve.
 - [ ] 6.3 End-to-end smoke test with three sessions: an `rs` L5 in English (abbreviated VO1), an `mle` with cut and `ai-assisted-coding`, and a standalone `ds` stage with `lang=es`. Check: isolation between stages, absence of live feedback, time flags, verified quotes, decision according to the rule, links to `recsys-course/` and clean `git status`. Record the findings in `netflix-ml-interview/examples/smoke-test.md`, without data from real sessions.
 
 ## Workflow follow-up
