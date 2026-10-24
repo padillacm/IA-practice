@@ -875,6 +875,18 @@ class ToolsTests(SimCase):
         _patch.apply_patch(d, diff)
         self.assertEqual((d / "f.txt").read_bytes(), b"a\r\nb\r\nc\r\nD\r\n")
 
+    def test_patch_module_ignores_wrong_hunk_counts(self):
+        # LLM-written diffs often miscount: here the header claims 6/9 lines for a 5/8-line body.
+        d = Path(tempfile.mkdtemp())
+        (d / "m.py").write_text("x = 1\n\n\ndef f():\n    return 1\n", encoding="utf-8")
+        (d / "i.py").write_text("from m import f\n", encoding="utf-8")
+        diff = ("--- a/m.py\n+++ b/m.py\n@@ -1,6 +1,9 @@\n x = 1\n \n \n+def g():\n+    return 2\n+\n+\n"
+                " def f():\n--- a/i.py\n+++ b/i.py\n@@ -1,1 +1,1 @@\n-from m import f\n+from m import f, g\n\n")
+        _patch.apply_patch(d, diff)
+        self.assertEqual((d / "m.py").read_text(encoding="utf-8"),
+                         "x = 1\n\n\ndef g():\n    return 2\n\n\ndef f():\n    return 1\n")
+        self.assertEqual((d / "i.py").read_text(encoding="utf-8"), "from m import f, g\n")
+
     def test_hidden_tests_report_flaw_state(self):
         sid = self.new_session(stages="ai-assisted-coding")
         self.ok("select", sid, "01")

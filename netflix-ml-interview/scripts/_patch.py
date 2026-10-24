@@ -41,26 +41,28 @@ def _clean(path: str) -> str:
 
 
 def _read_hunk(lines, i):
+    """Read one hunk. The body ends at the next hunk or file header (or the end), not at
+    the header counts: LLM-written diffs often get those counts wrong."""
     m = _HUNK.match(lines[i])
-    old_n = int(m.group(2)) if m.group(2) is not None else 1
-    new_n = int(m.group(4)) if m.group(4) is not None else 1
     ops, no_eol, i = [], False, i + 1
-    while i < len(lines) and (old_n > 0 or new_n > 0 or lines[i].startswith("\\")):
+    while i < len(lines) and not _HUNK.match(lines[i]) and not _is_file_header(lines, i):
         line = lines[i]
         if line.startswith("\\"):
             no_eol = no_eol or bool(ops and ops[-1][0] in "+ ")
         elif line.startswith("+"):
             ops.append(("+", line[1:]))
-            new_n -= 1
         elif line.startswith("-"):
             ops.append(("-", line[1:]))
-            old_n -= 1
         else:
             ops.append((" ", line[1:] if line.startswith(" ") else line))
-            old_n -= 1
-            new_n -= 1
         i += 1
+    while ops and ops[-1] == (" ", ""):  # trailing blank lines after the last hunk
+        ops.pop()
     return {"start": int(m.group(1)), "ops": ops, "no_eol": no_eol}, i
+
+
+def _is_file_header(lines, i):
+    return lines[i].startswith("--- ") and i + 1 < len(lines) and lines[i + 1].startswith("+++ ")
 
 
 def _safe_target(root: Path, rel: str) -> Path:
