@@ -1,0 +1,53 @@
+# Verification of the Netflix ML interview simulator (netflix-ml-interview/).
+#
+# Pure-Python checks, no API keys and no network beyond pip. The test suites create
+# throwaway git repositories in temp dirs and configure their own git identity, so no
+# global git config is needed here.
+
+name: Verify Netflix interview simulator
+
+on:
+  push:
+    paths:
+      - "netflix-ml-interview/**"
+      - ".claude/agents/netflix-*.md"
+      - ".claude/skills/netflix-ml-interview/**"
+      - ".gitignore"
+      - ".github/workflows/verify-netflix-interview.yml"
+  pull_request:
+    paths:
+      - "netflix-ml-interview/**"
+      - ".claude/agents/netflix-*.md"
+      - ".claude/skills/netflix-ml-interview/**"
+      - ".gitignore"
+      - ".github/workflows/verify-netflix-interview.yml"
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUTF8: "1"
+
+jobs:
+  verify:
+    name: Validate and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: netflix-ml-interview/requirements.txt
+      - run: pip install -r netflix-ml-interview/requirements.txt
+
+      - name: Content and structure validator
+        run: python netflix-ml-interview/scripts/check_simulator.py
+
+      - name: Validator tests
+        run: python netflix-ml-interview/scripts/test_check_simulator.py
+
+      - name: Simulator tests
+        run: python netflix-ml-interview/scripts/test_sim.py

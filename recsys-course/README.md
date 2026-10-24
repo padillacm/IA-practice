@@ -143,6 +143,12 @@ Te sobra margen para correr los experimentos a escala completa (MovieLens-25M/32
 
 ---
 
+## 🎤 Practica la entrevista
+
+Cuando termines el curso, pon a prueba lo aprendido con el [simulador de entrevistas de ML de Netflix](../netflix-ml-interview/): entrevistadores simulados por agentes de Claude Code, scorecards independientes y debrief (se usa con `/netflix-ml-interview`).
+
+---
+
 ## 🛠️ Para mantenedores
 
 Los notebooks se generan con scripts reproducibles:
