@@ -8,10 +8,11 @@ Preparar un loop de entrevistas de Machine Learning en Netflix exige practicar e
 
 - Nueva skill de Claude Code `/netflix-ml-interview` que orquesta una sesión de entrevista simulada. El candidato elige el rol (ML Engineer, Research Scientist, Applied/Data Scientist), el nivel (L4–L6), el idioma y **qué etapas simular**: el loop por defecto de su rol, una sola etapa o cualquier selección.
 - **Idioma: todo en inglés por defecto** (entrevista, scorecards y decisión final). Una opción configura **todo en español**.
-- Catálogo de **11 etapas** basado en la investigación: `recruiter-screen`, `hiring-manager`, `technical-screen`, `presentation` (research talk o take-home readout), `coding`, `ml-fundamentals`, `ml-system-design`, `ml-depth`, `experimentation`, `project-deep-dive` y `culture`, con un loop por defecto para cada rol.
+- Catálogo de **14 etapas en tres fases**, basado en la investigación. **Screens**: recruiter, HM, technical screen (con variantes, incluida la revisión de un PR de producción). **VO1** (general): presentation, coding, AI-assisted coding, ML fundamentals, ML system design, experimentation, culture ("Dream Team" con un director). **VO2** (del equipo): ML depth, project deep dive, partnership (manager de un equipo socio) y HM onsite. Cada rol tiene su loop por defecto, y hay un **corte entre VO1 y VO2**.
 - Un subagente entrevistador por etapa (en `.claude/agents/`) con persona, banco de preguntas, repreguntas y presupuesto de tiempo propios, sin feedback durante la etapa. Cada entrevistador evalúa también señales de cultura, porque en Netflix la cultura se evalúa en todas las rondas.
-- Un subagente evaluador que puntúa cada transcripción a ciegas contra una rúbrica por competencias y emite la recomendación pass / no-pass del entrevistador.
-- En lugar de un hiring committee (Netflix no lo tiene), un subagente **debrief del hiring manager** que simula el debrief del panel y la decisión del hiring manager como "informed captain": Hire / No Hire y nivel, con un plan de estudio que enlaza módulos de `recsys-course/`.
+- Un subagente evaluador que puntúa cada transcripción a ciegas contra una rúbrica por competencias y emite la recomendación pass / fail del entrevistador.
+- En lugar de un hiring committee (Netflix no lo tiene), un subagente **debrief del hiring manager** que simula la discusión en vivo del panel (pass / fail, buscando consenso) y la decisión del HM como "informed captain": Hire con nivel, No Hire, o "not a fit for this team, referred". Incluye un plan de estudio que enlaza módulos de `recsys-course/`.
+- Un subagente "AI pair", imperfecto a propósito, para la ronda de AI-assisted coding.
 - **Sesiones solo en local**: transcripciones, scorecards y decisiones se guardan en un directorio ignorado por git y el sistema nunca las añade ni las commitea.
 - Base de conocimiento versionada (`netflix-ml-interview/`) con el catálogo, los bancos de preguntas, las rúbricas y las fuentes, separada de los prompts de los agentes.
 
@@ -20,7 +21,7 @@ Preparar un loop de entrevistas de Machine Learning en Netflix exige practicar e
 ### New Capabilities
 - `interview-session`: configuración y orquestación de una sesión (rol, nivel, idioma, selección de etapas), loops por rol, orden y transición entre etapas, pausa y reanudación.
 - `interview-stages`: catálogo de etapas y comportamiento observable del entrevistador en cada una (persona, preguntas, repreguntas, tiempo, materiales previos, cierre, sin feedback en vivo).
-- `interview-evaluation`: rúbricas por competencia, scorecard por etapa evaluado de forma independiente, recomendación pass / no-pass y debrief con decisión del hiring manager y plan de estudio.
+- `interview-evaluation`: rúbricas por competencia, scorecard por etapa evaluado de forma independiente, recomendación pass / fail, corte VO1→VO2 y debrief con decisión del hiring manager y plan de estudio.
 - `interview-history`: registro local de sesiones fuera de git y resumen de progreso del candidato.
 
 ### Modified Capabilities

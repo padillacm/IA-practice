@@ -4,7 +4,13 @@
 
 - El repo es un espacio de aprendizaje: cursos en notebooks (`recsys-course/`, `langgraph/`, `langsmith/`…) y una skill multi-agente previa (`.claude/skills/course-builder/`) que usa `Agent` + `SendMessage`. Seguimos esas convenciones: archivos de referencia junto a la skill y documentación del repo en español.
 - La plataforma es Claude Code, sin código de aplicación. Un subagente **no puede hablar directamente con el usuario**: recibe un prompt, trabaja y devuelve un informe. `SendMessage` reanuda un agente con su contexto intacto. Ese límite condiciona el diseño de la interacción.
-- El formato de cada etapa sale de `research.md`. Lo más relevante para el diseño: los loops varían por equipo, no hay hiring committee (debrief + decisión del HM), la cultura se evalúa en todas las rondas, `presentation` tiene material previo y system design es la ronda con más peso para MLE.
+- El formato de cada etapa sale de `research.md`. Lo más relevante para el diseño:
+  - los loops varían por equipo;
+  - el onsite se divide en VO1 (general) y VO2 (del equipo), con un corte entre ambos;
+  - no hay hiring committee: la decisión es pass / fail en una discusión en vivo y la toma el HM;
+  - la cultura se evalúa en todas las rondas;
+  - system design es la ronda que más pesa;
+  - existen rondas de AI-assisted coding y de partnership.
 - Las sesiones deben quedarse en local y fuera de git. En Claude Code en la web, el contenedor es efímero (variable `CLAUDE_CODE_REMOTE=true`).
 - `recsys-course/` tiene 20 módulos (`00_intro` … `19_elite_playbook`) a los que enlaza el plan de estudio.
 
@@ -36,29 +42,33 @@ Cada réplica del entrevistador tiene dos bloques: `<say>` (lo único que ve el 
 - **Por qué**: permite registrar las pistas, las preguntas usadas (para no repetirlas) y las preguntas de cultura (spec *Señales de cultura en todas las etapas*), y detectar el cierre sin heurísticas sobre texto libre.
 
 ### D3 · Tiempo con marcas reales inyectadas por el orquestador
-El orquestador toma `date -u +%s` al empezar la etapa y en cada turno, y antepone a cada mensaje relevado `[t=23m/60m]`. Las reglas del aviso al 80 % y del cierre al 100 % están en el prompt del entrevistador. El orquestador intercepta `/time` y `/pause`; `/end-stage` se traduce a `[orchestrator: close the stage]`. En `technical-screen` de MLE, el brief marca el cambio de bloque (proyecto previo → ML coding) hacia el minuto 20.
+El orquestador toma `date -u +%s` al empezar la etapa y en cada turno, y antepone a cada mensaje relevado `[t=23m/60m]`. Las reglas del aviso al 80 % y del cierre al 100 % están en el prompt del entrevistador. El orquestador intercepta `/time`, `/pause` y `/ai` (este último lo enruta a `netflix-ai-pair`); `/end-stage` se traduce a `[orchestrator: close the stage]`. En `technical-screen` de MLE, el brief marca el cambio de bloque (proyecto previo → ML coding) hacia el minuto 20.
 
-### D4 · Catálogo y loops por rol (de `research.md`)
+### D4 · Catálogo, fases y loops por rol (de `research.md`)
 
 | Etapa | Fase | Min | MLE | RS | Applied/DS | Persona |
 |---|---|---|---|---|---|---|
 | recruiter-screen | screen | 30 | ● | ● | ● | Recruiter |
-| hiring-manager | screen | 45 | ● | ● | ● | Hiring manager del equipo |
-| technical-screen | screen | 60 | ● proyecto + ML coding | ● stats/ML + coding | ● SQL + caso | Senior MLE / RS / DS |
-| presentation | loop | 60 | ○ | ● research talk | ● take-home readout | Panel de 2 |
-| coding | loop | 60 | ● Python práctico/algorítmico | ● ML coding | ● SQL/pandas | Senior MLE / DS |
-| ml-fundamentals | loop | 45 | ○ | ● | ● caso de modelado | RS / Senior DS |
-| ml-system-design | loop | 60 | ● (peso máximo) | ○ | ○ | Staff MLE |
-| ml-depth | loop | 45 | ● | ● | ○ | Experto del dominio del equipo |
-| experimentation | loop | 45 | ○ | ○ | ● (decisiva) | Senior DS (experimentación) |
-| project-deep-dive | loop | 45 | ● | ○ | ○ | Senior MLE |
-| culture | loop | 45 | ● | ● | ● | Director (de la org que contrata o de una socia) |
+| hm-screen | screen | 30 | ● | ● | ● | HM (cordial, vende Netflix) |
+| technical-screen | screen | 60 | ● `project-ml-coding` / `fundamentals-pr-review` | ● `ml-framing-coding` | ● `sql` + ● `stats` | Senior MLE / RS / DS |
+| presentation | VO1 | 60 | ○ | ● `research-talk` | ● `take-home` | Panel de 2 |
+| coding | VO1 | 60 | ● `practical` | ● `ml-coding` | ● `sql-pandas` | Senior MLE / DS |
+| ai-assisted-coding | VO1 | 60 | ○ | ○ | ○ | Senior engineer |
+| ml-fundamentals | VO1 / VO2 | 45 | ○ | ● `breadth` (VO1) | ● `modeling-case` (VO2) | RS / Senior DS |
+| ml-system-design | VO1 | 60 | ● (peso máximo) | ○ | ○ | Staff MLE o director |
+| experimentation | VO1 | 45 | ○ | ○ | ● (decisiva) | Senior DS |
+| culture | VO1 | 45 | ● | ● | ● | Director ("Dream Team") |
+| ml-depth | VO2 | 45 | ● | ● | ○ | Experto del dominio del equipo |
+| project-deep-dive | VO2 | 45 | ● | ○ | ○ | Senior MLE ("reverse system design") |
+| partnership | VO2 | 45 | ● | ● | ● | Manager de un equipo socio |
+| hm-onsite | VO2 | 45 | ● | ● | ● | HM (exigente, encaje con el equipo) |
 
-● = loop por defecto, ○ = opcional. `ml-depth` pide al configurar el dominio del equipo (recsys, causal inference, RL/bandits, CV/NLP/LLM, ads); por defecto, recsys.
+● = loop por defecto, ○ = opcional. Al configurar se pide el **dominio del equipo**: recsys (por defecto), causal inference, RL/bandits, CV, NLP/LLM, ads o ML platform. Ese dominio orienta `ml-depth`, `ml-system-design` y `hm-onsite`. La notación `stage@variant` permite elegir variantes concretas.
 
 ### D5 · Agentes finos por etapa + paquetes de contenido
-- `.claude/agents/netflix-<stage>.md` (11 archivos): frontmatter (`name`, `description`, `tools`, `model`) y un prompt corto con la persona, las reglas de realismo, el protocolo D2, el sondeo de cultura y la regla de idioma. Al arrancar lee `brief.md` y `questions.md` de su etapa, **nunca `rubric.md`**. Solo `netflix-coding` y `netflix-technical-screen` tienen `Bash` (para ejecutar tests); el resto, `Read`, `Glob` y `Grep`.
-- `.claude/agents/netflix-evaluator.md` (genérico; recibe la ruta a la rúbrica) y `.claude/agents/netflix-hm-debrief.md`.
+- `.claude/agents/netflix-<stage>.md` (14 archivos): frontmatter (`name`, `description`, `tools`, `model`) y un prompt corto con la persona, las reglas de realismo, el protocolo D2, el sondeo de cultura y la regla de idioma. Al arrancar lee `brief.md` y `questions.md` de su etapa, **nunca `rubric.md`**. Solo `netflix-coding`, `netflix-ai-assisted-coding` y `netflix-technical-screen` tienen `Bash` (para ejecutar tests); el resto, `Read`, `Glob` y `Grep`. Cada persona declara su `style` (conversacional, conciso o incisivo) en el brief.
+- `.claude/agents/netflix-evaluator.md` (genérico; recibe la ruta a la rúbrica) y `.claude/agents/netflix-hm-debrief.md` (dos modos: `cut` tras la VO1 y `final`).
+- `.claude/agents/netflix-ai-pair.md`: el asistente de `ai-assisted-coding`. Lo invoca el orquestador cuando el candidato escribe `/ai <prompt>`. Es útil, pero cada problema declara en `flaws.yaml` 1–2 errores plausibles (oculto al candidato) que el asistente introduce cuando el prompt toca esa zona. El entrevistador recibe en `<meta>` qué errores se activaron, para registrar si el candidato los detectó.
 - **Por qué uno por etapa**: permisos de herramientas distintos, visibilidad en `/agents` y personas diferenciadas. El contenido pesado vive fuera, así que la duplicación es mínima.
 
 ### D6 · Base de conocimiento en `netflix-ml-interview/`
@@ -72,7 +82,9 @@ netflix-ml-interview/
     brief.md                    # objetivo, estructura temporal, persona, variantes, fuentes
     questions.md                # banco: id, rol, nivel, variante, repreguntas, sondeo de cultura
     rubric.md                   # 3–6 competencias (una de cultura) × 4 puntos × L4/L5/L6
-  stages/coding/problems/<id>/  # problem.md, starter.py, tests.py, reference.py (también los usa technical-screen)
+  stages/coding/problems/<id>/  # problem.md, starter.py, tests.py, reference.py, followups.md (también los usa technical-screen)
+  stages/technical-screen/prs/<id>/  # pr.diff, context.md, issues.md (problemas de producción esperados)
+  stages/ai-assisted-coding/repos/<id>/  # mini-codebase, tasks.md, tests/, flaws.yaml
   stages/presentation/takehomes/<id>/  # prompt.md + generate_data.py (dataset sintético con semilla)
   templates/                    # scorecard.md, debrief.md, session.yaml
   scripts/check_simulator.py    # validación (stdlib)
@@ -80,9 +92,10 @@ netflix-ml-interview/
 ```
 - **Idioma del contenido**: la base de conocimiento y los prompts de los agentes se escriben en **inglés** (el idioma por defecto). En `lang=es`, los agentes conducen la entrevista y redactan los informes en español a partir de ese contenido, sin traducir los términos técnicos estándar. Así hay una única fuente de contenido y no dos que mantener sincronizadas. El README del directorio va en español, siguiendo la convención del repo.
 
-### D7 · Evaluación y debrief
-- Al cerrar una etapa, el orquestador lanza `netflix-evaluator` en segundo plano con la ruta de la transcripción, `session.yaml` y `rubric.md`. El scorecard incluye la recomendación pass / no-pass del entrevistador.
-- `netflix-hm-debrief` recibe solo los scorecards y la configuración, igual que un HM que lee el feedback escrito del panel. Simula un debrief corto (cada entrevistador resume su recomendación), aplica la regla de consenso alto (un "Strong No" en una competencia central suele bloquear) y decide como informed captain, teniendo en cuenta las necesidades del equipo. Puede abrir una transcripción concreta si falta evidencia.
+### D7 · Evaluación, corte y debrief
+- Al cerrar una etapa, el orquestador lanza `netflix-evaluator` en segundo plano con la ruta de la transcripción, `session.yaml` y `rubric.md`. El scorecard incluye la recomendación pass / fail del entrevistador.
+- **Corte**: al terminar la última etapa de la VO1, el orquestador invoca `netflix-hm-debrief` en modo `cut`. Si la decisión es negativa, ofrece terminar o seguir en modo práctica (spec *Corte entre VO1 y VO2*).
+- `netflix-hm-debrief` (modo `final`) recibe solo los scorecards y la configuración, igual que un HM que lee el feedback escrito del panel. Simula la discusión en vivo: cada entrevistador da pass / fail y se pregunta si alguien cambiaría de opinión. Aplica la búsqueda de consenso (un "Strong No" en una competencia central suele bloquear) y pesa system design y cultura por encima de coding. Decide como informed captain: Hire con nivel, No Hire, o "not a fit for this team, referred" cuando la brecha es específica del dominio del equipo. Puede abrir una transcripción concreta si falta evidencia.
 - La escala de 4 puntos es una herramienta pedagógica; el README explica que Netflix no usa una escala común a toda la empresa.
 
 ### D8 · Sesiones solo locales

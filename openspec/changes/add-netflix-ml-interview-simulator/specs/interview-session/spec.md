@@ -33,22 +33,29 @@ El idioma por defecto SHALL ser inglés para todo: la configuración, la entrevi
 - **THEN** el resumen de configuración, la entrevista, los scorecards, el debrief y el plan de estudio se presentan en español
 
 ### Requirement: Loop por defecto según el rol
-El sistema SHALL definir en el catálogo un loop por defecto para cada rol (sus screens más las etapas finales típicas) y usarlo cuando se pide el "loop completo". Antes de empezar SHALL informar qué etapas incluye y cuáles quedan como opcionales.
+El catálogo SHALL definir un loop por defecto por rol en tres fases: screens, VO1 (general) y VO2 (específica del equipo). El sistema lo usará cuando se pida el "loop completo". Antes de empezar SHALL informar qué etapas y variantes incluye cada fase y cuáles quedan como opcionales.
 
 #### Scenario: Loop completo de ML Engineer
 - **WHEN** el rol es ML Engineer y se pide el loop completo
-- **THEN** el resumen lista `recruiter-screen`, `hiring-manager`, `technical-screen`, `coding`, `ml-system-design`, `ml-depth`, `project-deep-dive` y `culture`, e indica como opcionales las demás etapas
+- **THEN** el resumen lista como screens `recruiter-screen`, `hm-screen` y `technical-screen`; como VO1 `coding`, `ml-system-design` y `culture`; como VO2 `ml-depth`, `project-deep-dive`, `partnership` y `hm-onsite`; y marca como opcionales las demás etapas, incluida `ai-assisted-coding`
 
 #### Scenario: Loop completo de Research Scientist
 - **WHEN** el rol es Research Scientist y se pide el loop completo
-- **THEN** el resumen incluye `presentation` en su variante de research talk
+- **THEN** la VO1 incluye `presentation@research-talk`
 
 #### Scenario: Loop completo de Applied/Data Scientist
 - **WHEN** el rol es Applied/Data Scientist y se pide el loop completo
-- **THEN** el resumen incluye `experimentation` y `presentation` en su variante de take-home readout
+- **THEN** los screens incluyen `technical-screen@sql` y `technical-screen@stats`, y la VO1 incluye `presentation@take-home` y `experimentation`
+
+### Requirement: Corte entre VO1 y VO2
+Cuando una sesión incluye etapas de VO1 y de VO2, el sistema SHALL convocar al terminar la VO1 un debrief de corte que decida si se continúa a la VO2, como en el proceso real. El candidato SHALL poder seguir igualmente en modo práctica si el corte es negativo, y esa decisión queda registrada.
+
+#### Scenario: Corte negativo
+- **WHEN** el debrief de corte decide no continuar
+- **THEN** el sistema muestra la decisión con su justificación y pregunta si se termina la sesión o se sigue con la VO2 en modo práctica
 
 ### Requirement: Selección de etapas a simular
-El sistema SHALL permitir simular el loop por defecto del rol, una sola etapa o cualquier subconjunto del catálogo, incluidas etapas opcionales para ese rol. Con varias etapas, SHALL ejecutarlas en el orden canónico del catálogo, salvo que el candidato pida otro orden explícitamente.
+El sistema SHALL permitir simular el loop por defecto del rol, una sola etapa, una sola fase (p. ej. solo VO1) o cualquier subconjunto del catálogo, incluidas etapas opcionales y variantes concretas (`stage@variant`). Con varias etapas, SHALL ejecutarlas en el orden canónico del catálogo, salvo que el candidato pida otro orden explícitamente.
 
 #### Scenario: Una sola etapa
 - **WHEN** el candidato elige solo `experimentation`
