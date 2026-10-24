@@ -1,1 +1,3 @@
 netflix-ml-interview/sessions/
+__pycache__/
+*.pyc
