@@ -2,7 +2,7 @@
 
 Documento de soporte del change (no es un artefacto del schema). Recoge lo que se sabe públicamente, con qué confianza y qué decisiones de diseño se derivan. Última actualización: 2026-10-24 (tercera pasada, desde el PC del usuario).
 
-**Método.** Dos pasadas:
+**Método.** Tres pasadas:
 1. Búsquedas web amplias: guías, Glassdoor, Blind, PracHub, Levels.fyi, Netflix Tech Blog, Netflix Research y prensa.
 2. **Lectura directa** (curl) de: el memo de cultura en jobs.netflix.com, la guía de interviewing.io, la de Interview101, research.netflix.com, Levels.fyi, 12 hilos de Blind y 9 experiencias de PracHub (2025–2026).
 
