@@ -338,19 +338,48 @@ def load_template(ctx: Ctx) -> dict:
     return yamlish.loads(read_text(path)) if path.is_file() else {}
 
 
-def cmd_new(ctx: Ctx, args) -> int:
-    cat = load_catalog(ctx)
+def plan_new(ctx: Ctx, cat: dict, args) -> dict:
+    """Validate the full configuration against the catalog and resolve the instances (no writes)."""
     errors = validate_new_args(cat, args)
     if errors:
         raise SimError("; ".join(errors))
     role = args.role
     entries = expand_stages(cat, role, args.stages, args.order)
+    domain = args.domain or cat["roles"][role]["default_domain"]
+    phases = {e["phase"] for e in entries}
+    rows = [{"instance_id": f"{n:02d}-{e['stage']}@{e['variant']}", "stage": e["stage"], "variant": e["variant"],
+             "phase": e["phase"], "minutes": budget_minutes(cat, e["stage"], e["variant"]),
+             "weight": weight_for(cat, role, e["stage"], e["variant"])} for n, e in enumerate(entries, 1)]
+    return {"role": role, "level": args.level, "lang": args.lang, "domain": domain, "feedback": args.feedback,
+            "time_scale": float(args.time_scale), "background": str(args.background) if args.background else None,
+            "entries": entries, "rows": rows, "cut": bool(cat["roles"][role]["cut"]),
+            "cut_active": bool(cat["roles"][role]["cut"]) and {"vo1", "vo2"} <= phases}
+
+
+def cmd_new(ctx: Ctx, args) -> int:
+    cat = load_catalog(ctx)
+    plan = plan_new(ctx, cat, args)
+    role, entries = plan["role"], plan["entries"]
+    warnings = [VARIABILITY] + ([EPHEMERAL] if os.environ.get("CLAUDE_CODE_REMOTE") == "true" else [])
+    if args.dry_run:
+        rows = [f"  {r['instance_id']}  [{r['phase']}]  {r['minutes']}m  weight={r['weight']}" for r in plan["rows"]]
+        text = ("dry run: configuration is valid, nothing was created\n"
+                f"role={role} level={plan['level']} lang={plan['lang']} domain={plan['domain']} "
+                f"feedback={plan['feedback']} time_scale={plan['time_scale']}\n"
+                f"cut between VO1 and VO2: {'on' if plan['cut_active'] else 'off'}"
+                + ("" if plan["cut"] == plan["cut_active"] else " (role has a cut, but the selection lacks VO1 or VO2)")
+                + f"\nbackground: {plan['background'] or 'none'}\ninstances:\n"
+                + "\n".join(rows) + "\n" + "\n".join("warning: " + w for w in warnings))
+        emit(args, {"dry_run": True, "valid": True, "config": {k: plan[k] for k in (
+            "role", "level", "lang", "domain", "feedback", "time_scale", "background")},
+            "instances": plan["rows"], "cut": plan["cut"], "cut_active": plan["cut_active"], "warnings": warnings}, text)
+        return 0
     ensure_writable(ctx)
     now = ctx.now()
     sid = f"{now.strftime('%Y-%m-%d')}-{secrets.token_hex(3)}"
     session = load_template(ctx)
     session.update({"id": sid, "created": iso(now), "role": role, "level": args.level, "lang": args.lang,
-                    "domain": args.domain or cat["roles"][role]["default_domain"],
+                    "domain": plan["domain"],
                     "time_scale": float(args.time_scale), "python": args.python or detect_python(),
                     "env_ephemeral": os.environ.get("CLAUDE_CODE_REMOTE") == "true",
                     "feedback": args.feedback, "mode": "normal"})
@@ -365,15 +394,14 @@ def cmd_new(ctx: Ctx, args) -> int:
     for sub in ("transcripts", "scorecards", "work", "packets"):
         (sdir / sub).mkdir(parents=True, exist_ok=True)
     save_session(ctx, sdir, session)
-    warnings = [VARIABILITY] + ([EPHEMERAL] if session["env_ephemeral"] else [])
     rows = [f"  {i['instance_id']}  [{i['phase']}]  {budget_minutes(cat, i['stage'], i['variant'])}m  "
             f"weight={weight_for(cat, role, i['stage'], i['variant'])}" for i in session["instances"]]
     text = (f"session: {sid}\nrole={role} level={args.level} lang={args.lang} domain={session['domain']} "
             f"feedback={args.feedback} time_scale={session['time_scale']} python={session['python']}\n"
-            f"cut between VO1 and VO2: {'on' if cat['roles'][role]['cut'] else 'off'}\ninstances:\n"
+            f"cut between VO1 and VO2: {'on' if plan['cut_active'] else 'off'}\ninstances:\n"
             + "\n".join(rows) + "\n" + "\n".join("warning: " + w for w in warnings))
     emit(args, {"session": sid, "path": str(sdir), "warnings": warnings, "config": {k: v for k, v in session.items() if k != "instances"},
-                "instances": session["instances"], "cut": cat["roles"][role]["cut"]}, text)
+                "instances": session["instances"], "cut": plan["cut"]}, text)
     return 0
 
 
@@ -391,6 +419,8 @@ def validate_new_args(cat: dict, args) -> list[str]:
         errs.append(f"invalid feedback '{args.feedback}'. Valid: {', '.join(FEEDBACK)}")
     if float(args.time_scale) <= 0:
         errs.append("time_scale must be > 0")
+    if args.background and not Path(args.background).is_file():
+        errs.append(f"background file not found: {args.background}")
     return errs
 
 
@@ -590,11 +620,34 @@ def cmd_log(ctx: Ctx, args) -> int:
     path = ensure_transcript(ctx, cat, sdir, session, inst)
     touch(inst, ctx.now(), ctx.idle_cap, open_if_closed=not inst.get("segments"))
     clk = clock(ctx, cat, session, inst)
+    if args.role == "interviewer" and not result.get("malformed"):
+        if store_profile(session, parsed["meta_data"], parsed["meta"]):
+            result["candidate_profile_stored"] = True
     result["turn"] = append_turn(path, args.role, clk["t_min"], body)
     result["clock"] = clk
     save_session(ctx, sdir, session)
     emit(args, result, f"logged T{result['turn']} ({args.role})" + (" [stage closed]" if result.get("closed") else ""))
     return 0
+
+
+def store_profile(session: dict, meta: dict, raw_meta: str) -> bool:
+    """Keep hm-screen's `candidate_profile_summary` as session `candidate_profile` (later launch packets use it)."""
+    summary = meta.get("candidate_profile_summary")
+    if summary is None and "candidate_profile_summary" in raw_meta:
+        m = re.search(r"^candidate_profile_summary:[ \t]*(.*(?:\n[ \t]+.*)*)", raw_meta, re.M)
+        summary = m.group(1) if m else None
+    if summary in (None, "", [], {}):
+        return False
+    text = summary.strip() if isinstance(summary, str) else yamlish.dumps(summary).strip()
+    if not text:
+        return False
+    old = str(session.get("candidate_profile") or "").strip()
+    if old and old != text:
+        if text in old:
+            return False
+        text = old + "\n\nAdded from the HM screen:\n" + text
+    session["candidate_profile"] = text
+    return True
 
 
 def cmd_pause(ctx: Ctx, args) -> int:
@@ -854,6 +907,9 @@ def build_packet(ctx, cat, sdir, session, inst, chosen) -> str:
     qs = "\n\n".join(render_question(q) for q in chosen["questions"]) or "(none)"
     probes = "\n\n".join(render_question(q) for q in chosen["probes"])
     clk_budget = budget_minutes(cat, inst["stage"], inst["variant"])
+    work = sdir / "work" / inst["instance_id"]
+    workspace_line = (f"- candidate workspace (their files live here; tell them the path): {work.resolve()}\n"
+                      if chosen["material"] and work.is_dir() else "")
     return f"""# Launch packet: {inst['instance_id']}
 
 ## Config
@@ -861,7 +917,7 @@ def build_packet(ctx, cat, sdir, session, inst, chosen) -> str:
 - candidate role: {session['role']} ({cat['roles'][session['role']]['label']}); target level: {session['level']}; domain: {session['domain']}
 - time budget: {clk_budget} minutes of candidate time scaled by time_scale={session['time_scale']} (the orchestrator sends time flags; obey them)
 - session language: {lang_name}
-
+{workspace_line}
 ## Persona
 You are {persona['name']}, {persona['title']}. Interview style: {persona['style']} (style changes tone, not rigor).
 
@@ -1051,6 +1107,8 @@ def verify_scorecard(cat: dict, front: dict, turns: list[dict]) -> dict:
             errors.append({"competency": comp, "kind": "bad_score", "detail": str(score)})
             continue
         entries = evidence.get(comp) or []
+        if not isinstance(entries, list):
+            entries = [entries]
         if score != "no_evidence" and not entries:
             errors.append({"competency": comp, "kind": "missing_evidence", "detail": "no evidence entries"})
         for e in entries:
@@ -1074,7 +1132,9 @@ def verify_scorecard(cat: dict, front: dict, turns: list[dict]) -> dict:
 
 
 def check_quote(comp: str, entry, by_n: dict) -> list[dict]:
-    raw_id = entry.get("turn_id") if isinstance(entry, dict) else None
+    if not isinstance(entry, dict):
+        return [{"competency": comp, "kind": "bad_turn_id", "turn_id": None, "detail": "evidence entry must be {turn_id, quote}"}]
+    raw_id = entry.get("turn_id")
     try:
         tid = int(str(raw_id).lstrip("Tt"))
     except (TypeError, ValueError):
@@ -1143,6 +1203,416 @@ def cmd_verify(ctx: Ctx, args) -> int:
     return 0 if report["ok"] else 1
 
 
+# ------------------------------------------------------- writing results
+SCORECARD_LEVELS = ("L4", "L5", "L6", "none")
+RECOMMENDATIONS = ("pass", "fail", "insufficient_signal")
+OUTCOMES = {"cut": ("continue", "stop"), "final": ("hire", "no_hire", "referred")}
+CULTURE_VERDICTS = ("positive", "negative", "mixed")
+
+
+def unfence(text: str) -> str:
+    """Drop a ```markdown fence an agent may have wrapped around its document."""
+    t = text.strip("\n")
+    lines = t.split("\n")
+    if lines and lines[0].lstrip().startswith("```") and len(lines) > 2 and lines[-1].strip() == "```":
+        return "\n".join(lines[1:-1]) + "\n"
+    return t + "\n"
+
+
+def rubric_version(ctx: Ctx, stage: str):
+    path = ctx.stages / stage / "rubric.md"
+    if not path.is_file():
+        return None
+    try:
+        return yamlish.split_front_matter(read_text(path))[0].get("rubric_version")
+    except yamlish.YamlError:
+        return None
+
+
+def front_errors(cat: dict, ctx: Ctx, session: dict, inst: dict, front: dict) -> list[dict]:
+    """Validate a scorecard front-matter against templates/scorecard.md and the D10 enums."""
+    errs = []
+
+    def bad(detail, kind="front_matter"):
+        errs.append({"competency": "-", "kind": kind, "detail": detail})
+
+    for key in ("instance_id", "stage", "variant", "level", "rubric_version", "recommendation",
+                "level_observed", "scores", "evidence", "hints"):
+        if key not in front:
+            bad(f"missing key '{key}'")
+    for key in ("instance_id", "stage", "variant"):
+        if key in front and front[key] != inst[key]:
+            bad(f"{key} is '{front[key]}', the instance has '{inst[key]}'")
+    if "level" in front and front["level"] != session["level"]:
+        bad(f"level is '{front['level']}', the session target is '{session['level']}'")
+    if "recommendation" in front and front["recommendation"] not in RECOMMENDATIONS:
+        bad(f"recommendation '{front['recommendation']}' must be one of {', '.join(RECOMMENDATIONS)}")
+    if "level_observed" in front and front["level_observed"] not in SCORECARD_LEVELS:
+        bad(f"level_observed '{front['level_observed']}' must be one of {', '.join(SCORECARD_LEVELS)}")
+    want = rubric_version(ctx, inst["stage"])
+    if "rubric_version" in front:
+        if not isinstance(front["rubric_version"], int) or isinstance(front["rubric_version"], bool):
+            bad("rubric_version must be an integer")
+        elif want is not None and front["rubric_version"] != want:
+            bad(f"rubric_version is {front['rubric_version']}, the rubric has {want}")
+    for key in ("scores", "evidence"):
+        if key in front and not isinstance(front[key], dict):
+            bad(f"'{key}' must be a map")
+    if "hints" in front:
+        if not isinstance(front["hints"], list):
+            bad("'hints' must be a list")
+        else:
+            for h in front["hints"]:
+                if not (isinstance(h, dict) and h.get("level") in ("nudge", "substantive") and h.get("competency")):
+                    bad(f"hint {h!r} must be {{id, level: nudge|substantive, competency}}")
+    if isinstance(front.get("scores"), dict):
+        for comp, score in front["scores"].items():
+            if score not in content.SCORES:
+                errs.append({"competency": comp, "kind": "bad_score", "detail": str(score)})
+    return errs
+
+
+def _report(front_errs: list[dict], front: dict, turns: list[dict], cat: dict) -> dict:
+    """Front-matter problems first; the quote/rule checks only run on a well-formed map."""
+    if any(e["kind"] == "front_matter" for e in front_errs) and not isinstance(front.get("scores"), dict):
+        return {"ok": False, "errors": front_errs, "warnings": []}
+    rep = verify_scorecard(cat, front, turns)
+    seen = {(e["competency"], e["kind"]) for e in front_errs}
+    rep["errors"] = front_errs + [e for e in rep["errors"] if (e["competency"], e["kind"]) not in seen]
+    rep["ok"] = not rep["errors"]
+    return rep
+
+
+def format_report(report: dict, ok_text: str) -> str:
+    lines = [ok_text if report["ok"] else "FAILED:"]
+    lines += [f"  {e['competency']}: {e['kind']} {('T' + str(e['turn_id'])) if 'turn_id' in e else ''} {e['detail']}"
+              for e in report["errors"]]
+    lines += [f"  downgrade: {n}" for n in report.get("downgraded", [])]
+    lines += [f"warning: {w}" for w in report.get("warnings", [])]
+    return "\n".join(lines)
+
+
+def cmd_write_scorecard(ctx: Ctx, args) -> int:
+    cat = load_catalog(ctx)
+    sdir, session = resolve_session(ctx, args.session)
+    inst = get_instance(session, args.instance)
+    ensure_writable(ctx)
+    text = unfence(input_text(args))
+    try:
+        front, body = yamlish.split_front_matter(text)
+    except yamlish.YamlError as exc:
+        raise SimError(f"scorecard front-matter is not valid YAML-subset: {exc}", 1)
+    if not front:
+        raise SimError("scorecard must start with a '---' front-matter block (see templates/scorecard.md)", 1)
+    turns = read_turns(transcript_path(sdir, inst))
+    report = _report(front_errs=front_errors(cat, ctx, session, inst, front), front=front, turns=turns, cat=cat)
+    target = sdir / "scorecards" / f"{inst['instance_id']}.md"
+    if not report["ok"] and args.downgrade:
+        report["downgraded"] = downgrade(cat, front, report)
+        text = yamlish.join_front_matter(front, body)
+        after = _report(front_errors(cat, ctx, session, inst, front), front, turns, cat)
+        report["errors_after_downgrade"] = after["errors"]
+        report["ok"] = after["ok"]
+        report["errors"] = after["errors"]
+    keep = report["ok"] or args.keep_invalid
+    if keep:
+        atomic_write(target, text)
+        inst["scorecard"] = f"scorecards/{inst['instance_id']}.md"
+        save_session(ctx, sdir, session)
+    if inst["status"] not in ("done", "skipped"):
+        report.setdefault("warnings", []).append(f"instance is {inst['status']}; run `end` before evaluating")
+    report.update(path=str(target), written=keep)
+    summary = ("OK after downgrade: scorecard written; unverifiable competencies were set to no_evidence"
+               if report["ok"] and report.get("downgraded") else
+               "OK: scorecard written and every evidence quote verified" if report["ok"] else "FAILED:")
+    msg = format_report(report, summary)
+    if not report["ok"]:
+        msg += ("\n  written (invalid) to " + str(target) if keep else
+                "\n  nothing was written; fix the items above and send the scorecard again "
+                "(--downgrade writes it with unverifiable competencies set to no_evidence)")
+    emit(args, report, msg)
+    return 0 if report["ok"] else 1
+
+
+def debrief_errors(cat: dict, session: dict, front: dict, mode: str) -> list[str]:
+    errs = []
+    for key in ("type", "session_id", "role", "target_level", "complete", "provisional_outcome", "outcome", "level",
+                "override", "culture_verdict", "stages_considered"):
+        if key not in front:
+            errs.append(f"missing key '{key}'")
+    if errs:
+        return errs
+    if front["type"] != mode:
+        errs.append(f"type is '{front['type']}', expected '{mode}'")
+    if front["session_id"] != session["id"]:
+        errs.append(f"session_id is '{front['session_id']}', expected '{session['id']}'")
+    if front["role"] != session["role"]:
+        errs.append(f"role is '{front['role']}', expected '{session['role']}'")
+    if front["target_level"] != session["level"]:
+        errs.append(f"target_level is '{front['target_level']}', expected '{session['level']}'")
+    for key in ("complete", "override"):
+        if not isinstance(front[key], bool):
+            errs.append(f"{key} must be true or false")
+    if front["provisional_outcome"] not in OUTCOMES["final"]:
+        errs.append(f"provisional_outcome must be one of {', '.join(OUTCOMES['final'])}")
+    if front["outcome"] not in OUTCOMES[mode]:
+        errs.append(f"outcome '{front['outcome']}' must be one of {', '.join(OUTCOMES[mode])} in {mode} mode")
+    if front["level"] not in SCORECARD_LEVELS:
+        errs.append(f"level must be one of {', '.join(SCORECARD_LEVELS)}")
+    if front["culture_verdict"] not in CULTURE_VERDICTS:
+        errs.append(f"culture_verdict must be one of {', '.join(CULTURE_VERDICTS)}")
+    ids = [i["instance_id"] for i in session.get("instances") or []]
+    listed = front["stages_considered"]
+    if not isinstance(listed, list):
+        errs.append("stages_considered must be a list")
+    else:
+        unknown = [x for x in listed if x not in ids]
+        if unknown:
+            errs.append("stages_considered has unknown instances: " + ", ".join(map(str, unknown)))
+        else:
+            order = catalog_order(cat, session, session.get("instances") or [])
+            rank = {i["instance_id"]: n for n, i in enumerate(order)}
+            if [rank[x] for x in listed] != sorted(rank[x] for x in listed):
+                errs.append("stages_considered is not in catalog order: " + ", ".join(i["instance_id"] for i in order))
+    if front["override"] is False and front["provisional_outcome"] in OUTCOMES["final"] and not errs:
+        expect = front["provisional_outcome"] if mode == "final" else (
+            "stop" if front["provisional_outcome"] == "no_hire" else "continue")
+        if front["outcome"] != expect:
+            errs.append(f"override is false but outcome '{front['outcome']}' differs from the provisional "
+                        f"outcome (expected '{expect}'); set override: true with a justification or fix it")
+    return errs
+
+
+def cmd_write_debrief(ctx: Ctx, args) -> int:
+    cat = load_catalog(ctx)
+    sdir, session = resolve_session(ctx, args.session)
+    ensure_writable(ctx)
+    if args.mode == "cut" and not cat["roles"][session["role"]]["cut"]:
+        raise SimError(f"role '{session['role']}' has no cut", 1)
+    text = unfence(input_text(args))
+    try:
+        front, _ = yamlish.split_front_matter(text)
+    except yamlish.YamlError as exc:
+        raise SimError(f"debrief front-matter is not valid YAML-subset: {exc}", 1)
+    errs = debrief_errors(cat, session, front, args.mode) if front else ["no front-matter block"]
+    target = sdir / ("debrief-cut.md" if args.mode == "cut" else "debrief.md")
+    if errs and not args.keep_invalid:
+        emit(args, {"ok": False, "errors": errs, "written": False},
+             "FAILED:\n  " + "\n  ".join(errs) + "\n  nothing was written; fix the items above and send it again")
+        return 1
+    atomic_write(target, text)
+    if not errs:
+        if args.mode == "cut":
+            session["cut"] = {"outcome": front["outcome"], "reason": args.reason or f"see {target.name}"}
+        else:
+            session["final"] = {"outcome": front["outcome"], "level": front["level"], "override": front["override"]}
+        save_session(ctx, sdir, session)
+    emit(args, {"ok": not errs, "errors": errs, "written": True, "path": str(target), "outcome": front.get("outcome")},
+         (f"OK: {args.mode} debrief written to {target}; session {'cut' if args.mode == 'cut' else 'final'} = "
+          f"{front.get('outcome')}" if not errs else "written (invalid) to " + str(target) + ":\n  " + "\n  ".join(errs)))
+    return 0 if not errs else 1
+
+
+# ---------------------------------------------------------------- packets
+def catalog_order(cat: dict, session: dict, instances: list[dict]) -> list[dict]:
+    """Instances in the order of the role's loop (screen, vo1, vo2), then catalog stage order."""
+    loop = cat["roles"][session["role"]]["loop"]
+    flat = [f"{loop_entry(e)[0]}@{loop_entry(e)[1] or default_variant(stage_def(cat, loop_entry(e)[0]), session['role'])}"
+            for ph in PHASES for e in loop[ph]]
+
+    def key(item):
+        n, inst = item
+        tag = f"{inst['stage']}@{inst['variant']}"
+        return (PHASES.index(inst["phase"]), flat.index(tag) if tag in flat else 1000,
+                stage_def(cat, inst["stage"])["order"], n)
+    return [i for _, i in sorted(enumerate(instances), key=key)]
+
+
+def is_practice(session: dict, inst: dict) -> bool:
+    cut_stop = (session.get("cut") or {}).get("outcome") == "stop"
+    return session.get("mode") == "practice" and (not cut_stop or inst.get("phase") == "vo2")
+
+
+def packet_file(sdir: Path, name: str, text: str) -> str:
+    path = sdir / "packets" / name
+    atomic_write(path, text)
+    return str(path)
+
+
+def scorecard_path(sdir: Path, inst: dict):
+    front = load_scorecard_front(sdir, inst)
+    return (sdir / "scorecards" / f"{inst['instance_id']}.md") if front else None
+
+
+def evaluator_packet(ctx, cat, sdir, session, inst, args) -> str:
+    st = stage_def(cat, inst["stage"])
+    rub = ctx.stages / inst["stage"] / "rubric.md"
+    version = rubric_version(ctx, inst["stage"])
+    if version is None:
+        raise SimError(f"rubric (or its rubric_version) not found: {rub}")
+    tr = transcript_path(sdir, inst)
+    if not tr.is_file():
+        raise SimError(f"no transcript for {inst['instance_id']}")
+    filtered = content.strip_notes_private(read_text(tr))
+    comps = "\n".join(f"- {c['id']}: core={'true' if c['core'] else 'false'}" for c in st["competencies"])
+    if args.inline:
+        transcript = "## Transcript (interviewer private notes removed)\n\n" + filtered
+    else:
+        fpath = packet_file(sdir, f"{inst['instance_id']}.transcript.md", filtered)
+        transcript = f"## Transcript\n\nRead it with the Read tool (interviewer private notes already removed): {fpath}"
+    notes = "\n".join(f"- {n}" for n in args.note or [])
+    cause = {"external": "external (competencies without signal stay no_evidence)",
+             "candidate": "candidate (score what was missing and list the uncovered signal points)"}.get(
+        END_REASONS.get(inst.get("end_reason")), "unknown (infer from the final interviewer meta)")
+    return f"""# Evaluator packet: {inst['instance_id']}
+
+Score this one stage instance and return ONLY the scorecard markdown (final message, no preamble, no code fence).
+
+## Config
+- instance_id: {inst['instance_id']}
+- stage: {inst['stage']}
+- variant: {inst['variant']}
+- target level: {session['level']}
+- role: {session['role']}; domain: {session['domain']}
+- session language: {session['lang']} ({LANGS[session['lang']]}); write the scorecard body in it, keep enums and ids in English
+- session mode: {session.get('mode', 'normal')}
+- rubric_version: {version}
+- end_reason: {inst.get('end_reason') or '(none recorded: infer it from the final interviewer meta)'}
+- end cause: {cause}
+
+## Competencies to score (all of them, and no others)
+{comps}
+
+## Files (read with the Read tool)
+- rubric: {rub}
+- study map: {ctx.base / 'study-map.yaml'}
+- scorecard template: {ctx.base / 'templates' / 'scorecard.md'}
+
+{transcript}
+
+## Notes from the orchestrator
+{notes or '(none)'}
+
+## Reminder
+Quotes must be verbatim from candidate turns (turn_id = the number n of `T<n>`). Apply hint caps. Derive the recommendation with the fixed rule from the core flags above.
+"""
+
+
+def debrief_packet(ctx, cat, sdir, session, args) -> str:
+    mode = args.mode
+    role = session["role"]
+    if mode == "cut" and not cat["roles"][role]["cut"]:
+        raise SimError(f"role '{role}' has no cut")
+    phases = PHASES[:2] if mode == "cut" else PHASES
+    insts = [i for i in catalog_order(cat, session, session.get("instances") or []) if i["phase"] in phases]
+    rows, missing, practice, skipped = [], [], [], []
+    for i in insts:
+        iid = i["instance_id"]
+        w = weight_for(cat, role, i["stage"], i["variant"])
+        if i["status"] == "skipped":
+            skipped.append(iid)
+            continue
+        sc = scorecard_path(sdir, i)
+        front = load_scorecard_front(sdir, i) if sc else None
+        derived = None
+        if front:
+            derived = content.derive_recommendation(front.get("scores") or {}, core_ids(cat, i["stage"]))
+        row = (f"| {iid} | {i['phase']} | {w} | {i['status']} | {i.get('end_reason') or '-'} | "
+               f"{sc if sc else '(no scorecard)'} | {derived or '-'} |")
+        if i["status"] != "done" or not sc:
+            missing.append(iid)
+        if is_practice(session, i):
+            practice.append(iid)
+        rows.append(row)
+    vo1 = [i for i in insts if i["phase"] == "vo1"]
+    sel_all = [i for i in session.get("instances") or [] if i["phase"] in phases]
+    complete = (all(i["status"] == "done" for i in sel_all) and not missing
+                and any(i["phase"] == "vo1" for i in sel_all))
+    screens = [i["instance_id"] for i in insts if i["phase"] == "screen" and scorecard_path(sdir, i)]
+    weights = cat["roles"][role].get("weights") or {}
+    wtxt = "\n".join(f"- {k}: {v}" for k, v in weights.items())
+    personas = "\n".join(f"- {s['id']}: {s['persona']['name']} ({s['persona']['title']})" for s in cat["stages"])
+    cut = session.get("cut")
+    return f"""# Debrief packet: {mode} ({session['id']})
+
+Run the {mode} debrief and return ONLY the debrief markdown (final message, no preamble, no code fence).
+
+## Session
+- mode: {mode}
+- session id: {session['id']}
+- role: {role}; target level: {session['level']}; domain: {session['domain']}
+- session language: {session['lang']} ({LANGS[session['lang']]})
+- session mode: {session.get('mode', 'normal')}
+- cut result: {yamlish.dumps(cut).strip().replace(chr(10), '; ') if cut else '(none)'}
+- loop complete: {'true' if complete else 'false'} ({'every selected stage is done and evaluated' if complete else 'stages are missing, skipped, unevaluated or the phase is incomplete: mark the outcome provisional'})
+- evaluated screens: {', '.join(screens) if screens else 'none (say so explicitly)'}
+- practice-only instances (feedback only, not in the tally): {', '.join(practice) if practice else 'none'}
+- skipped instances: {', '.join(skipped) if skipped else 'none'}
+- missing or unevaluated: {', '.join(missing) if missing else 'none'}
+
+## Scorecards in catalog order
+`recommend` is the simulator's derived recommendation (authoritative).
+
+| instance | phase | weight | status | end_reason | scorecard path | recommend |
+|---|---|---|---|---|---|---|
+{chr(10).join(rows) or '| (none) | | | | | | |'}
+
+## Role weights (key stage@variant wins over stage)
+{wtxt or '(none)'}
+
+## Files (read with the Read tool; do not read rubric.md)
+- catalog: {ctx.base / 'catalog.yaml'}
+- study map: {ctx.base / 'study-map.yaml'}
+- debrief template: {ctx.base / 'templates' / 'debrief.md'}
+- transcripts (optional, to check context of an already quoted piece of evidence): {sdir / 'transcripts'}
+
+## Interviewer personas
+{personas}
+"""
+
+
+def ai_pair_packet(ctx, cat, sdir, session, inst) -> str:
+    pid = inst.get("problem_id")
+    dirname, path = locate_material(ctx, inst["stage"], pid) if pid else (None, None)
+    if dirname != "repos":
+        raise SimError("this instance has no repo selected (run `select` on an ai-assisted-coding instance first)")
+    work = (sdir / "work" / inst["instance_id"]).resolve()
+    fl = path / "flaws.yaml"
+    flaws = (yamlish.loads(read_text(fl)) or {}).get("flaws") or [] if fl.is_file() else []
+    keep = [{k: f.get(k) for k in ("id", "zone", "trigger_keywords", "description")} for f in flaws]
+    leaked = [n for n in ("flaws.yaml", "hidden", "notes.md") if (work / n).exists()]
+    if leaked:
+        raise SimError(f"workspace contains interviewer-only files: {', '.join(leaked)}", 1)
+    return ("<orchestrator private>\n"
+            f"workspace: {work}\n"
+            f"language: {session['lang']} ({LANGS[session['lang']]})\n"
+            + (yamlish.dumps({"flaws": keep}) if keep else "flaws: []\n")
+            + "</orchestrator>\n")
+
+
+def cmd_packet(ctx: Ctx, args) -> int:
+    cat = load_catalog(ctx)
+    sdir, session = resolve_session(ctx, args.session)
+    ensure_writable(ctx)
+    if args.kind == "debrief":
+        if not args.mode:
+            raise SimError("packet debrief needs --mode cut|final")
+        text = debrief_packet(ctx, cat, sdir, session, args)
+        path = packet_file(sdir, f"debrief-{args.mode}.md", text)
+    else:
+        if not args.instance:
+            raise SimError(f"packet {args.kind} needs an instance (packet {args.kind} <session> <NN>)")
+        inst = get_instance(session, args.instance)
+        if args.kind == "evaluator":
+            text = evaluator_packet(ctx, cat, sdir, session, inst, args)
+            path = packet_file(sdir, f"{inst['instance_id']}.evaluator.md", text)
+        else:
+            text = ai_pair_packet(ctx, cat, sdir, session, inst)
+            path = packet_file(sdir, f"{inst['instance_id']}.ai-pair.md", text)
+    emit(args, {"kind": args.kind, "packet_path": path, "packet": text}, text)
+    return 0
+
+
 # ---------------------------------------------------------------- progress
 SCORE_LABEL = {"SN": "SN", "N": "N", "Y": "Y", "SY": "SY", "no_evidence": "n/e"}
 
@@ -1150,12 +1620,11 @@ SCORE_LABEL = {"SN": "SN", "N": "N", "Y": "Y", "SY": "SY", "no_evidence": "n/e"}
 def collect_points(ctx: Ctx) -> dict:
     series: dict = {}
     for sdir, sess in list_sessions(ctx):
-        cut_stop = (sess.get("cut") or {}).get("outcome") == "stop"
         for order, inst in enumerate(sess.get("instances") or []):
             front = load_scorecard_front(sdir, inst)
             if not front:
                 continue
-            practice = (sess.get("mode") == "practice") and (not cut_stop or inst.get("phase") == "vo2")
+            practice = is_practice(sess, inst)
             for comp, score in (front.get("scores") or {}).items():
                 key = (inst["stage"], inst["variant"], comp)
                 series.setdefault(key, []).append({
@@ -1260,11 +1729,31 @@ def cmd_state(ctx: Ctx, args) -> int:
         emit(args, {"pending_sessions": rows}, "\n".join(f"{r['session']} ({r['role']}): in_progress={r['in_progress']} pending={r['pending']}" for r in rows) or "no pending sessions")
         return 0
     sdir, session = resolve_session(ctx, args.session or "latest")
+    if args.time:
+        return state_time(ctx, cat, session, args)
     data = state_data(ctx, cat, sdir, session)
     lines = [f"session {session['id']}: " + " ".join(f"{k}={v}" for k, v in data["config"].items() if k != "id" and v is not None)]
     for r in data["instances"]:
         lines.append(f"  {r['instance_id']} [{r['phase']}] {r['status']} t={r['t_min']}m/{r['budget_min']}m ({r['pct']}%) turns={r['turns']} attempt={r['attempt']}")
     emit(args, data, "\n".join(lines))
+    return 0
+
+
+def state_time(ctx: Ctx, cat: dict, session: dict, args) -> int:
+    """`state --time`: scaled elapsed active minutes vs. budget of one instance (used by ::time)."""
+    insts = session.get("instances") or []
+    if args.instance:
+        inst = get_instance(session, args.instance)
+    else:
+        open_i = [i for i in insts if i["status"] == "in_progress"] or [i for i in insts if i["status"] == "pending"]
+        if not open_i:
+            raise SimError("no open instance in this session; pass --instance NN")
+        inst = open_i[0]
+    clk = clock(ctx, cat, session, inst)
+    remaining = max(0, clk["budget_min"] - clk["t_min"])
+    data = {"instance": inst["instance_id"], "status": inst["status"], **clk, "remaining_min": remaining}
+    emit(args, data, f"{inst['instance_id']}: t={clk['t_min']}m of {clk['budget_min']}m ({clk['pct']}%), "
+                     f"about {remaining}m left (active time only, time_scale={clk['time_scale']})")
     return 0
 
 
@@ -1316,6 +1805,8 @@ def build_parser() -> argparse.ArgumentParser:
     new.add_argument("--time-scale", type=float, default=1.5)
     new.add_argument("--python", help="python command that works (default: autodetect)")
     new.add_argument("--background", help="path to the candidate background file")
+    new.add_argument("--dry-run", action="store_true",
+                     help="validate everything against the catalog and print the resolved plan; creates nothing")
     sel = add("select", cmd_select, "choose questions/material and print the launch packet")
     sel.add_argument("--seed", type=int, default=0)
     sel.add_argument("--count", type=int, help="number of main questions")
@@ -1358,12 +1849,38 @@ def build_parser() -> argparse.ArgumentParser:
     tr = add("transcript", cmd_transcript, "print a transcript")
     tr.add_argument("--for-evaluator", action="store_true", help="strip notes_private")
     tr.add_argument("--out")
+    ws = add("write-scorecard", cmd_write_scorecard, "write the evaluator's scorecard, validate it and verify its quotes")
+    ws.add_argument("--text")
+    ws.add_argument("--file")
+    ws.add_argument("--stdin", action="store_true")
+    ws.add_argument("--keep-invalid", action="store_true", help="keep the file even if checks fail (exit code stays 1)")
+    ws.add_argument("--downgrade", action="store_true",
+                    help="final attempt: set unverifiable competencies to no_evidence and recompute the recommendation")
+    wd = sub.add_parser("write-debrief", parents=[common], help="write and validate a cut/final debrief")
+    wd.add_argument("session")
+    wd.add_argument("--mode", required=True, choices=("cut", "final"))
+    wd.add_argument("--text")
+    wd.add_argument("--file")
+    wd.add_argument("--stdin", action="store_true")
+    wd.add_argument("--reason", help="short reason stored in session.yaml cut.reason (cut mode)")
+    wd.add_argument("--keep-invalid", action="store_true")
+    wd.set_defaults(fn=cmd_write_debrief)
+    pk = sub.add_parser("packet", parents=[common], help="print the exact prompt for evaluator, debrief or ai-pair agents")
+    pk.add_argument("kind", choices=("evaluator", "debrief", "ai-pair"))
+    pk.add_argument("session")
+    pk.add_argument("instance", nargs="?", help="instance (evaluator, ai-pair)")
+    pk.add_argument("--mode", choices=("cut", "final"), help="debrief mode")
+    pk.add_argument("--inline", action="store_true", help="evaluator: embed the filtered transcript instead of its path")
+    pk.add_argument("--note", action="append", help="evaluator: extra factual line (e.g. hidden-test result)")
+    pk.set_defaults(fn=cmd_packet)
     rc = sub.add_parser("recommend", parents=[common], help="derive the recommendation of a scorecard")
     rc.add_argument("scorecard")
     rc.set_defaults(fn=cmd_recommend)
     stt = sub.add_parser("state", parents=[common], help="show session state and clocks")
     stt.add_argument("session", nargs="?")
     stt.add_argument("--pending", action="store_true", help="list sessions with open instances")
+    stt.add_argument("--time", action="store_true", help="only elapsed active minutes (scaled), budget and percentage")
+    stt.add_argument("--instance", help="with --time: instance (default: the one in progress)")
     stt.set_defaults(fn=cmd_state)
     pr = sub.add_parser("progress", parents=[common], help="regenerate sessions/PROGRESS.md")
     pr.add_argument("--no-write", action="store_true")

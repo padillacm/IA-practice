@@ -5,7 +5,7 @@
 1. Detect `PY`, run `sim.py guard` (before any write) and `sim.py state --pending`.
 2. No pending sessions: say so and offer to start a new session (setup).
 3. One pending session: use it. Several: list them (id, role, level, stages, last instance status, date) and ask which, with AskUserQuestion. If the candidate gives a session id, use it.
-4. `sim.py state <session>` and show a short status: instances done / in progress / pending, remaining active time of the open instance, mode.
+4. `sim.py state <session>` and show a short status: instances done / in progress / pending, mode; for the open instance `sim.py state <session> --time` gives its elapsed and remaining active time.
 5. Read `references/relay-protocol.md`, load tools (`ToolSearch` query `select:SendMessage,AskUserQuestion`).
 6. Instance status:
    - `in_progress` (paused or interrupted mid-stage): `sim.py rebuild <session> <NN>` prints the relaunch prompt (brief, transcript with `<meta>`, remaining time, attempt+1, and the instruction to continue as the same persona without re-introducing). Launch a fresh foreground `Agent` with `subagent_type: netflix-<stage>`, name `iv-<instance>-<sid>-<attempt+1>` and that prompt. Log its `<say>` with `sim.py log` and print it verbatim: it answers the candidate's last message. The clock resumes automatically on the next `sim.py turn`. For ai-assisted-coding, relaunch the ai-pair the same way if needed (rebuild prompt for `ai-...`; otherwise start a fresh one with the repo's launch packet).

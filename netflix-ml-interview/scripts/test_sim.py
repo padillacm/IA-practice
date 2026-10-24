@@ -541,6 +541,224 @@ class ScorecardTests(SimCase):
         self.assertEqual(rule({"a": "SN", "b": "no_evidence"}, core), "fail")
 
 
+class NewFeaturesTests(SimCase):
+    """state --time, new --dry-run, write-*, packets and the profile summary."""
+
+    CORE = {"culture_signals", "impact_with_metrics", "high_stakes_judgment", "candor_and_disagreement"}
+
+    def culture_session(self, stages="culture", **kw):
+        sid = self.new_session(stages=stages, **kw)
+        self.ok("log", sid, "01", "--text", "<say>Q1?</say>\n<meta>\nphase: main\nnotes_private: secret thought\n</meta>")
+        self.ok("turn", sid, "01", "--text", "I once pushed back on a launch decision and shared the data.", now=at(3))
+        return sid
+
+    def card_text(self, sid, quote="pushed back on a launch decision", iid="01-culture@default", **over):
+        comps = [c["id"] for c in sim.stage_def(sim.load_catalog(sim.Ctx(self.kb)), "culture")["competencies"]]
+        scores = {c: "Y" for c in comps}
+        front = {"instance_id": iid, "stage": "culture", "variant": "default", "level": "L5", "rubric_version": 1,
+                 "recommendation": "pass", "level_observed": "L5", "scores": scores,
+                 "evidence": {c: [{"turn_id": 2, "quote": quote}] for c in comps}, "hints": []}
+        front.update(over)
+        return yamlish.join_front_matter(front, "# Scorecard: " + iid + "\n\n## Summary\nok\n")
+
+    # --- state --time
+    def test_state_time(self):
+        sid = self.culture_session()
+        out = self.ok("state", sid, "--time", "--instance", "01", now=at(21), json_out=True)
+        self.assertEqual((out["t_min"], out["budget_min"]), (14, 45))
+        self.assertAlmostEqual(out["pct"], round(out["t_min"] / 45 * 100, 1))
+        self.assertEqual(out["instance"], "01-culture@default")
+        text = self.ok("state", sid, "--time", now=at(21))
+        self.assertIn("of 45m", text)
+
+    # --- new --dry-run
+    def test_dry_run_creates_nothing_and_validates(self):
+        out = self.ok("new", "--role", "mle", "--stages", "vo1,culture", "--dry-run", json_out=True)
+        self.assertTrue(out["dry_run"] and out["valid"])
+        self.assertEqual(out["instances"][0]["phase"], "vo1")
+        self.assertIn("weight", out["instances"][0])
+        self.assertFalse((self.kb / "sessions").exists())
+        out = self.ok("new", "--role", "mle", "--stages", "full", "--dry-run", json_out=True)
+        self.assertTrue(out["cut_active"])
+        for bad in (["--role", "xx"], ["--role", "mle", "--level", "L9"], ["--role", "mle", "--lang", "fr"],
+                    ["--role", "mle", "--domain", "nope"], ["--role", "mle", "--feedback", "later"],
+                    ["--role", "mle", "--stages", "coding@foo"], ["--role", "mle", "--stages", "nope"],
+                    ["--role", "mle", "--time-scale", "0"], ["--role", "mle", "--background", str(self.root / "missing.md")]):
+            code, _, err = self.sim("new", *bad, "--dry-run")
+            self.assertEqual(code, 2, bad)
+            self.assertTrue("Valid" in err or "not found" in err or "> 0" in err, err)
+        self.assertFalse((self.kb / "sessions").exists())
+
+    def test_dry_run_needs_no_guard(self):
+        (self.root / ".gitignore").write_text("", encoding="utf-8")
+        self.assertEqual(self.sim("new", "--role", "mle", "--dry-run")[0], 0)
+        self.assertEqual(self.sim("new", "--role", "mle")[0], 1)
+
+    # --- write-scorecard
+    def test_write_scorecard_ok_records_path(self):
+        sid = self.culture_session()
+        out = self.ok("write-scorecard", sid, "01", "--stdin", stdin=self.card_text(sid), json_out=True)
+        self.assertTrue(out["ok"] and out["written"])
+        inst = self.session_data(sid)["instances"][0]
+        self.assertEqual(inst["scorecard"], "scorecards/01-culture@default.md")
+        self.assertTrue((self.kb / "sessions" / sid / "scorecards" / "01-culture@default.md").is_file())
+
+    def test_write_scorecard_accepts_fenced_markdown(self):
+        sid = self.culture_session()
+        self.ok("write-scorecard", sid, "01", "--stdin", stdin="```markdown\n" + self.card_text(sid) + "```\n")
+
+    def test_write_scorecard_invalid_not_kept(self):
+        sid = self.culture_session()
+        path = self.kb / "sessions" / sid / "scorecards" / "01-culture@default.md"
+        code, out, _ = self.sim("write-scorecard", sid, "01", "--stdin", stdin=self.card_text(sid, quote="never said this"), json_out=True)
+        self.assertEqual(code, 1)
+        self.assertFalse(path.exists())
+        self.assertIn("quote_not_found", out)
+        code, _, _ = self.sim("write-scorecard", sid, "01", "--stdin", "--keep-invalid", stdin=self.card_text(sid, quote="never said this"))
+        self.assertEqual(code, 1)
+        self.assertTrue(path.exists())
+
+    def test_write_scorecard_does_not_overwrite_good_one_with_bad_one(self):
+        sid = self.culture_session()
+        self.ok("write-scorecard", sid, "01", "--stdin", stdin=self.card_text(sid))
+        path = self.kb / "sessions" / sid / "scorecards" / "01-culture@default.md"
+        before = path.read_text(encoding="utf-8")
+        self.assertEqual(self.sim("write-scorecard", sid, "01", "--stdin", stdin=self.card_text(sid, quote="nope"))[0], 1)
+        self.assertEqual(path.read_text(encoding="utf-8"), before)
+
+    def test_write_scorecard_front_matter_enums(self):
+        sid = self.culture_session()
+        for over in ({"recommendation": "maybe"}, {"level_observed": "L9"}, {"rubric_version": 7},
+                     {"instance_id": "02-other@default"}, {"level": "L4"}, {"hints": [{"id": "h1", "level": "huge", "competency": "x"}]}):
+            code, out, _ = self.sim("write-scorecard", sid, "01", "--stdin", stdin=self.card_text(sid, **over), json_out=True)
+            self.assertEqual(code, 1, over)
+            self.assertIn("front_matter", out)
+        self.assertEqual(self.sim("write-scorecard", sid, "01", "--stdin", stdin="no front matter here")[0], 1)
+
+    def test_write_scorecard_downgrade(self):
+        sid = self.culture_session()
+        code, out, _ = self.sim("write-scorecard", sid, "01", "--stdin", "--downgrade", stdin=self.card_text(sid, quote="invented"), json_out=True)
+        data = json.loads(out)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(data["downgraded"])
+        front = yamlish.split_front_matter((self.kb / "sessions" / sid / "scorecards" / "01-culture@default.md").read_text(encoding="utf-8"))[0]
+        self.assertEqual(set(front["scores"].values()), {"no_evidence"})
+        self.assertEqual(front["recommendation"], "insufficient_signal")
+
+    # --- packets
+    def test_evaluator_packet_contract(self):
+        sid = self.culture_session()
+        self.ok("end", sid, "01", "--reason", "candidate_end", now=at(5))
+        out = self.ok("packet", "evaluator", sid, "01", "--note", "[hidden: x clean]", json_out=True)
+        p = out["packet"]
+        for needle in ("rubric_version: 1", "end_reason: candidate_end", "culture_signals: core=true", "core=false", "stages/culture/rubric.md",
+                       "study-map.yaml", "templates/scorecard.md", "target level: L5", "session language: en", "01-culture@default",
+                       "[hidden: x clean]", "external"):
+            self.assertIn(needle, p)
+        filtered = Path(out["packet_path"]).with_name("01-culture@default.transcript.md").read_text(encoding="utf-8")
+        self.assertIn("pushed back", filtered)
+        self.assertNotIn("secret thought", filtered)
+        inline = self.ok("packet", "evaluator", sid, "01", "--inline", json_out=True)["packet"]
+        self.assertIn("pushed back", inline)
+        self.assertNotIn("secret thought", inline)
+
+    def test_debrief_packet(self):
+        sid = self.culture_session(stages="recruiter-screen,culture", role="mle")
+        self.ok("end", sid, "01", "--reason", "completed", now=at(2))
+        self.ok("turn", sid, "02", "--text", "I once pushed back on a launch decision and shared the data.", now=at(3))
+        self.ok("end", sid, "02", "--reason", "completed", now=at(5))
+        self.assertEqual(self.sim("packet", "debrief", sid)[0], 2)
+        out = self.ok("packet", "debrief", sid, "--mode", "final", json_out=True)["packet"]
+        for needle in ("mode: final", "weight", "catalog.yaml", "study-map.yaml", "templates/debrief.md", "(no scorecard)",
+                       "cut result: (none)", "loop complete: false", "practice-only instances (feedback only, not in the tally): none"):
+            self.assertIn(needle, out)
+        self.assertLess(out.index("01-recruiter-screen@default |"), out.index("02-culture@default |"))
+        self.assertEqual(self.sim("packet", "debrief", sid, "--mode", "cut")[0], 0)
+        rs = self.new_session(role="rs", stages="culture")
+        self.assertEqual(self.sim("packet", "debrief", rs, "--mode", "cut")[0], 2)
+
+    def test_ai_pair_packet_private_and_workspace_clean(self):
+        sid = self.new_session(role="mle", stages="ai-assisted-coding", lang="es")
+        self.assertEqual(self.sim("packet", "ai-pair", sid, "01")[0], 2)  # before select
+        sel = self.ok("select", sid, "01", json_out=True)
+        out = self.ok("packet", "ai-pair", sid, "01", json_out=True)["packet"]
+        work = self.kb / "sessions" / sid / "work" / "01-ai-assisted-coding@default"
+        self.assertTrue(out.startswith("<orchestrator private>"))
+        self.assertTrue(out.rstrip().endswith("</orchestrator>"))
+        self.assertIn(str(work.resolve()), out)
+        self.assertIn("Spanish", out)
+        flaws = yamlish.loads((self.kb / "stages" / "ai-assisted-coding" / "repos" / sel["problem_id"] / "flaws.yaml").read_text(encoding="utf-8"))["flaws"]
+        for f in flaws:
+            self.assertIn(f["id"], out)
+            self.assertNotIn(f["hidden_test"], out)
+        if not flaws:
+            self.assertIn("flaws: []", out)
+        self.assertFalse((work / "flaws.yaml").exists() or (work / "hidden").exists())
+        self.assertNotIn("flaws", sel["packet"].lower().replace("flaws_triggered", ""))
+        self.assertIn(str(work.resolve()), sel["packet"])  # interviewer packet names the workspace
+
+    def test_select_prepares_takehome_and_starter(self):
+        sid = self.new_session(role="ds", stages="presentation@take-home")
+        out = self.ok("select", sid, "01", json_out=True)
+        work = self.kb / "sessions" / sid / "work" / "01-presentation@take-home"
+        self.assertTrue((work / "prompt.md").is_file() and (work / "data.csv").is_file())
+        self.assertIn(str(work.resolve()), out["packet"])
+
+    # --- write-debrief
+    def debrief_text(self, sid, mode="final", **over):
+        insts = [i["instance_id"] for i in self.session_data(sid)["instances"]]
+        front = {"type": mode, "session_id": sid, "role": "mle", "target_level": "L5", "complete": True,
+                 "provisional_outcome": "hire", "outcome": "hire" if mode == "final" else "continue", "level": "L5",
+                 "override": False, "culture_verdict": "positive", "stages_considered": insts}
+        front.update(over)
+        return yamlish.join_front_matter(front, "# Debrief\n")
+
+    def test_write_debrief_final_and_cut(self):
+        sid = self.new_session(stages="recruiter-screen,culture")
+        out = self.ok("write-debrief", sid, "--mode", "final", "--stdin", stdin=self.debrief_text(sid), json_out=True)
+        self.assertTrue((self.kb / "sessions" / sid / "debrief.md").is_file())
+        data = self.session_data(sid)
+        self.assertEqual(data["final"], {"outcome": "hire", "level": "L5", "override": False})
+        self.ok("write-debrief", sid, "--mode", "cut", "--reason", "weak", "--stdin",
+                stdin=self.debrief_text(sid, "cut", provisional_outcome="no_hire", outcome="stop"))
+        self.assertTrue((self.kb / "sessions" / sid / "debrief-cut.md").is_file())
+        self.assertEqual(self.session_data(sid)["cut"], {"outcome": "stop", "reason": "weak"})
+        self.assertTrue(out["ok"])
+
+    def test_write_debrief_rejects_bad_front_matter(self):
+        sid = self.new_session(stages="recruiter-screen,culture")
+        path = self.kb / "sessions" / sid / "debrief.md"
+        insts = [i["instance_id"] for i in self.session_data(sid)["instances"]]
+        cases = [{"type": "cut"}, {"outcome": "continue"}, {"session_id": "other"}, {"culture_verdict": "meh"},
+                 {"level": "L9"}, {"stages_considered": list(reversed(insts))}, {"stages_considered": ["99-x@default"]},
+                 {"outcome": "no_hire"}, {"complete": "yes"}]
+        for over in cases:
+            code, out, _ = self.sim("write-debrief", sid, "--mode", "final", "--stdin", stdin=self.debrief_text(sid, **over))
+            self.assertEqual(code, 1, over)
+            self.assertFalse(path.exists(), over)
+        # an override with justification is allowed to differ from the provisional outcome
+        self.ok("write-debrief", sid, "--mode", "final", "--stdin", stdin=self.debrief_text(sid, outcome="no_hire", override=True))
+        self.assertEqual(self.sim("write-debrief", sid, "--mode", "cut", "--stdin", stdin="plain text")[0], 1)
+
+    # --- candidate profile from hm-screen
+    def test_log_stores_candidate_profile_summary_for_later_packets(self):
+        sid = self.new_session(stages="hm-screen,culture")
+        reply = ("<say>Thanks, the recruiter will follow up.</say>\n<meta>\nphase: closed\ncandidate_profile_summary: |\n"
+                 "  Senior MLE at a streaming company; owned a ranking migration (2 years).\n  Stack: python, spark\n</meta>")
+        out = self.ok("log", sid, "01", "--stdin", stdin=reply, json_out=True)
+        self.assertTrue(out["candidate_profile_stored"])
+        self.assertIn("ranking migration", self.session_data(sid)["candidate_profile"])
+        self.ok("end", sid, "01", "--reason", "completed")
+        packet = self.ok("select", sid, "02", json_out=True)["packet"]
+        self.assertIn("ranking migration", packet)
+        # HTML-escaped reply (task notification) also works, and a second summary is appended, not lost
+        esc = reply.replace("<", "&lt;").replace(">", "&gt;").replace("Senior MLE", "Staff MLE")
+        self.ok("log", sid, "01", "--stdin", stdin=esc)
+        profile = self.session_data(sid)["candidate_profile"]
+        self.assertIn("Senior MLE", profile)
+        self.assertIn("Staff MLE", profile)
+
+
 class ProgressTests(SimCase):
     def scored_session(self, now, level="L5", rubric=1, score="Y", mode=None, stage="ml-system-design@design"):
         sid = self.new_session(stages=stage, now=now, level=level)

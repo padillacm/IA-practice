@@ -40,11 +40,11 @@ Compare every value with the catalog. Reject, list the valid options, and do not
 - `time_scale` is not a positive number;
 - the background path does not exist.
 
-`sim.py new` validates again (exit 2 with `Valid: ...`); relay that message as a rejection.
+Run all of this at once with `sim.py new <the same options> --dry-run`: it validates every value against the catalog (including phases, `stage@variant`, role-compatible variants and the background path), exits 2 listing the valid options on invalid input, and otherwise prints the resolved plan (instances with phase, variant, minutes, weight, and whether the cut is on) as text or `--json`. It creates nothing and needs no guard. Relay a rejection as is. `sim.py new` without `--dry-run` validates again.
 
 ## 5. Summary
 
-Show, in the session language:
+Build it from the dry-run plan and show, in the session language:
 - role (and title equivalence), level, language, domain, feedback mode, time_scale;
 - the instances in order, grouped by phase (screen / VO1 / VO2), each as `NN-stage@variant (minutes)`; mark optional additions;
 - whether the cut after VO1 is on (role `cut: yes`, and the selection includes both VO1 and VO2) or off;
@@ -58,7 +58,7 @@ Show, in the session language:
 
 Ask for explicit confirmation (AskUserQuestion: start / change something / cancel). No stage starts before a yes.
 
-Then:
+Then (same options as the dry run, without `--dry-run`):
 
 ```
 PY netflix-ml-interview/scripts/sim.py new --role <r> --level <l> --lang <lang> --domain <d> --stages <list> --feedback <f> --time-scale <x> [--order given] [--background <path>] [--python <PY>]

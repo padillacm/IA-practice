@@ -24,7 +24,7 @@ Tested with a throwaway named sonnet subagent over 3 turns.
 States: `IDLE → OPENING → AWAITING_CANDIDATE → AWAITING_INTERVIEWER → … → CLOSED`.
 
 1. **OPENING**
-   - Run `sim.py select` to get the launch packet.
+   - Run `sim.py select` to get the launch packet (it also prepares the session workspace).
    - Call `Agent` in the foreground with `subagent_type: netflix-<stage>`, `name: iv-<instance>-<sid>-<attempt>` and the launch packet as the prompt.
    - Parse the result with `sim.py log`. Print `<say>` verbatim and stop. → `AWAITING_CANDIDATE`.
 2. **AWAITING_CANDIDATE** — a user message arrives.
@@ -49,10 +49,10 @@ States: `IDLE → OPENING → AWAITING_CANDIDATE → AWAITING_INTERVIEWER → �
 
 | Command | Action |
 |---|---|
-| `::time` | `sim.py state --time`, show elapsed and budget. |
+| `::time` | `sim.py state <session> --time --instance <NN>`, show elapsed (scaled active minutes), budget and percentage. |
 | `::pause` | `sim.py pause`, show how to resume. |
 | `::end` | Send `<orchestrator>Close the stage now (external end).</orchestrator>`; set `end_reason: candidate_end`. |
-| `::ai <prompt>` | Relay to `ai-<instance>-<sid>` (same async pattern). Show its explanation + diff. Pass a summary to the interviewer as `<orchestrator private>`. |
+| `::ai <prompt>` | Relay to `ai-<instance>-<sid>` (same async pattern; launch it with the output of `sim.py packet ai-pair`). Show its explanation + diff. Pass a summary to the interviewer as `<orchestrator private>`. |
 | `::apply` | `sim.py apply` the last AI diff to the session workspace. |
 | `::help` | List these commands. Unknown `::x` also shows help. |
 
