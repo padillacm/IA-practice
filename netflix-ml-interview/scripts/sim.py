@@ -580,7 +580,13 @@ def parse_reply(text: str) -> dict:
         if text[text.rfind("</meta>") + len("</meta>"):].strip():
             problems.append("text found after </meta>")
         if not out["say"]:
-            problems.append("<say> is empty")
+            before = text[:text.find("<say>")].strip()
+            if before:
+                # Seen in practice: the agent writes its answer, then an empty <say></say>.
+                out["say"] = before
+                out["warnings"].append("<say> was empty; used the text written before <say> instead")
+            else:
+                problems.append("<say> is empty")
     if metas:
         try:
             data = yamlish.loads(out["meta"])

@@ -313,6 +313,13 @@ class TranscriptTests(SimCase):
         out = self.ok("log", self.sid, "01", "--text", text, json_out=True)
         self.assertTrue(out["closed"])
 
+    def test_empty_say_falls_back_to_text_before_it(self):
+        text = "Here is the diff.\n```diff\n+x\n```\n\n&lt;say&gt;\n&lt;/say&gt;\n&lt;meta&gt;\nphase: main\n&lt;/meta&gt;"
+        out = self.ok("log", self.sid, "01", "--text", text, json_out=True)
+        self.assertFalse(out["closed"])
+        transcript = (self.kb / "sessions" / self.sid / "transcripts" / "01-culture@default.md").read_text(encoding="utf-8")
+        self.assertIn("Here is the diff.", transcript)
+
     def test_malformed_reply_not_stored_unless_accepted(self):
         for bad in ("just text", "<say>a</say>", "<say>a</say><meta>x: 1</meta> trailing", "<meta>x: 1</meta><say>a</say>",
                     "<say>a</say><say>b</say><meta>x: 1</meta>"):
