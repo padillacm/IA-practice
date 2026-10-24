@@ -130,6 +130,12 @@ def _locate(lines: list[str], old: list[str], preferred: int):
     return None
 
 
+def _read_exact(path: Path) -> str:
+    """Read text without newline translation (Path.read_text gained newline= only in 3.13)."""
+    with open(path, encoding="utf-8", newline="") as fh:
+        return fh.read()
+
+
 def apply_patch(root, text: str, dry_run: bool = False) -> list[dict]:
     """Apply ``text`` under ``root``; returns [{path, action, added, removed}]."""
     root = Path(root)
@@ -146,7 +152,7 @@ def apply_patch(root, text: str, dry_run: bool = False) -> list[dict]:
         elif kind == "delete":
             content = None
         else:
-            content = _apply_hunks(target.read_text(encoding="utf-8", newline=""), fp["hunks"], rel)
+            content = _apply_hunks(_read_exact(target), fp["hunks"], rel)
         plan.append({"path": rel, "target": target, "action": kind, "content": content,
                      "added": added, "removed": removed})
     if not dry_run:

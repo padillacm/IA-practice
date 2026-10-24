@@ -654,7 +654,7 @@ class NewFeaturesTests(SimCase):
         for needle in ("rubric_version: 1", "end_reason: candidate_end", "culture_signals: core=true", "core=false", "stages/culture/rubric.md",
                        "study-map.yaml", "templates/scorecard.md", "target level: L5", "session language: en", "01-culture@default",
                        "[hidden: x clean]", "external"):
-            self.assertIn(needle, p)
+            self.assertIn(needle, p.replace("\\", "/"))
         filtered = Path(out["packet_path"]).with_name("01-culture@default.transcript.md").read_text(encoding="utf-8")
         self.assertIn("pushed back", filtered)
         self.assertNotIn("secret thought", filtered)
@@ -671,7 +671,7 @@ class NewFeaturesTests(SimCase):
         out = self.ok("packet", "debrief", sid, "--mode", "final", json_out=True)["packet"]
         for needle in ("mode: final", "weight", "catalog.yaml", "study-map.yaml", "templates/debrief.md", "(no scorecard)",
                        "cut result: (none)", "loop complete: false", "practice-only instances (feedback only, not in the tally): none"):
-            self.assertIn(needle, out)
+            self.assertIn(needle, out.replace("\\", "/"))
         self.assertLess(out.index("01-recruiter-screen@default |"), out.index("02-culture@default |"))
         self.assertEqual(self.sim("packet", "debrief", sid, "--mode", "cut")[0], 0)
         rs = self.new_session(role="rs", stages="culture")
