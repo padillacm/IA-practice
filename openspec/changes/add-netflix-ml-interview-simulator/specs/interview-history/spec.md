@@ -2,60 +2,68 @@
 
 ## Purpose
 
-Guarda cada sesión de entrevista simulada solo en la máquina local, fuera del control de versiones, y resume la evolución del candidato entre sesiones para que pueda medir su progreso.
+Guarda cada sesión de entrevista simulada solo en la máquina local, fuera del control de versiones, y resume la evolución del candidato entre sesiones de forma comparable.
 
 ## ADDED Requirements
 
 ### Requirement: Registro local de cada sesión
-El sistema SHALL guardar cada sesión en un directorio propio, identificado por fecha y un identificador corto, dentro del directorio local de sesiones. Ese directorio SHALL contener la configuración, el estado de cada etapa, una transcripción por etapa, un scorecard por etapa evaluada, los materiales de la sesión (código y take-homes) y, si existe, la decisión del debrief.
+El sistema SHALL guardar cada sesión en un directorio propio dentro del directorio local de sesiones, identificado por fecha y un id corto. Contendrá:
+- la configuración y el estado de cada instancia;
+- una transcripción y un scorecard por instancia;
+- los materiales (código, take-homes);
+- las decisiones de corte y de debrief, si existen.
 
 #### Scenario: Sesión completada
-- **WHEN** termina una sesión de dos etapas con debrief
-- **THEN** el directorio de la sesión contiene la configuración, dos transcripciones, dos scorecards y la decisión
+- **WHEN** termina una sesión de dos instancias con debrief
+- **THEN** su directorio contiene la configuración, dos transcripciones, dos scorecards y la decisión
 
 ### Requirement: Sesiones fuera del repositorio
-El directorio de sesiones SHALL estar en `.gitignore`. El sistema no SHALL añadir al índice, commitear ni subir ningún archivo de sesiones, ni ofrecer hacerlo. Antes de escribir la primera sesión, SHALL comprobar que el directorio está ignorado por git y negarse a guardar si no lo está.
+El directorio de sesiones SHALL estar en `.gitignore`. El sistema no SHALL añadir al índice, commitear ni subir archivos de sesiones, ni ofrecer hacerlo. Antes de escribir, SHALL comprobar que el directorio está ignorado y que ninguno de sus archivos está rastreado; si no se cumple, no escribirá.
 
 #### Scenario: Directorio ignorado
 - **WHEN** se crea una sesión
-- **THEN** `git status` no muestra ningún archivo de esa sesión
+- **THEN** `git status` no muestra ningún archivo de la sesión
 
 #### Scenario: Ignore ausente
-- **WHEN** el directorio de sesiones no está ignorado por git (p. ej. se borró la entrada de `.gitignore`)
-- **THEN** el sistema no escribe la sesión, avisa al candidato e indica la línea que debe restaurar
+- **WHEN** el directorio de sesiones no está ignorado o contiene archivos rastreados
+- **THEN** el sistema no escribe la sesión, avisa e indica cómo corregirlo
 
-#### Scenario: Fin de sesión
-- **WHEN** termina o se pausa una sesión
-- **THEN** el sistema no propone ningún commit y solo indica dónde quedaron los archivos locales
+#### Scenario: Fuera de un repositorio git
+- **WHEN** el simulador se ejecuta fuera de un repositorio git
+- **THEN** el sistema escribe la sesión y avisa de que no hay control de versiones que proteger
 
 ### Requirement: Aviso en entornos efímeros
-Si el sistema detecta que corre en un entorno remoto efímero, SHALL avisar al iniciar la sesión de que los archivos locales se pierden cuando se recicla el entorno.
+Si detecta que corre en un entorno remoto efímero, el sistema SHALL avisar al iniciar que el historial local se pierde al reciclarse el entorno.
 
 #### Scenario: Claude Code en la web
 - **WHEN** la sesión empieza en un contenedor remoto de Claude Code
-- **THEN** el resumen de configuración incluye un aviso de que el historial no persistirá más allá del contenedor
+- **THEN** el resumen de configuración incluye ese aviso
 
 ### Requirement: Guardado incremental
-El sistema SHALL persistir la transcripción de una etapa a medida que avanza, como mínimo tras cada turno del candidato, para que una interrupción no pierda la etapa en curso.
+El sistema SHALL persistir cada turno en la transcripción y actualizar el estado de la instancia, incluido el tiempo activo, tras cada turno. Así una interrupción no pierde la etapa en curso y se puede reconstruir al entrevistador.
 
 #### Scenario: Conversación interrumpida
 - **WHEN** la conversación se corta en mitad de una etapa
-- **THEN** la transcripción guardada contiene todos los turnos hasta el último respondido y la etapa queda marcada "in progress"
+- **THEN** la transcripción tiene todos los turnos hasta el último, y la instancia queda "in progress" con su tiempo consumido
 
-### Requirement: Resumen de progreso
-El sistema SHALL mantener, en el mismo directorio local, un resumen de progreso que liste las sesiones con fecha, rol, nivel, etapas y recomendaciones, y que muestre la tendencia por competencia en las etapas repetidas.
+### Requirement: Resumen de progreso comparable
+El sistema SHALL mantener, en el directorio local, un resumen de progreso que agrupe las puntuaciones por etapa, variante e id de competencia en orden cronológico, mostrando en cada punto el nivel y la versión de la rúbrica. "No evidence" no se representará como una puntuación baja, y las etapas de práctica se marcarán como tales.
 
 #### Scenario: Repetir una etapa
-- **WHEN** el candidato completa `ml-system-design` por segunda vez
-- **THEN** el resumen muestra las dos puntuaciones por competencia de esa etapa en orden cronológico
+- **WHEN** el candidato completa `ml-system-design@design` por segunda vez
+- **THEN** el resumen muestra las dos puntuaciones de cada competencia en orden cronológico
+
+#### Scenario: Distinto nivel o versión
+- **WHEN** la repetición es a otro nivel o con otra versión de la rúbrica
+- **THEN** el resumen lo indica en esos puntos y marca la ruptura de comparabilidad
 
 #### Scenario: Consultar progreso
 - **WHEN** el candidato invoca `/netflix-ml-interview progress`
 - **THEN** el sistema muestra el resumen sin iniciar ninguna sesión
 
-### Requirement: Evitar repetir preguntas
-Al preparar una etapa ya hecha en sesiones locales anteriores, el sistema SHALL evitar repetir las preguntas principales ya usadas mientras queden alternativas en el banco para el rol y el nivel.
+### Requirement: Historial de preguntas usadas
+El estado de cada sesión SHALL registrar las preguntas y problemas usados en cada instancia, para que la selección de sesiones futuras pueda excluirlos.
 
-#### Scenario: Segunda vez en coding
-- **WHEN** el candidato hace `coding` por segunda vez con el mismo rol y nivel
-- **THEN** el problema principal es distinto del de la sesión anterior
+#### Scenario: Registro de preguntas
+- **WHEN** termina una instancia
+- **THEN** su estado lista los ids de las preguntas o del problema usados

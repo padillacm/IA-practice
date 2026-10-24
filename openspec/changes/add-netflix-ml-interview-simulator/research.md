@@ -22,7 +22,7 @@ Para esas fuentes se usaron los extractos del buscador hasta la pasada 3, en la 
 | Hallazgo | Confianza | Fuentes |
 |---|---|---|
 | Pasos: recruiter call → **hiring manager screen** → technical phone screen → onsite "muy largo". El proceso está descentralizado y depende del equipo. | Alta | [interviewing.io], [Blind HM gatekeeper], [PracHub DS 11 rondas] |
-| El onsite virtual se divide en **VO1 (general: coding, system design, behavioral)** y **VO2 (específico del equipo: system design del dominio del equipo, partnership con un manager de un equipo socio, segunda reunión con el HM)**. Hay un corte entre ambos: "4 hours of interviews and likely more if I had got past the first set". | Alta | [PracHub VO1 billboard], [PracHub data platform], [Blind messed up] |
+| El onsite virtual se divide en **VO1 (general: coding, system design, behavioral)** y **VO2 (específico del equipo: system design del dominio del equipo, partnership con un manager de un equipo socio, segunda reunión con el HM)**. Hay un corte entre ambos: "4 hours of interviews and likely more if I had got past the first set". | Alta para SWE · Media para MLE · Baja para RS/DS (los relatos de DS describen un onsite único) | [PracHub VO1 billboard], [PracHub data platform], [Blind messed up] |
 | Recruiting puede ofrecer partir el onsite en 2 días. Hay relatos de hasta "9 interviews on a single day". | Media | [interviewing.io], [Blind RS vs MLE] |
 | Suele haber 1–2 **directores** en el loop (uno de la organización que contrata y otro de una socia, para reducir sesgo). Uno puede hacer system design y el otro behavioral. Los directores a veces dejan 30 min para las preguntas del candidato. | Alta | [interviewing.io], [Glassdoor MLE: "2 with directors"] |
 | **No hay hiring committee ni escala común a toda la empresa.** La decisión es binaria (pass / fail) en una discusión en vivo tras el onsite, buscando consenso ("then you discuss if you'd be open to changing your mind"). El hiring manager actúa como informed captain. | Alta | [interviewing.io], [four-leaf], [Glassdoor DS] |
@@ -130,9 +130,9 @@ Para esas fuentes se usaron los extractos del buscador hasta la pasada 3, en la 
 
 | Rol | Screens | VO1 (general) | VO2 (equipo) |
 |---|---|---|---|
-| ML Engineer | recruiter, HM screen, technical screen (A: proyecto + ML coding · B: fundamentals + PR review) | coding, ml-system-design, culture | ml-depth, project-deep-dive, partnership, HM onsite |
+| ML Engineer | recruiter, HM screen, technical screen (`ml-coding`: preguntas de ML + coding medio; opcional B: fundamentals + PR review; el formato 20'+40' es de prácticas) | coding, ml-system-design, culture | ml-depth, project-deep-dive, partnership, HM onsite |
 | Research Scientist | recruiter, HM screen, technical screen (ML fundamentals/framing + coding) | presentation (research talk), ml-fundamentals, coding (ML), culture | ml-depth, partnership, HM onsite |
-| Applied / Data Scientist | recruiter, HM screen, technical screen ×2 (SQL ejecutable · estadística) | presentation (take-home), experimentation, coding (SQL/pandas), culture | ml-fundamentals (caso de modelado), partnership, HM onsite |
+| Data Scientist (experimentation & analytics) | recruiter, HM screen, technical screen ×2 (SQL ejecutable · estadística) | presentation (take-home), experimentation ×2 (diseño · análisis), coding (SQL/pandas), culture | partnership, HM onsite (caso de modelado opcional, sin evidencia directa) |
 
 Opcionales en cualquier rol: `ai-assisted-coding`, y las etapas que no estén en el loop por defecto del rol.
 

@@ -1,45 +1,134 @@
 # Tasks
 
-## 1. Andamiaje, sesiones locales y validación
+Organización en paquetes de trabajo (WP), cada uno con sus propios archivos. Los formatos de D10 (design.md) están congelados: ningún paquete los cambia sin actualizar antes el design. Ningún paquete hace commit: integra y commitea el orquestador de la implementación.
 
-- [ ] 1.1 Crear `netflix-ml-interview/` con `README.md` (en español: uso, comandos, `lang=es`, aviso de no afiliación y de variabilidad, nota de que la escala es pedagógica) y el árbol de D6; verificar con `find netflix-ml-interview -maxdepth 2` que coincide con D6
-- [ ] 1.2 Añadir `netflix-ml-interview/sessions/` al `.gitignore` raíz; verificar que `git check-ignore -q netflix-ml-interview/sessions/x` devuelve 0 y que un archivo de prueba en `sessions/` no aparece en `git status`
-- [ ] 1.3 Escribir `catalog.yaml` con las 14 etapas de D4 (fase screen/VO1/VO2, duración, variantes, loops por rol, competencias, persona, estilo, agente) y `sources.md` a partir de `research.md`; verificar que el script de 1.4 lo carga
-- [ ] 1.4 Implementar `scripts/check_simulator.py` (stdlib), que valide: cada etapa tiene `brief.md` (con fuentes), `questions.md`, `rubric.md` y `.claude/agents/netflix-<stage>.md`; rúbricas con 3–6 competencias (una de cultura) × 4 puntos × L4–L6; rutas de `study-map.yaml` existentes; problemas de coding cuyos `tests.py` pasan contra `reference.py`; repos de `ai-assisted-coding` con `flaws.yaml` válido y tests en verde; PRs de `technical-screen` con `issues.md`; generadores de take-home deterministas; la entrada del `.gitignore`; y que la skill no contiene `git add`/`commit`/`push` sobre `sessions/`. Verificar que falla con mensajes claros sobre el árbol vacío y que su test (`scripts/test_check_simulator.py`) pasa
+## 1. WP1 · Fundamentos: repo, catálogo, validador y helper
 
-## 2. Contenido de las etapas (en inglés, basado en `research.md`)
+- [ ] 1.1 Crear el `.gitignore` raíz con `netflix-ml-interview/sessions/` y `.claude/settings.json` con permisos para `Bash(python netflix-ml-interview/scripts/sim.py:*)`, `Bash(python3 netflix-ml-interview/scripts/sim.py:*)` y `Bash(py netflix-ml-interview/scripts/sim.py:*)`. Verificar que `git check-ignore -q netflix-ml-interview/sessions/.probe` devuelve 0 y que el JSON es válido.
+- [ ] 1.2 Crear `netflix-ml-interview/` con el árbol de D6, `README.md` en español y `requirements.txt` (numpy, pandas). El README debe cubrir: uso, comandos `::`, `lang`, regla de honor, escala pedagógica, niveles L4/L6 extrapolados, una fase por conversación y que las sesiones son locales. Verificar con `find netflix-ml-interview -maxdepth 2` que el árbol coincide con D6.
+- [ ] 1.3 Escribir `catalog.yaml` según D10, con las 14 etapas, las variantes, `variant_by_role`, los loops de los 3 roles con su fase por entrada, `cut`, `default_domain`, pesos por rol, los dominios, las personas con estilo y las competencias con `core`. Escribir también `sources.md`, con la confianza por etapa y las duraciones marcadas como supuestos, a partir de `research.md`. Verificar con 1.5.
+- [ ] 1.4 Escribir `templates/session.yaml`, `templates/scorecard.md` y `templates/debrief.md` con los formatos de D10 y el aviso "regla pedagógica del simulador". Verificar que `sim.py` (1.6) los carga.
+- [ ] 1.5 Implementar `scripts/check_simulator.py` (stdlib) con estas comprobaciones:
+  - el schema del catálogo, y que cada entrada de loop sea compatible con su rol y tenga peso;
+  - por etapa: `brief.md` con fuentes, `questions.md` según D10 con un mínimo de 2 `main` por rol aplicable × variante, y `rubric.md` según D10 (versión, 3–6 competencias con ids únicos y al menos una core, cultura con `memo_values`, barras L4/L5/L6 distintas y sin adjetivos de una lista negra);
+  - los 17 agentes: `name` igual al nombre de archivo, tools sin Bash/Write y modelo según D5;
+  - las rutas de `study-map.yaml`;
+  - en coding, que `tests.py` pase contra `reference.py`, saltando con aviso si faltan dependencias;
+  - en ai-assisted, que los tests del workspace pasen y que cada `hidden_test` sea válido;
+  - que los generadores de take-home sean deterministas;
+  - la entrada del `.gitignore`, y que la skill no contenga `git add`, `commit` ni `push`.
 
-- [ ] 2.1 Escribir los paquetes de `recruiter-screen`, `hm-screen` (cordial, vende Netflix) y `hm-onsite` (exigente, encaje con el dominio del equipo): "Why Netflix", "personal top of market", memo y trabajo pasado; verificar con `check_simulator.py`
-- [ ] 2.2 Escribir los paquetes de `culture` ("Dream Team" con un director: los 8 valores con su texto literal del memo, keeper test, context not control, informed captain, farming for dissent, disagree then commit, tiempo para preguntas del candidato) y `partnership` (manager de un equipo socio: colaboración, stakeholders, dependencias); verificar con `check_simulator.py`
-- [ ] 2.3 Escribir el paquete de `technical-screen` con sus 5 variantes (`ml-coding`, `fundamentals-pr-review` con al menos 2 PRs de feature pipelines con fallos de producción, `ml-framing-coding`, `sql` ejecutable sobre SQLite y `stats` con inferencia causal); verificar con `check_simulator.py`
-- [ ] 2.4 Escribir el paquete de `coding` con al menos 5 problemas Python prácticos con sabor a Netflix (dedup de la homepage por filas, duplicados en el historial de visionado, rotación de billboard con scores actualizables, NDCG@K/P@K, CF con coseno sobre una matriz dispersa) y 3 de SQL/pandas (window functions, retención por cohortes, sesionización). Cada uno con `problem.md`, `starter.py`, `tests.py`, `reference.py` y `followups.md` (escala y concurrencia). Verificar que `check_simulator.py` ejecuta los tests contra las referencias y pasan
-- [ ] 2.4b Escribir el paquete de `ai-assisted-coding` con al menos 2 mini-repos (p. ej. un servicio de features con caché y un job de evaluación offline), cada uno con `tasks.md`, tests y `flaws.yaml`; verificar con `check_simulator.py` que los tests pasan sobre el repo base
-- [ ] 2.5 Escribir los paquetes de `ml-fundamentals` (con la variante de caso de modelado) y `ml-depth`, con los dominios recsys, causal inference, RL/bandits, CV, NLP/LLM (KV cache, attention), ads y ML platform, y contexto del foundation model, GenRec (verbalización y context engineering, scoring head sobre el catálogo, pérdida ponderada por recompensa, inferencia prefill-only), semantic IDs y artwork personalization; verificar con `check_simulator.py`
-- [ ] 2.6 Escribir el paquete de `ml-system-design`, con al menos 8 prompts (homepage rows, artwork personalization, personalized search, Continue Watching, cold start de títulos nuevos, reentrenamiento diario a escala, ML job scheduler, feature serving en tiempo real), una lista de "puntos de señal" por prompt para que el entrevistador controle el ritmo, y expectativas L4/L5/L6; verificar con `check_simulator.py`
-- [ ] 2.7 Escribir el paquete de `experimentation` (diseño, power, peeking, interferencia, efectos heterogéneos, interleaving, CUPED, quasi-experimentos geográficos, casos de frequency cap de anuncios y de A/B de un modelo de ordenación de filas con solapamiento y retención a largo plazo; interleaving como medida relativa que no sustituye al A/B de segunda etapa); verificar con `check_simulator.py`
-- [ ] 2.8 Escribir los paquetes de `presentation` (research talk y take-home readout, con al menos 2 take-homes con `generate_data.py` con semilla) y `project-deep-dive` (reverse system design); verificar con `check_simulator.py`, incluido el determinismo de los datasets
-- [ ] 2.9 Escribir `study-map.yaml`, que mapee competencias y temas a módulos de `recsys-course/`; verificar que `check_simulator.py` encuentra todas las rutas y que pasa en verde con las 14 etapas
+  Verificar que falla con mensajes claros sobre el árbol vacío y que `scripts/test_check_simulator.py` pasa.
+- [ ] 1.6 Implementar `scripts/sim.py` (stdlib, con `pathlib` y portable a Windows) con los subcomandos de D6: `guard` (D8), `new`, `select`, `turn` (segmentos, `time_scale` y flags 80/90/100 %), `log`, `pause`, `run-tests`, `apply`, `verify-scorecard`, `rebuild`, `state`, `progress` e `info`. Verificar con `scripts/test_sim.py`, que debe cubrir:
+  - el guard en un repo temporal: ignorado, no ignorado, con archivos rastreados y sin repo;
+  - `git status --porcelain` vacío tras crear una sesión;
+  - el cálculo de tiempo con pausas;
+  - que la selección excluya los ids ya usados;
+  - que la verificación de citas detecte una cita inventada y una que viene de un turno del entrevistador;
+  - que el filtro elimine `notes_private`;
+  - que `progress` agrupe por etapa, variante y competencia y marque los cambios de nivel y de versión.
 
-## 3. Agentes
+## 2. WP2 · Contenido de etapas (en inglés; 2a–2e en paralelo, cada uno dueño de sus directorios)
 
-- [ ] 3.1 Escribir los 14 agentes `.claude/agents/netflix-<stage>.md`: persona y estilo de D4, realismo sin feedback, control del ritmo (interrumpir cuando ya hay señal), protocolo `<say>`/`<meta>`, tiempo, sondeo de cultura, regla de idioma (`en`/`es`), lectura de `brief.md` y `questions.md` (no de `rubric.md`) y preguntas no usadas en sesiones previas; verificar que `check_simulator.py` valida el frontmatter y que solo `netflix-coding`, `netflix-ai-assisted-coding` y `netflix-technical-screen` declaran `Bash`
-- [ ] 3.1b Escribir `.claude/agents/netflix-ai-pair.md` (asistente útil que activa los errores de `flaws.yaml` cuando el prompt toca esa zona y lo informa en `<meta>`); verificar con un repo de ejemplo que un prompt sobre la zona afectada activa el error y otro prompt no
-- [ ] 3.2 Escribir `.claude/agents/netflix-evaluator.md` y `templates/scorecard.md` (cita por competencia, "no evidence", pass / no-pass, calibración de nivel, fortalezas, brechas, 1–3 recomendaciones y plan de estudio, en el idioma de la sesión); verificar evaluando una transcripción de ejemplo en `netflix-ml-interview/examples/`, en inglés y en español
-- [ ] 3.3 Escribir `.claude/agents/netflix-hm-debrief.md` y `templates/debrief.md` con los modos `cut` y `final` (pass / fail por entrevistador, "¿alguien cambiaría de opinión?", consenso, peso mayor de system design y cultura, decisión del HM: Hire con nivel, No Hire o "not a fit for this team, referred", riesgos, etapas pendientes y plan de estudio); verificar con tres casos de ejemplo: un "Strong No" bloqueante, señales mixtas y una brecha de dominio que lleva a referido
+- [ ] 2.1 (2a) Escribir `recruiter-screen`, `hm-screen`, `hm-onsite`, `culture` y `partnership` (brief, questions y rubric). Deben incluir:
+  - "Why Netflix" y "personal top of market", con el aviso de no citar el salario como motivación (Baja);
+  - autopromoción con métricas;
+  - preguntas sobre el memo, que no haberlo leído "is a fail";
+  - los 8 valores con su texto literal, el keeper test, context not control, informed captain, farming for dissent y disagree then commit, con una muestra de 3–4 valores;
+  - un director con tiempo para las preguntas del candidato;
+  - en `partnership`: colaboración, stakeholders y dependencias, con la opción de que lo haga un director;
+  - en `hm-onsite`: el encaje con el dominio, y para L6, alcance entre equipos.
 
-## 4. Skill orquestadora
+  Verificar con `check_simulator.py`.
+- [ ] 2.2 (2b) Escribir `coding` con:
+  - al menos 6 problemas `practical`: dedup de la homepage por filas, duplicados en el historial de visionado, rotación de billboard, clave aleatoria ponderada, sliding window sobre eventos y NDCG@K/P@K;
+  - 2 de `ml-coding`: CF con coseno sobre una matriz dispersa y multiplicación de matrices dispersas;
+  - 3 de `sql-pandas` sobre `sqlite3`: window functions, retención por cohortes y sesionización;
+  - 2 de `lc-style`.
 
-- [ ] 4.1 Escribir `.claude/skills/netflix-ml-interview/SKILL.md`: configuración (`role`, `level`, `lang` con `en` por defecto, `stages` con fases y `stage@variant`, dominio del equipo, feedback inmediato o diferido) por argumentos o con `AskUserQuestion`; validación contra `catalog.yaml`; loops por rol; aviso de variabilidad y de entorno efímero (`CLAUDE_CODE_REMOTE`); comprobación `git check-ignore` antes de escribir. Verificar con `stages=foo` (rechazo), con un arranque válido que muestra el resumen y con `.gitignore` sin la entrada (se niega a guardar)
-- [ ] 4.2 Implementar el bucle de relevo D1–D3 (lanzar el entrevistador, `SendMessage` por turno, mostrar `<say>` sin cambios, guardar `<meta>` y el turno, cabecera de tiempo, `/time`, `/pause`, `/end-stage`, `/ai`) y el modo degradado D9; verificar con un `recruiter-screen` real de 3–4 turnos, comprobando que la transcripción se escribe tras cada turno
-- [ ] 4.3 Implementar la entrega de material y la pausa de `presentation` (take-home generado en `sessions/<id>/takehome/`) y el espacio `code/` para coding; verificar con un take-home de Applied/DS que se genera, pausa y se reanuda
-- [ ] 4.4 Implementar transiciones, orden por fases, evaluación en segundo plano, feedback inmediato o diferido, el corte VO1→VO2 (con opción de modo práctica) y el debrief final; verificar con una sesión de 1 etapa de VO1 + 1 de VO2 que produce los scorecards, el corte y `debrief.md`
-- [ ] 4.5 Implementar `resume` y `progress` y la regeneración de `PROGRESS.md`; verificar pausando y reanudando en una conversación nueva, repitiendo una etapa y comprobando la tendencia, y confirmando con `git status` que nada de `sessions/` está rastreado
+  Cada problema lleva `problem.md`, `starter.py`, `tests.py`, `reference.py` y `followups.md` (escala y concurrencia). Escribir también `technical-screen` con sus variantes:
+  - `ml-coding`;
+  - `ml-framing-coding`;
+  - `sql`, con `datasets/*.sql`;
+  - `stats` (regresión, tipo I/II, FDR, CLT/t, bootstrap, potencia/MDE y causal opcional);
+  - `fundamentals-pr-review`, con 2 PRs de feature pipelines y su `issues.md`;
+  - `intern-project-coding`;
+  - `oa`.
 
-## 5. Integración
+  Verificar que `check_simulator.py` ejecuta los tests contra las referencias y pasan.
+- [ ] 2.3 (2c) Escribir `ai-assisted-coding` con al menos 3 repos (p. ej. un servicio de features con caché, un job de evaluación offline y un deduplicador de catálogo). Cada uno lleva `workspace/` con tests en verde, `tasks.md`, `notes.md` y `flaws.yaml` con 0, 1 y 2 errores respectivamente, cada error con su `hidden_test`. Verificar con `check_simulator.py`.
+- [ ] 2.4 (2d) Escribir `ml-fundamentals` con dos variantes:
+  - `breadth`: bias-variance, L1/L2, GBDT y early stopping, embeddings de co-watch, cold start, popularity bias, métricas de ranking (P@K, R@K, MAP, NDCG, cobertura, diversidad), CF, árboles vs redes, monitorización post-deploy, Bayes, forward pass, KNN, KV cache y attention;
+  - `modeling-case`.
 
-- [ ] 5.1 Añadir `.github/workflows/verificar-netflix-interview.yml`, que ejecute `check_simulator.py` y su test en los cambios de `netflix-ml-interview/**`, `.claude/agents/netflix-*` y `.claude/skills/netflix-ml-interview/**`; verificar que el workflow pasa en el PR
-- [ ] 5.2 Enlazar el simulador desde el `README.md` raíz y desde `recsys-course/README.md`; verificar que los enlaces relativos resuelven
-- [ ] 5.3 Smoke test end-to-end: un loop abreviado de Research Scientist L5 en inglés (VO1 + VO2), un `ai-assisted-coding` de MLE y una etapa suelta de Applied/DS con `lang=es`, comprobando el corte VO1→VO2, la detección de los errores del AI pair, el aislamiento entre etapas, que no hay feedback en vivo, el aviso de tiempo, el sondeo de cultura, citas en los scorecards, el debrief con enlaces a `recsys-course/` y que `git status` queda limpio; registrar los hallazgos en `netflix-ml-interview/examples/smoke-test.md` (sin datos de sesiones reales)
+  Escribir también `ml-depth` por dominio: recsys (con foundation model, GenRec, semantic IDs y artwork personalization), experimentation, causal-inference, rl-bandits, cv, nlp-llm, ads y ml-platform. Brief con la regla: "GenRec y las demás publicaciones son contexto de discusión; nunca se preguntan cifras". Para L6, deep dive de arquitectura. Verificar con `check_simulator.py`.
+- [ ] 2.5 (2d) Escribir `ml-system-design` con:
+  - variante `design`, con al menos 10 prompts etiquetados por dominio: homepage rows, artwork personalization, personalized search, search autocomplete, Continue Watching, cold start de títulos, reentrenamiento diario, ML job scheduler, compute allocation, portal ML y feature serving en tiempo real;
+  - variante `problem-framing` (RS).
+
+  Cada prompt lleva sus puntos de señal (incluidos disponibilidad, seguridad y validación online: interleaving → A/B) y expectativas L4/L5/L6. Escribir también `experimentation`:
+  - `design-case`: frequency cap de anuncios, ordenación de filas con solapamiento y retención, y artwork;
+  - `analysis-case`: cuantiles, bootstrap, efectos heterogéneos, ajuste por covariables y FDR;
+  - las dos con interleaving, CUPED, quasi-experimentos y peeking.
+
+  Verificar con `check_simulator.py`.
+- [ ] 2.6 (2e) Escribir:
+  - `presentation`: `research-talk` de 45' y `take-home` con al menos 2 take-homes cuyo `generate_data.py` use semilla;
+  - `project-deep-dive`, como "reverse system design" con partes asignables del background.
+
+  Verificar con `check_simulator.py`, incluido el determinismo.
+
+## 3. WP3 · Agentes
+
+- [ ] 3.0 Spike del relevo en un directorio temporal fuera de `.claude/agents/` (dos agentes de prueba lanzados como general-purpose). Hay que confirmar:
+  - la entrega asíncrona de `SendMessage` como notificación;
+  - qué pasa con `::time` y `/time` en el prompt;
+  - la latencia y el coste por turno;
+  - que el contrato `<say>`/`<meta>` se respeta durante 5 turnos.
+
+  Documentar los resultados en `.claude/skills/netflix-ml-interview/references/relay-protocol.md` (la máquina de estados de D1) y ajustar D1–D3 si algo no se confirma.
+- [ ] 3.1 Escribir un esqueleto común de prompt para los entrevistadores. Debe incluir el contrato D2 literal, la persona y el estilo del catálogo, el control del ritmo, la obediencia a los flags de tiempo, el realismo sin feedback, las pistas con nivel, el registro de cultura, la regla de idioma, la lectura del *launch packet* en el primer turno y la prohibición de leer `rubric.md`. Con ese esqueleto, generar los 14 `.claude/agents/netflix-<stage>.md`. Verificar con `check_simulator.py`.
+- [ ] 3.2 Escribir `.claude/agents/netflix-ai-pair.md`: devuelve explicación más diff y activa los errores de `flaws.yaml` cuando el prompt toca esa zona, informándolo en `<meta>`. Verificar invocándolo directamente con dos prompts fijos sobre un repo (uno toca la zona y otro no) y aplicando el `hidden_test`.
+- [ ] 3.3 Escribir `.claude/agents/netflix-evaluator.md`, que implementa la regla pedagógica de D7: evidencia `{turn_id, quote}` de turnos del candidato, efecto de las pistas, `end_reason`, "no evidence", respuesta Yes modelo y plan de estudio. Escribir también `.claude/agents/netflix-hm-debrief.md` con sus modos `cut` y `final`: paso 1 determinista, paso 2 con override justificado, cultura por valor, orden de catálogo y sin evidencia nueva. Verificar con 4.2.
+
+## 4. WP4 · Calidad de la evaluación
+
+- [ ] 4.1 Escribir `study-map.yaml`: cada `<stage>.<competency_id>` apunta a un módulo de `recsys-course/` o a una alternativa (`practice_stage` o `resource`). Verificar con `check_simulator.py`.
+- [ ] 4.2 Crear un gold set en `netflix-ml-interview/examples/gold/` para `ml-system-design`, `coding` y `culture`. Debe tener transcripciones fuerte, límite y débil, larga-superficial, con halo, con manipulación y la misma en EN/ES, con las puntuaciones esperadas (±1) y la recomendación. Añadir 3 casos de debrief: Strong No bloqueante, señales mixtas y referred. Verificar puntuando cada caso 3 veces, comprobando con `sim.py verify-scorecard` y registrando los resultados en `RESULTS.md`. La recomendación y la decisión deben coincidir en las 3 ejecuciones.
+
+## 5. WP5 · Skill orquestadora
+
+- [ ] 5.1 Escribir `.claude/skills/netflix-ml-interview/SKILL.md` (en inglés), con `allowed-tools` Agent, SendMessage, ToolSearch, AskUserQuestion, Bash, Read, Write, Edit, Glob y Grep. Debe cubrir:
+  - los subcomandos `stages`, `resume` y `progress`;
+  - la configuración por argumentos o con AskUserQuestion: rol (con su equivalencia de títulos), nivel (L5 por defecto), `lang`, `stages` (fases y `stage@variant`), dominio, feedback, `time_scale` y background;
+  - la validación de los valores con el catálogo;
+  - los avisos de variabilidad y de entorno efímero, y `sim.py guard` antes de escribir.
+
+  Verificar:
+  - con `stages=foo` y `coding@foo`, que rechaza;
+  - con un arranque válido, que muestra el resumen;
+  - con el `.gitignore` sin la entrada, que se niega a guardar.
+- [ ] 5.2 Implementar el relevo D1–D3 siguiendo `relay-protocol.md`:
+  - el *launch packet* preparado por `sim.py select`;
+  - un `sim.py turn` por turno;
+  - el saneado de `<candidate>`;
+  - `<say>` mostrado sin cambios y `<meta>` registrado;
+  - reformateo con un solo reintento;
+  - mensajes retenidos;
+  - los comandos `::time`, `::pause`, `::end` y `::help`;
+  - los tests ejecutados por el hilo principal con `sim.py run-tests`;
+  - el modo degradado D9.
+
+  Verificar con un guion de candidato de 6 turnos para `recruiter-screen`. La comprobación posterior con `sim.py state` y un grep sobre la transcripción debe dar: tantos `<say>` como turnos, ningún término de la rúbrica, un flag de tiempo con `time_scale` bajo y transcripción escrita tras cada turno.
+- [ ] 5.3 Implementar `::ai` y `::apply` con `netflix-ai-pair` (resumen y `flaws_triggered` pasados al entrevistador como `<orchestrator private>`), y los materiales de `presentation` con su pausa. Verificar con un repo de `ai-assisted-coding` y un take-home de `ds`.
+- [ ] 5.4 Implementar las instancias y su orden por fases, las transiciones, la evaluación según el modo de feedback con barrera, la verificación de citas, el corte (con modo práctica), el debrief final y la oferta de repetir la VO2 si el resultado es referred. Verificar con una sesión `mle` de una etapa de VO1 y otra de VO2 que produzca los scorecards, el corte y `debrief.md`.
+- [ ] 5.5 Implementar `resume` (reconstruyendo con `sim.py rebuild` las instancias en curso, y eligiendo entre varias sesiones) y `progress`. Verificar que una etapa pausada a mitad continúa en una conversación nueva sin que el entrevistador se vuelva a presentar, que al repetir una etapa la tendencia aparece en `PROGRESS.md` y que `git status` queda limpio.
+
+## 6. WP6 · Integración
+
+- [ ] 6.1 Añadir `.github/workflows/verificar-netflix-interview.yml`: instala `requirements.txt` y ejecuta `check_simulator.py`, `test_check_simulator.py` y `test_sim.py`. Se dispara con cambios en `netflix-ml-interview/**`, `.claude/agents/netflix-*.md`, `.claude/skills/netflix-ml-interview/**`, `.gitignore` y el propio workflow. Verificar que pasa en el PR.
+- [ ] 6.2 Enlazar el simulador desde el `README.md` raíz y desde `recsys-course/README.md`. Verificar que los enlaces relativos resuelven.
+- [ ] 6.3 Smoke test end-to-end con tres sesiones: un `rs` L5 en inglés (VO1 abreviada), un `mle` con corte y `ai-assisted-coding`, y una etapa suelta de `ds` con `lang=es`. Comprobar: aislamiento entre etapas, ausencia de feedback en vivo, flags de tiempo, citas verificadas, decisión según la regla, enlaces a `recsys-course/` y `git status` limpio. Registrar los hallazgos en `netflix-ml-interview/examples/smoke-test.md`, sin datos de sesiones reales.
 
 ## Workflow follow-up
 
