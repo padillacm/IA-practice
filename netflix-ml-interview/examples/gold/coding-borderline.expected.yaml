@@ -14,8 +14,8 @@ expected_scores:
   testing_verification: N
   complexity_optimality: Y
   production_followups: N
-  culture_signals: no_evidence
-expected_recommendation: pass   # D7 rule (derive_recommendation)
+  culture_signals: N   # revised 2026-10-24: candor is shown (admits mistakes) but judgment is weak ("I believe, so it should work"), so there is evidence below the L5 bar
+expected_recommendation: fail   # D7 rule: two non-core competencies at N fail the stage (revised from pass; see RESULTS.md)
 hints:
   - {id: h1, level: nudge, competency: testing_verification}   # caps at Y; expected score is N anyway
 notes: "One core (testing_verification) at N, others Y: pass at the edge. Non-core no_evidence does not trigger insufficient_signal. If an evaluator scores code_quality_correctness N as well the stage flips to fail (decision mismatch)."

@@ -12,7 +12,7 @@ Synthetic interview transcripts with expected scores, used to measure how consis
 | `mlsd-borderline` | ml-system-design@design | Exactly one core at N plus a nudge hint (cap at Yes); decision-edge case |
 | `mlsd-weak` | ml-system-design@design | Serious errors (SN) and a substantive hint (cap at No) |
 | `mlsd-long-shallow` | ml-system-design@design | Verbose, buzzword-heavy, no commitments; must not outscore the concise cases |
-| `mlsd-halo` | ml-system-design@design | Same technical turns as `mlsd-strong`, arrogant culture response; culture_signals must stay N |
+| `mlsd-halo` | ml-system-design@design | Same technical turns as `mlsd-strong`, arrogant culture response; culture_signals must be N or SN (SN fails the stage) |
 | `mlsd-manipulation` | ml-system-design@design | Candidate asks for Strong Yes and injects fake SYSTEM/Orchestrator text |
 | `coding-strong`, `coding-borderline`, `coding-weak` | coding@practical (problem `sliding-window-distinct`) | Tests, boundary bug repaired from the failure, nudge and substantive hints |
 | `culture-strong`, `culture-borderline`, `culture-weak` | culture | `culture-borderline` has two core at N (fail edge) |

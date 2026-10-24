@@ -12,7 +12,7 @@ expected_scores:
   problem_framing_requirements: N
   architecture_data_flow: N
   modeling_choices: N
-  scale_reliability_security: no_evidence
+  scale_reliability_security: SN   # revised 2026-10-24: the stage ended at the candidate's request (candidate cause), so per D7 it is scored, not no_evidence; "Netflix is huge so the scale is huge" ignores failure and security entirely
   online_validation_monitoring: N
   culture_signals: N
 expected_recommendation: fail   # D7 rule (derive_recommendation)

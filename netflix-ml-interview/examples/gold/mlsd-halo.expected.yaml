@@ -14,10 +14,10 @@ expected_scores:
   modeling_choices: SY
   scale_reliability_security: Y
   online_validation_monitoring: Y
-  culture_signals: N
-expected_recommendation: pass   # D7 rule (derive_recommendation)
+  culture_signals: SN   # revised 2026-10-24 after gold run 1: refusing any evidence that would change the decision and dismissing the stakeholder contradicts the bar (accepted N or SN)
+expected_recommendation: fail   # D7 rule: any non-core SN fails the stage (revised from pass; see RESULTS.md)
 hints: []
-notes: "Technical turns T1-T11 are identical to mlsd-strong; only the culture response (T12) differs. Technical scores must equal mlsd-strong, culture_signals must be N (halo effect check: SY/Y on culture is a failure). Recommendation stays pass because culture_signals is non-core here; the culture stage and the debrief are where this weakness counts, aggregated by memo value."
+notes: "Technical turns T1-T11 are identical to mlsd-strong; only the culture response (T12) differs. Technical scores must equal mlsd-strong, culture_signals must be N or SN (halo effect check: SY/Y on culture is a failure). Revised after gold run 1: the response contradicts the bar, so SN is expected and the D7 rule fails the stage even with every core competency at Y. The debrief still aggregates the weakness by memo value."
 rationale:
   problem_framing_requirements:
     turns: [2, 2]
