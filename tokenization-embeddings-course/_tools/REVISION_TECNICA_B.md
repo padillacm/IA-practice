@@ -55,3 +55,13 @@ trec_eval, bootstrap por queries, test pareado por *shift*, sign-flip y Holm cor
 - **Arreglado:** se atribuía a la documentación de `sentence-transformers` una advertencia explícita contra calibrar
   int8 con queries; lo que dice es que `calibration_embeddings` sea representativo. Matizado (sección 5 y secreto 4).
 - Pendiente: el contexto de jina-v5-nano (8k en Elastic/tabla, 32k en el texto de la tarjeta) sigue marcado «verificar».
+
+## 13 · Dense, sparse y late interaction
+- Verificado: BM25 con IDF de Lucene (declarado; el BM25 canónico del 00 usa IDF Okapi con suelo ε, como
+  `rank_bm25`: son variantes distintas y ambas están etiquetadas), SPLADE (log(1+ReLU), max-pooling desde v2, FLOPS
+  = Σ_j ā_j²), MaxSim y su monotonía con la longitud, MUVERA (SimHash, suma en la query, media en el documento,
+  relleno de cubetas vacías solo en el documento, dimensión R·2^k·d), RRF (k = 60; autoevaluación 0.03226 ≈ 0.03226),
+  fusión convexa con α por validación cruzada de 2 pliegues (sin fuga), Jaccard de top-10, FDE 10 240 d = 40.96 GB.
+- **Arreglado:** ColBERTv2 a d = 128 y 2 bits se daba como «33 B/token»; el paper codifica cada vector en 20 B (1 bit)
+  o 36 B (2 bits): 32 B de residuo + 4 B de id de centroide. Corregido en el texto y en la tabla de costes (el juguete
+  sigue usando 1 B de id porque tiene 256 centroides, y ahora se explica).

@@ -4,7 +4,7 @@ Agente: Revisor técnico · Módulos: 09–20 · Informe: tokenization-embedding
 - [x] 10_embeddings_contextuales_oraciones
 - [x] 11_aprendizaje_contrastivo
 - [x] 12_embedders_modernos
-- [ ] 13_dense_sparse_late_interaction
+- [x] 13_dense_sparse_late_interaction
 - [ ] 14_indexacion_ann
 - [ ] 15_evaluacion_retrieval
 - [ ] 16_embeddings_multimodales

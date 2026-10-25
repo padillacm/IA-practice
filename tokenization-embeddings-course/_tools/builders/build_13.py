@@ -595,7 +595,7 @@ for r in tabla_c.itertuples():
 ax.set_xscale("log"); ax.set_xlabel("bytes por token (log)"); ax.set_ylabel("nDCG@10"); ax.set_title("Compresión residual: espacio vs calidad"); ax.grid(alpha=.3)
 plt.tight_layout(); plt.show()
 ''')
-    nb.md(r'''> 👀 **Qué debes observar.** Bajar de 256 B (`float32`, $d=64$) a ≈ 9–25 B por token con residuos de 1–3 bits cuesta muy poco nDCG: **los residuos tienen poca energía** una vez que restas el centroide. Esa es la idea central de ColBERTv2. Con $d=128$ y 2 bits son 33 B por token frente a 256 B en `float16`. Atención: este es un experimento a escala diminuta con embeddings de juguete; la reducción de 6–10× es la cifra que **reporta el paper** para ColBERTv2 real.
+    nb.md(r'''> 👀 **Qué debes observar.** Bajar de 256 B (`float32`, $d=64$) a ≈ 9–25 B por token con residuos de 1–3 bits cuesta muy poco nDCG: **los residuos tienen poca energía** una vez que restas el centroide. Esa es la idea central de ColBERTv2. Con $d=128$ y 2 bits son 32 B de residuo + el id del centroide (4 B en la implementación de ColBERTv2, que usa decenas de miles de centroides): **36 B por token** (20 B con 1 bit), frente a 256 B en `float16`; nuestro juguete usa 1 B de id porque solo tiene 256 centroides. Atención: este es un experimento a escala diminuta con embeddings de juguete; la reducción de 6–10× es la cifra que **reporta el paper** para ColBERTv2 real.
 
 ### PLAID en pequeño: interacción por centroides
 Buscar con MaxSim exacto sobre toda la colección es $O(\text{tokens})$. PLAID (Santhanam et al., 2022) usa los centroides como **proxy**: cada documento se representa por el *conjunto de centroides* de sus tokens; la similitud query-centroide ($q_i\cdot c_k$) se calcula **una sola vez por query** y el score aproximado de un documento es $\tilde S(q,d)=\sum_i\max_{k\in\text{cent}(d)} q_i\cdot c_k$ (un MaxSim con vectores "cuantizados" a su centroide). Se conservan los `ncand` mejores y solo a esos se les calcula el MaxSim exacto.
@@ -1045,7 +1045,7 @@ filas = [
     ("Denso 1024 d float32", 1024 * 4),
     ("Denso 256 d int8 (Matryoshka+int8)", 256),
     ("ColBERT 128 d float16 (200 tok)", TOK * 128 * 2),
-    ("ColBERTv2: id centroide + residuo 2 bit (33 B/token)", TOK * 33),
+    ("ColBERTv2: id centroide + residuo 2 bit (36 B/token)", TOK * 36),
     (f"MUVERA FDE R={R_f}, k={k_f}, d={d_f} float32", R_f * (1 << k_f) * d_f * 4),
 ]
 costos = pd.DataFrame(filas, columns=["representación", "bytes por documento"])
