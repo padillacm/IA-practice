@@ -127,6 +127,8 @@ class Notebook:
 
     def save(self, path: str) -> None:
         self._check()
+        for i, cell in enumerate(self.nb.cells):
+            cell.id = f"cell-{i:03d}"  # IDs deterministas: regenerar no produce diffs ruidosos
         nbformat.validate(self.nb)
         nbformat.write(self.nb, path)
         n_code = sum(c.cell_type == "code" for c in self.nb.cells)
