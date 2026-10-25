@@ -340,7 +340,9 @@ def carga_paralelo(fast_dev: bool = True, langs=None) -> dict:
 '''
 
 def pip_cell(extra: str = "") -> str:
-    return f'!pip install -q -U tokenizers sentencepiece tiktoken datasets matplotlib seaborn scikit-learn {extra}'.strip()
+    # Sin -U: en Colab, actualizar solo `tokenizers` puede dejarlo fuera del rango que exige el `transformers`
+    # preinstalado (ImportError al importar transformers en 04/05). Las versiones de Colab bastan.
+    return f'!pip install -q tokenizers sentencepiece tiktoken datasets matplotlib seaborn scikit-learn {extra}'.strip()
 
 
 def cells(code: str):
