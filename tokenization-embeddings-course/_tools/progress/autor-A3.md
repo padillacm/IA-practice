@@ -1,7 +1,7 @@
 # Progreso: autor-A3
 Agente: Autor A3 · Módulos: 06–08
 - [x] Módulo 06_tokenizer_free_bytes_blt: README + lección + proyecto + build_06.py OK + commit/push
-- [ ] Módulo 07_hnet_tokenizer_transfer: README + lección + proyecto + build_07.py OK + commit/push
+- [x] Módulo 07_hnet_tokenizer_transfer: README + lección + proyecto + build_07.py OK + commit/push
 - [ ] Módulo 08_tokens_multimodales_audio: README + lección + proyecto + build_08.py OK + commit/push
 - [ ] check_course.py OK + informe final
 
@@ -11,3 +11,6 @@ Agente: Autor A3 · Módulos: 06–08
 - 06 hecho: lección (46 md + 25 código; 3 IMG + 1 VID) y proyecto (18 md + 33 código). Medido (corpus sintético, FAST_DEV): ps val 4.27/4.48, incremental 100 %/92.7 % (BPE), erratas 5 %: frag 1.036 vs 1.005, estabilidad 0.993 vs 1.0, ps para -25 % FLOPs = 6.0. MiniBLT 1.7 bpb vs BPE-512 1.0 vs bytes 2.9 (400 pasos; BPE gana, coherente con el paper a poco cómputo).
 - 07: código de celdas y builders escritos (build_07.py, _a3_src07.py, _a3_proj07.py); falta calibrar umbrales del proyecto (T en _a3_proj07.py), probar lección/proyecto completos y commit.
 - 08: pendiente (diseño: ViT patches, VQ-VAE/FSQ/RVQ en MNIST, codec toy RVQ audio sintético, imagen real sklearn china/flower; EnCodec/HF con try/except).
+
+- 07 hecho: medido H-Net mini: F≈0.27 (obj 0.25), fronteras vs inicios de palabra P=0.54 R=0.91 (azar 0.16/0.27); bpb pool 3.17 > dc ~2.55 ≈ space ~2.45 (400 pasos). Transfer: bpb0 FVT 3.55, FOCUS 3.59, media 3.86, Hewitt 4.18; final ≈0.23 todas; control A 0.39, scratch B 0.32. Proyecto 7/7 con umbrales calibrados (regresión EN+código +50 %).
+- 08: falta _a3_proj08.py (proyecto: foto real china/flower con VQ/RVQ vs JPEG + audio RVQ vs μ-law). FSQ necesitaba ganancia x10 a la entrada (arreglado).

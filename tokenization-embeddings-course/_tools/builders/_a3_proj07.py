@@ -11,8 +11,8 @@ import _a3_src07 as S  # noqa: E402
 T = {
     "fert_min": 1.6,            # bytes/token de B dividido por el de A, sobre ES (val)
     "mejora_cero_shot": 0.0,    # bpb0(FVT) <= bpb0(aleatoria) - mejora_cero_shot
-    "bpb_final_max": 1.0,       # bpb en ES tras la adaptación con la mejor init (<= medido + margen)
-    "regresion_max": 0.30,      # aumento relativo máximo de bpb en EN+código tras adaptarse al ES
+    "bpb_final_max": 0.30,       # bpb en ES tras la adaptación con la mejor init (<= medido + margen)
+    "regresion_max": 0.60,      # aumento relativo máximo de bpb en EN+código tras adaptarse al ES
 }
 
 GIVEN_TT = S.TT_DATA.split("print(f\"vocab A=")[0]
@@ -222,11 +222,11 @@ Corpus Políglota vía `carga_corpus()` (módulo 00). *Origen:* inglés + códig
 | Criterio | Umbral (calibrado con la solución de referencia) |
 |---|---|
 | R1 · comprobaciones unitarias de las 3 inits | todas ✅ |
-| R2 · fertilidad: bytes/token de B ÷ bytes/token de A en ES | ≥ """ + f"{T['fert_min']}x" + r""" |
-| R3 · bpb cero-shot FVT vs aleatoria | FVT ≤ aleatoria − """ + f"{T['mejora_cero_shot']}" + r""" |
-| R4 · bpb final en ES con la mejor init | ≤ """ + f"{T['bpb_final_max']}" + r""" |
+| R2 · fertilidad: bytes/token de B ÷ bytes/token de A en ES | ≥ """ + f"{T['fert_min']}x" + r""" (medido: 1.90x) |
+| R3 · bpb cero-shot FVT vs aleatoria | FVT ≤ aleatoria − """ + f"{T['mejora_cero_shot']}" + r""" (medido: 3.549 vs 3.554, diferencia mínima) |
+| R4 · bpb final en ES con la mejor init | ≤ """ + f"{T['bpb_final_max']}" + r""" (medido: 0.232, FVT) |
 | R5 · adaptado vs modelo base sin adaptar (tokenizer A) | menos bpb |
-| R6 · regresión en EN+código (aumento relativo de bpb) | ≤ """ + f"{int(T['regresion_max']*100)} %" + r""" |
+| R6 · regresión en EN+código (aumento relativo de bpb) | ≤ """ + f"{int(T['regresion_max']*100)} %" + r""" (medido: +50 %: el ajuste al ES **sí** hace olvidar) |
 | R7 · conclusión | ≥ 300 caracteres |
 
 > Los umbrales salen de lo **medido** por la solución (FAST_DEV, corpus sintético, una semilla); con datos reales o GPT-2 real, vuelve a medir y ajusta.
