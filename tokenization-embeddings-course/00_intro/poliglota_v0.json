@@ -1,0 +1,17 @@
+{
+  "source": "synthetic",
+  "n_docs": 400,
+  "n_queries": 110,
+  "k1": 1.2,
+  "b": 0.75,
+  "tokenizacion": "tokenize_simple (+ split_ident en código)",
+  "ndcg_all": 0.877952840960081,
+  "ndcg_es": 0.9815464876785729,
+  "ndcg_en": 0.9321394630357187,
+  "ndcg_code": 0.6675791492345778,
+  "ndcg_code_base": 0.6062527108876844,
+  "ci95": [
+    0.8298989441594656,
+    0.9220344682269241
+  ]
+}
