@@ -9,7 +9,7 @@ Agente: Revisor de ejecutabilidad · Módulos: 00–08 · Informe: tokenization-
 - [x] 06_tokenizer_free_bytes_blt (lección + proyecto ejecutados con nbclient)
 - [x] 07_hnet_tokenizer_transfer (lección + proyecto ejecutados con nbclient)
 - [x] 08_tokens_multimodales_audio (lección + proyecto ejecutados con nbclient)
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (comandos lanzados y su resultado)
@@ -23,3 +23,4 @@ Agente: Revisor de ejecutabilidad · Módulos: 00–08 · Informe: tokenization-
 - 06 lección: 274 s (celda 55 MiniBLT 145 s, celda 28 72 s; 2 hilos CPU), 0 errores; corpus sintético con aviso. Proyecto: 46 s, 0 errores; plantilla 0/7 (esperado), solución 7/7 ✅ (ps 4.27/4.48; frag 1.036 ≤ 1.10; ps_25 6.0 ≤ 6.5). Sin cambios.
 - 07 lección: 370 s (celdas 42/22 ≈ 130 s c/u), 0 errores; corpus sintético con aviso. Proyecto: 150 s, 0 errores, 7/7 ✅. Cambio: R3 comparaba bpb cero-shot FVT vs aleatoria con margen 0 y diferencia medida ~0.009 (autor: 0.005; frágil, cambia de signo entre entornos) → ahora compara tras la fase de solo embeddings (K1): medido 0.703 vs 0.779, umbral FVT ≤ aleatoria − 0.03 (`_a3_proj07.py`). Re-ejecutado: ✅.
 - 08 lección: 1ª corrida 387 s con 1 error (`import torchaudio` fuera del try). Arreglado (torchaudio opcional + SciPy). Añadida cadena de audio real FSDD (GitHub) → sintético. Re-ejecutado con torchvision/torchaudio instalados (--no-deps): 354 s, 0 errores, MNIST real + voz real. Proyecto: 140 s, 0 errores; R5 falló con voz real (SNR 2.94 dB < 9.0) → recalibrada a ≥ 2.5 dB y ganancia ≥ 1.0 dB (medido 1.46→2.94). Informe en _tools/REVISION_EJECUTABILIDAD_A.md.
+- check_course.py: Todo OK (tras commit 42f375c).
