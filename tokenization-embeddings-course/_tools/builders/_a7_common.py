@@ -141,18 +141,28 @@ faiss.omp_set_num_threads(1)
 class ServicioPoliglota:
     """Búsqueda versionada: caché de embeddings de query + índice denso por versión (FAISS IndexFlatIP) + BM25,
     filtro por idioma, fusión RRF, alias 'prod' -> versión y versiones 'adaptador' (queries nuevas -> índice viejo)."""
-    def __init__(self, docs, bm25, cache_cap: int = 2048, rrf_k: int = 60, profundidad: int = 50):
+    def __init__(self, docs, bm25, cache_cap: int = 2048, rrf_k: int = 60, profundidad: int = 50, tokenizador=None,
+                 fusion: str = "rrf", alfa: float = 0.5):
+        # CONTRATO: `tokenizador` debe ser el MISMO con el que se construyó `bm25` (si no, fallo silencioso F3 del módulo 19)
+        self.tok = tokenizador or tokenize_simple
+        self.fusion, self.alfa = fusion, alfa      # fusion: 'rrf' | 'lineal' (alfa·denso + (1-alfa)·BM25, min-max en cada lista)
         self.ids = [d["id"] for d in docs]; self.lang = np.array([d["lang"] for d in docs])
         self.bm25, self.cache, self.rrf_k, self.prof = bm25, LRUCache(cache_cap), rrf_k, profundidad
         self.versiones, self.alias, self.lat_ms = {}, {}, []
 
-    def registrar_version(self, nombre, embedder, D):
-        idx = faiss.IndexFlatIP(D.shape[1]); idx.add(l2n(D))
-        self.versiones[nombre] = {"emb": embedder, "idx": idx, "W": None, "base": nombre}
+    def registrar_version(self, nombre, embedder, D, indice: str = "flat", ef_search: int = 64):
+        """indice: 'flat' (exacto) | 'hnsw' (FAISS IndexHNSWFlat, M=32)."""
+        if indice == "hnsw":
+            idx = faiss.IndexHNSWFlat(D.shape[1], 32, faiss.METRIC_INNER_PRODUCT); idx.hnsw.efConstruction = 80
+        else:
+            idx = faiss.IndexFlatIP(D.shape[1])
+        idx.add(l2n(D))
+        self.versiones[nombre] = {"emb": embedder, "idx": idx, "W": None, "base": nombre, "indice": indice, "ef": ef_search}
 
     def registrar_adaptador(self, nombre, embedder, W, sobre: str):
         """Queries con `embedder` (versión nueva) proyectadas con W al espacio del índice `sobre` (versión vieja)."""
-        self.versiones[nombre] = {"emb": embedder, "idx": self.versiones[sobre]["idx"], "W": W, "base": sobre}
+        base = self.versiones[sobre]
+        self.versiones[nombre] = {"emb": embedder, "idx": base["idx"], "W": W, "base": sobre, "indice": base["indice"], "ef": base["ef"]}
 
     def embebe_query(self, texto, nombre):
         k = clave_cache(nombre, texto)
@@ -166,31 +176,57 @@ class ServicioPoliglota:
         return v
 
     def _rangos_densos(self, texto, nombre, cand):
-        idx = self.versiones[nombre]["idx"]; q = self.embebe_query(texto, nombre)
-        params = faiss.SearchParameters(sel=faiss.IDSelectorBatch(cand.astype("int64"))) if cand is not None else None
-        _, I = idx.search(q, min(self.prof, idx.ntotal), params=params)
-        return [i for i in I[0] if i >= 0]
+        return [int(i) for i in self._cands_densos(texto, nombre, cand)[0]]
+
+    def _cands_densos(self, texto, nombre, cand):
+        """(índices, scores) del top-`profundidad` denso, con el filtro aplicado DENTRO de la búsqueda."""
+        cfg = self.versiones[nombre]; idx = cfg["idx"]; q = self.embebe_query(texto, nombre)
+        sel = faiss.IDSelectorBatch(cand.astype("int64")) if cand is not None else None
+        if cfg["indice"] == "hnsw":       # HNSW exige sus propios parámetros (efSearch + selector de filtro)
+            params = faiss.SearchParametersHNSW(efSearch=cfg["ef"]) if sel is None else faiss.SearchParametersHNSW(sel=sel, efSearch=cfg["ef"])
+        else:
+            params = faiss.SearchParameters(sel=sel) if sel is not None else None
+        Dsc, I = idx.search(q, min(self.prof, idx.ntotal), params=params)
+        m = I[0] >= 0
+        return I[0][m], Dsc[0][m]
+
+    def _lineal(self, texto, nombre, cand):
+        """Combinación convexa con min-max dentro de cada lista (un doc ausente de una lista aporta 0 por ella)."""
+        I, sd = self._cands_densos(texto, nombre, cand)
+        sb_all = self.bm25.scores(self.tok(texto))
+        Ib = np.array(self._rangos_bm25(texto, cand), dtype=int); sb = sb_all[Ib] if len(Ib) else np.zeros(0)
+        def mm(v):
+            return (v - v.min()) / max(float(v.max() - v.min()), 1e-9) if len(v) else v
+        score = {}
+        for i, v in zip(I, mm(sd)):
+            score[int(i)] = score.get(int(i), 0.0) + self.alfa * float(v)
+        for i, v in zip(Ib, mm(sb)):
+            score[int(i)] = score.get(int(i), 0.0) + (1 - self.alfa) * float(v)
+        return score
 
     def _rangos_bm25(self, texto, cand):
-        s = self.bm25.scores(tokenize_simple(texto))
+        s = self.bm25.scores(self.tok(texto))
         if cand is not None:
             m = np.full(len(s), -np.inf); m[cand] = s[cand]; s = m
         orden = np.lexsort((np.arange(len(s)), -s))[: self.prof]
-        return [i for i in orden if np.isfinite(s[i]) and s[i] > 0]
+        return [int(i) for i in orden if np.isfinite(s[i]) and s[i] > 0]
 
     def buscar(self, texto, k: int = 10, lang=None, modo: str = "hibrido", version: str = "prod"):
         t0 = time.perf_counter()
         nombre = self.alias.get(version, version)
         cand = np.flatnonzero(self.lang == lang) if lang else None
-        listas = []
-        if modo in ("denso", "hibrido"):
-            listas.append(self._rangos_densos(texto, nombre, cand))
-        if modo in ("bm25", "hibrido"):
-            listas.append(self._rangos_bm25(texto, cand))
-        score = {}
-        for lst in listas:                       # RRF: sum 1/(k + rango), rango desde 1
-            for r, i in enumerate(lst):
-                score[i] = score.get(i, 0.0) + 1.0 / (self.rrf_k + r + 1)
+        if modo == "hibrido" and self.fusion == "lineal":
+            score = self._lineal(texto, nombre, cand)
+        else:
+            listas = []
+            if modo in ("denso", "hibrido"):
+                listas.append(self._rangos_densos(texto, nombre, cand))
+            if modo in ("bm25", "hibrido"):
+                listas.append(self._rangos_bm25(texto, cand))
+            score = {}
+            for lst in listas:                       # RRF: sum 1/(k + rango), rango desde 1
+                for r, i in enumerate(lst):
+                    score[i] = score.get(i, 0.0) + 1.0 / (self.rrf_k + r + 1)
         top = sorted(score, key=lambda i: (-score[i], i))[:k]
         self.lat_ms.append((time.perf_counter() - t0) * 1e3)
         return [(self.ids[i], round(score[i], 5)) for i in top]
