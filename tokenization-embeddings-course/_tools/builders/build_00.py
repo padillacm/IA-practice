@@ -407,7 +407,7 @@ plt.tight_layout(); plt.show()
 display(df.groupby("lang")[["chars", "bytes", "palabras"]].mean().round(1))
 ''')
 
-nb.md(obs(r"""1. **Bytes extra**: el inglés y el código rondan 0 (ASCII puro: 1 byte por carácter); el español queda por encima por las vocales acentuadas y la «ñ» (2 bytes cada una). Con el corpus sintético el efecto es pequeño; con Wikipedia real mide tú el valor. Es una pista del costo oculto de los idiomas con diacríticos (módulo 01 lo cuantifica con 11 idiomas).
+nb.md(obs(r"""1. **Bytes extra**: el inglés y el código rondan 0 (ASCII puro: 1 byte por carácter); el español queda por encima por las vocales acentuadas y la «ñ» (2 bytes cada una). Con el corpus sintético el efecto es pequeño; con Wikipedia real mide tú el valor. Es una pista del costo oculto de los idiomas con diacríticos (módulo 01 lo cuantifica con 12 idiomas).
 2. Los documentos de código y los de Wikipedia tienen distribuciones de longitud distintas: cualquier hiperparámetro que dependa de la longitud (como $b$ en BM25) se comportará distinto por tipo de corpus."""))
 
 nb.md(r"""
