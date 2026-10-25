@@ -1223,6 +1223,8 @@ except NotImplementedError as e:
     print("⏳ pendiente:", e)
 ''')
 
+pb.md("> 👀 **Qué debes observar.** Tres barras: **limpio** (verde) y **normalizado** (azul) deben quedar prácticamente a la misma altura, y **sucio** (rojo) varios puntos por debajo (la solución mide 0.955 / 0.894 / 0.955 con corpus sintético). Si la azul no alcanza a la verde, tu `normalizar` deja algún tipo de ruido sin reparar: vuelve a la tabla de TODO 5 y mira qué tipo tiene recall bajo. En la salida de tokens, un ratio > 1 es el sobrecoste en tokens que el ruido Unicode añade a la factura de un LLM.")
+
 pb.md(r"""
 ## TODO 8 · Informe
 Guarda `poliglota_unicode.json` con las claves `source`, `n_docs`, `n_contaminados`, `deteccion` (la tabla de TODO 5 como dict), `reparacion`, `ndcg`, `tokens`, `bytes_por_char` (por idioma, del corpus **limpio**, usando tu `audit_doc`) y `version_unicode` (`unicodedata.unidata_version`).

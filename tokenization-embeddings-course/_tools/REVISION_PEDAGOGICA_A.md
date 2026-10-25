@@ -18,3 +18,10 @@ y algún ejemplo a mano ausente.
 - **Arreglado:** BM25 saltaba de la fórmula al código sin ejemplo numérico. Añadido un **ejemplo resuelto a mano**
   (3 documentos, consulta «gato»: 0.499 / 0.598 / 0) y una celda que lo comprueba con el `BM25` propio.
 - **Arreglado:** el gráfico del proyecto (baseline vs `split_ident`) no tenía 👀; añadido.
+
+## 01 · Unicode y bytes
+- Bien: ya tenía 🧭 (≈ 75 celdas), 🔁 sobre 00, ejemplo a mano de UTF-8 (`€` → `E2 82 AC`) antes del código,
+  analogías explícitas (Huffman/códigos de prefijo, bits por byte, grafema como unidad lingüística), 6 preguntas
+  etiquetadas. El proyecto solo pide lo enseñado (mojibake y doble mojibake en §10, homoglifos en §7) con 🪜 1/2.
+- **Arreglado:** el gráfico del TODO 7 del proyecto (nDCG limpio/sucio/normalizado) no tenía 👀; añadido con la
+  lectura esperada y qué hacer si «normalizado» no alcanza a «limpio».
