@@ -2,7 +2,7 @@
 
 Índice generado por `_tools/gen_gemini_index.py`. Cada recurso es una celda 🎨/🎬 de una lección que debes **reemplazar** por la imagen/video generado con Gemini. Guarda el archivo como `<módulo>/assets/<ID>.png|mp4` y sustituye la celda por la línea indicada en ella.
 
-**Total:** 40 recursos (32 imágenes, 8 videos).
+**Total:** 81 recursos (65 imágenes, 16 videos).
 
 | ID | Tipo | Módulo | Título | Formato | Estado |
 |---|---|---|---|---|---|
@@ -29,6 +29,29 @@
 | `M05-VID-01` | video | 05_patologias_robustez | Cómo un token nunca visto se vuelve «basura» durante el entrenamiento | MP4 16:9, 1080p | Duración: 30 s | ⏳ pendiente |
 | `M05-IMG-02` | imagen | 05_patologias_robustez | Por qué el modelo no cuenta las erres de «strawberry» | PNG 16:9, 1920x1080 | ⏳ pendiente |
 | `M05-IMG-03` | imagen | 05_patologias_robustez | El problema de la frontera del prompt y token healing | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M06-IMG-01` | imagen | 06_tokenizer_free_bytes_blt | El espectro de la tokenización: de bytes a parches | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M06-IMG-02` | imagen | 06_tokenizer_free_bytes_blt | Arquitectura del Byte Latent Transformer | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M06-IMG-03` | imagen | 06_tokenizer_free_bytes_blt | Cómputo uniforme por token vs. cómputo adaptativo por parche | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M06-VID-01` | video | 06_tokenizer_free_bytes_blt | Patching dinámico por entropía, paso a paso | MP4 16:9, 1080p | Duración: 25 s | ⏳ pendiente |
+| `M07-IMG-01` | imagen | 07_hnet_tokenizer_transfer | H-Net: U-Net jerárquica con chunking dinámico | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M07-IMG-02` | imagen | 07_hnet_tokenizer_transfer | Routing, smoothing y upsampling en H-Net | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M07-VID-01` | video | 07_hnet_tokenizer_transfer | Cómo aprende H-Net dónde cortar | MP4 16:9, 1080p | Duración: 28 s | ⏳ pendiente |
+| `M07-IMG-03` | imagen | 07_hnet_tokenizer_transfer | Estrategias para inicializar el vocabulario nuevo | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M08-IMG-01` | imagen | 08_tokens_multimodales_audio | Mapa de tokens por modalidad | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M08-IMG-02` | imagen | 08_tokens_multimodales_audio | VQ-VAE: encoder, codebook y decoder con straight-through | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M08-IMG-03` | imagen | 08_tokens_multimodales_audio | Códec de audio neuronal con RVQ (EnCodec/SoundStream) | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M08-VID-01` | video | 08_tokens_multimodales_audio | Cuantización vectorial residual: cada nivel refina el error | MP4 16:9, 1080p | Duración: 24 s | ⏳ pendiente |
+| `M09-IMG-01` | imagen | 09_capa_embedding_llm | De token id a vector y de vuelta a probabilidades | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M09-IMG-02` | imagen | 09_capa_embedding_llm | Weight tying: una matriz, dos gradientes | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M09-IMG-03` | imagen | 09_capa_embedding_llm | Extender el vocabulario: filas nuevas y su inicialización | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M10-IMG-01` | imagen | 10_embeddings_contextuales_oraciones | Estático vs contextual: la palabra «banco» | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M10-IMG-02` | imagen | 10_embeddings_contextuales_oraciones | Cuatro formas de resumir una secuencia (pooling) | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M10-IMG-03` | imagen | 10_embeddings_contextuales_oraciones | Anisotropía: del cono a la esfera (centrado y whitening) | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M10-IMG-04` | imagen | 10_embeddings_contextuales_oraciones | Bi-encoder (siamés) frente a cross-encoder | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M11-IMG-01` | imagen | 11_aprendizaje_contrastivo | Anatomía de un embedder contrastivo | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M11-VID-01` | video | 11_aprendizaje_contrastivo | La matriz B×B: cómo InfoNCE empuja positivos y negativos | MP4 16:9, 1080p | Duración: 40-45 s | ⏳ pendiente |
+| `M11-IMG-02` | imagen | 11_aprendizaje_contrastivo | Alineación y uniformidad en la hiperesfera | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M11-IMG-03` | imagen | 11_aprendizaje_contrastivo | Minado de negativos duros con filtro de falsos negativos | PNG 16:9, 1920x1080 | ⏳ pendiente |
 | `M12-IMG-01` | imagen | 12_embedders_modernos | La receta de un embedder moderno | PNG 16:9, 1920x1080 | ⏳ pendiente |
 | `M12-IMG-02` | imagen | 12_embedders_modernos | Matryoshka: el vector como muñecas rusas | PNG 16:9, 1920x1080 | ⏳ pendiente |
 | `M12-VID-01` | video | 12_embedders_modernos | Truncar y renormalizar paso a paso | MP4 16:9, 1080p | Duración: 25-30 s | ⏳ pendiente |
@@ -46,6 +69,24 @@
 | `M15-VID-1` | video | 15_evaluacion_retrieval | Bootstrap: remuestrear queries y construir el intervalo de confianza | MP4 16:9, 1080p | Duración: 30 s | ⏳ pendiente |
 | `M15-IMG-3` | imagen | 15_evaluacion_retrieval | Ciclo de vida de un golden set | PNG 16:9, 1920x1080 | ⏳ pendiente |
 | `M15-IMG-2` | imagen | 15_evaluacion_retrieval | Por qué dimensión pequeña no puede devolver todos los pares | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M16-IMG-1` | imagen | 16_embeddings_multimodales | CLIP y SigLIP: dos torres y la matriz de similitudes | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M16-IMG-2` | imagen | 16_embeddings_multimodales | El modality gap y el efecto cono | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M16-VID-1` | video | 16_embeddings_multimodales | ColPali: de la página a los patches y MaxSim | MP4 16:9, 1080p | Duración: 30 s | ⏳ pendiente |
+| `M16-IMG-3` | imagen | 16_embeddings_multimodales | Árbol de decisión: OCR + texto vs embedding visual | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M17-IMG-3` | imagen | 17_interpretabilidad_geometria | Capas de información dentro de un embedding de texto | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M17-VID-1` | video | 17_interpretabilidad_geometria | Steering: sumar un vector de concepto desplaza la consulta y sus resultados | MP4 16:9, 1080p | Duración: 28 s | ⏳ pendiente |
+| `M17-IMG-1` | imagen | 17_interpretabilidad_geometria | Superposición: cinco características en dos dimensiones | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M17-IMG-2` | imagen | 17_interpretabilidad_geometria | Arquitectura de un sparse autoencoder TopK | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M18-IMG-01` | imagen | 18_produccion | Arquitectura de un servicio de embeddings en producción | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M18-IMG-02` | imagen | 18_produccion | Micro-batching dinámico en un servidor de embeddings | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M18-VID-01` | video | 18_produccion | Migración blue/green de un índice de embeddings | MP4 16:9, 1080p | Duración: 35-40 s | ⏳ pendiente |
+| `M18-IMG-03` | imagen | 18_produccion | Modelo de amenazas de un índice de embeddings | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M19-IMG-01` | imagen | 19_playbook_elite | Árbol de decisión del índice vectorial | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M19-IMG-03` | imagen | 19_playbook_elite | Cuatro trampas de evaluación en retrieval | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M19-IMG-02` | imagen | 19_playbook_elite | Del nDCG offline a la métrica online | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M20-IMG-01` | imagen | 20_capstone | Arquitectura de Políglota v1.0 | PNG 16:9, 1920x1080 | ⏳ pendiente |
+| `M20-VID-01` | video | 20_capstone | Recorrido de una consulta por Políglota v1.0 | MP4 16:9, 1080p | Duración: 30-35 s | ⏳ pendiente |
+| `M20-IMG-02` | imagen | 20_capstone | Anatomía de un informe técnico de decisiones | PNG 16:9, 1920x1080 | ⏳ pendiente |
 
 ## 00_intro
 
@@ -303,7 +344,7 @@ Cinco cajas grandes alineadas de izquierda a derecha, conectadas por flechas azu
 Entrada (tarjeta gris a la izquierda, antes de la caja 1): "  ¡Café CON leche!  "
 
 Caja 1 · "Normalizer" (azul). Descripción: "str → str (NFKC, minúsculas)". Tarjeta: "  ¡café con leche!  ".
-Caja 2 · "Pre-tokenizer" (naranja). Descripción: "str → pre-tokens + offsets". Tarjeta con cuatro chips: [¡] [café] [con] [leche] [!] (cinco chips, con los offsets pequeños debajo: (2,3) (3,7) (8,11) (12,17) (17,18)).
+Caja 2 · "Pre-tokenizer" (naranja). Descripción: "str → pre-tokens + offsets". Tarjeta con cinco chips: [¡] [café] [con] [leche] [!] (con los offsets pequeños debajo: (2,3) (3,7) (8,11) (12,17) (17,18)).
 Caja 3 · "Model (WordPiece)" (verde). Descripción: "pre-token → piezas → ids". Tarjeta con chips: [¡] [café] [con] [le] [##che] [!] y debajo los ids: 12 408 57 301 88 13.
 Caja 4 · "Post-processor" (gris oscuro). Descripción: "añade tokens especiales". Tarjeta: [CLS] [¡] [café] [con] [le] [##che] [!] [SEP] con ids 2 12 408 57 301 88 13 3.
 Caja 5 · "Decoder" (azul). Descripción: "ids → str". Tarjeta: "¡ café con leche !" y una nota pequeña "(WordPiece pierde el espaciado original)".
@@ -454,6 +495,346 @@ Panel superior (borde rojo), cabecera "Sin healing". Fila A "Entrenamiento (cóm
 Panel inferior (borde verde), cabecera "Con token healing". Paso 1: chips [▁ha] [▁trab] con el último chip tachado y el texto "1. quitar el último token (queda el prefijo '▁trab')". Paso 2: una lista de candidatos permitidos "▁trabajado, ▁trabajar, ▁trabajo, ▁trabajamos" (todos empiezan por '▁trab') con flecha al modelo y salida: "2. elegir SOLO entre tokens que empiezan por '▁trab'" con una barra de probabilidad concentrada en verde sobre "▁trabajado".
 Pie en gris: "Cura la frontera sin reentrenar · disponible en toolkits locales (guidance) · APIs de terceros: normalmente no".
 Evita: texto ilegible, probabilidades numéricas inventadas, flechas ambiguas, iconos decorativos, sombras, degradados.
+```
+
+## 06_tokenizer_free_bytes_blt
+
+### `M06-IMG-01` · El espectro de la tokenización: de bytes a parches
+*06_tokenizer_free_bytes_blt.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, estilo infografía de paper (sans-serif legible, flechas claras, sin ilustraciones decorativas ni texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título superior: "El espectro de la tokenización: ¿cuántos bytes por paso del transformer?".
+Composición: 4 filas horizontales apiladas, todas muestran la MISMA frase en español: "El gato duerme." (15 bytes, con el espacio escrito como ␣). A la izquierda de cada fila va una etiqueta en negrita; a la derecha, un texto gris pequeño.
+Fila 1, etiqueta "Bytes": 15 cajitas grises, una por carácter (E, l, ␣, g, a, t, o, ␣, d, u, e, r, m, e, .). Texto derecha: "1 byte por paso · secuencia larga (15 pasos)".
+Fila 2, etiqueta "Tokens BPE (vocabulario fijo)": 4 bloques naranjas contiguos con los textos "El", "␣gato", "␣duerme", ".". Texto derecha: "~4.4 bytes por token en Llama 3 (dato del paper de BLT) · ids opacos".
+Fila 3, etiqueta "Parches fijos (MegaByte, k=4)": 4 bloques azules de igual ancho con los textos "El␣g", "ato␣", "duer", "me.". Texto derecha: "tamaño fijo · corta palabras al azar".
+Fila 4, etiqueta "Parches dinámicos (BLT)": 5 bloques verdes de ancho distinto con los textos "El", "␣g", "ato", "␣d", "uerme." y encima de cada bloque una pequeña barra vertical cuya altura sugiere la entropía del primer byte (más alta en "g" y "d"). Texto derecha: "tamaño según la incertidumbre del siguiente byte (ilustrativo)".
+Una flecha vertical a la izquierda de las filas, de arriba a abajo, con la leyenda "menos pasos del transformer grande ↓" y otra en el extremo opuesto "más control sobre los bytes ↑". Nota inferior en gris: "Segmentaciones ilustrativas; no son la salida de ningún modelo real".
+Evita: ilustraciones decorativas, texto ilegible, números inventados distintos de los dados, flechas ambiguas, sombras 3D.
+```
+
+### `M06-IMG-02` · Arquitectura del Byte Latent Transformer
+*06_tokenizer_free_bytes_blt.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio de arquitectura, fondo blanco, estilo figura de paper (sans-serif legible, flechas claras, sin ilustraciones decorativas ni texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "Byte Latent Transformer (BLT): tres módulos".
+Composición, de IZQUIERDA a DERECHA, con una fila de bytes en la parte inferior y una fila de bytes en la parte superior:
+1) Parte inferior izquierda: una fila de 12 cajitas grises (bytes) con los textos "B","e","t","t","e","r","␣","t","h","a","n","␣". Debajo, una barra pequeña "Modelo de entropía (pequeño, 100M)" en gris que apunta con una flecha punteada a las cajitas y produce la etiqueta "entropía del siguiente byte H(x_i)". Marca con líneas verticales finas verdes tres fronteras que dividen los 12 bytes en 4 parches de tamaño distinto (3, 2, 4 y 3 bytes) con la etiqueta "fronteras: H(x_i) > θ".
+2) Bloque azul claro, etiqueta "Codificador local (ligero)": recibe los bytes; encima un bloque pequeño etiquetado "+ embeddings hash de n-gramas (n = 3…8)". Dentro, texto "capas de transformer local + atención cruzada".
+3) Flecha ancha etiquetada "atención cruzada: bytes → parches (consulta = parche, clave/valor = bytes del parche)" que lleva a 4 círculos naranjas etiquetados "patch 1", "patch 2", "patch 3", "patch 4".
+4) Bloque naranja grande en el centro, etiqueta "Transformer latente global (grande)", subetiqueta "se ejecuta UNA vez por parche". Recibe los 4 círculos y emite 4 círculos de salida.
+5) Flecha ancha etiquetada "atención cruzada: parches → bytes (consulta = byte, clave/valor = parche)" que lleva a un bloque verde claro, etiqueta "Decodificador local (ligero)".
+6) Parte superior derecha: fila de 12 cajitas grises (bytes de salida) con el texto "predicción del siguiente byte".
+Una llave bajo el bloque global con la leyenda "la mayor parte de los FLOPs"; otra bajo los bloques locales: "corren por byte, pero son pequeños".
+Evita: ilustraciones decorativas, texto ilegible, números no indicados, flechas ambiguas, más de tres módulos principales, logotipos.
+```
+
+### `M06-IMG-03` · Cómputo uniforme por token vs. cómputo adaptativo por parche
+*06_tokenizer_free_bytes_blt.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, sans-serif legible, sin ilustraciones decorativas ni texto inventado. Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "¿Dónde se gasta el cómputo?".
+Dos paneles horizontales apilados que comparten el mismo eje x: la frase "Daenerys Targaryen is in Game of Thrones" escrita en 41 casillas pequeñas (una por carácter, espacios como ␣).
+Panel superior, título "Transformer con tokens BPE": encima de la frase, bloques naranjas CONTIGUOS de ancho similar con los textos "Dae", "ner", "ys", "␣Tar", "gar", "yen", "␣is", "␣in", "␣Game", "␣of", "␣Thrones"; cada bloque sostiene una columna naranja de la MISMA altura. Leyenda a la derecha: "el mismo cómputo en cada token".
+Panel inferior, título "BLT con parches por entropía": una curva azul suave de entropía del siguiente byte sobre la frase, con picos al principio de cada palabra y valles dentro de ellas, y una línea roja horizontal discontinua etiquetada "umbral θ". Debajo, bloques verdes de ANCHO VARIABLE que empiezan donde la curva supera θ: columnas verdes altas y estrechas en los picos, columnas anchas y bajas donde la curva es baja. Leyenda a la derecha: "más cómputo donde hay más incertidumbre".
+Nota inferior en gris: "Ilustración conceptual; los valores de entropía no son medidas reales".
+Evita: valores numéricos de entropía inventados, adornos, texto ilegible, flechas ambiguas, sombras 3D.
+```
+
+### `M06-VID-01` · Patching dinámico por entropía, paso a paso
+*06_tokenizer_free_bytes_blt.ipynb* · video · MP4 16:9, 1080p | Duración: 25 s
+
+```text
+Video explicativo técnico de 25 segundos, 16:9, 1080p, ritmo calmado, sin voz en off, sin música intensa (opcional un fondo muy suave). Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas.
+Texto de la escena: la frase "El servidor procesa las peticiones." escrita como una fila de cajitas, una por byte (espacios como ␣), en el centro-inferior de la pantalla.
+Guion por escenas:
+0–4 s: Título "Parches dinámicos por entropía" aparece y se desvanece. Aparece la fila de cajitas grises vacías y, sobre ella, un eje con la etiqueta "H(siguiente byte) en bits" y una línea roja discontinua horizontal etiquetada "umbral θ".
+4–14 s: los bytes se iluminan de izquierda a derecha, uno cada ~0.3 s. Sobre cada byte crece una barra azul con la entropía: alta (supera θ) en "E", "s" (de "servidor"), "p" (de "procesa"), "l" (de "las"), "p" (de "peticiones"); baja en el resto de letras dentro de cada palabra. Cuando una barra supera la línea roja se vuelve naranja y aparece una línea vertical verde que abre un nuevo parche; el parche anterior se rellena de verde claro y se cierra con un pequeño "clic" visual.
+14–20 s: los parches cerrados suben hacia un bloque grande etiquetado "Transformer latente global" que parpadea UNA vez por parche; debajo, contador "pasos del transformer grande: 5" frente a un contador gris "bytes: 35".
+20–25 s: texto final en pantalla: "Mismo contenido: 35 bytes → 5 parches. El umbral θ controla el coste." Se desvanece.
+Texto en pantalla solo en español, con términos técnicos en inglés (patch, threshold).
+Evita: voz en off, texto ilegible, cambios bruscos de cámara, números distintos de los indicados, logos, decoraciones.
+```
+
+## 07_hnet_tokenizer_transfer
+
+### `M07-IMG-01` · H-Net: U-Net jerárquica con chunking dinámico
+*07_hnet_tokenizer_transfer.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio de arquitectura, fondo blanco, estilo figura de paper (sans-serif legible, flechas claras, sin ilustraciones decorativas ni texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "H-Net: una U-Net con chunking dinámico (2 etapas)".
+Composición en forma de "U" con las entradas a la izquierda y las salidas a la derecha.
+Bajada (izquierda, de arriba abajo), cada bloque con su etiqueta: "Bytes de entrada (L₀ posiciones)" → bloque azul "Encoder E⁰" → bloque naranja pequeño "Chunking 0 (routing + downsampler)" → "Vectores de etapa 1 (L₁ < L₀)" → bloque azul "Encoder E¹" → bloque naranja pequeño "Chunking 1" → "Vectores de etapa 2 (L₂ < L₁)".
+Fondo de la U (abajo): bloque verde grande "Main network M (Transformer)" con la nota "procesa pocos vectores → casi todos los parámetros".
+Subida (derecha, de abajo arriba): bloque naranja pequeño "Dechunking 1 (smoothing + upsampler)" → bloque azul "Decoder D¹" → bloque naranja pequeño "Dechunking 0" → bloque azul "Decoder D⁰" → "Predicción del siguiente byte".
+Dos flechas horizontales discontinuas grises etiquetadas "conexión residual (Linear)" que van del Encoder E⁰ al Decoder D⁰ y del Encoder E¹ al Decoder D¹.
+Una anotación lateral: "E y D: Mamba-2 en el paper · M: Transformer". Otra: "las fronteras (chunks) se aprenden de extremo a extremo".
+Evita: ilustraciones decorativas, texto ilegible, más etapas de las indicadas, logotipos, flechas ambiguas, números no indicados.
+```
+
+### `M07-IMG-02` · Routing, smoothing y upsampling en H-Net
+*07_hnet_tokenizer_transfer.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, estilo figura de paper (sans-serif legible, flechas claras, sin texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "Una etapa de dynamic chunking, paso a paso".
+Cuatro paneles en fila de izquierda a derecha, numerados 1 a 4, todos sobre la secuencia de bytes "n e w _ p r o d u c t !" (12 casillas; "_" es un espacio).
+Panel 1 "Routing": debajo de cada par de casillas vecinas, una barra azul cuya altura es p_t = ½(1 − cos(q_t, k_{t−1})). Barras altas (≥ 0.5, resaltadas en naranja) bajo "n", "p" y bajo "d" (esta última algo más baja, ≈ 0.55). Línea horizontal discontinua roja en 0.5 etiquetada "umbral 0.5". La primera barra vale 1.0 (etiqueta "p₁ = 1").
+Panel 2 "Downsampler": solo las casillas con barra naranja (n, p, d) se copian a una fila nueva más corta, etiquetada "vectores seleccionados x′ (L′ < L)".
+Panel 3 "Smoothing": tres círculos de salida de la red principal con la fórmula "z̄ⱼ = Pⱼ·ẑⱼ + (1 − Pⱼ)·z̄ⱼ₋₁"; el tercer círculo, con P = 0.55, aparece mezclado (degradado entre verde y gris) y se anota "frontera dudosa → se mezcla con el chunk anterior".
+Panel 4 "Upsampler": cada círculo se repite hasta el siguiente borde sobre las 12 casillas (3 bloques de colores: azul, naranja, verde de anchos 4, 5 y 3), con la leyenda "× STE(cₜ)" y "forward vale 1; el gradiente pasa por cₜ".
+Evita: ilustraciones decorativas, texto ilegible, números no indicados, flechas ambiguas, sombras 3D.
+```
+
+### `M07-VID-01` · Cómo aprende H-Net dónde cortar
+*07_hnet_tokenizer_transfer.ipynb* · video · MP4 16:9, 1080p | Duración: 28 s
+
+```text
+Video explicativo técnico de 28 segundos, 16:9, 1080p, ritmo calmado, sin voz en off. Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas ni datos reales (todo es ilustrativo y debe decirlo una nota fija abajo: "Ilustración conceptual").
+Escena fija: la frase "el servidor procesa las peticiones" en una fila de casillas (una por carácter, espacios como ␣) abajo; encima, una fila de barras azules que representan p_t (probabilidad de frontera) y una línea roja discontinua en 0.5. Un contador arriba a la derecha dice "paso de entrenamiento".
+Guion por escenas:
+0–5 s: título "H-Net aprende sus propias fronteras". Aparece la frase y las barras con alturas casi aleatorias (entre 0.3 y 0.7); contador "paso 0". Etiqueta: "al inicio, el router no sabe nada".
+5–14 s: el contador avanza a "paso 100" y "paso 250"; las barras se van diferenciando: las que están sobre la primera letra de cada palabra (e, s, p, l, p) suben por encima de 0.5 y se vuelven naranjas; las demás bajan. Aparecen líneas verticales verdes tenues en los inicios de palabra reales para comparar.
+14–22 s: contador "paso 400". Aparece una barra lateral pequeña con dos marcadores: "F (bordes reales)" y "G (prob. media)" convergiendo hacia una línea horizontal etiquetada "objetivo 1/N". Texto: "la ratio loss mantiene la densidad de bordes".
+22–28 s: texto final: "Las fronteras emergen sin supervisión; el router decide qué vectores pasan a la red principal". Se desvanece.
+Texto en pantalla en español, con términos técnicos en inglés (router, ratio loss).
+Evita: voz en off, texto ilegible, datos numéricos distintos de los indicados, cambios bruscos, logotipos.
+```
+
+### `M07-IMG-03` · Estrategias para inicializar el vocabulario nuevo
+*07_hnet_tokenizer_transfer.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, estilo infografía de paper (sans-serif legible, flechas claras, sin ilustraciones decorativas ni texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "¿Qué embedding le damos al token nuevo «ción»?".
+Contexto a la izquierda, en un recuadro gris: "Vocabulario antiguo A (inglés): …, 'tion', 'ation', 'c', 'i', 'ón' …" y "Vocabulario nuevo B (español): …, 'ción', 'dad', …". Debajo, un cuadro: "Tokens compartidos (se copian): 'a', 'e', 'ion'".
+A la derecha, cuatro mini-diagramas en cuadrícula 2×2, cada uno con un título, una flecha desde "ción (nuevo)" hacia su vector de salida (círculo naranja) y los pesos escritos como números sobre las flechas de entrada:
+1) "Media (Hewitt/HF)": flechas desde TODOS los embeddings del vocabulario antiguo (nube gris) hacia un solo círculo naranja en el centro de la nube. Nota: "todos los nuevos quedan en el mismo punto".
+2) "FVT": el texto "ción" se descompone con el tokenizer antiguo en "c" + "i" + "ón"; flechas de pesos iguales (1/3, 1/3, 1/3) hacia el círculo naranja. Nota: "media de la descomposición".
+3) "FOCUS": flechas desde los tokens compartidos con pesos distintos (0.7, 0.3, 0.0) producidos por "sparsemax"; nota: "pesos exactamente 0 fuera del soporte; similitud en un espacio auxiliar entrenado con texto en español".
+4) "WECHSEL": dos nubes (inglés y español) alineadas con una flecha curva etiquetada "rotación de Procrustes"; el círculo naranja se calcula con los k vecinos más cercanos y "softmax(cos/τ)".
+Pie en gris: "Después de cualquier init: ajuste corto (primero solo embeddings, luego todo el modelo)".
+Evita: ilustraciones decorativas, texto ilegible, números distintos de los indicados, flechas ambiguas, logotipos.
+```
+
+## 08_tokens_multimodales_audio
+
+### `M08-IMG-01` · Mapa de tokens por modalidad
+*08_tokens_multimodales_audio.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, estilo infografía de paper (sans-serif legible, flechas claras, sin ilustraciones decorativas ni texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "De señales continuas a secuencias de tokens".
+Cuatro filas, de arriba a abajo; en cada fila, a la izquierda el icono esquemático de la señal (un rectángulo con trazos simples, sin dibujos realistas), en el centro un bloque con el método y a la derecha una secuencia de cajitas (los tokens) con la tasa.
+Fila 1 "Texto": rectángulo con líneas de texto → bloque azul "Tokenizer BPE (módulos 02-04)" → cajitas con ids "412 · 87 · 3051 · 9" → "~1.3 tokens por palabra (orden de magnitud)".
+Fila 2 "Imagen (continuo)": cuadrícula 14x14 sobre un cuadrado → bloque azul "Parches ViT 16x16 + proyección lineal" → cajitas con vectores (cada una con la etiqueta "vector de 768 números") → "196 tokens para una imagen de 224x224".
+Fila 3 "Imagen (discreto)": cuadrado → bloque naranja "Encoder → cuantizador VQ/FSQ (codebook)" → cajitas con ids "5021 · 17 · 8190 · 733" → "1 024 tokens (codebook de 8192) para 512x512 en Chameleon".
+Fila 4 "Audio (discreto)": onda sinusoidal → bloque verde "Códec neuronal: encoder → RVQ (8 niveles) → decoder" → una matriz de 8 filas x 4 columnas de cajitas de ids (columnas = frames) → "EnCodec 24 kHz a 6 kbps: 75 frames/s x 8 niveles = 600 tokens/s; Mimi: 12.5 frames/s x 8 = 100 tokens/s".
+Una barra vertical a la derecha etiquetada "coste de contexto" con una flecha creciente de arriba a abajo.
+Evita: ilustraciones decorativas, texto ilegible, números distintos de los indicados, flechas ambiguas, logotipos, sombras 3D.
+```
+
+### `M08-IMG-02` · VQ-VAE: encoder, codebook y decoder con straight-through
+*08_tokens_multimodales_audio.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, estilo figura de paper (sans-serif legible, flechas claras, sin ilustraciones decorativas ni texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "VQ-VAE: de píxeles a ids y de vuelta".
+De izquierda a derecha, cinco bloques:
+1) Cuadrado gris etiquetado "Imagen x (28x28)".
+2) Bloque azul "Encoder (convoluciones, stride 4)" que produce una rejilla de 7x7 cuadraditos azules etiquetada "z_e: 49 vectores de dimensión d".
+3) En el centro, un recuadro naranja grande "Codebook: K vectores e₁ … e_K" mostrado como una columna de K filas (con "e₁", "e₂", "…", "e_K"). Desde un cuadradito de la rejilla azul sale una flecha etiquetada "vecino más cercano: k = argmin ‖z_e − e_j‖" hasta la fila "e₅" resaltada, y de ahí a un cuadradito naranja de una segunda rejilla 7x7 etiquetada "z_q = e_k". Debajo de la segunda rejilla, una tercera rejilla 7x7 de números (por ejemplo 5, 17, 17, 3, …) etiquetada "ids: 49 tokens (log₂K bits cada uno)".
+4) Bloque verde "Decoder (deconvoluciones)" que produce un cuadrado gris etiquetado "Reconstrucción x̂".
+5) Debajo de todo, una flecha curva discontinua roja que va desde z_q de vuelta hasta z_e con la etiqueta "straight-through: el gradiente se copia de z_q a z_e (el argmin no es diferenciable)".
+Pie con las tres pérdidas en tres cajitas: "‖x − x̂‖²" (reconstrucción), "‖sg[z_e] − e‖²" (codebook), "β‖z_e − sg[e]‖²" (commitment).
+Evita: ilustraciones decorativas, texto ilegible, números no indicados, flechas ambiguas, sombras 3D, logotipos.
+```
+
+### `M08-IMG-03` · Códec de audio neuronal con RVQ (EnCodec/SoundStream)
+*08_tokens_multimodales_audio.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, estilo figura de paper (sans-serif legible, flechas claras, sin ilustraciones decorativas ni texto inventado). Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
+Título: "Códec neuronal de audio: waveform → tokens → waveform".
+De izquierda a derecha:
+1) Una onda sonora gris etiquetada "Audio 24 kHz (1.44 M muestras por minuto)".
+2) Bloque azul "Encoder convolucional (strides 2·4·5·8 = 320)" con una flecha etiquetada "75 frames por segundo".
+3) Un bloque naranja grande "RVQ: 8 cuantizadores en cascada". Dentro, 8 cajitas apiladas "VQ 1 (1 024 entradas)", "VQ 2", "…", "VQ 8", unidas por flechas verticales etiquetadas "residuo". A la derecha del bloque, una matriz de 8 filas x 5 columnas de cajitas pequeñas con ids (filas = niveles, columnas = frames), etiquetada "tokens: 75 x 8 = 600 por segundo".
+4) Bloque verde "Decoder convolucional" que reconstruye una onda gris etiquetada "Audio reconstruido".
+Debajo, una línea horizontal con tres marcas: "1 nivel → baja calidad", "4 niveles → media", "8 niveles → 6 kbps" (con la cuenta "75 × 8 × 10 bits = 6 000 bit/s") y la leyenda "quantizer dropout: un solo modelo, varias tasas".
+Nota lateral en gris: "Mimi: 12.5 frames/s x 8 niveles de 2 048 entradas = 1.1 kbps".
+Evita: ilustraciones decorativas, texto ilegible, números distintos de los indicados, flechas ambiguas, sombras 3D, logotipos.
+```
+
+### `M08-VID-01` · Cuantización vectorial residual: cada nivel refina el error
+*08_tokens_multimodales_audio.ipynb* · video · MP4 16:9, 1080p | Duración: 24 s
+
+```text
+Video explicativo técnico de 24 segundos, 16:9, 1080p, ritmo calmado, sin voz en off. Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas.
+Escena fija: un plano cartesiano 2D con un punto objetivo azul etiquetado "z (vector a codificar)" en la posición aproximada (3.2, 2.1). Nota fija abajo: "Ilustración conceptual con K = 4 centroides por nivel".
+Guion por escenas:
+0–4 s: título "RVQ: cada nivel corrige lo que dejó el anterior". Aparece el punto z y 4 puntos grises etiquetados "codebook 1" en (0,0), (4,0), (0,4), (4,4).
+4–10 s: una línea discontinua une z con el centroide más cercano (4,4); ese centroide se vuelve naranja, etiqueta "nivel 1: q₁". Se dibuja una flecha roja desde q₁ hasta z, etiquetada "residuo r₁ = z − q₁ (error aún grande)". Contador "error: alto".
+10–17 s: el plano se re-centra en el residuo r₁ (se traslada para que q₁ quede en el origen); aparecen 4 centroides pequeños verdes etiquetados "codebook 2" alrededor del origen. Se elige el más cercano (verde brillante, etiqueta "nivel 2: q₂"); la flecha roja se acorta. Contador "error: medio".
+17–22 s: se repite una vez más con "codebook 3" (centroides diminutos); la flecha roja casi desaparece. Contador "error: bajo". Aparece la fórmula "ẑ = q₁ + q₂ + q₃".
+22–24 s: texto final "Cada nivel = log₂ K bits; más niveles = más fidelidad". Se desvanece.
+Texto en pantalla en español.
+Evita: voz en off, texto ilegible, números distintos de los indicados, cambios bruscos de cámara, logotipos.
+```
+
+## 09_capa_embedding_llm
+
+### `M09-IMG-01` · De token id a vector y de vuelta a probabilidades
+*09_capa_embedding_llm.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, formato 16:9, estilo de infografía de ingeniería (sin ilustraciones decorativas). Paleta: azul #1F6FEB para la entrada, naranja #F28E2B para la salida, verde #2CA02C para el Transformer, gris #6B7280 para texto secundario. Tipografía sans-serif legible.
+Composición de izquierda a derecha en seis bloques unidos por flechas gruesas:
+1) Caja gris «Texto: "El gato come pescado"».
+2) Caja «Tokenizer (BPE)» con salida «ids: [1212, 8745, 5981, 22104]».
+3) Una matriz grande azul rotulada «E  (V × d)» con 6 filas visibles etiquetadas «fila 0», «fila 1», …, «fila V-1»; de los ids salen flechas finas azules que resaltan SOLO las filas 1212, 8745, 5981 y 22104. Debajo: «lookup = one-hot × E».
+4) Cuatro vectores horizontales de d casillas azules, rotulados «e₁ e₂ e₃ e₄ (d = 768)».
+5) Una pila verde rotulada «Transformer (N bloques)» que produce un vector «h (d)» marcado «último estado oculto».
+6) Una matriz naranja rotulada «W_U (V × d)  — unembedding», una caja «logits = h · W_Uᵀ  (V valores)» y una caja «softmax → p(siguiente token)» con un histograma de barras naranjas muy bajas salvo dos altas.
+Entre las matrices azul y naranja dibuja una línea punteada gris de doble flecha con el texto «weight tying: W_U = E (misma matriz)».
+Debajo del diagrama, una franja gris con la leyenda: «Cada fila de E es el vector de un token; V = tamaño del vocabulario, d = dimensión del modelo».
+Evita: texto ilegible, flechas ambiguas, más de seis bloques, elementos decorativos, números inventados distintos de los indicados.
+```
+
+### `M09-IMG-02` · Weight tying: una matriz, dos gradientes
+*09_capa_embedding_llm.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, estilo de infografía de ingeniería sin elementos decorativos. Paleta: azul #1F6FEB (vía de entrada), naranja #F28E2B (vía de salida), verde #2CA02C (filas bien entrenadas), gris #6B7280 (texto secundario).
+Centro: una matriz vertical grande rotulada «E = W_U  (V × d)» con 10 filas horizontales; las filas 2 y 7 están coloreadas en verde y rotuladas «token frecuente»; las filas 4, 5 y 9 están en gris y rotuladas «token casi nunca visto».
+Panel izquierdo (azul), título «Vía de entrada (dispersa)»: una flecha azul desde la caja «contexto: token 2, token 7» hacia SOLO las filas 2 y 7 con el texto «gradiente solo en filas usadas».
+Panel derecho (naranja), título «Vía de salida (densa)»: una caja «h (estado oculto)» con flechas naranjas hacia TODAS las filas, con grosor mayor en las filas frecuentes; sobre las filas grises, un pequeño vector naranja apuntando hacia la izquierda rotulado «−h̄ (todas se empujan en la misma dirección)».
+Parte inferior: dos mini-gráficos de esferas: izquierda «filas bien repartidas» (puntos dispersos), derecha «filas huérfanas colapsadas» (puntos agrupados en un casquete) con la leyenda «coseno medio ≈ +1».
+Fórmula centrada abajo: «∂L/∂w_j = (p_j − 1[j = y]) · h».
+Evita: texto ilegible, flechas ambiguas, añadir números inventados, decoración innecesaria.
+```
+
+### `M09-IMG-03` · Extender el vocabulario: filas nuevas y su inicialización
+*09_capa_embedding_llm.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, sin elementos decorativos. Paleta: azul #1F6FEB (filas existentes), verde #2CA02C (fila nueva bien inicializada), naranja #F28E2B (alternativas), gris #6B7280 (texto secundario). Tipografía sans-serif.
+Arriba a la izquierda: la palabra «serialización» y debajo cuatro fichas azules con el texto «Ġser», «ializ», «ac», «ión» y la etiqueta «tokenizer original: 4 tokens».
+Flecha hacia la derecha con el texto «add_tokens(" serialización")» hasta una única ficha verde «Ġserialización» con la etiqueta «tokenizer extendido: 1 token».
+Centro: una matriz vertical azul «E (V × d)» con 8 filas; debajo se añade una fila verde nueva rotulada «fila V (nueva)». Desde las cuatro filas azules de las piezas salen flechas finas que convergen en la fila verde con el rótulo «media de sub-tokens».
+A la derecha, tres recuadros naranjas apilados con títulos: «random: N(0, 0.02²)», «mean: media de todas las filas (todas las filas nuevas idénticas)», «subtoken: media de las piezas (recomendada)».
+Abajo, una franja con dos indicadores: «Medir con bits por byte (no pérdida por token)» y «Masa filtrada: probabilidad puesta en tokens nuevos donde no tocan».
+Evita: texto ilegible, flechas ambiguas, números inventados, iconos decorativos.
+```
+
+## 10_embeddings_contextuales_oraciones
+
+### `M10-IMG-01` · Estático vs contextual: la palabra «banco»
+*10_embeddings_contextuales_oraciones.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, sin decoración. Paleta: azul #1F6FEB (sentido «asiento»), naranja #F28E2B (sentido «entidad financiera»), gris #6B7280 (elementos neutros), verde #2CA02C (flechas de contexto). Tipografía sans-serif.
+Mitad izquierda, título «Embedding estático (fila de E)»: dos frases en cajas grises: «Me senté en el banco del parque» y «El banco subió los tipos de interés». De la palabra «banco» de ambas frases salen flechas grises hacia UN ÚNICO punto gris en un plano 2D rotulado «E[banco]» con la nota «mismo vector en las dos frases».
+Mitad derecha, título «Embedding contextual (capa final del Transformer)»: las mismas dos frases; flechas verdes desde las palabras vecinas («parque», «senté» / «tipos», «interés») hacia «banco» indicando atención. En un plano 2D, un punto azul rotulado «banco (asiento)» cerca de puntos azules pequeños «silla», «parque», y un punto naranja «banco (entidad)» cerca de puntos naranjas «crédito», «tipos». Línea discontinua entre ambos puntos con el texto «coseno bajo».
+Pie común: «Capa 0 = estático; capas altas = cada vez más dependiente del contexto».
+Evita: texto ilegible, flechas ambiguas, números inventados, iconos decorativos.
+```
+
+### `M10-IMG-02` · Cuatro formas de resumir una secuencia (pooling)
+*10_embeddings_contextuales_oraciones.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9. Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280; tipografía sans-serif.
+Arriba: una frase tokenizada en 8 fichas: «[CLS]», «cómo», «configurar», «la», «caché», «[SEP]», «[PAD]», «[PAD]». Las dos fichas [PAD] en gris claro con la etiqueta «máscara = 0».
+Debajo, una cuadrícula de 8 columnas × 6 filas (estados ocultos h₁…h₈ de dimensión d), con las columnas [PAD] sombreadas en gris y tachadas.
+Debajo, cuatro paneles en fila, cada uno con una flecha desde la cuadrícula a un vector de 6 casillas:
+1) «CLS»: solo la columna 1 resaltada en azul.
+2) «media (con máscara)»: columnas 1–6 resaltadas en verde y la fórmula «Σ mᵢ hᵢ / Σ mᵢ».
+3) «máximo»: casillas sueltas resaltadas en naranja en distintas columnas (el máximo por dimensión), nunca en [PAD].
+4) «último token real»: solo la columna 6 ([SEP]) resaltada en azul oscuro con la nota «no la columna 8».
+Pie: «El pooling debe coincidir con el que se usó al entrenar el modelo».
+Evita: texto ilegible, flechas ambiguas, números inventados, decoración.
+```
+
+### `M10-IMG-03` · Anisotropía: del cono a la esfera (centrado y whitening)
+*10_embeddings_contextuales_oraciones.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, tres paneles de izquierda a derecha con flechas entre ellos. Paleta: azul #1F6FEB para los puntos, naranja #F28E2B para la dirección media, gris #6B7280 para ejes y texto.
+Panel 1, título «Anisótropo»: ejes 2D con el origen marcado; una nube alargada y estrecha de 40 puntos azules lejos del origen, todos dentro de un cono delgado; una flecha naranja gruesa desde el origen hasta el centro de la nube rotulada «μ (dirección media)». Texto bajo el panel: «coseno medio ≈ 0.8».
+Flecha a la derecha con el rótulo «restar μ».
+Panel 2, título «Centrado»: la misma nube, ahora centrada en el origen pero todavía alargada en diagonal (elipse). Texto: «coseno medio ≈ 0, pero varianza desigual».
+Flecha a la derecha con el rótulo «× U Λ^(-1/2)».
+Panel 3, título «Whitening»: nube redonda (círculo) centrada en el origen. Texto: «covarianza = I (isótropo)».
+Franja inferior: «Whitening = (x − μ) · U Λ^(-1/2); con k columnas también reduce dimensión».
+Evita: texto ilegible, flechas ambiguas, añadir números distintos de los indicados, decoración.
+```
+
+### `M10-IMG-04` · Bi-encoder (siamés) frente a cross-encoder
+*10_embeddings_contextuales_oraciones.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, dos mitades separadas por una línea vertical gris. Paleta: azul #1F6FEB (bi-encoder), naranja #F28E2B (cross-encoder), verde #2CA02C (salidas), gris #6B7280 (texto secundario).
+Mitad izquierda, título «Bi-encoder (SBERT)»: dos cajas de texto abajo «consulta: cómo configurar la caché» y «documento: La caché es una memoria rápida…». Encima de cada una, una torre azul idéntica rotulada «Transformer + pooling» y entre las dos torres un candado con el texto «pesos compartidos». Sobre cada torre un vector verde «u» y «v», y arriba una caja «cos(u, v)». A un lado: «documentos: se codifican UNA vez y se indexan (ANN)» y «coste por consulta: 1 forward + búsqueda».
+Mitad derecha, título «Cross-encoder»: una sola caja de texto «[CLS] consulta [SEP] documento [SEP]», encima una única torre naranja más ancha rotulada «Transformer (atención cruzada completa)» y arriba una caja verde «score ∈ ℝ». A un lado: «coste por consulta: N forwards (uno por documento)» y «uso típico: re-rankear el top-100».
+Evita: texto ilegible, flechas ambiguas, números inventados, decoración.
+```
+
+## 11_aprendizaje_contrastivo
+
+### `M11-IMG-01` · Anatomía de un embedder contrastivo
+*11_aprendizaje_contrastivo.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, sin decoración. Paleta: azul #1F6FEB (consultas), naranja #F28E2B (documentos), verde #2CA02C (positivos), gris #6B7280 (negativos y texto secundario). Tipografía sans-serif.
+Izquierda: una columna de 4 cajas azules «q₁: cómo configurar la caché», «q₂: what is a hash table», «q₃: limitación de tasa», «q₄: unit tests» y otra columna de 4 cajas naranjas «d₁: La caché es una memoria rápida…», «d₂: A hash table stores key-value pairs…», «d₃: Una política que restringe peticiones…», «d₄: Automatic checks that verify a function…». Líneas verdes finas unen qᵢ con dᵢ con la etiqueta «pares positivos».
+Centro: ambas columnas entran en UNA torre rotulada «Encoder compartido (Transformer + mean pooling)» y salen vectores con la etiqueta «normalizar ‖·‖ = 1».
+Derecha: una matriz 4×4 rotulada «S = Q·Dᵀ / τ» con la diagonal en verde («positivos») y el resto en gris («negativos del lote»). A la derecha de la matriz, una flecha hacia la caja «InfoNCE = entropía cruzada por filas con etiqueta = diagonal».
+Pie: «B pares → B·(B−1) negativos gratis».
+Evita: texto ilegible, flechas ambiguas, números inventados, iconos decorativos.
+```
+
+### `M11-VID-01` · La matriz B×B: cómo InfoNCE empuja positivos y negativos
+*11_aprendizaje_contrastivo.ipynb* · video · MP4 16:9, 1080p | Duración: 40-45 s
+
+```text
+Video técnico 16:9, 1080p, fondo blanco, estilo de animación de diagramas (sin personajes, sin voz en off, sin música estridente; ritmo calmado). Paleta: verde #2CA02C (positivos/diagonal), gris #6B7280 (negativos), naranja #F28E2B (negativo duro), azul #1F6FEB (texto y ejes). Tipografía sans-serif grande.
+0–5 s: aparece el título «InfoNCE con negativos en el lote» y, debajo, cuatro filas «q1 q2 q3 q4» y cuatro columnas «d1 d2 d3 d4».
+5–12 s: se rellena una matriz 4×4 de similitudes coseno con estos valores exactos (fila por fila): q1: 0.82, 0.31, 0.12, 0.78 · q2: 0.28, 0.77, 0.40, 0.05 · q3: 0.10, 0.35, 0.69, 0.66 · q4: 0.47, 0.02, 0.18, 0.80. La diagonal se colorea en verde; las celdas (q1,d4)=0.78 y (q3,d4)=0.66 parpadean en naranja con el rótulo «negativos difíciles».
+12–20 s: texto en pantalla «softmax por filas con τ = 0.05». Cada fila se transforma en probabilidades exactas: q1: 0.69, 0.00, 0.00, 0.31 · q2: 0.00, 1.00, 0.00, 0.00 · q3: 0.00, 0.00, 0.65, 0.35 · q4: 0.00, 0.00, 0.00, 1.00. Junto a cada fila aparece su pérdida −log p(diagonal): 0.37, 0.00, 0.44, 0.00; abajo «pérdida media = 0.20».
+20–27 s: texto «la misma matriz con τ = 1.0». Las filas se vuelven casi uniformes: q1: 0.33, 0.20, 0.16, 0.31 · q2: 0.22, 0.36, 0.25, 0.17 · q3: 0.17, 0.22, 0.31, 0.30 · q4: 0.26, 0.17, 0.20, 0.37; «pérdida media = 1.08». Rótulo: «τ alta: todos los negativos pesan casi igual».
+27–35 s: flechas animadas sobre una esfera pequeña a la derecha: el punto q1 se acerca a d1 (flecha verde) y se aleja sobre todo de d4 (flecha naranja más gruesa) y poco de d2, d3 (flechas grises finas). Rótulo: «el gradiente se concentra en los negativos difíciles (τ baja)».
+35–42 s: se añade a la derecha de la matriz una quinta columna naranja rotulada «h1 (negativo duro minado con BM25)», la matriz pasa a 4×5; rótulo final: «negativos duros = columnas extra del denominador».
+Evita: texto ilegible, números distintos de los indicados, transiciones rápidas, elementos decorativos.
+```
+
+### `M11-IMG-02` · Alineación y uniformidad en la hiperesfera
+*11_aprendizaje_contrastivo.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, tres círculos grandes (esferas vistas en 2D) en fila con título encima de cada uno. Paleta: cada color es una clase de pares positivos: azul #1F6FEB, naranja #F28E2B, verde #2CA02C; gris #6B7280 para el contorno y texto.
+Esfera 1, título «Colapso»: todos los puntos (de los tres colores) amontonados en un único punto del borde. Debajo: «L_align ≈ 0 · L_uniform ≈ 0 → inútil».
+Esfera 2, título «Alineado pero no uniforme»: tres grupos compactos (azul, naranja, verde) todos apiñados en el mismo cuarto de la esfera, muy cerca unos de otros. Debajo: «positivos cerca, pero las clases se confunden».
+Esfera 3, título «Ideal (InfoNCE)»: tres grupos compactos repartidos alrededor de la esfera, separados ~120°. Debajo: «L_align bajo · L_uniform muy negativo».
+Pie común con las fórmulas: «L_align = E‖f(x) − f(y)‖² (pares positivos)» y «L_uniform = log E exp(−2‖f(x) − f(y)‖²) (pares aleatorios)».
+Evita: texto ilegible, perspectiva 3D confusa, números inventados, decoración.
+```
+
+### `M11-IMG-03` · Minado de negativos duros con filtro de falsos negativos
+*11_aprendizaje_contrastivo.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, 16:9, flujo de izquierda a derecha. Paleta: azul #1F6FEB (consulta), verde #2CA02C (positivo), naranja #F28E2B (negativos duros válidos), rojo apagado #C0392B (falsos negativos descartados), gris #6B7280 (texto secundario).
+1) Caja azul «consulta: configurar el balanceador de carga».
+2) Caja «Recuperador (BM25 o modelo denso)» que produce una lista vertical de 6 candidatos con scores exactos: «d+ (positivo) 12.0», «c1 11.8», «c2 10.9», «c3 9.1», «c4 7.5», «c5 6.2».
+3) Caja «Filtro TopK-PercPos: score < 0.95 × 12.0 = 11.4». c1 (11.8) aparece en rojo tachado con la etiqueta «posible falso negativo»; c2 (10.9), c3, c4 en naranja con «negativo duro»; c5 en gris «fácil».
+4) Caja final «InfoNCE: positivo + negativos del lote + c2, c3, c4 como columnas extra».
+Nota al pie: «Alternativas: filtrar con un cross-encoder (RocketQA) o refrescar el índice durante el entrenamiento (ANCE)».
+Evita: texto ilegible, flechas ambiguas, otros números, decoración.
 ```
 
 ## 12_embedders_modernos
@@ -745,5 +1126,266 @@ Panel izquierdo, título «d = 2: 5 documentos en una circunferencia»: una circ
 Panel derecho, título «Pares posibles vs. pares alcanzables»: una cuadrícula 5×5 triangular con los 10 pares AB, AC, AD, AE, BC, BD, BE, CD, CE, DE; los 5 pares adyacentes (AB, BC, CD, DE, EA) en verde con una marca ✓ y los otros 5 (AC, AD, BD, BE, CE) en gris tachados con una cruz.
 Debajo, una línea de texto: «Con d = 2 solo 5 de 10 pares son top-2 de alguna query. Más dimensiones → más pares alcanzables».
 Evita: texto ilegible o inventado, más de 5 puntos, sombras 3D, ilustraciones decorativas, flechas ambiguas.
+```
+
+## 16_embeddings_multimodales
+
+### `M16-IMG-1` · CLIP y SigLIP: dos torres y la matriz de similitudes
+*16_embeddings_multimodales.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
+Composición con tres zonas de izquierda a derecha.
+Zona izquierda: dos columnas verticales de bloques. Arriba una caja azul «Torre de imagen (ViT / CNN)» con una miniatura abstracta de un círculo rojo a su izquierda; abajo una caja naranja «Torre de texto (Transformer)» con el texto «un círculo rojo» a su izquierda. De cada torre sale una flecha hacia un vector etiquetado «z_i» (azul) y «z_t» (naranja), ambos con la etiqueta «L2-normalizado».
+Zona central: una cuadrícula 4×4 con filas etiquetadas «imagen 1…4» y columnas «texto 1…4»; la diagonal en verde con «s_ii (par correcto)» y el resto en gris claro con «s_ij (negativos)». Título: «Matriz de similitudes N×N».
+Zona derecha: dos recuadros apilados. Recuadro superior (azul) «CLIP · InfoNCE»: texto «softmax sobre cada fila y cada columna» y la fórmula «L = −log( exp(s_ii/τ) / Σ_j exp(s_ij/τ) )». Recuadro inferior (verde) «SigLIP · sigmoide»: texto «cada celda es una clasificación binaria independiente (+1 diagonal, −1 fuera)» y la fórmula «L = −Σ_ij log σ( z_ij · (t·s_ij + b) )».
+Título superior: «Dos torres, un espacio de embeddings».
+Evita: texto ilegible o inventado, fotografías realistas, sombras 3D, elementos decorativos, flechas ambiguas.
+```
+
+### `M16-IMG-2` · El modality gap y el efecto cono
+*16_embeddings_multimodales.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
+Composición con dos paneles.
+Panel izquierdo, título «Efecto cono: dos redes, dos conos»: una esfera dibujada como círculo gris con dos zonas en forma de cono estrecho: una azul etiquetada «imágenes» (arriba a la izquierda) y una naranja etiquetada «textos» (abajo a la derecha). Entre los centroides (puntos grandes) una flecha negra etiquetada «vector del gap  Δ = z̄_img − z̄_txt» y la medida «gap = ‖Δ‖».
+Panel derecho, título «Consecuencia en un índice mixto»: la misma disposición, con una consulta de texto «un círculo rojo» (estrella naranja) dentro del cono naranja; tres puntos naranjas vecinos (otros textos) a distancia corta etiquetados «textos más cercanos», y un punto azul (la imagen correcta) a distancia mayor etiquetado «su imagen (más lejos)». Debajo, el texto: «Con gap grande, el top-k mezcla poco las modalidades».
+Abajo un recuadro verde: «Mitigación simple: restar el centroide de cada modalidad y renormalizar».
+Evita: texto ilegible o inventado, ilustraciones decorativas, sombras 3D, más de dos conos, flechas ambiguas.
+```
+
+### `M16-VID-1` · ColPali: de la página a los patches y MaxSim
+*16_embeddings_multimodales.ipynb* · video · MP4 16:9, 1080p | Duración: 30 s
+
+```text
+Animación técnica limpia, 16:9, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif, ritmo calmado, sin voz en off, sin música. Textos en español, términos técnicos en inglés.
+Escenas:
+0–5 s: aparece una página de documento esquemática (rectángulo blanco con borde gris; un título como barra gris, dos párrafos como líneas grises, un gráfico de barras azules y una pequeña tabla). Título en pantalla: «Una página = una imagen».
+5–11 s: sobre la página se dibuja una rejilla de 4×3 celdas y cada celda se resalta brevemente de izquierda a derecha, de arriba abajo; a la derecha aparece una columna de 12 vectores pequeños (barras verticales de colores) con la etiqueta «1 vector por patch (128-d)».
+11–16 s: abajo a la izquierda aparece la consulta «latencia del índice HNSW»; se parte en tres tokens, «latencia», «índice», «HNSW», y cada uno genera un vector naranja con la etiqueta «1 vector por token».
+16–25 s: para el token «índice» se dibujan 12 líneas finas grises hacia los 12 vectores de patch y la de mayor similitud se engrosa en verde con el texto «max»; se repite para «latencia» y «HNSW», cada uno con su línea verde hacia un patch distinto (el gráfico de barras, la tabla y el párrafo).
+25–30 s: los tres valores máximos se suman en una caja verde: «score = max₁ + max₂ + max₃» y aparece el texto «MaxSim (late interaction)».
+Evita: voz en off, música, texto ilegible, números inventados, efectos 3D, transiciones bruscas, imágenes realistas.
+```
+
+### `M16-IMG-3` · Árbol de decisión: OCR + texto vs embedding visual
+*16_embeddings_multimodales.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama de flujo técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
+Árbol de decisión de arriba abajo con rombos (preguntas) y rectángulos redondeados (resultados). Textos literales:
+Rombo 1: «¿El contenido relevante es texto limpio y seleccionable?» → Sí: rectángulo verde «Parseo + texto + embedder de texto (+ BM25 híbrido)». → No: siguiente.
+Rombo 2: «¿Hay tablas, gráficos, capturas o diagramas que responden preguntas?» → No: rectángulo azul «OCR de calidad + texto». → Sí: siguiente.
+Rombo 3: «¿Presupuesto de almacenamiento multi-vector (≈ 250 KB/página)?» → Sí: rectángulo naranja «ColPali / ColQwen (multi-vector) + MaxSim». → No: rectángulo naranja «Un vector por página (DSE) o pooling/binarización + reranking».
+A la derecha, un recuadro gris: «Siempre: evaluar con IC por tipo de consulta (módulo 15). Considerar híbrido: texto + visual con fusión RRF».
+Título superior: «¿OCR + texto o embedding visual?».
+Evita: texto ilegible o inventado, ilustraciones decorativas, más de tres rombos, flechas que se crucen.
+```
+
+## 17_interpretabilidad_geometria
+
+### `M17-IMG-3` · Capas de información dentro de un embedding de texto
+*17_interpretabilidad_geometria.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
+Composición: a la izquierda un documento (rectángulo blanco con borde gris y tres líneas de texto: «La caché expira tras un TTL…») con una flecha azul etiquetada «Embedder de texto» hacia un vector central dibujado como una fila larga de 12 celdas de colores (etiqueta «z ∈ R^768»).
+A la derecha del vector, cinco flechas verdes que salen hacia cinco cajas apiladas, con estos textos literales:
+«Tema (sonda lineal: muy legible)»,
+«Idioma (sonda lineal: casi perfecta)»,
+«Palabras concretas (parcial: inversión con vec2text)»,
+«Longitud y estilo (parcial)»,
+«Orden de las palabras (depende del modelo)».
+Debajo del vector, una flecha naranja hacia atrás hacia el documento con la etiqueta «Inversión: reconstruir el texto desde z» y un candado gris con el texto «privacidad (módulo 18)».
+Título superior: «¿Qué hay dentro de un embedding?». Pie en gris: «Probing mide lo que se puede leer, no lo que el sistema usa».
+Evita: texto ilegible o inventado, ilustraciones decorativas, sombras 3D, más de cinco cajas a la derecha, flechas ambiguas.
+```
+
+### `M17-VID-1` · Steering: sumar un vector de concepto desplaza la consulta y sus resultados
+*17_interpretabilidad_geometria.ipynb* · video · MP4 16:9, 1080p | Duración: 28 s
+
+```text
+Animación técnica limpia, 16:9, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif, ritmo calmado, sin voz en off, sin música. Textos en español.
+Escenas:
+0–6 s: un plano 2D sin ejes numéricos con dos nubes de puntos: una azul etiquetada «documentos de caché» (izquierda) y una naranja etiquetada «documentos de git» (derecha), y una estrella negra «consulta q» dentro de la nube azul. Un panel a la derecha lista «Top-3: cache, cache, cache» con barras azules.
+6–12 s: aparecen los centroides de cada nube como puntos grandes y una flecha gris gruesa del centroide azul al naranja con la etiqueta «v = media(git) − media(cache)».
+12–22 s: la estrella se desplaza gradualmente a lo largo de una flecha verde paralela a v; sobre ella un contador «α = 0 → 0.5 → 1 → 1.5». Los tres vecinos más cercanos se resaltan con líneas finas y el panel de la derecha cambia: «cache, cache, git» (α = 1), luego «git, git, git» (α = 1.5), con barras que pasan de azul a naranja.
+22–28 s: la estrella queda dentro de la nube naranja; texto final «Una dirección de concepto controla el retrieval (¡mídelo y compáralo con baselines!)».
+Evita: voz en off, música, texto ilegible, números inventados, efectos 3D, transiciones bruscas.
+```
+
+### `M17-IMG-1` · Superposición: cinco características en dos dimensiones
+*17_interpretabilidad_geometria.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
+Dos paneles lado a lado, cada uno un plano 2D con un círculo gris fino de radio 1 y ejes grises sin números.
+Panel izquierdo, título «Características DENSAS (S = 0)»: solo dos flechas largas, azul «f1» y naranja «f2», perpendiculares; tres flechas muy cortas casi invisibles en gris «f3, f4, f5». Debajo: «Solo 2 características caben bien».
+Panel derecho, título «Características DISPERSAS (S = 0.97)»: cinco flechas de igual longitud desde el origen formando un pentágono regular, con colores azul «f1», naranja «f2», verde «f3», rojo apagado «f4», gris «f5», y líneas finas punteadas uniendo las puntas. Debajo: «5 características en 2 dimensiones: superposición».
+Entre los dos paneles una flecha gris con el texto «más dispersión».
+Evita: texto ilegible o inventado, ilustraciones decorativas, sombras 3D, más de cinco flechas, ejes con números.
+```
+
+### `M17-IMG-2` · Arquitectura de un sparse autoencoder TopK
+*17_interpretabilidad_geometria.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
+De izquierda a derecha cinco bloques conectados por flechas:
+1) Caja azul «x ∈ R^64 (embedding del documento)» dibujada como una fila de 12 celdas.
+2) Caja azul «Encoder lineal W_enc (x − b_dec) + b_enc → 256 preactivaciones» dibujada como una fila larga de 24 celdas grises.
+3) Caja naranja «TopK (k = 4)»: de la fila larga solo 4 celdas quedan en naranja intenso con valores «0.9, 0.6, 0.4, 0.3» y el resto tachado en gris; etiqueta «z: dispersa, L0 = k».
+4) Caja verde «Decoder W_dec (256 átomos de norma 1) z + b_dec» con un pequeño abanico de 4 flechas verdes que se suman.
+5) Caja azul «x̂ ≈ x» con una flecha de retorno punteada gris hacia 1 con el texto «pérdida: ‖x − x̂‖² / varianza».
+Debajo del bloque 4, un recuadro gris: «Cada átomo = una característica: se interpreta por sus documentos más activos y por sus términos». Un recuadro más pequeño naranja: «AuxK: los latentes muertos reconstruyen el residuo».
+Título superior: «Sparse autoencoder TopK sobre embeddings».
+Evita: texto ilegible o inventado, ilustraciones decorativas, sombras 3D, más de cinco bloques, flechas ambiguas.
+```
+
+## 18_produccion
+
+### `M18-IMG-01` · Arquitectura de un servicio de embeddings en producción
+*18_produccion.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta sobria: azul #1F6FEB (ruta online), naranja #F28E2B (ruta offline), verde #2CA02C (monitorización), gris #6B7280 (almacenamiento). Tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas.
+Composición en dos bandas horizontales.
+Banda superior (naranja), de izquierda a derecha, con el título "Ruta offline (indexación)": cajas "Documentos ES/EN/código" → "Chunking" → "Caché por contenido (hash + versión)" → "Embedder v1/v2 (lotes grandes, GPU)" → "Índice vectorial versionado (colección v1 · colección v2)". Debajo de la flecha del embedder, texto pequeño "throughput: tokens/s/$".
+Banda inferior (azul), con el título "Ruta online (consulta)": "Usuario" → "API /search" → "Caché de queries (LRU, clave = versión + texto normalizado)" → "Embedder (micro-batching)" → "Búsqueda: denso + BM25 + filtro idioma" → "Fusión RRF" → "Top-10". Texto pequeño bajo la API: "SLA: p99 ≤ 100 ms".
+Una caja gris a la derecha "Alias prod → v1" conectada con línea discontinua a la colección v1, y otra línea discontinua gris hacia v2 con la etiqueta "migración (blue/green)".
+Abajo, una franja verde que recorre todo el ancho: "Monitorización: p50/p99 · hit rate · drift (PSI) · A/B · privacidad".
+Evita: logotipos de empresas, texto ilegible, flechas cruzadas, iconos decorativos, cifras inventadas.
+```
+
+### `M18-IMG-02` · Micro-batching dinámico en un servidor de embeddings
+*18_produccion.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta: azul #1F6FEB (peticiones), naranja #F28E2B (lote), verde #2CA02C (GPU), gris #6B7280 (eje de tiempo). Sans-serif legible.
+Eje horizontal de tiempo en la parte inferior con la etiqueta "tiempo (ms)".
+Arriba, a la izquierda, pequeñas flechas azules verticales que llegan a distintos instantes, etiquetadas "q1", "q2", "q3", "q4", "q5".
+En el centro, un rectángulo naranja llamado "Cola del servidor" que agrupa q1, q2 y q3 con una llave y el texto "lote 1: se cierra por max_wait = 5 ms"; luego q4 y q5 agrupadas como "lote 2: se cierra por max_batch".
+A la derecha, una caja verde "GPU: t(B) = a + b·B" que recibe cada lote.
+Debajo de q1, una barra horizontal azul que muestra su latencia total dividida en dos tramos con texto: "espera en cola" (gris claro) y "cómputo del lote" (verde).
+Esquina superior derecha: dos casillas de texto "max_batch = 32" y "max_wait = 5 ms".
+Evita: números de rendimiento inventados, logotipos, iconos decorativos, flechas ambiguas.
+```
+
+### `M18-VID-01` · Migración blue/green de un índice de embeddings
+*18_produccion.ipynb* · video · MP4 16:9, 1080p | Duración: 35-40 s
+
+```text
+Video de diagrama técnico animado, 16:9, fondo blanco, paleta sobria: azul #1F6FEB (v1), naranja #F28E2B (v2), verde #2CA02C (OK/evaluación), gris #6B7280 (infraestructura). Tipografía sans-serif grande y legible, sin voz en off, ritmo calmado, transiciones suaves.
+0–5 s: aparece una caja gris "API /search" con una flecha hacia un cilindro azul "Colección v1 (prod)". Texto en pantalla: "Situación inicial: alias prod → v1".
+5–11 s: aparece a la derecha un cilindro naranja vacío "Colección v2". Texto: "1. Crear colección nueva (sin tocar v1)".
+11–18 s: una barra de progreso naranja se llena bajo v2 con el texto "2. Backfill: re-embeber todos los documentos con v2"; a la vez, flechas desde "Documentos nuevos" van a v1 y a v2. Texto: "Doble escritura durante el backfill".
+18–25 s: desde "API /search" sale una flecha punteada hacia v2 con la etiqueta "tráfico sombra (no se muestra al usuario)"; aparece una caja verde "Evaluación: nDCG pareado + IC + interleaving". Texto: "3. Evaluar en sombra".
+25–31 s: la flecha "alias prod" se desplaza de v1 a v2 con una animación suave. Texto: "4. Cambio atómico del alias prod → v2".
+31–37 s: v1 queda en gris claro con el texto "conservada N días para rollback"; un botón "rollback = mover el alias" parpadea una vez. Texto final: "5. Retirar v1 cuando las métricas online lo confirmen".
+Evita: logotipos de productos, texto pequeño, cifras inventadas, movimientos de cámara bruscos, música estridente.
+```
+
+### `M18-IMG-03` · Modelo de amenazas de un índice de embeddings
+*18_produccion.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama técnico limpio, fondo blanco, paleta: azul #1F6FEB (flujo de datos), naranja #F28E2B (puntos de riesgo), verde #2CA02C (controles), gris #6B7280 (componentes). Sans-serif legible, flechas claras.
+Flujo de izquierda a derecha con cajas grises: "Texto del cliente" → "API de embeddings (externa o propia)" → "Vector DB" → "Caché de queries" → "Logs".
+Sobre cada caja, un triángulo naranja numerado con el riesgo:
+1 sobre la API: "el texto sale del perímetro";
+2 sobre Vector DB: "inversión del vector (vec2text)";
+3 sobre la caché: "vectores sin borrar tras una solicitud de olvido";
+4 sobre Logs: "queries con PII en texto plano";
+5 entre dos cilindros "Tenant A" y "Tenant B" dentro de la Vector DB: "fuga entre tenants".
+Debajo de cada riesgo, una etiqueta verde con el control: 1 "modelo propio o acuerdo de residencia"; 2 "cifrado + control de acceso; ruido (con costo de calidad)"; 3 "borrado por doc_id en índice y caché"; 4 "redacción de PII en logs"; 5 "colecciones separadas o filtro obligatorio en el servidor".
+Título arriba: "Un embedding es un dato sensible".
+Evita: candados o calaveras decorativas, logotipos, texto ilegible, flechas cruzadas.
+```
+
+## 19_playbook_elite
+
+### `M19-IMG-01` · Árbol de decisión del índice vectorial
+*19_playbook_elite.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama de árbol de decisión técnico, fondo blanco, paleta: azul #1F6FEB (preguntas), verde #2CA02C (decisiones finales), naranja #F28E2B (advertencias), gris #6B7280 (flechas). Tipografía sans-serif legible. Flujo de arriba abajo.
+Nodo raíz (rombo azul): "¿Fuerza bruta cumple el p99 con batch = 1? (mídelo)". Rama "sí" → hoja verde "Flat exacto (FAISS IndexFlatIP / numpy)". Rama "no" → rombo azul "¿Vectores float32 + grafo caben en RAM?".
+"sí" → hoja verde "HNSW (M = 16–32, efSearch según recall)". "no" → rombo azul "¿Caben en RAM con int8?".
+"sí" → hoja verde "HNSW + int8 (rescore con float en disco)". "no" → rombo azul "¿SSD rápido disponible?".
+"sí" → hoja verde "DiskANN / Vamana (PQ en RAM, grafo en SSD)". "no" → hoja verde "IVF-PQ (+ refine)".
+A la derecha, dos notas naranjas conectadas con línea discontinua a todo el árbol: "Filtros muy selectivos → pre-filtro o grafo con filtros (ACORN)" y "Muchas actualizaciones → evita reentrenar IVF; HNSW admite inserciones, compacta borrados".
+Título arriba: "¿Qué índice vectorial?".
+Evita: cifras de rendimiento, logotipos, iconos decorativos, texto pequeño.
+```
+
+### `M19-IMG-03` · Cuatro trampas de evaluación en retrieval
+*19_playbook_elite.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Infografía técnica en cuadrícula 2x2, fondo blanco, paleta: naranja #F28E2B (práctica incorrecta), azul #1F6FEB (práctica correcta), gris #6B7280 (texto secundario), verde #2CA02C (remedio). Sans-serif legible, sin decoración.
+Cuadrante 1, título "T1 · Ajustar en el test": a la izquierda una rejilla de 21 puntos con uno resaltado en naranja y la etiqueta "α elegido mirando el test"; a la derecha cinco bloques apilados (pliegues) con uno en azul y la etiqueta "validación cruzada". Flecha hacia arriba naranja "sesgo: optimista". Remedio verde: "CV o test ciego".
+Cuadrante 2, título "T2 · Winner's curse": nube de 20 puntos grises en un plano "dev" (eje x) vs "test" (eje y), uno rojo arriba a la derecha en x y en el centro en y. Flecha naranja "sesgo: optimista". Remedio: "IC pareado + Holm".
+Cuadrante 3, título "T3 · Depende del golden set": dos pequeñas tablas lado a lado, "ítem conocido (títulos)" y "paráfrasis", con dos barras cada una "BM25" y "denso" cuyo orden se invierte entre tablas. Remedio: "reportar por golden set y por slice".
+Cuadrante 4, título "T4 · Sesgo de pooling": un embudo "top-10 de BM25 → juicios", y un sistema nuevo con documentos marcados "relevante sin juzgar = 0". Flecha naranja hacia abajo "sesgo: penaliza al sistema nuevo". Remedio: "juzgar el top-k del sistema nuevo".
+Evita: cifras inventadas, logotipos, iconos decorativos, texto pequeño.
+```
+
+### `M19-IMG-02` · Del nDCG offline a la métrica online
+*19_playbook_elite.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Infografía técnica en forma de embudo horizontal (izquierda → derecha), fondo blanco, paleta: azul #1F6FEB (métricas), naranja #F28E2B (pérdidas), verde #2CA02C (métrica final), gris #6B7280 (texto secundario). Sans-serif legible.
+A la izquierda, una caja azul ancha: "nDCG@10 offline (golden set)". El embudo se estrecha en cuatro tramos, cada uno con una etiqueta naranja encima:
+tramo 1: "Mezcla de tráfico ≠ mezcla del golden set (reponderar por slice)";
+tramo 2: "Interfaz: el usuario ve 3–5 resultados + sesgo de posición";
+tramo 3: "Queries sin respuesta o ambiguas que el golden set no contiene";
+tramo 4: "Latencia y abandono".
+A la derecha, una caja verde estrecha: "Métrica online (éxito de sesión, interleaving, A/B)".
+Debajo, en gris, una flecha de vuelta de derecha a izquierda con el texto: "muestrear tráfico real → ampliar el golden set".
+Evita: números inventados, logotipos, iconos de personas, texto pequeño.
+```
+
+## 20_capstone
+
+### `M20-IMG-01` · Arquitectura de Políglota v1.0
+*20_capstone.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Diagrama de arquitectura técnico, fondo blanco, paleta sobria: azul #1F6FEB (ruta de consulta), naranja #F28E2B (ruta de indexación), verde #2CA02C (evaluación e informe), gris #6B7280 (almacenamiento). Sans-serif legible, flechas claras, cajas con esquinas suaves.
+Arriba, de izquierda a derecha (naranja), título "Indexación": "Docs ES/EN + código" → "Normalización NFC (M01)" → "Chunking" → "Tokenizer BPE: costo y fertilidad (M02–M04)" → bifurcación en dos cajas: "BM25 · palabras + identificadores (M00, M13)" y "Embedder · dimensión recortada + int8 (M10–M12)" → cilindros grises "Índice invertido" y "Índice vectorial Flat/HNSW (M14)".
+Abajo, de izquierda a derecha (azul), título "Consulta": "Usuario" → "API FastAPI /search (M18)" → "Caché LRU versionada (M18)" → flechas a los dos índices → "Fusión RRF (M13)" → "Top-10".
+A la derecha, una columna verde: "Evaluación: dev para decidir · test ciego una vez · IC pareado · slices (M15, M19)" → "Informe técnico + criterios de aceptación (M20)".
+Una caja punteada gris opcional junto al embedder: "Opcional: páginas/capturas → ColPali MaxSim en 2ª etapa (M16)".
+Evita: logotipos, texto pequeño, iconos decorativos, cifras de rendimiento.
+```
+
+### `M20-VID-01` · Recorrido de una consulta por Políglota v1.0
+*20_capstone.ipynb* · video · MP4 16:9, 1080p | Duración: 30-35 s
+
+```text
+Video de diagrama técnico animado, 16:9, fondo blanco, paleta: azul #1F6FEB (consulta), naranja #F28E2B (BM25), verde #2CA02C (denso), gris #6B7280 (infraestructura). Sans-serif grande, sin voz en off, ritmo calmado.
+0–4 s: aparece una tarjeta con la consulta "cómo invalidar la caché de sesiones" y el texto "Usuario → /search".
+4–9 s: la consulta entra en la caja "Normalización NFC + minúsculas"; aparece la clave "versión v2-d96-int8 + texto normalizado" y una caja "Caché LRU": primero un letrero rojo "fallo", luego la consulta sigue.
+9–15 s: la consulta se divide en dos flechas: naranja hacia "BM25 (palabras + identificadores)" y verde hacia "Embedder (d recortada) → HNSW efSearch". Cada flecha devuelve una lista de 5 documentos con su rango 1..5.
+15–21 s: las dos listas se funden en la caja "RRF: Σ 1/(60 + rango)"; los documentos se reordenan visiblemente; un documento que estaba 3.º en ambas sube al 1.º.
+21–26 s: aparece el top-3 final en una tarjeta; debajo, el texto "latencia registrada: p50 / p99" y "vector guardado en caché".
+26–32 s: la misma consulta se repite y la caja "Caché LRU" muestra "acierto": la flecha verde salta directamente al índice. Texto final: "Cada etapa = una decisión medida en dev".
+Evita: cifras inventadas, logotipos, transiciones bruscas, texto pequeño.
+```
+
+### `M20-IMG-02` · Anatomía de un informe técnico de decisiones
+*20_capstone.ipynb* · imagen · PNG 16:9, 1920x1080
+
+```text
+Maqueta de documento técnico de una página, vista frontal, fondo blanco, paleta: azul #1F6FEB (títulos), verde #2CA02C (criterio cumplido), naranja #F28E2B (criterio no cumplido), gris #6B7280 (texto de relleno). Sans-serif legible.
+Título arriba: "Políglota v1.0 · Informe técnico de decisiones". Debajo, cinco bloques apilados con encabezados azules:
+1 "Decisiones (tomadas en dev)": tabla de 3 columnas "Componente | Decisión | Evidencia" con filas "Tokenizer", "Analizador BM25", "Embedder", "Fusión", "Índice" (el contenido de las celdas en líneas grises, sin números).
+2 "Resultados en test ciego": una barra horizontal con tres segmentos rotulados "BM25", "denso", "Políglota" y un intervalo de confianza dibujado como bigote.
+3 "Costos y latencia": tres pastillas "re-embedding $", "RAM GB/réplica", "p50 / p99 ms".
+4 "Criterios de aceptación": tabla "Criterio | Umbral | Valor | OK" con cinco filas: cuatro con un ✓ verde y una con un ✗ naranja.
+5 "Limitaciones y siguiente iteración": tres viñetas grises.
+Al margen derecho, una flecha gris vertical con el texto "generado desde las métricas, no escrito a mano".
+Evita: números concretos, logotipos, texto ilegible, sombras decorativas.
 ```
 
