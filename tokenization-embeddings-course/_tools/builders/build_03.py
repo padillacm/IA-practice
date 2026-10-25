@@ -729,7 +729,8 @@ Panel izquierdo (borde naranja), cabecera "Pre-tokenizar por espacios (estilo BE
 Panel derecho (borde azul), cabecera "SentencePiece (▁ = espacio visible)". Fila 1, la misma caja gris "Texto original" con los mismos puntos "·" y "↵". Flecha hacia abajo con la etiqueta "encode (normalización identidad + byte fallback)". Fila 2, cajas de tokens: [Hola] [▁▁mundo] [<0x0A>] [▁▁▁▁x] [▁=] [▁1]. Flecha hacia abajo con la etiqueta "decode: concatenar y cambiar ▁ por espacio". Fila 3, caja con borde verde: "Hola··mundo↵····x·=·1" y debajo, en verde, "✓ idéntico al original".
 
 En la parte inferior, una barra gris con el texto: "Lossless: decode(encode(s)) = s  ·  la configuración por defecto de SentencePiece normaliza espacios y por eso NO es lossless para código".
-Evita: texto ilegible, tokens inventados distintos a los indicados, flechas ambiguas, iconos decorativos, sombras, degradados.""",
+Añade al pie, en letra pequeña gris: "Tokens ilustrativos; el vocabulario real depende del entrenamiento".
+Evita: texto ilegible, tokens distintos a los indicados, flechas ambiguas, iconos decorativos, sombras, degradados.""",
     "Comparación de dos paneles: pre-tokenizar por espacios pierde espacios dobles, saltos de línea e indentación; SentencePiece con ▁ y byte fallback reconstruye el texto exacto.",
     """
  Texto:  Hola··mundo↵····x·=·1        (· = espacio, ↵ = salto de línea)
@@ -1377,3 +1378,364 @@ nb.md(r"""
 """)
 
 nb.save(os.path.join(MOD_DIR, f"{SLUG}.ipynb"))
+
+# (el proyecto se construye en la sección siguiente)
+
+# =====================================================================================
+#                                       PROYECTO
+# =====================================================================================
+pj = Notebook("Proyecto 03 · Tres tokenizers para Políglota", colab_path=PROJ_REL)
+pj.md(pj.badge() + r"""
+
+# Proyecto 03 · Entrenar y comparar BPE / WordPiece / Unigram sobre Políglota
+
+| | |
+|---|---|
+| **Nivel** | 🟡 Intermedio |
+| **Duración** | ≈ 2 h |
+| **GPU** | Ninguna (CPU; `FAST_DEV_RUN = True` en minutos) |
+| **Prerrequisitos** | Lección del módulo 03 (y módulos 01–02) |
+
+## Contexto de negocio
+Eres ML engineer en **Políglota Labs**. El buscador semántico necesitará su propio tokenizer (para el índice sparse hoy y para el embedder propio después). Tu CTO quiere una **recomendación con datos**: ¿BPE, WordPiece o Unigram?
+Entrenarás los tres con la **misma tubería** sobre el corpus Políglota (ES/EN/código), los compararás con 4 métricas más un test de recuperación BM25, exportarás un BPE byte-level a `tiktoken` y escribirás la decisión.
+
+> **Conexión.** Viene de: módulo 02 (tu BPE) y módulo 00 (corpus + BM25). Va hacia: módulo 04 (diseño de vocabulario y paridad multilingüe) y módulo 05 (qué falla cuando el vocabulario no coincide con los datos del modelo).
+
+## Dataset
+Corpus Políglota vía `carga_corpus()` (oficial HF Wikipedia ES/EN + CodeSearchNet → espejo Europarl + stdlib de Python → sintético; avisa en pantalla). Partición 80/20 por documento y por idioma. El mini golden set (consulta = primera frase de un documento) sirve para la prueba de retrieval.
+
+## Entregables y rúbrica
+1. `entrena_tokenizer(tipo, vocab_size, textos)` para `bpe | wordpiece | unigram` con idéntica normalización y pre-tokenización.
+2. `evalua(tok, nombre)` con fertilidad y bytes/token por idioma, `[UNK]` en el texto de estrés y F1 morfológica.
+3. Un analizador BM25 por tokenizer y su nDCG@10 en el mini golden set.
+4. Exportación de un BPE byte-level a `tiktoken` con igualdad exacta.
+5. Una decisión escrita (≥ 300 caracteres) apoyada en la tabla.
+
+La celda **Rúbrica** puntúa automáticamente. Los umbrales se calibraron con lo que **mide la solución de referencia** (corpus espejo, `FAST_DEV_RUN=True`, vocabulario 4 000) menos un margen; si usas datos oficiales (Wikipedia) o `FAST_DEV_RUN=False`, los criterios *relativos* son los fiables y los absolutos se relajan.
+""")
+pj.code(C.pip_cell())
+pj.code(C.SETUP.strip("\n"))
+for _c in C.cells(C.CORPUS_1) + C.cells(C.CORPUS_2):
+    pj.code(_c)
+pj.code(C.CORPUS_USE.strip("\n"))
+pj.code(C.METRICS.strip("\n") + "\n" + C.TOKMETRICS.strip("\n"))
+pj.code(r'''
+from collections import Counter
+from tokenizers import Tokenizer, models, pre_tokenizers, normalizers, trainers, decoders, Regex
+from tokenizers.pre_tokenizers import ByteLevel
+import pandas as pd
+
+rng = random.Random(SEED); train_docs, test_docs = [], []
+for lang in ["es", "en", "code"]:
+    pool = [d for d in docs if d["lang"] == lang]; rng.shuffle(pool); cut = int(0.8 * len(pool))
+    train_docs += pool[:cut]; test_docs += pool[cut:]
+train_texts = [d["text"] for d in train_docs]
+test_by_lang = {l: [d["text"] for d in test_docs if d["lang"] == l] for l in ["es", "en", "code"]}
+VOCAB = 4000 if FAST_DEV_RUN else 16000
+ESTRES = ["Привет, мир", "你好，世界", "مرحبا بالعالم", "नमस्ते दुनिया", "😀🚀 ¡hola!", "naïve café Ünïcödé"]
+def n_unk(tok, texto): return tok.encode(texto).ids.count(tok.token_to_id("[UNK]"))   # cuenta por ID (HF Unigram devuelve el texto original)
+
+MORF_ES = ["re|construc|ción", "des|confian|za", "im|pens|able", "trabaj|ador|es", "feliz|mente", "organiza|ciones", "publica|ción", "il|legal|mente",
+           "descubri|miento", "pensa|miento", "agrupa|ción", "comunica|ción", "in|felic|idad", "des|hacer", "pre|histór|ico", "sub|desarrollo",
+           "co|opera|ción", "automática|mente", "ir|reversible", "re|ubic|ar", "des|organiza|ción", "hermosa|mente", "re|comenda|ciones",
+           "inter|nacional|es", "actualiza|ción", "indepen|diente|mente", "multi|lingüe", "pos|guerra", "sobre|ajuste", "ejecuta|ble"]
+MORF_EN = ["un|believ|able", "re|construct|ion", "inter|national|iz|ation", "happi|ness", "un|happi|ly", "dis|agree|ment", "mis|understand|ing",
+           "pre|process|ing", "re|us|able", "nation|al|ism", "effect|ive|ly", "token|iz|ation", "re|writ|ing", "non|linear", "sub|word",
+           "multi|lingual", "over|fit|ting", "under|estimate", "counter|example", "teach|er|s", "re|commend|ation|s", "quick|ly",
+           "in|depend|ent|ly", "un|control|led", "de|code", "en|code", "pre|train|ing", "fine|tun|ing", "dis|connect|ed", "work|ing|s"]
+def fronteras(partes):
+    pos, acc = set(), 0
+    for p in partes[:-1]: acc += len(p); pos.add(acc)
+    return pos
+def f1_morfologico(segmenta, gold):
+    tp = fp = fn = 0
+    for g in gold:
+        gp = g.split("|"); palabra = "".join(gp)
+        pred = [p for p in (x.replace("▁", "").replace("##", "") for x in segmenta(palabra)) if p]
+        if "".join(pred) != palabra: pred = [palabra]
+        a, b = fronteras(pred), fronteras(gp); tp += len(a & b); fp += len(a - b); fn += len(b - a)
+    p = tp / max(tp + fp, 1); r = tp / max(tp + fn, 1)
+    return 2 * p * r / max(p + r, 1e-9)
+
+# BM25 mínimo (módulo 00): lo recibes hecho; tu trabajo es el ANALIZADOR (el tokenizer)
+class BM25:
+    def __init__(self, textos, ids, analizador, k1=1.5, b=0.75):
+        self.ids, self.k1, self.b = ids, k1, b
+        self.tf = [Counter(analizador(t)) for t in textos]; self.len = np.array([sum(c.values()) for c in self.tf], float); self.avg = self.len.mean()
+        df = Counter(w for c in self.tf for w in c); n = len(textos)
+        self.idf = {w: math.log(1 + (n - d + 0.5) / (d + 0.5)) for w, d in df.items()}
+    def ranking(self, consulta_tokens, k=10):
+        sc = np.zeros(len(self.tf))
+        for w in set(consulta_tokens):
+            if w not in self.idf: continue
+            for i, c in enumerate(self.tf):
+                f = c.get(w, 0)
+                if f: sc[i] += self.idf[w] * f * (self.k1 + 1) / (f + self.k1 * (1 - self.b + self.b * self.len[i] / self.avg))
+        return [self.ids[i] for i in np.argsort(-sc)[:k]]
+print(len(train_texts), "docs de entrenamiento;", {l: len(v) for l, v in test_by_lang.items()}, "docs de test")
+''')
+
+pj.md(r"""
+## Paso 1 · Entrenar los tres tokenizers con la misma tubería
+
+**TODO.** Implementa `entrena_tokenizer`. Requisitos: normalizer `NFKC`; pre-tokenizer = `Metaspace(replacement="▁", prepend_scheme="always")` seguido de `Punctuation(behavior="isolated")`; modelo y *trainer* según `tipo`; `[UNK]` como único token especial; entrena con `train_from_iterator(textos, trainer)`.
+
+<details><summary>🪜 Pista 1 (idea)</summary>
+
+Solo cambian dos cosas entre los tres tipos: el objeto `models.*` y el `trainers.*`. El resto de la tubería es idéntico (por eso la comparación es justa).
+</details>
+<details><summary>🪜 Pista 2 (casi la API)</summary>
+
+`models.BPE(unk_token="[UNK]")` + `trainers.BpeTrainer(vocab_size=..., special_tokens=["[UNK]"])`; `models.WordPiece(unk_token="[UNK]")` + `trainers.WordPieceTrainer(..., continuing_subword_prefix="##")`; `models.Unigram()` + `trainers.UnigramTrainer(..., unk_token="[UNK]")`. Asigna `tok.normalizer` y `tok.pre_tokenizer` antes de entrenar.
+</details>
+""")
+pj.code(r'''
+def entrena_tokenizer(tipo: str, vocab_size: int, textos: list) -> Tokenizer:
+    """Devuelve un Tokenizer HF entrenado (tipo: 'bpe' | 'wordpiece' | 'unigram')."""
+    # TODO: modelo + trainer según `tipo`; normalizer NFKC; pre_tokenizer Metaspace + Punctuation; entrenar
+    raise NotImplementedError("TODO paso 1")
+
+def intenta(f, *a, **k):
+    """Ejecuta un paso; si aún tiene TODO pendiente avisa sin romper 'Ejecutar todo'."""
+    try: return f(*a, **k)
+    except NotImplementedError as e: print("⏳ pendiente:", e); return None
+
+toks = {t: intenta(entrena_tokenizer, t, VOCAB, train_texts) for t in ["bpe", "wordpiece", "unigram"]}
+print({t: (v.get_vocab_size() if v else None) for t, v in toks.items()})
+''')
+
+pj.md(r"""
+## Paso 2 · Evaluar: fertilidad, bytes/token, `[UNK]` de estrés y morfología
+
+**TODO.** `evalua(tok, nombre)` devuelve un dict con: `fert_es/en/code`, `bpt_es/en/code` (bytes por token, usa `metricas_tokenizacion`), `unk_estres` (suma de `n_unk` sobre `ESTRES`) y `f1_morf_es/en` (usa `f1_morfologico` con `lambda w: tok.encode(w).tokens`).
+
+<details><summary>🪜 Pista 1</summary>
+
+`metricas_tokenizacion(encode, textos)` ya devuelve `fertilidad` y `bytes_por_token`; `encode` es `lambda s: tok.encode(s).tokens`.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+Bucle `for lang in ["es","en","code"]`: `m = metricas_tokenizacion(..., test_by_lang[lang])`; `out[f"fert_{lang}"] = m["fertilidad"]`, `out[f"bpt_{lang}"] = m["bytes_por_token"]`.
+</details>
+""")
+pj.code(r'''
+def evalua(tok: Tokenizer, nombre: str) -> dict:
+    # TODO: métricas por idioma, [UNK] de estrés y F1 morfológica
+    raise NotImplementedError("TODO paso 2")
+
+filas = [intenta(evalua, tok, t) for t, tok in toks.items() if tok is not None]
+filas = [f for f in filas if f]
+if filas: print(pd.DataFrame(filas).set_index("nombre").round(3).T)
+''')
+
+pj.md(r"""
+## Paso 3 · ¿Cambia el tokenizer la recuperación? BM25 con cada analizador
+
+**TODO.** Construye un índice BM25 por tokenizer sobre **todos los documentos** del corpus y calcula el nDCG@10 medio en las consultas del mini golden set, **degradadas** (se descarta ~40 % de las palabras de cada consulta, semilla fija) para que no sea trivial. El analizador es `lambda t: tok.encode(t.lower()).tokens`.
+
+<details><summary>🪜 Pista 1</summary>
+
+`BM25(textos, ids, analizador)` ya está hecho; llama a `.ranking(tokens_de_la_consulta, k=10)` y usa `ndcg_at_k(ranking, corpus["qrels"][qid], 10)`.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+Degradar: `rr = random.Random(SEED); q = " ".join(w for w in texto.split() if rr.random() > 0.4) or texto`.
+</details>
+""")
+pj.code(r'''
+def ndcg_bm25(tok: Tokenizer) -> float:
+    # TODO: índice BM25 con analizador del tokenizer; nDCG@10 medio sobre corpus["queries"] degradadas
+    raise NotImplementedError("TODO paso 3")
+
+ndcg = {t: intenta(ndcg_bm25, tok) for t, tok in toks.items() if tok is not None}
+print(ndcg)
+''')
+
+pj.md(r"""
+## Paso 4 · Exportar un BPE byte-level a `tiktoken`
+
+**TODO.** Entrena un BPE byte-level (regex GPT-2 + `ByteLevel`, `vocab_size=VOCAB`) y conviértelo a `tiktoken.Encoding`; `export_check(...)` devuelve el **nº de textos de test con tokenización distinta** (debe ser 0). Te damos `bytes_a_unicode`; la conversión de la lección (`hf_a_tiktoken`) es tu referencia.
+
+<details><summary>🪜 Pista 1</summary>
+
+Invierte `bytes_a_unicode` para pasar de los tokens HF (alfabeto visible) a `bytes`; reserva los ranks 0–255 para los bytes sueltos y numera los merges en orden de id.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+`ranks = {bytes([i]): i for i in range(256)}`; por cada `(id, bytes)` ordenado con `len(b) > 1`: `ranks[b] = len(ranks)`; `tiktoken.Encoding(name=..., pat_str=PAT_GPT2, mergeable_ranks=ranks, special_tokens={"<|endoftext|>": len(ranks)})`.
+</details>
+""")
+pj.code(r'''
+import tiktoken
+PAT_GPT2 = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+def bytes_a_unicode() -> dict:
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(ord("¡"), ord("¬") + 1)) + list(range(ord("®"), ord("ÿ") + 1))
+    cs, n = bs[:], 0
+    for b in range(256):
+        if b not in bs: bs.append(b); cs.append(256 + n); n += 1
+    return dict(zip(bs, map(chr, cs)))
+
+def export_check(textos: list, vocab_size: int) -> int:
+    # TODO: entrenar BPE byte-level, convertirlo a tiktoken.Encoding y contar textos con tokenización distinta
+    raise NotImplementedError("TODO paso 4")
+
+n_dif = intenta(export_check, [t for ts in test_by_lang.values() for t in ts], VOCAB)
+print("textos distintos tras exportar:", n_dif)
+''')
+
+pj.md(r"""
+## Paso 5 · La decisión
+
+**TODO.** Asigna a `DECISION` una de `"bpe"`, `"wordpiece"`, `"unigram"` y a `JUSTIFICACION` un texto (≥ 300 caracteres) que cite **al menos tres cifras** de tu tabla (fertilidad, bytes/token, `[UNK]`, F1 morfológica, nDCG@10) **y un riesgo** de tu elección. Piensa en el índice sparse de Políglota (ES/EN/código) y en que más adelante entrenarás un embedder sobre este vocabulario.
+""")
+pj.code(r'''
+DECISION = None        # TODO: "bpe" | "wordpiece" | "unigram"
+JUSTIFICACION = ""     # TODO: ≥ 300 caracteres, ≥ 3 cifras de tu tabla, 1 riesgo
+''')
+
+pj.md(r"""
+## Rúbrica (autoevaluación)
+
+Los umbrales absolutos están calibrados con la **solución de referencia** (corpus espejo Europarl+stdlib, `FAST_DEV_RUN=True`, `VOCAB=4000`): `fert_es` BPE ≈ 1.46, Unigram ≈ 1.62 (umbral ≤ 1.80); bytes/token ES de BPE ≈ 3.9 (umbral ≥ 3.3); F1 morfológica ES BPE ≈ 0.29, Unigram ≈ 0.42 (umbral ≥ 0.33); nDCG@10 BM25 ≈ 0.95 con los tres (umbral 0.85); exportación a tiktoken = 0 diferencias.
+""")
+
+pj.code(r'''
+def rubrica():
+    """Puntúa los entregables. Umbrales absolutos calibrados con la solución de referencia (menos margen); los relativos son los robustos."""
+    R = []
+    ok = lambda nombre, cond, pts: R.append((nombre, bool(cond), pts))
+    F = {f["nombre"]: f for f in filas} if filas else {}
+    ok("1 · los 3 tokenizers entrenan y llegan a ≥ 95 % del vocabulario pedido", all(v is not None and v.get_vocab_size() >= 0.95 * VOCAB for v in toks.values()), 2)
+    if len(F) == 3:
+        ok("2 · fertilidad ES de BPE ≤ 1.80 y de WordPiece ≤ 1.80", F["bpe"]["fert_es"] <= UMBRALES["fert_es_max"] and F["wordpiece"]["fert_es"] <= UMBRALES["fert_es_max"], 2)
+        ok("2 · el código necesita más tokens/palabra que el español (fert_code > fert_es) en los 3", all(f["fert_code"] > f["fert_es"] for f in F.values()), 1)
+        ok("2 · bytes/token ES de BPE ≥ " + str(UMBRALES["bpt_es_min"]), F["bpe"]["bpt_es"] >= UMBRALES["bpt_es_min"], 1)
+        ok("2 · Unigram alinea mejor la morfología ES que BPE (F1 relativa)", F["unigram"]["f1_morf_es"] > F["bpe"]["f1_morf_es"], 2)
+        ok("2 · F1 morfológica ES de Unigram ≥ " + str(UMBRALES["f1_es_min"]), F["unigram"]["f1_morf_es"] >= UMBRALES["f1_es_min"], 1)
+        ok("2 · WordPiece con un solo [UNK] por palabra: unk_estres(WP) ≤ unk_estres(BPE)", F["wordpiece"]["unk_estres"] <= F["bpe"]["unk_estres"], 1)
+    else:
+        ok("2 · evalúa los 3 tokenizers", False, 8)
+    nd = {k: v for k, v in ndcg.items() if v is not None}
+    ok("3 · nDCG@10 BM25 ≥ " + str(UMBRALES["ndcg_min"]) + " con los 3 analizadores", len(nd) == 3 and min(nd.values()) >= UMBRALES["ndcg_min"], 2)
+    ok("4 · exportación a tiktoken con 0 diferencias", n_dif == 0, 2)
+    ok("5 · decisión válida", DECISION in ("bpe", "wordpiece", "unigram"), 1)
+    ok("5 · justificación ≥ 300 caracteres con ≥ 3 cifras", len(JUSTIFICACION) >= 300 and len(re.findall(r"\d+[.,]?\d*", JUSTIFICACION)) >= 3, 2)
+    tot = sum(p for _, _, p in R); got = sum(p for _, c, p in R if c)
+    for nombre, c, p in R: print(("✅" if c else "⬜"), f"[{p}]", nombre)
+    print(f"\nPuntuación: {got}/{tot}")
+UMBRALES = {"fert_es_max": 1.80, "bpt_es_min": 3.3, "f1_es_min": 0.33, "ndcg_min": 0.85}
+rubrica()
+''')
+
+pj.md(r"""
+## ⛔ SPOILER — intenta resolverlo primero
+
+Debajo está la **solución de referencia completa**. Si llegas aquí sin haber intentado los pasos 1–5, vuelve arriba: el valor está en equivocarte con el `[UNK]` de Unigram o con el prefijo `##`.
+Al ejecutar las celdas de solución, las funciones se redefinen y la rúbrica final te muestra la puntuación de la referencia.
+""")
+
+pj.md(r"""
+### Solución · pasos 1 y 2
+""")
+pj.code(r'''
+def entrena_tokenizer(tipo: str, vocab_size: int, textos: list) -> Tokenizer:
+    if tipo == "bpe":
+        tok, tr = Tokenizer(models.BPE(unk_token="[UNK]")), trainers.BpeTrainer(vocab_size=vocab_size, special_tokens=["[UNK]"])
+    elif tipo == "wordpiece":
+        tok, tr = Tokenizer(models.WordPiece(unk_token="[UNK]")), trainers.WordPieceTrainer(vocab_size=vocab_size, special_tokens=["[UNK]"], continuing_subword_prefix="##")
+    elif tipo == "unigram":
+        tok, tr = Tokenizer(models.Unigram()), trainers.UnigramTrainer(vocab_size=vocab_size, special_tokens=["[UNK]"], unk_token="[UNK]")
+    else:
+        raise ValueError(tipo)
+    tok.normalizer = normalizers.NFKC()
+    tok.pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.Metaspace(replacement="▁", prepend_scheme="always"), pre_tokenizers.Punctuation(behavior="isolated")])
+    tok.train_from_iterator(textos, tr)
+    return tok
+
+def evalua(tok: Tokenizer, nombre: str) -> dict:
+    out = {"nombre": nombre}
+    for lang in ["es", "en", "code"]:
+        m = metricas_tokenizacion(lambda s: tok.encode(s).tokens, test_by_lang[lang])
+        out[f"fert_{lang}"], out[f"bpt_{lang}"] = m["fertilidad"], m["bytes_por_token"]
+    out["unk_estres"] = sum(n_unk(tok, t) for t in ESTRES)
+    out["f1_morf_es"] = f1_morfologico(lambda w: tok.encode(w).tokens, MORF_ES)
+    out["f1_morf_en"] = f1_morfologico(lambda w: tok.encode(w).tokens, MORF_EN)
+    return out
+
+toks = {t: entrena_tokenizer(t, VOCAB, train_texts) for t in ["bpe", "wordpiece", "unigram"]}
+filas = [evalua(tok, t) for t, tok in toks.items()]
+print(pd.DataFrame(filas).set_index("nombre").round(3).T)
+''')
+
+pj.md(r"""
+### Solución · pasos 3 y 4
+""")
+pj.code(r'''
+ids_docs = [d["id"] for d in docs]; textos_docs = [d["text"] for d in docs]
+
+def ndcg_bm25(tok: Tokenizer) -> float:
+    bm = BM25(textos_docs, ids_docs, lambda t: tok.encode(t.lower()).tokens)
+    rr = random.Random(SEED); vals = []
+    for q in corpus["queries"]:
+        texto = " ".join(w for w in q["text"].split() if rr.random() > 0.4) or q["text"]
+        vals.append(ndcg_at_k(bm.ranking(tok.encode(texto.lower()).tokens, 10), corpus["qrels"][q["qid"]], 10))
+    return float(np.mean(vals))
+
+ndcg = {t: ndcg_bm25(tok) for t, tok in toks.items()}
+print({t: round(v, 3) for t, v in ndcg.items()})
+
+def export_check(textos: list, vocab_size: int) -> int:
+    bl = Tokenizer(models.BPE())
+    bl.pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.Split(Regex(PAT_GPT2), behavior="isolated"), ByteLevel(add_prefix_space=False, use_regex=False)])
+    bl.decoder = decoders.ByteLevel()
+    bl.train_from_iterator(train_texts, trainers.BpeTrainer(vocab_size=vocab_size, initial_alphabet=ByteLevel.alphabet(), special_tokens=["<|endoftext|>"]))
+    u2b = {v: k for k, v in bytes_a_unicode().items()}
+    piezas = sorted((i, bytes(u2b[ch] for ch in t)) for t, i in bl.get_vocab().items() if t != "<|endoftext|>")
+    ranks = {bytes([i]): i for i in range(256)}
+    for _, b in piezas:
+        if len(b) > 1: ranks[b] = len(ranks)
+    enc = tiktoken.Encoding(name="poliglota_proyecto", pat_str=PAT_GPT2, mergeable_ranks=ranks, special_tokens={"<|endoftext|>": len(ranks)})
+    dif = 0
+    for t in textos:
+        a = [bytes(u2b[ch] for ch in x) for x in bl.encode(t).tokens]
+        dif += a != [enc.decode_single_token_bytes(i) for i in enc.encode_ordinary(t)]
+    return dif
+
+n_dif = export_check([t for ts in test_by_lang.values() for t in ts], VOCAB)
+print("textos distintos tras exportar:", n_dif)
+''')
+
+pj.md(r"""
+### Solución · paso 5 y rúbrica final
+""")
+pj.code(r'''
+T = pd.DataFrame(filas).set_index("nombre")
+DECISION = "unigram" if T.loc["unigram", "f1_morf_es"] > T.loc["bpe", "f1_morf_es"] + 0.05 else "bpe"
+JUSTIFICACION = (
+    f"Recomiendo {DECISION}. Con |V|={VOCAB} la fertilidad en español es {T.loc['bpe','fert_es']:.2f} (BPE) frente a {T.loc['unigram','fert_es']:.2f} (Unigram), es decir Unigram necesita "
+    f"≈ {T.loc['unigram','fert_es']/T.loc['bpe','fert_es']-1:.0%} más tokens, pero su F1 morfológica en español es {T.loc['unigram','f1_morf_es']:.2f} frente a {T.loc['bpe','f1_morf_es']:.2f}, "
+    f"lo que favorece el índice sparse con raíces/sufijos reales; el nDCG@10 de BM25 fue {ndcg['unigram']:.2f} (Unigram) y {ndcg['bpe']:.2f} (BPE). "
+    f"Riesgo: ninguno de los tres es byte-level, así que los caracteres no vistos producen [UNK] ({T.loc['unigram','unk_estres']} en el texto de estrés); "
+    f"antes de entrenar el embedder propio habrá que añadir byte fallback y medir paridad multilingüe (módulo 04)."
+)
+print(DECISION, "|", len(JUSTIFICACION), "caracteres")
+rubrica()
+''')
+
+pj.md(r"""
+## Retos extra (nivel experto)
+
+1. **Controla el tamaño.** Repite la comparación con SentencePiece (`unigram` y `bpe`, `byte_fallback=True`) a `vocab_size` idéntico y añade al informe el *round-trip* (`decode(encode(t)) == t`) con la configuración por defecto y con `identity`.
+2. **Barrido de vocabulario.** Entrena BPE/Unigram a 1 k, 2 k, 4 k, 8 k y 16 k (`FAST_DEV_RUN=False`) y dibuja fertilidad y F1 morfológica; ¿dónde se aplana la curva?
+3. **Tokenizer para sparse retrieval.** Compara el nDCG@10 de BM25 con el tokenizer *de palabras* (módulo 00) frente a Unigram y BPE usando consultas con inflexiones distintas (singular/plural); ¿quién gana y por qué?
+4. **BPE-dropout como augmentación de consultas.** Genera consultas con `bpe_pieza(..., dropout=0.1)` y mide el cambio de nDCG@10.
+5. **Implementa el criterio de verosimilitud** de la lección dentro de un entrenador a escala del corpus completo (¡cuida la complejidad!) y compara su vocabulario con el de `BpeTrainer`.
+
+## Reflexión (conecta con producción y con Políglota)
+
+- ¿Qué cambiaría en tu decisión si el 40 % de los documentos fueran código? ¿Y si el buscador tuviera que indexar nombres propios y códigos de error?
+- Un tokenizer **se congela** al entrenar el embedder (módulo 09–11): ¿qué coste tiene cambiarlo después (re-indexar, re-entrenar embeddings)? ¿Qué harías en la v1 para no arrepentirte?
+- ¿Cómo detectarías en producción que el vocabulario ya no encaja con los datos (drift de dominio/idioma)? (Pista: módulo 05.)
+""")
+pj.save(os.path.join(MOD_DIR, "03_proyecto_wordpiece_unigram_sentencepiece.ipynb"))
