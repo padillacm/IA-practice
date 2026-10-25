@@ -25,3 +25,13 @@ y algún ejemplo a mano ausente.
   etiquetadas. El proyecto solo pide lo enseñado (mojibake y doble mojibake en §10, homoglifos en §7) con 🪜 1/2.
 - **Arreglado:** el gráfico del TODO 7 del proyecto (nDCG limpio/sucio/normalizado) no tenía 👀; añadido con la
   lectura esperada y qué hacer si «normalizado» no alcanza a «limpio».
+
+## 02 · BPE desde cero
+- Bien: 🔁 con repaso espaciado de 00 y 01, 🧭 (≈ 81 celdas), verificación contra `tiktoken`/HF, analogías con
+  compresión (bits por byte, Huffman) bien explotadas en §9.5, proyecto con 🪜 en todos los TODO.
+- **Reestructurado:** la teoría formal (§3) iba antes del ejemplo resuelto a mano. Ahora §3 = ejemplo de Sennrich a
+  mano (con frase puente y analogía LZW) y §4 = algoritmo formal («acabas de verlo funcionar; ahora en general»),
+  como pide la secuencia intuición → ejemplo → fórmula → código.
+- **Arreglado:** el placeholder de M02-VID-01 decía `low</w>×5` como estado final; tras 5 fusiones es `low </w>×5`
+  (dos tokens), como dicen el texto y el prompt.
+- **Arreglado:** 👀 tras el gráfico del TODO 6 del proyecto (barrido de vocabulario e impuesto de idioma).
