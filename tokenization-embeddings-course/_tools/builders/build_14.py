@@ -445,8 +445,9 @@ Complejidad empírica: $O(\log N)$ saltos. Coste: RAM (vectores + grafo) y const
     nb.code(r"""
 import heapq
 
-class MiniHNSW:
-    '''HNSW didáctico en NumPy puro (distancia L2; con vectores normalizados da el mismo ranking que el producto interno).'''
+class _HNSWBusqueda:
+    '''Base del HNSW didáctico en NumPy puro: estructura, búsqueda por capa (haz de tamaño ef) y búsqueda jerárquica.
+    Distancia L2: con vectores normalizados da el mismo ranking que el producto interno.'''
     def __init__(self, V, M=12, ef_construction=64, seed=SEED):
         self.X, self.n, self.M, self.M0, self.efc = V, len(V), M, 2 * M, ef_construction
         self.ml = 1 / math.log(M)
@@ -477,6 +478,19 @@ class MiniHNSW:
                     if len(res) > ef:
                         heapq.heappop(res)
         return sorted((-d, e) for d, e in res)
+    def busca(self, q, k=10, ef=50, traza=False):
+        ep, tr = [self.entrada], {}
+        for capa in range(self.capa_max, 0, -1):
+            tr[capa] = []
+            ep = [self._busca_capa(q, ep, 1, capa, tr[capa])[0][1]]
+        tr[0] = []
+        res = self._busca_capa(q, ep, max(ef, k), 0, tr[0])[:k]
+        ids = [e for _, e in res]
+        return (ids, tr) if traza else ids
+""")
+    nb.code(r"""
+class MiniHNSW(_HNSWBusqueda):
+    '''Añade la INSERCIÓN: heurística de selección de vecinos, enlaces bidireccionales y recorte de grado.'''
     def _selecciona(self, cands, M):
         '''Heurística de selección: acepta c si está más cerca de la query que de cualquier vecino ya aceptado.'''
         out = []
@@ -518,15 +532,6 @@ class MiniHNSW:
         for i in range(self.n):
             self.anade(i)
         return self
-    def busca(self, q, k=10, ef=50, traza=False):
-        ep, tr = [self.entrada], {}
-        for capa in range(self.capa_max, 0, -1):
-            tr[capa] = []
-            ep = [self._busca_capa(q, ep, 1, capa, tr[capa])[0][1]]
-        tr[0] = []
-        res = self._busca_capa(q, ep, max(ef, k), 0, tr[0])[:k]
-        ids = [e for _, e in res]
-        return (ids, tr) if traza else ids
 
 N_MINI = 2000 if FAST_DEV_RUN else 8000
 Xm = X[:N_MINI]
