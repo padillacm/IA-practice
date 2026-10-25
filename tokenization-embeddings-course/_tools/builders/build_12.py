@@ -24,72 +24,7 @@ CODE_PIP = r'''
 !pip install -q -U sentence-transformers transformers scikit-learn matplotlib pandas mteb
 '''
 
-CODE_EMBEDDER_TOOLS = r'''
-# Catálogo de embedders multilingües "pequeños" (caben en CPU/T4). Prefijos copiados de las tarjetas de modelo:
-# VERIFÍCALOS en la tarjeta antes de usar un modelo en producción (cambian entre versiones).
-MODELOS = {
-    "multilingual-e5-small": dict(hf="intfloat/multilingual-e5-small", q="query: ", d="passage: "),
-    "multilingual-e5-base": dict(hf="intfloat/multilingual-e5-base", q="query: ", d="passage: "),
-    "paraphrase-multilingual-MiniLM-L12-v2": dict(hf="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", q="", d=""),
-    "gte-multilingual-base": dict(hf="Alibaba-NLP/gte-multilingual-base", q="", d="", trust=True),
-    "bge-m3": dict(hf="BAAI/bge-m3", q="", d=""),
-    "nomic-embed-text-v2-moe": dict(hf="nomic-ai/nomic-embed-text-v2-moe", q="search_query: ", d="search_document: ", trust=True),
-    "Qwen3-Embedding-0.6B": dict(hf="Qwen/Qwen3-Embedding-0.6B", d="",
-                                 q="Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"),
-    "embeddinggemma-300m": dict(hf="google/embeddinggemma-300m", q="task: search result | query: ", d="title: none | text: ", gated=True),
-}
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.decomposition import TruncatedSVD
-
-class HashSVDEmbedder:
-    """Fallback SIN descargas: TF-IDF de n-gramas de caracteres + SVD. NO es multilingüe ni semántico:
-    sirve para ejercitar el pipeline (truncado, cuantización, métricas) cuando HF no es accesible."""
-    def __init__(self, dim: int = 64, ngram=(3, 5), analyzer: str = "char_wb"):
-        self.dim = dim
-        self.tfidf = TfidfVectorizer(analyzer=analyzer, ngram_range=ngram, sublinear_tf=True, min_df=1)
-        self.svd = TruncatedSVD(n_components=dim, random_state=SEED)
-    def fit(self, textos):
-        X = self.tfidf.fit_transform(textos)
-        self.svd.n_components = min(self.dim, X.shape[1] - 1, X.shape[0] - 1)
-        self.svd.fit(X)
-        return self
-    def encode(self, textos):
-        Z = self.svd.transform(self.tfidf.transform(textos))
-        return (Z / np.maximum(np.linalg.norm(Z, axis=1, keepdims=True), 1e-9)).astype(np.float32)
-
-class Embedder:
-    """Interfaz común: encode_queries / encode_docs (aplican el prefijo de cada modelo) -> float32 normalizado."""
-    def __init__(self, clave, cfg, model=None, fallback=None):
-        self.clave, self.cfg, self.model, self.fallback = clave, cfg, model, fallback
-        self.is_real = model is not None
-    def _enc(self, textos, prefijo, bs=16):
-        if self.model is not None:
-            E = self.model.encode([prefijo + t for t in textos], batch_size=bs, normalize_embeddings=True,
-                                  convert_to_numpy=True, show_progress_bar=False)
-            return E.astype(np.float32)
-        return self.fallback.encode([prefijo + t for t in textos])
-    def encode_queries(self, textos): return self._enc(textos, self.cfg.get("q", ""))
-    def encode_docs(self, textos): return self._enc(textos, self.cfg.get("d", ""))
-    @property
-    def n_params(self):
-        return sum(p.numel() for p in self.model.parameters()) if self.model is not None else 0
-
-def cargar_embedder(clave, textos_ajuste=None, max_len=256):
-    """Carga con sentence-transformers; si no se puede (sin red, modelo con licencia, falta de RAM) cae al fallback."""
-    cfg = MODELOS[clave]
-    try:
-        from sentence_transformers import SentenceTransformer
-        m = SentenceTransformer(cfg["hf"], device=device, trust_remote_code=cfg.get("trust", False))
-        m.max_seq_length = min(m.max_seq_length or max_len, max_len)
-        return Embedder(clave, cfg, model=m)
-    except Exception as e:
-        print(f"[embedder] {clave}: no se pudo cargar ({type(e).__name__}: {str(e)[:70]})")
-        if textos_ajuste is None:
-            return None
-        print(f"[embedder] {clave}: usando fallback TF-IDF+SVD (NO representa al modelo real)")
-        return Embedder(clave + " (fallback)", cfg, fallback=HashSVDEmbedder().fit(textos_ajuste))
-'''
+CODE_EMBEDDER_TOOLS = C.CODE_EMBEDDER_TOOLS
 
 CODE_LOAD_CORPUS_EMB = r'''
 CORPUS = carga_corpus(FAST_DEV_RUN)

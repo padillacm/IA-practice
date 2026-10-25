@@ -4,13 +4,12 @@ Cada notebook del curso es autocontenido: estas cadenas se incrustan en cada not
 (NO se importan en Colab). Aquí viven los textos fuente de las celdas comunes:
 
 - CODE_SETUP_*: instalación, semillas, device, FAST_DEV_RUN.
-- CODE_CORPUS_SEED: mini-corpus sintético bilingüe (29 conceptos técnicos) con el MISMO esquema que el real.
-- CODE_CORPUS_LOADER: `carga_corpus(fast_dev)` (contrato común): oficial -> espejo -> sintético.
+- CODE_CORPUS_SEED: PARAFRASIS = 29 conceptos técnicos x {EN, ES, código} escritos a mano (mini golden set).
+- CODE_PARAFRASIS_LOADER: `corpus_parafrasis()`: mini golden set de paráfrasis/cruzado ES-EN-código (esquema del contrato).
 - CODE_METRICS: nDCG/Recall/MRR (misma implementación canónica que el módulo 00).
 
-Diferencia documentada con la implementación canónica del módulo 00 (autor A1): la rama "real" de esta copia usa
-Wikipedia ES/EN (título -> lead) y CodeSearchNet (docstring -> función) como queries auto-generadas, y NO el mini
-golden set manual del módulo 00; la rama sintética (30 conceptos x ES/EN/código) es propia de A5.
+Nota: carga_corpus() y las métricas canónicas vienen de poliglota_utils.py (módulo 00, autor A1); aquí solo viven
+utilidades propias de A5 (setup, embedders de respaldo, mini golden set de paráfrasis, nDCG por query).
 """
 
 CODE_SETUP_COMMON = r'''
@@ -40,7 +39,7 @@ CODE_CORPUS_SEED = r'''
 # Mini-corpus sintético "Políglota": 29 conceptos técnicos x {EN, ES, código}. Es el FALLBACK del cargador de datos;
 # tiene el mismo esquema que el corpus real. Las queries están parafraseadas a propósito para que no compartan
 # casi ninguna palabra con el documento (así BM25 no es trivial y los embeddings multilingües sí aportan).
-CONCEPTOS = [
+PARAFRASIS = [
  ("hnsw",
   "HNSW builds a multi-layer proximity graph. A search enters at the top layer, walks greedily towards the target and descends layer by layer, returning approximate neighbors in logarithmic time.",
   "HNSW construye un grafo de proximidad con varias capas. La búsqueda entra por la capa superior, avanza de forma voraz hacia el objetivo y desciende capa a capa, devolviendo vecinos aproximados en tiempo logarítmico.",
@@ -187,80 +186,25 @@ CONCEPTOS = [
   "import unicodedata\n\ndef strip_accents(s):\n    nfd = unicodedata.normalize('NFD', s)\n    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')",
   "make visually identical accented strings compare as equal", "lograr que cadenas con tildes visualmente idénticas se comparen como iguales"),
 ]
-print(f"{len(CONCEPTOS)} conceptos sintéticos x 3 documentos (en/es/código)")
+print(f"{len(PARAFRASIS)} conceptos x 3 documentos (en/es/código) en el mini golden set de paráfrasis")
 '''
 
-CODE_CORPUS_LOADER = r'''
-def _corpus_sintetico() -> dict:
+CODE_PARAFRASIS_LOADER = r'''
+def corpus_parafrasis() -> dict:
+    """Mini golden set de PARÁFRASIS y búsqueda CRUZADA ES<->EN<->código (29 conceptos x 3 documentos, 58 queries).
+    Mismo esquema que carga_corpus(). Las queries casi no comparten palabras con sus documentos: BM25 sufre y los
+    modelos semánticos/multilingües deberían ganar. Es un conjunto pequeño y escrito a mano: úsalo para diagnosticar,
+    no para reportar cifras de producción."""
     docs, queries, qrels = [], [], {}
-    for key, en, es, code, q_en, q_es in CONCEPTOS:
+    for key, en, es, code, q_en, q_es in PARAFRASIS:
         ids = {"en": f"{key}-en", "es": f"{key}-es", "code": f"{key}-code"}
-        docs += [{"id": ids["en"], "lang": "en", "text": en},
-                 {"id": ids["es"], "lang": "es", "text": es},
+        docs += [{"id": ids["en"], "lang": "en", "text": en}, {"id": ids["es"], "lang": "es", "text": es},
                  {"id": ids["code"], "lang": "code", "text": code}]
         for lang, q in (("en", q_en), ("es", q_es)):
-            qid = f"q-{key}-{lang}"
+            qid = f"par-{key}-{lang}"
             queries.append({"qid": qid, "lang": lang, "text": q})
-            qrels[qid] = {d: 1 for d in ids.values()}     # el concepto en los 3 formatos es relevante
-    return {"docs": docs, "queries": queries, "qrels": qrels, "source": "synthetic"}
-
-
-def _corpus_real(fast_dev: bool) -> dict:
-    """Wikipedia ES/EN (título -> lead) + CodeSearchNet Python (docstring -> función). Necesita acceso a HF."""
-    from datasets import load_dataset
-    n_wiki, n_code = (150, 150) if fast_dev else (3000, 3000)
-    docs, queries, qrels = [], [], {}
-    for lang in ("es", "en"):
-        ds = load_dataset("wikimedia/wikipedia", f"20231101.{lang}", split="train", streaming=True)
-        for i, ex in enumerate(ds):
-            if i >= n_wiki:
-                break
-            lead = ex["text"].split("\n\n")[0][:700]
-            if len(lead) < 80:
-                continue
-            did = f"wiki-{lang}-{ex['id']}"
-            docs.append({"id": did, "lang": lang, "text": f"{ex['title']}. {lead}"})
-            if i < 40:                                    # 40 queries por idioma: el título busca su artículo
-                queries.append({"qid": f"q-{did}", "lang": lang, "text": ex["title"]})
-                qrels[f"q-{did}"] = {did: 1}
-    csn = load_dataset("code-search-net/code_search_net", "python", split="test", streaming=True)
-    for i, ex in enumerate(csn):
-        if i >= n_code:
-            break
-        did = f"csn-{i}"
-        docs.append({"id": did, "lang": "code", "text": ex["func_code_string"][:900]})
-        if i < 40:
-            queries.append({"qid": f"q-{did}", "lang": "en", "text": ex["func_documentation_string"].split("\n")[0][:200]})
-            qrels[f"q-{did}"] = {did: 1}
-    assert len(docs) > 100 and len(queries) > 20, "descarga incompleta"
-    return {"docs": docs, "queries": queries, "qrels": qrels, "source": "real"}
-
-
-def carga_corpus(fast_dev: bool = True) -> dict:
-    """Contrato común del curso: {"docs","queries","qrels","source"}. Cadena: oficial -> espejo -> sintético."""
-    try:
-        import huggingface_hub.constants as hc
-        endpoint_orig = hc.ENDPOINT
-    except Exception:
-        hc, endpoint_orig = None, None
-    for etiqueta, endpoint in (("oficial", None), ("espejo", "https://hf-mirror.com")):
-        try:
-            if endpoint:
-                os.environ["HF_ENDPOINT"] = endpoint
-                if hc is not None:
-                    hc.ENDPOINT = endpoint
-            data = _corpus_real(fast_dev)
-            print(f"[corpus] fuente {etiqueta}: datos REALES ({len(data['docs'])} docs)")
-            return data
-        except Exception as e:
-            print(f"[corpus] {etiqueta} no disponible ({type(e).__name__}: {str(e)[:80]})")
-    os.environ.pop("HF_ENDPOINT", None)       # se restaura el endpoint oficial para que la carga de modelos no use el espejo
-    if hc is not None:
-        hc.ENDPOINT = endpoint_orig
-    data = _corpus_sintetico()
-    print(f"[corpus] ⚠️ usando corpus SINTÉTICO ({len(data['docs'])} docs, {len(data['queries'])} queries): "
-          "mismo esquema, pero los números NO son comparables con los del corpus real.")
-    return data
+            qrels[qid] = {d: 1 for d in ids.values()}
+    return {"docs": docs, "queries": queries, "qrels": qrels, "source": "paraphrase-golden"}
 '''
 
 CODE_METRICS = r'''
@@ -315,4 +259,72 @@ CODE_EVAL_PQ = r'''
 def ndcgs_por_query(run: dict, qrels: dict, k: int = 10):
     """nDCG@k de cada query (mismo filtro que evaluate(): solo queries con algún relevante). Sirve para bootstrap."""
     return np.array([ndcg_at_k(run.get(q, []), r, k) for q, r in qrels.items() if any(v > 0 for v in r.values())])
+'''
+
+
+CODE_EMBEDDER_TOOLS = r'''
+# Catálogo de embedders multilingües "pequeños" (caben en CPU/T4). Prefijos copiados de las tarjetas de modelo:
+# VERIFÍCALOS en la tarjeta antes de usar un modelo en producción (cambian entre versiones).
+MODELOS = {
+    "multilingual-e5-small": dict(hf="intfloat/multilingual-e5-small", q="query: ", d="passage: "),
+    "multilingual-e5-base": dict(hf="intfloat/multilingual-e5-base", q="query: ", d="passage: "),
+    "paraphrase-multilingual-MiniLM-L12-v2": dict(hf="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", q="", d=""),
+    "gte-multilingual-base": dict(hf="Alibaba-NLP/gte-multilingual-base", q="", d="", trust=True),
+    "bge-m3": dict(hf="BAAI/bge-m3", q="", d=""),
+    "nomic-embed-text-v2-moe": dict(hf="nomic-ai/nomic-embed-text-v2-moe", q="search_query: ", d="search_document: ", trust=True),
+    "Qwen3-Embedding-0.6B": dict(hf="Qwen/Qwen3-Embedding-0.6B", d="",
+                                 q="Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"),
+    "embeddinggemma-300m": dict(hf="google/embeddinggemma-300m", q="task: search result | query: ", d="title: none | text: ", gated=True),
+}
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
+
+class HashSVDEmbedder:
+    """Fallback SIN descargas: TF-IDF de n-gramas de caracteres + SVD. NO es multilingüe ni semántico:
+    sirve para ejercitar el pipeline (truncado, cuantización, métricas) cuando HF no es accesible."""
+    def __init__(self, dim: int = 64, ngram=(3, 5), analyzer: str = "char_wb"):
+        self.dim = dim
+        self.tfidf = TfidfVectorizer(analyzer=analyzer, ngram_range=ngram, sublinear_tf=True, min_df=1)
+        self.svd = TruncatedSVD(n_components=dim, random_state=SEED)
+    def fit(self, textos):
+        X = self.tfidf.fit_transform(textos)
+        self.svd.n_components = min(self.dim, X.shape[1] - 1, X.shape[0] - 1)
+        self.svd.fit(X)
+        return self
+    def encode(self, textos):
+        Z = self.svd.transform(self.tfidf.transform(textos))
+        return (Z / np.maximum(np.linalg.norm(Z, axis=1, keepdims=True), 1e-9)).astype(np.float32)
+
+class Embedder:
+    """Interfaz común: encode_queries / encode_docs (aplican el prefijo de cada modelo) -> float32 normalizado."""
+    def __init__(self, clave, cfg, model=None, fallback=None):
+        self.clave, self.cfg, self.model, self.fallback = clave, cfg, model, fallback
+        self.is_real = model is not None
+    def _enc(self, textos, prefijo, bs=16):
+        if self.model is not None:
+            E = self.model.encode([prefijo + t for t in textos], batch_size=bs, normalize_embeddings=True,
+                                  convert_to_numpy=True, show_progress_bar=False)
+            return E.astype(np.float32)
+        return self.fallback.encode([prefijo + t for t in textos])
+    def encode_queries(self, textos): return self._enc(textos, self.cfg.get("q", ""))
+    def encode_docs(self, textos): return self._enc(textos, self.cfg.get("d", ""))
+    @property
+    def n_params(self):
+        return sum(p.numel() for p in self.model.parameters()) if self.model is not None else 0
+
+def cargar_embedder(clave, textos_ajuste=None, max_len=256):
+    """Carga con sentence-transformers; si no se puede (sin red, modelo con licencia, falta de RAM) cae al fallback."""
+    cfg = MODELOS[clave]
+    try:
+        from sentence_transformers import SentenceTransformer
+        m = SentenceTransformer(cfg["hf"], device=device, trust_remote_code=cfg.get("trust", False))
+        m.max_seq_length = min(m.max_seq_length or max_len, max_len)
+        return Embedder(clave, cfg, model=m)
+    except Exception as e:
+        print(f"[embedder] {clave}: no se pudo cargar ({type(e).__name__}: {str(e)[:70]})")
+        if textos_ajuste is None:
+            return None
+        print(f"[embedder] {clave}: usando fallback TF-IDF+SVD (NO representa al modelo real)")
+        return Embedder(clave + " (fallback)", cfg, fallback=HashSVDEmbedder().fit(textos_ajuste))
 '''
