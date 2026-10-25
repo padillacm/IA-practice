@@ -494,7 +494,7 @@ if enc:
     print("tiktoken NO normaliza: encode('é') =", enc.encode("é"), "| encode('e' + U+0301) =", enc.encode("e\u0301"))
     assert enc.encode("é") != enc.encode("e\u0301")
 ''')
-nb.md(obs(r"""Para **cada** palabra, la forma NFD cuesta más bytes (+1 por marca combinante) y **más tokens** (el vocabulario de GPT-2 contiene tokens como `ción` o `más` pero casi ninguno con la marca `U+0301` suelta, así que `e`+◌́ cae a bytes). Si tu corpus mezcla NFC y NFD, el mismo concepto genera **secuencias de tokens distintas**: peor compresión, vocabulario fragmentado y *recall* perdido."""))
+nb.md(obs(r"""Para **cada** palabra, la forma NFD cuesta más bytes (+1 por marca combinante) y **más tokens** (el vocabulario de GPT-2 contiene tokens precompuestos como `ón`, `ás` o `ño` (mira `canción` → `can`·`ci`·`ón`) pero casi ninguno con la marca `U+0301` suelta, así que `o`+◌́ cae a bytes). Si tu corpus mezcla NFC y NFD, el mismo concepto genera **secuencias de tokens distintas**: peor compresión, vocabulario fragmentado y *recall* perdido."""))
 
 nb.md(r"""
 ### Impacto 2: búsqueda

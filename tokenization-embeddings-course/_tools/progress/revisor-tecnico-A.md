@@ -1,7 +1,7 @@
 # Progreso: revisor-tecnico-A
 Agente: Revisor técnico · Módulos: 00–08 · Informe: tokenization-embeddings-course/_tools/REVISION_TECNICA_A.md
-- [ ] 00_intro
-- [ ] 01_unicode_bytes
+- [x] 00_intro
+- [x] 01_unicode_bytes
 - [ ] 02_bpe_desde_cero
 - [ ] 03_wordpiece_unigram_sentencepiece
 - [ ] 04_diseno_tokenizers_modernos

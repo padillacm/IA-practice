@@ -167,7 +167,7 @@ texto ──► bytes ──► tokens ──► ids ──► embeddings ──
 ```
 
 * **Bytes (módulo 01).** El ordenador no ve letras: ve bytes. «é» ocupa 2 bytes en UTF-8; un ideograma chino, 3; un emoji, 4. Esto condiciona el costo de todo lo demás.
-* **Tokens (módulos 02–08).** Un *tokenizer* parte el texto en unidades de un vocabulario fijo (≈ 32 000–250 000 entradas en modelos actuales). Es **discreto y determinista**: no aprende con gradientes.
+* **Tokens (módulos 02–08).** Un *tokenizer* parte el texto en unidades de un vocabulario fijo (≈ 32 000–262 000 entradas en modelos actuales; p. ej. Gemma 3 usa 262 144). Es **discreto y determinista**: no aprende con gradientes.
 * **Embeddings (módulos 09–12).** Cada token (y cada texto completo) se asocia a un **vector denso** que *sí* se aprende. Textos parecidos → vectores cercanos.
 * **Índice y ranking (módulos 13–15).** Buscar es encontrar los vectores más cercanos a la consulta (o combinar con señales léxicas como BM25).
 
