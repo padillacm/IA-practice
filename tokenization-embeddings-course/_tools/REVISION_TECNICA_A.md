@@ -58,3 +58,16 @@ falta. Cambios aplicados en los builders y notebooks regenerados; recomendacione
   derivación del gradiente para tokens nunca objetivo y token healing coherentes.
 - **Arreglado:** la sección 6 decía que el indicador coseno es «para modelos con embeddings atados»; en el artículo
   vale con o sin tying (toda la matriz de salida recibe gradiente). Cifras GPT-4 de Singh & Strouse (ver 04).
+
+## 06 · Tokenizer-free I (bytes, BLT)
+- Código revisado: Witten-Bell, reglas de parcheo global/monótona, calibración por bisección, entropías con ventana
+  deslizante (contexto máximo), MiniBLT (máscaras por parche, decodificación con el parche anterior y prueba de
+  causalidad), bpb del baseline BPE normalizado por bytes de los objetivos. Correcto.
+- Cifras de BLT contrastadas con arXiv:2412.09871 (Tablas 1, 3, 4, 8: 60.0/58.0/61.1; CUTE 27.5/20.0/54.1;
+  «contains char» 0.0/55.9; HellaSwag con ruido 56.9/64.3; FLORES 12.1→14.0 y 5.9→6.4; ablación n-gramas
+  0.850→0.826; modelo de entropía 100M/14 capas/ventana 512). Bolmo (arXiv:2512.15586, Olmo 2 1B / Olmo 3 7B) existe.
+- **Arreglado:** MambaByte se describía como «350M en el paper»; el artículo entrena 353M y 972M (y 1.6B en la prueba
+  de velocidad). El ahorro de inferencia a FLOPs fijos compara con baselines Llama 2 **y** Llama 3 (se añadió).
+  El video M06-VID-01 decía «34 bytes» para una frase de 35.
+- Recomendación: `es_espacio` trata los bytes iniciales UTF-8 (≥ 0xC0) como no-espacio, una variante razonable para
+  español que conviene declarar frente a la definición de SpaceByte.

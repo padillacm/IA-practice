@@ -121,7 +121,7 @@ nb.md(r"""
 | ByT5 (T5 byte-a-byte) | 🟡 | Google Research; robusto a ruido, 4x más largo | Xue et al., TACL 2022 (arXiv:2105.13626) |
 | MegaByte (parches fijos, local+global) | 🔴 | Meta; el propio paper de BLT lo ve por detrás de BPE a escala | Yu et al., 2023 (arXiv:2305.07185) |
 | SpaceByte (parche tras cada espacio) | 🔴 | Investigación (autor único); cierra parte de la brecha con BPE | Slagle, 2024 (arXiv:2404.14408) |
-| MambaByte (SSM sobre bytes) | 🔴 | Investigación (COLM 2024); 350M en el paper | Wang et al., 2024 (arXiv:2401.13660) |
+| MambaByte (SSM sobre bytes) | 🔴 | Investigación (COLM 2024); modelos de 353M a 972M (y 1.6B en una prueba de velocidad) | Wang et al., 2024 (arXiv:2401.13660) |
 | **BLT: parches por entropía** | 🟡/🔴 | Meta FAIR; hasta 8B / 4T bytes; ACL 2025; pesos 1B y 7B en HF (acceso controlado) | Pagnoni et al., 2024 (arXiv:2412.09871) |
 | *Byte-ification* de un LLM ya entrenado (Bolmo) | 🔴 | Ai2: Bolmo 1B/7B a partir de Olmo 2 1B / Olmo 3 7B | Minixhofer et al., 2025 (arXiv:2512.15586) |
 | Chunking aprendido de extremo a extremo (H-Net) | 🔴 | Cartesia/CMU (módulo 07) | Hwang, Wang, Gu (arXiv:2507.07955) |
@@ -175,7 +175,7 @@ nb.md(r"""
 | **Hourglass / Dynamic Token Pooling** (2021-22) | Transformer jerárquico con *down/upsampling*; segmentación aprendida o por heurística | fija o dinámica | Escala pequeña (≤150M / 40M) |
 | **MegaByte** (2023) | Decodificador multiescala: modelo *global* sobre parches + modelo *local* dentro del parche | parches **fijos** de $k$ bytes | Parches fijos cortan palabras al azar; en el análisis de BLT queda por detrás de BPE a escala |
 | **SpaceByte** (2024) | Parche nuevo tras cada byte tipo espacio | por **espacios** | No varía el tamaño de parche; no gestiona bien todos los idiomas |
-| **MambaByte** (2024) | SSM (Mamba) sobre bytes, sin parches | no agrupa | Pequeña escala (350M en el paper); coste lineal pero sin ahorro de pasos |
+| **MambaByte** (2024) | SSM (Mamba) sobre bytes, sin parches | no agrupa | Escala moderada (353M–972M en el paper); coste lineal pero sin ahorro de pasos |
 | **BLT** (2024) | Parches por **entropía** del siguiente byte + codificador/decodificador locales con *cross-attention* + hash de n-gramas | **dinámica**, controlable | Sin leyes de escala propias; ver «Limitaciones» más abajo |
 | **H-Net** (2025) | El segmentador **se aprende** de extremo a extremo (módulo 07) | aprendida | Escala hasta ≈1.3B (FLOPs de un GPT-3 XL) en el paper |
 """)
@@ -346,7 +346,7 @@ Cifras **reportadas por los autores** (Pagnoni et al., arXiv:2412.09871, v1 de d
 |---|---|---|
 | Escala | Estudio FLOP-controlado hasta 8B parámetros y 4T bytes de entrenamiento | Primer estudio así para modelos de bytes, según los autores |
 | Paridad con Llama 3 | Media de 7 benchmarks: 61.1 (BLT-Entropy) vs 60.0 (Llama 3), ambos entrenados con el mismo presupuesto de FLOPs (1T tokens ≈ 4.5T bytes) | 8B, dataset BLT-1T; umbral de inferencia reajustado de 0.6 a 0.1 |
-| Ahorro de inferencia | «Hasta 50% menos FLOPs» con parches de 8 bytes (con un coste menor en métricas) | Escalado con FLOPs de inferencia fijos: modelos 470M y 3.6B (Llama 2) |
+| Ahorro de inferencia | «Hasta 50% menos FLOPs» con parches de 8 bytes (con un coste menor en métricas) | Escalado con FLOPs de inferencia fijos: baselines de ≈ 470M y 3.6B (tokenizer de Llama 2) y 450M y 3.9B (Llama 3) |
 | Robustez al ruido | HellaSwag con ruido (media): 64.3 vs 56.9 (Llama 3, 1T tokens) y 64.3 (Llama 3.1, 16T tokens) | 8B |
 | Conciencia ortográfica | CUTE: 54.1 vs 27.5 (Llama 3) y 20.0 (Llama 3.1); «contains char» 55.9 vs 0.0 | 8B |
 | Traducción multilingüe | FLORES-101, media de 27 idiomas X→En: 14.0 vs 12.1; En→X: 6.4 vs 5.9 | 8B, 1T tokens |
@@ -364,15 +364,15 @@ Texto de la escena: la frase "El servidor procesa las peticiones." escrita como 
 Guion por escenas:
 0–4 s: Título "Parches dinámicos por entropía" aparece y se desvanece. Aparece la fila de cajitas grises vacías y, sobre ella, un eje con la etiqueta "H(siguiente byte) en bits" y una línea roja discontinua horizontal etiquetada "umbral θ".
 4–14 s: los bytes se iluminan de izquierda a derecha, uno cada ~0.3 s. Sobre cada byte crece una barra azul con la entropía: alta (supera θ) en "E", "s" (de "servidor"), "p" (de "procesa"), "l" (de "las"), "p" (de "peticiones"); baja en el resto de letras dentro de cada palabra. Cuando una barra supera la línea roja se vuelve naranja y aparece una línea vertical verde que abre un nuevo parche; el parche anterior se rellena de verde claro y se cierra con un pequeño "clic" visual.
-14–20 s: los parches cerrados suben hacia un bloque grande etiquetado "Transformer latente global" que parpadea UNA vez por parche; debajo, contador "pasos del transformer grande: 5" frente a un contador gris "bytes: 34".
-20–25 s: texto final en pantalla: "Mismo contenido: 34 bytes → 5 parches. El umbral θ controla el coste." Se desvanece.
+14–20 s: los parches cerrados suben hacia un bloque grande etiquetado "Transformer latente global" que parpadea UNA vez por parche; debajo, contador "pasos del transformer grande: 5" frente a un contador gris "bytes: 35".
+20–25 s: texto final en pantalla: "Mismo contenido: 35 bytes → 5 parches. El umbral θ controla el coste." Se desvanece.
 Texto en pantalla solo en español, con términos técnicos en inglés (patch, threshold).
 Evita: voz en off, texto ilegible, cambios bruscos de cámara, números distintos de los indicados, logos, decoraciones.""",
           "Animación en la que una fila de bytes se agrupa en parches cuando la entropía supera un umbral y el transformer grande se activa una vez por parche",
           """t=0s   [bytes vacíos] ---- línea θ ---------------------
 t=4-14s  E l ␣ s e r v i d o r ...   barras de entropía: ▂▇ ▂ ▇▂▂▂▂▂ ...  (naranja = supera θ -> | nuevo parche)
-t=14-20s parches cerrados -> [Transformer global] parpadea 1 vez por parche   (5 pasos vs 34 bytes)
-t=20-25s "34 bytes -> 5 parches. θ controla el coste."
+t=14-20s parches cerrados -> [Transformer global] parpadea 1 vez por parche   (5 pasos vs 35 bytes)
+t=20-25s "35 bytes -> 5 parches. θ controla el coste."
 """, duration="25 s")
 nb.md(obs("""
 Fíjate en el orden causal: el umbral se evalúa **con el pasado** (no hay que mirar adelante), el parche se **cierra** cuando aparece el siguiente byte difícil y solo entonces corre el bloque caro. Es lo que permite generar byte a byte con parches dinámicos.
