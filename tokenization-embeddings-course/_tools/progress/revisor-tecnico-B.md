@@ -1,6 +1,6 @@
 # Progreso: revisor-tecnico-B
 Agente: Revisor técnico · Módulos: 09–20 · Informe: tokenization-embeddings-course/_tools/REVISION_TECNICA_B.md
-- [ ] 09_capa_embedding_llm
+- [x] 09_capa_embedding_llm
 - [ ] 10_embeddings_contextuales_oraciones
 - [ ] 11_aprendizaje_contrastivo
 - [ ] 12_embedders_modernos

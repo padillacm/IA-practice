@@ -990,7 +990,7 @@ Los umbrales están **calibrados con la solución de referencia** (semilla 42, `
 | # | Entregable | Criterio (umbral) |
 |---|---|---|
 | R1 | `auditoria` con normas, frecuencias, ρ de Spearman y nº de tokens no vistos | claves presentes; `n_no_vistos` > 0; ρ es un número finito |
-| R2 | Coseno medio entre filas de tokens **no vistos** vs vistos frecuentes | `cos_no_vistos − cos_frecuentes ≥ 0.5` (referencia mide ≈ 0.9) |
+| R2 | Coseno medio entre filas de tokens **no vistos** vs vistos frecuentes | `cos_no_vistos − cos_frecuentes ≥ 0.5` (referencia mide ≈ 0.9). Solo con el modelo de *fallback*: con GPT-2 real «no visto en Políglota» no significa «no visto al entrenar» y R2 solo se informa |
 | R3 | Lista de $K=32$ términos con ahorro = frecuencia × (piezas − 1) | 32 términos únicos, cada uno con ≥ 2 piezas en el tokenizer original |
 | R4 | Extensión + init por media de sub-tokens; filas viejas **intactas** tras ajustar | `assert` de filas viejas pasa |
 | R5 | Fertilidad (tokens/palabra) en el texto retenido | reducción ≥ 5 % (referencia ≈ 8–9 %) |
@@ -1150,7 +1150,10 @@ def pipeline_y_rubrica():
     piezas_ok = all(len(tok(w, add_special_tokens=False)["input_ids"]) >= 2 for w in nuevos)
     checks = {
         "R1 auditoría": r["n_no_vistos"] > 0 and np.isfinite(r["rho"]),
-        "R2 colapso de filas no vistas (gap ≥ 0.5)": r["gap_cos"] >= 0.5,
+        # R2 solo es un test válido en el fallback: allí «no visto en el corpus» = «nunca visto al entrenar».
+        # Con GPT-2 real, un token ausente de Políglota sí se vio en WebText: no se espera colapso (solo se informa).
+        "R2 colapso de filas no vistas (gap ≥ 0.5)" + ("" if "fallback" in lm_name else " [no aplica con GPT-2 real]"):
+            r["gap_cos"] >= 0.5 or "fallback" not in lm_name,
         "R3 32 términos únicos con ≥ 2 piezas": len(set(nuevos)) == K and piezas_ok,
         "R4 filas viejas intactas": True,                       # el assert de TODO 5 habría fallado antes
         "R5 reducción de fertilidad ≥ 5 %": r["reduccion_fert"] >= 0.05,
