@@ -356,3 +356,135 @@ def pip_cell(extra: str = "") -> str:
 def cells(code: str):
     """Divide un bloque en celdas por el marcador #---SPLIT---."""
     return [c.strip("\n") for c in code.split("#---SPLIT---\n")]
+
+
+# ---------------------------------------------------------------------------------
+# Módulo 05: banco de pruebas "tokenizer + modelo pequeño" (celdas compartidas lección/proyecto)
+# ---------------------------------------------------------------------------------
+M05_BASE = r'''
+import torch, torch.nn as nn, torch.nn.functional as F
+from tokenizers import Tokenizer, models, pre_tokenizers, trainers, decoders, Regex
+from tokenizers.pre_tokenizers import ByteLevel
+from collections import Counter
+
+PAT_GPT2 = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+
+def bytes_a_unicode() -> dict:
+    """Tabla de GPT-2: byte 0-255 -> carácter imprimible (así se escriben los tokens byte-level en los vocabularios HF)."""
+    bs = list(range(ord("!"), ord("~") + 1)) + list(range(ord("¡"), ord("¬") + 1)) + list(range(ord("®"), ord("ÿ") + 1))
+    cs, n = bs[:], 0
+    for b in range(256):
+        if b not in bs: bs.append(b); cs.append(256 + n); n += 1
+    return dict(zip(bs, map(chr, cs)))
+B2U = bytes_a_unicode(); U2B = {v: k for k, v in B2U.items()}
+def token_a_bytes(t: str) -> bytes: return bytes(U2B[ch] for ch in t if ch in U2B)
+def token_a_texto(t: str) -> str: return token_a_bytes(t).decode("utf-8", "replace")
+BYTES_INVALIDOS = list(range(0xF5, 0x100))          # estos bytes NUNCA aparecen en UTF-8 válido: sus tokens son "no usados" de referencia
+'''
+
+M05_MINI = r'''
+class _Bloque(nn.Module):
+    def __init__(s, d, h):
+        super().__init__(); s.ln1 = nn.LayerNorm(d); s.att = nn.MultiheadAttention(d, h, batch_first=True); s.ln2 = nn.LayerNorm(d)
+        s.mlp = nn.Sequential(nn.Linear(d, 4 * d), nn.GELU(), nn.Linear(4 * d, d))
+    def forward(s, x, m):
+        a = s.ln1(x); x = x + s.att(a, a, a, attn_mask=m, need_weights=False)[0]; return x + s.mlp(s.ln2(x))
+
+class MiniGPT(nn.Module):
+    """GPT diminuto con embeddings ATADOS (como GPT-2): la misma matriz sirve de entrada y de salida."""
+    def __init__(s, V, d=64, L=2, h=4, ctx=64):
+        super().__init__(); s.emb = nn.Embedding(V, d); s.pos = nn.Embedding(ctx, d); s.ctx = ctx
+        s.blocks = nn.ModuleList([_Bloque(d, h) for _ in range(L)]); s.ln = nn.LayerNorm(d); nn.init.normal_(s.emb.weight, std=0.02)
+    def forward(s, x):
+        T = x.shape[1]; m = torch.triu(torch.ones(T, T, dtype=torch.bool), 1); h = s.emb(x) + s.pos(torch.arange(T))
+        for b in s.blocks: h = b(h, m)
+        return s.ln(h) @ s.emb.weight.T
+
+SILABAS = ["Mag", "ika", "Gold", "Troll", "Stream", "Bot", "Nitro", "Fan", "Redd", "Pixel", "Quan", "Zed", "Moon", "Karp", "Sol"]
+def nombres_intrusos(n: int = 40, semilla: int = SEED) -> list:
+    r = random.Random(semilla); return sorted({" " + "".join(r.choice(SILABAS) for _ in range(3)) for _ in range(n * 2)})[:n]
+
+def banco_mini(docs, vocab_size: int = 2000, pasos: int = 500, semilla: int = SEED) -> dict:
+    """Banco de pruebas reproducible del fenómeno 'glitch token':
+    - el TOKENIZER se entrena con el corpus + un 'hilo de nombres de usuario' (los INTRUSOS, muy repetidos)
+    - el MODELO se entrena SOLO con el corpus (nunca ve a los intrusos)  =>  los intrusos son tokens sub-entrenados.
+    Devuelve un 'bundle' con la misma interfaz que usaremos para GPT-2 real."""
+    torch.manual_seed(semilla); intr = nombres_intrusos()
+    textos = [d["text"] for d in docs]
+    hilo = [f"u/{n.strip()} posted: {n} {n} {n}\n" * 3 for n in intr for _ in range(120)]
+    tk = Tokenizer(models.BPE())
+    tk.pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.Split(Regex(PAT_GPT2), behavior="isolated"), ByteLevel(add_prefix_space=False, use_regex=False)])
+    tk.decoder = decoders.ByteLevel()
+    tk.train_from_iterator(textos + hilo, trainers.BpeTrainer(vocab_size=vocab_size, initial_alphabet=ByteLevel.alphabet(), special_tokens=["<|endoftext|>"]))
+    V = tk.get_vocab_size(); ids = []
+    for t in textos: ids += tk.encode(t).ids + [0]
+    ids = torch.tensor(ids); cnt = Counter(ids.tolist())
+    model = MiniGPT(V); opt = torch.optim.AdamW(model.parameters(), lr=3e-3, weight_decay=0.0); B, T = 32, 64
+    snaps = {}; sin_usar = [i for i in range(V) if cnt[i] == 0]
+    for paso in range(pasos + 1):
+        if paso % 100 == 0: snaps[paso] = model.emb.weight.detach().numpy().copy()
+        if paso == pasos: break
+        ix = torch.randint(0, len(ids) - T - 1, (B,)); x = torch.stack([ids[i:i + T] for i in ix]); y = torch.stack([ids[i + 1:i + T + 1] for i in ix])
+        loss = F.cross_entropy(model(x).reshape(-1, V), y.reshape(-1)); opt.zero_grad(); loss.backward(); opt.step()
+    model.eval()
+    vocab = tk.get_vocab(); inv = {i: t for t, i in vocab.items()}
+    intr_ids = sorted({i for n in intr for i in tk.encode(n).ids if cnt[i] == 0})
+    def logits(x):
+        with torch.no_grad(): return model(torch.as_tensor(x))
+    return {"nombre": f"MiniGPT (tokenizer {V} con intrusos; modelo sin intrusos)", "E": model.emb.weight.detach().numpy().copy(), "E_out": model.emb.weight.detach().numpy().copy(), "tied": True,
+            "tokens": [token_a_bytes(inv[i]) if inv[i] != "<|endoftext|>" else b"<|endoftext|>" for i in range(V)], "encode": lambda s: tk.encode(s).ids,
+            "decode": lambda ids_: tk.decode(list(ids_)), "logits": logits, "tok": tk, "ctx": model.ctx, "frecuencias": cnt, "intrusos": intr_ids, "snaps": snaps,
+            "ids_entrenamiento": ids, "loss_final": float(loss), "modelo": model}
+'''
+
+M05_HF = r'''
+def bundle_hf(model, tok, nombre: str) -> dict:
+    """Envuelve un modelo causal de HF (p. ej. GPT-2) con la MISMA interfaz que banco_mini. tok: AutoTokenizer byte-level."""
+    E = model.get_input_embeddings().weight.detach().cpu().numpy(); Eo = model.get_output_embeddings().weight.detach().cpu().numpy()
+    V = E.shape[0]; vocab = tok.convert_ids_to_tokens(list(range(V)))
+    def logits(x):
+        with torch.no_grad(): return model(torch.as_tensor(x)).logits
+    return {"nombre": nombre, "E": E, "E_out": Eo, "tied": model.get_input_embeddings().weight is model.get_output_embeddings().weight,
+            "tokens": [token_a_bytes(t) if t else b"" for t in vocab], "encode": lambda s: tok.encode(s), "decode": lambda ids_: tok.decode(list(ids_)),
+            "logits": logits, "tok": tok, "ctx": getattr(model.config, "n_positions", 1024), "frecuencias": None, "intrusos": None, "snaps": None, "modelo": model}
+
+def cargar_banco(docs, fast_dev: bool = True) -> dict:
+    """Cadena: GPT-2 real de HF (si hay red y fast_dev=False o se pide) -> MiniGPT local con intrusos (siempre disponible)."""
+    if not fast_dev and hay_red("https://huggingface.co"):
+        try:
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            m = AutoModelForCausalLM.from_pretrained("gpt2").eval(); t = AutoTokenizer.from_pretrained("gpt2")
+            print("Usando GPT-2 real (124M) de Hugging Face."); return bundle_hf(m, t, "GPT-2 (124M)")
+        except Exception as e:
+            print("   (GPT-2 no disponible:", type(e).__name__, ") -> MiniGPT local")
+    print("Usando el banco MiniGPT local (tokenizer con 'intrusos' + modelo que nunca los ve). Entrenando ~1-2 min en CPU...")
+    return banco_mini(docs, vocab_size=2000, pasos=500)
+'''
+
+M05_IND = r'''
+def ids_referencia(bundle) -> list:
+    """Ids de los tokens de bytes 0xF5-0xFF (jamás aparecen en UTF-8 válido): referencia de 'token no usado' (Land & Bartolo 2024)."""
+    pos = {b: i for i, b in enumerate(bundle["tokens"]) if len(b) == 1}
+    return [pos[bytes([b])] for b in BYTES_INVALIDOS if bytes([b]) in pos]
+
+def ind_coseno(bundle) -> np.ndarray:
+    """Distancia coseno entre la fila de salida de cada token y la media de los no-usados (MENOR distancia = más sospechoso)."""
+    E = bundle["E_out"]; ref = E[ids_referencia(bundle)].mean(0)
+    return 1 - (E @ ref) / (np.linalg.norm(E, axis=1) * np.linalg.norm(ref) + 1e-12)
+
+def ind_norma(bundle) -> np.ndarray:
+    """Norma L2 de la fila de ENTRADA (con embeddings no atados, las filas nunca vistas se quedan en su valor inicial o decaen por weight decay)."""
+    return np.linalg.norm(bundle["E"], axis=1)
+
+def max_prob_contexto(bundle, n_ctx: int = 200, largo: int = 48, semilla: int = SEED) -> np.ndarray:
+    """Verificación por comportamiento: máxima probabilidad que el modelo asigna a cada token sobre n_ctx contextos reales.
+    Un token que casi nunca se predice (max_p << el de tokens normales) es candidato confirmado."""
+    ids = bundle.get("ids_entrenamiento")
+    if ids is None: ids = torch.tensor(bundle["encode"](" ".join(d["text"] for d in docs[:60])))
+    r = random.Random(semilla); mp = None
+    for _ in range(0, n_ctx, 50):
+        starts = [r.randrange(0, len(ids) - largo - 1) for _ in range(50)]
+        P = F.softmax(bundle["logits"](torch.stack([ids[s:s + largo] for s in starts])), -1).amax(dim=(0, 1)).numpy()
+        mp = P if mp is None else np.maximum(mp, P)
+    return mp
+'''
