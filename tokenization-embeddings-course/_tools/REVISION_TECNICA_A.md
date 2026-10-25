@@ -71,3 +71,15 @@ falta. Cambios aplicados en los builders y notebooks regenerados; recomendacione
   El video M06-VID-01 decía «34 bytes» para una frase de 35.
 - Recomendación: `es_espacio` trata los bytes iniciales UTF-8 (≥ 0xC0) como no-espacio, una variante razonable para
   español que conviene declarar frente a la definición de SpaceByte.
+
+## 07 · H-Net y tokenizer transfer
+- MiniHNet contrastado con arXiv:2507.07955: routing p_t = ½(1−cos(q_t,k_{t−1})), p_1 = 1, selección de bordes,
+  EMA z̄_j = P_j ẑ_j + (1−P_j) z̄_{j−1}, STE de la confianza, residual lineal, ratio loss (Ec. 10, α = 0.03, mínimo 1 en
+  F = G = 1/N). Tabla 2 del paper (bpb 0.756/0.760/0.755/0.755/0.743 y 0.730/0.733/0.726/0.728/0.715; precisión media)
+  coincide exactamente. ICLR 2026 (H-Net) y NeurIPS 2025 (AU-Net) verificados.
+- Tokenizer transfer: sparsemax, FOCUS (sparsemax sobre solapados en espacio auxiliar), WECHSEL (Procrustes, k = 10,
+  τ = 0.1), FVT (Gee et al., EMNLP 2022, arXiv:2402.09977), `mean_resizing` de transformers (covarianza × 1e-9) y las
+  cifras de ZeTT (−14 % longitud, > 16 % velocidad, XNLI a 1 %, código −10 % tokens a ≈ 3 %, < 1B tokens) verificadas
+  en el PDF. Todas las referencias arXiv del mapa de madurez existen (SOMBRERO 2601.22805, ALM 2503.20083, etc.).
+- Sin cambios necesarios. Recomendación: WECHSEL-lite usa los tokens compartidos como diccionario (el original usa un
+  diccionario bilingüe de palabras); ya está declarado como «lite».
