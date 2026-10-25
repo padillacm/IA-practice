@@ -96,6 +96,8 @@ Dos preguntas ordenan el módulo: **(1) ¿discreto o continuo?** (¿necesito *pr
 
 nb.code(S.PIP)
 nb.code(C.SETUP_COMMON + S.SETUP8)
+nb.md("Datos de imagen: **MNIST real** vía `torchvision` (si no hay red, figuras sintéticas 28x28) y dos **fotos reales** empaquetadas con scikit-learn.")
+nb.code(S.DATA_IMG)
 
 nb.md(r"""
 ## 4. Mapa de madurez (a oct-2026)
@@ -172,8 +174,7 @@ pérdidas: ||x-x̂||² + ||sg[z_e]-e||² + β||z_e - sg[e]||²""")
 nb.md(obs("""
 Hay **tres** caminos: (1) el de *reconstrucción* (a través de $z_q$ con STE hasta el encoder), (2) el del **codebook** (mueve los $e_j$ hacia los $z_e$) y (3) el del **commitment** (mantiene a $z_e$ cerca del código elegido). Sin el STE el encoder no recibiría gradiente de la reconstrucción.
 """))
-nb.md("### 7.1 Datos y cuantizadores desde cero\n\nImágenes: **MNIST real** vía `torchvision` (si no hay red: figuras sintéticas 28x28). Los tres cuantizadores (`VQ`, `FSQ`, `RVQ`) comparten interfaz.")
-nb.code(S.DATA_IMG)
+nb.md("### 7.1 Cuantizadores desde cero\n\nLos tres cuantizadores (`VQ`, `FSQ`, `RVQ`) comparten interfaz.")
 nb.code(S.QUANTIZERS)
 nb.code(S.AE_MODEL)
 nb.md("### 7.2 Entrenar un VQ-VAE ($K=64$, 49 tokens por imagen)")
@@ -208,7 +209,7 @@ Los primeros niveles capturan lo grueso; los siguientes **refinan**. Entrenando 
 """)
 nb.code(S.FSQ_RVQ)
 nb.md(obs("""
-* **VQ vs FSQ (izquierda y centro):** FSQ usa **casi todo** su «vocabulario» (perplejidad/|C| alta) sin trucos y con calidad comparable. Por eso se está imponiendo en tokenizers de gran escala (Cosmos).
+* **VQ vs FSQ (izquierda y centro):** con un presupuesto parecido de códigos (~256 vs 240) FSQ alcanza una calidad comparable **sin codebook, sin pérdidas auxiliares y sin trucos** (init por datos, reinicios). En la corrida de referencia: VQ 22.3 dB con perplejidad 22/256 y FSQ 21.2 dB con 41/240 — FSQ usa **casi el doble** de su vocabulario, aunque ninguno lo llena (MNIST 7x7 no tiene variedad para cientos de códigos); el paper de FSQ reporta uso casi completo a escala. Dos detalles prácticos que nos costó descubrir: **normalizamos** la entrada de FSQ por su desviación típica (si no, todo redondea a 0) y usamos un **learning rate menor** (con 2e-3 el autoencoder colapsaba a una salida constante en esta semilla). FSQ no tiene codebook, pero sigue siendo sensible a la escala.
 * **Derecha:** un único modelo **RVQ** con `n_q = 1…4` traza una **curva de tasas** (más niveles → más PSNR). El VQ simple necesita **un modelo por punto** de la curva.
 * ⚠️ Una semilla, ~400 pasos, MNIST: las diferencias finas (±0.5 dB) **no son concluyentes**; busca las tendencias.
 """))
@@ -337,7 +338,7 @@ nb.md(r"""
 ## 14. 🧠 Secretos de la élite
 
 1. **Mide la perplejidad de uso del codebook, siempre.** Un VQ con $K=8192$ y perplejidad 300 es un VQ de ~300 códigos; la calidad se estanca y no sabes por qué. Es la métrica de salud nº 1.
-2. **FSQ simplifica el entrenamiento:** sin codebook, sin *commitment*, sin reinicios; el paper de FSQ reporta uso de codebook casi completo y calidad comparable a VQ. Es el motivo de que Cosmos use FSQ (niveles 8,8,8,5,5,5).
+2. **FSQ simplifica el entrenamiento:** sin codebook, sin *commitment*, sin reinicios; el paper de FSQ reporta uso de codebook casi completo y calidad comparable a VQ (vigila la **escala de entrada** al `tanh`: si es pequeña, todo redondea al mismo nivel). Es el motivo de que Cosmos use FSQ (niveles 8,8,8,5,5,5).
 3. **El *quantizer dropout* es el truco de SoundStream** para tener **un modelo, muchas tasas**; sin él, recortar niveles en inferencia da basura (el decoder nunca vio esa configuración).
 4. **El primer nivel de RVQ concentra la «semántica».** Mimi lo aprovecha **destilando** WavLM en el primer cuantizador (split RVQ) para que los primeros tokens lleven contenido y los demás acústica.
 5. **La tasa de frames manda el coste.** 75 Hz (EnCodec) vs 12.5 Hz (Mimi) son 6x de diferencia en pasos de LM a igual nº de niveles; baja la frecuencia con un encoder más profundo y *una buena pérdida*.

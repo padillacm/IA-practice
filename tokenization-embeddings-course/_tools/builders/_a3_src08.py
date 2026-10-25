@@ -113,7 +113,7 @@ axs[1].set_xlim(0, 6); axs[1].set_ylim(0, 1); axs[1].set_title("Seis parches = s
 res = np.arange(224, 1281, 32)
 for p, col in [(32, VERDE), (16, AZUL), (14, NARANJA), (8, GRIS)]:
     axs[2].plot(res, (res // p) ** 2, color=col, lw=2, label=f"parche {p}")
-axs[2].set_yscale("log"); axs[2].set_xlabel("resolución (lado, píxeles)"); axs[2].set_ylabel("tokens por imagen"); axs[2].axhline(128_000 / 100, color="crimson", ls=":", lw=1)
+axs[2].set_yscale("log"); axs[2].set_xlabel("resolución (lado, píxeles)"); axs[2].set_ylabel("tokens por imagen")
 axs[2].set_title("Tokens vs resolución (la atención cuesta ~N²)", fontsize=9); axs[2].legend(fontsize=8); plt.tight_layout(); plt.show()
 '''
 
@@ -141,12 +141,13 @@ class VQ(nn.Module):
         return zq.reshape(*shape[:1], *shape[2:], self.d).movedim(-1, 1), loss, idx.reshape(shape[0], *shape[2:])
 
 class FSQ(nn.Module):
-    """Finite Scalar Quantization (Mentzer et al., 2023): acota cada canal y lo redondea a L_i niveles; sin codebook ni pérdidas extra."""
+    """Finite Scalar Quantization (Mentzer et al., 2023): acota cada canal y lo redondea a L_i niveles; sin codebook ni pérdidas extra.
+    (Normalizamos z por su desviación típica por canal: con salidas del encoder ~0.1 todo redondearía a 0 y el entrenamiento colapsa.)"""
     def __init__(self, levels):
         super().__init__(); L = torch.tensor(levels); self.register_buffer("L", L); self.d = len(levels)
         self.register_buffer("basis", torch.cumprod(torch.tensor([1] + list(levels[:-1])), 0)); self.K = int(L.prod())
     def forward(self, z, reinicia=False):
-        zp = z.movedim(1, -1); half = (self.L - 1) * (1 - 1e-3) / 2; off = torch.where(self.L % 2 == 0, 0.5, 0.0); shift = torch.atanh(off / half)
+        zp = z.movedim(1, -1); zp = zp / (zp.detach().reshape(-1, self.d).std(0) + 1e-5); half = (self.L - 1) * (1 - 1e-3) / 2; off = torch.where(self.L % 2 == 0, 0.5, 0.0); shift = torch.atanh(off / half)
         b = torch.tanh(zp + shift) * half - off; q = b + (torch.round(b) - b).detach()          # acota + redondea (STE)
         hw = (self.L // 2).float(); idx = ((q + hw) * self.basis).sum(-1).long()
         return (q / hw).movedim(-1, 1), z.new_zeros(()), idx
@@ -244,7 +245,8 @@ plt.tight_layout(); plt.show()
 FSQ_RVQ = r'''
 t0 = time.time(); R = {}
 torch.manual_seed(SEED); m = AE2D(VQ(256, D0), D0).to(device); entrena_ae(m, PASOS_AE); r = evalua_ae(m); R["VQ K=256"] = (r["psnr"], r["ppl"], 256, 49 * 8)
-torch.manual_seed(SEED); fsq = FSQ([8, 6, 5]); m = AE2D(fsq, 3).to(device); entrena_ae(m, PASOS_AE); r = evalua_ae(m); R["FSQ [8,6,5]"] = (r["psnr"], r["ppl"], fsq.K, 49 * math.log2(fsq.K))
+torch.manual_seed(SEED); fsq = FSQ([8, 6, 5]); m = AE2D(fsq, 3).to(device); entrena_ae(m, PASOS_AE, lr=1e-3);   # FSQ: lr menor (con 2e-3 colapsa en esta semilla)
+r = evalua_ae(m); R["FSQ [8,6,5]"] = (r["psnr"], r["ppl"], fsq.K, 49 * math.log2(fsq.K))
 torch.manual_seed(SEED); rvq = RVQ(4, 16, D0); m_rvq = AE2D(rvq, D0).to(device)
 def paso_rvq(m, pasos, B=128, lr=2e-3):                         # entrenamiento con 'quantizer dropout': n_q aleatorio por lote
     opt = torch.optim.Adam(m.parameters(), lr=lr); g = torch.Generator().manual_seed(SEED)
@@ -352,7 +354,7 @@ def stft_mag(x, n_fft):
 
 def perdida_audio(x, xr):
     """L1 en la forma de onda + L1 de log-magnitud STFT multi-escala (la idea de EnCodec/DAC; sin discriminador)."""
-    l = F.l1_loss(xr, x)
+    l = 10 * F.l1_loss(xr, x)                                   # peso 10: sin él el códec ignora la fase (SNR < 0 dB)
     for n in (512, 256, 128): l = l + 0.5 * F.l1_loss(torch.log(stft_mag(xr, n) + 1e-5), torch.log(stft_mag(x, n) + 1e-5))
     return l
 
