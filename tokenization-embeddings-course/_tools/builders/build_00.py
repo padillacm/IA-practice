@@ -471,6 +471,13 @@ $$\text{BM25}(Q,D)=\sum_{t\in Q}\text{IDF}(t)\cdot\frac{f(t,D)\,(k_1+1)}{f(t,D)+
 * $k_1\approx1.2$–$2$ controla la **saturación** de $f$; $b\in[0,1]$ controla cuánto se **normaliza por longitud** ($b=0$: nada; $b=1$: total).
 * Esta variante de IDF (la de Lucene) nunca es negativa; la de `rank_bm25.BM25Okapi` usa $\ln\frac{N-n_t+0.5}{n_t+0.5}$ y **sí puede serlo** para términos en más de la mitad de los documentos (la librería los sustituye por un suelo $\epsilon\cdot\overline{\text{IDF}}$).
 
+**Ejemplo resuelto a mano** ($k_1=1.2$, $b=0.75$). Corpus: D1 = «gato negro», D2 = «gato gato blanco», D3 = «perro negro»; consulta «gato».
+
+* $N=3$, $n_{\text{gato}}=2$ ⇒ $\text{IDF}=\ln(1+1.5/2.5)=\ln 1.6=0.470$. $\text{avgdl}=(2+3+2)/3=2.33$.
+* D1 ($f=1$, $|D|=2$): $0.470\cdot\dfrac{1\cdot2.2}{1+1.2\,(0.25+0.75\cdot 2/2.33)}=0.470\cdot\dfrac{2.2}{2.071}=\mathbf{0.499}$.
+* D2 ($f=2$, $|D|=3$): $0.470\cdot\dfrac{2\cdot2.2}{2+1.2\,(0.25+0.75\cdot 3/2.33)}=0.470\cdot\dfrac{4.4}{3.457}=\mathbf{0.598}$.
+* D3 ($f=0$): 0. Ranking: D2 > D1 > D3. Fíjate en que D2 tiene **el doble** de apariciones pero solo un **20 %** más de score: saturación + penalización por longitud. La celda que sigue a la implementación lo comprueba con el `BM25` propio.
+
 **Implementación:** un **índice invertido** (`término → [(doc, tf)]`) que solo visita los documentos que contienen algún término de la consulta. Es la misma estructura que usa Lucene/Elasticsearch (analogía directa con la búsqueda de candidatos de un recsys).
 """)
 
@@ -491,6 +498,12 @@ plt.tight_layout(); plt.show()
 nb.md(obs(r"""**Izquierda.** Con $k_1$ pequeño la curva se aplana enseguida (la 3.ª aparición casi no suma); con $k_1$ grande se acerca al conteo lineal. **Derecha.** Con $b=0$ los documentos largos no se penalizan (curva plana); con $b=1$ la contribución cae a la mitad cuando el documento es el doble de largo que el promedio. Estos dos botones son los únicos hiperparámetros relevantes de BM25."""))
 
 nb.code("# ── Tokenización léxica simple + BM25 propio con índice invertido ──\n" + SRC_BM25)
+
+nb.code(r'''
+# Comprobación del ejemplo resuelto a mano (D1, D2, D3 y la consulta «gato»)
+mini = BM25(k1=1.2, b=0.75).fit([["gato", "negro"], ["gato", "gato", "blanco"], ["perro", "negro"]], ["D1", "D2", "D3"])
+print(np.round(mini.scores(["gato"]), 3), mini.search(["gato"], 3))   # esperado: [0.499 0.598 0.] ['D2', 'D1', ...]
+''')
 
 nb.code(r'''
 def construir_bm25(docs, acentos="keep", **kw):
@@ -1055,6 +1068,7 @@ if RESULTADOS:
     ax.set_xticks(x, grupos); ax.set_ylim(0, 1.05); ax.set_ylabel("nDCG@10"); ax.set_title(f"Políglota v0 (corpus {source})"); ax.legend()
     plt.tight_layout(); plt.show()
 ''')
+pb.md("> 👀 **Qué debes observar.** ES y EN casi no cambian (la división de identificadores solo se aplica al grupo `code`); en `code` la barra azul debe superar a la gris: partir `getUserName` en `get`, `user`, `name` (en los documentos) permite que una consulta en lenguaje natural como «get user name» los encuentre. Si la azul queda por debajo, revisa que `tok_doc` aplique `split_ident` solo a los documentos `code` (las consultas siguen con `tokenize_simple`).")
 
 pb.md(r"""
 ## TODO 6 · Intervalo de confianza bootstrap

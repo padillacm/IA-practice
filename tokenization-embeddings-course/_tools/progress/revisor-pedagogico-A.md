@@ -1,6 +1,6 @@
 # Progreso: revisor-pedagogico-A
 Agente: Revisor pedagógico · Módulos: 00–08 · Informe: tokenization-embeddings-course/_tools/REVISION_PEDAGOGICA_A.md
-- [ ] 00_intro
+- [x] 00_intro
 - [ ] 01_unicode_bytes
 - [ ] 02_bpe_desde_cero
 - [ ] 03_wordpiece_unigram_sentencepiece
