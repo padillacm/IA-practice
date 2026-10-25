@@ -6,7 +6,7 @@ Agente: Revisor de ejecutabilidad · Módulos: 00–08 · Informe: tokenization-
 - [x] 03_wordpiece_unigram_sentencepiece (lección + proyecto ejecutados con nbclient)
 - [x] 04_diseno_tokenizers_modernos (lección + proyecto ejecutados con nbclient)
 - [x] 05_patologias_robustez (lección + proyecto ejecutados con nbclient)
-- [ ] 06_tokenizer_free_bytes_blt (lección + proyecto ejecutados con nbclient)
+- [x] 06_tokenizer_free_bytes_blt (lección + proyecto ejecutados con nbclient)
 - [ ] 07_hnet_tokenizer_transfer (lección + proyecto ejecutados con nbclient)
 - [ ] 08_tokens_multimodales_audio (lección + proyecto ejecutados con nbclient)
 - [ ] check_course.py OK + informe final
@@ -20,3 +20,4 @@ Agente: Revisor de ejecutabilidad · Módulos: 00–08 · Informe: tokenization-
 - 03 lección: 39 s, 0 errores; datos REALES vía espejo (NLTK Europarl ES/EN + stdlib); r50k/cl100k/o200k no descargables (aviso). Proyecto: 14 s, 0 errores, rúbrica 11/11 ✅. Cambio: `_a2_common.pip_cell` sin `-U` (riesgo de romper transformers en Colab al actualizar solo tokenizers); afecta 03–05.
 - 04 lección: 43 s, 0 errores; Europarl real (espejo NLTK); tokenizers HF no disponibles (aviso). Proyecto: 15 s, 0 errores, 13/16 (los 3 pts de «tiktoken o200k/cl100k» no alcanzables aquí por proxy; en Colab sí). Mejora J medida 11 % (umbral 8 %), desbalance 1.20 (≤ 1.35): calibrado. Solo regenerado (pip).
 - 05 lección: 93 s (celda 18 MiniGPT 70 s), 0 errores; Europarl real. Proyecto: 74 s, 0 errores, rúbrica completa ✅ (prec@100 1.00 ≥ 0.9; recall 0.42 ≥ 0.3; AUC 1.0; P5 83 % ≥ 60 %). Solo regenerado (pip).
+- 06 lección: 274 s (celda 55 MiniBLT 145 s, celda 28 72 s; 2 hilos CPU), 0 errores; corpus sintético con aviso. Proyecto: 46 s, 0 errores; plantilla 0/7 (esperado), solución 7/7 ✅ (ps 4.27/4.48; frag 1.036 ≤ 1.10; ps_25 6.0 ≤ 6.5). Sin cambios.
