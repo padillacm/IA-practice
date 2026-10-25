@@ -5,7 +5,7 @@ Agente: Autor A7 · Módulos: 18–20 + extras
 - [x] extras/GUIA_ENTREVISTAS.md + commit/push
 - [x] extras/LECTURA_PAPERS.md + commit/push
 - [x] Módulo 20_capstone: README + lección + proyecto + build_20.py OK + commit/push
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - Builders propios: `_tools/builders/_a7_common.py` (celdas compartidas: setup, versiones v1/v2, caché, ServicioPoliglota, adaptador, FastAPI),
@@ -19,3 +19,4 @@ Agente: Autor A7 · Módulos: 18–20 + extras
 - 20: `_a7_l20.py` (lección ≈ 30 s), `_a7_p20.py` (proyecto ≈ 35 s, solución 95/95; REF dev 0.914, test 0.887, BM25 0.842), `build_20.py`.
   `ServicioPoliglota` (en `_a7_common.py`) ahora admite `indice="hnsw"`, `tokenizador=` y `fusion="lineal"`; 18 re-ejecutado sin cambios de resultados.
 - `extras/GEMINI_ASSETS.md` regenerado con `gen_gemini_index.py` (81 recursos).
+- Final: check_course «Todo OK»; los 6 notebooks re-ejecutados con nbclient, 0 errores.
