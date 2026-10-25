@@ -27,3 +27,14 @@ falta. Cambios aplicados en los builders y notebooks regenerados; recomendacione
 - Arreglado: rango de vocabularios de la tabla de la sección 1 (hasta 262 000).
 - Recomendación (no aplicada): `BPETokenizer.encode` codifica como texto normal un especial no permitido; `tiktoken`
   lanza error por defecto. Mencionarlo como diferencia de diseño.
+
+## 03 · WordPiece, Unigram, SentencePiece
+- Derivación de ΔL de WordPiece (exacta y aproximación m·(PMI−1)), ejemplo `hug/pug/pun/bun/hugs` (score 1/36 vs 0.05;
+  ΔL exacto 28.0 para `##u##g`), lattice/forward-backward/Viterbi de Unigram y el ejemplo `hugs` (P(X)=0.1751,
+  posterior 0.857) verificados. Defaults de SentencePiece (`shrinking_factor` 0.75, `max_sentence_length` 4192,
+  semilla 1 M) y cifras de producción (Llama 3 3.17→3.94 chars/token, T5 10:1:1:1, Tekken) coherentes con las fuentes.
+- **Arreglado (03, 04, 05):** `_a2_common.METRICS` usaba ganancia exponencial y no deduplicaba, distinto de la métrica
+  canónica del módulo 00 (lineal, como trec_eval, con dedup). Ahora `METRICS` se lee de `poliglota_src/metrics.py`
+  (fuente única). Con qrels binarios los números no cambian.
+- **Arreglado:** prompt M03-IMG-03 decía «cuatro chips» y listaba cinco.
+- Recomendación: `puntuaciones(..., "verosimilitud")` no trata el caso `a == b` (p. ej. `##a##a`), donde c_a baja 2m.

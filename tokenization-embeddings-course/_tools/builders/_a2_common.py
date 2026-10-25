@@ -203,20 +203,10 @@ print("\\nEjemplo ES:", by_lang["es"][0][:160].replace("\\n", " "))
 print("Ejemplo código:\\n", by_lang["code"][0][:200])
 '''
 
-METRICS = '''
-def dcg(rels): return sum((2 ** r - 1) / math.log2(i + 2) for i, r in enumerate(rels))
-def ndcg_at_k(ranked_ids, rels: dict, k: int = 10) -> float:
-    gains = [rels.get(d, 0) for d in ranked_ids[:k]]
-    ideal = sorted(rels.values(), reverse=True)[:k]
-    return dcg(gains) / dcg(ideal) if ideal and dcg(ideal) > 0 else 0.0
-def recall_at_k(ranked_ids, rels: dict, k: int = 10) -> float:
-    rel = {d for d, r in rels.items() if r > 0}
-    return len(rel & set(ranked_ids[:k])) / len(rel) if rel else 0.0
-def mrr_at_k(ranked_ids, rels: dict, k: int = 10) -> float:
-    for i, d in enumerate(ranked_ids[:k]):
-        if rels.get(d, 0) > 0: return 1.0 / (i + 1)
-    return 0.0
-'''
+# Métricas canónicas del módulo 00 (ganancia lineal como trec_eval, dedup, empates deterministas): fuente única
+import pathlib as _pl
+METRICS = (
+    _pl.Path(__file__).parent / "poliglota_src" / "metrics.py").read_text(encoding="utf-8")
 
 TOKMETRICS = '''
 WORD_RE = re.compile(r"\\w+(?:['’]\\w+)?|[^\\w\\s]", re.UNICODE)

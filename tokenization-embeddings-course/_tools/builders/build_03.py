@@ -827,7 +827,7 @@ Cinco cajas grandes alineadas de izquierda a derecha, conectadas por flechas azu
 Entrada (tarjeta gris a la izquierda, antes de la caja 1): "  ¡Café CON leche!  "
 
 Caja 1 · "Normalizer" (azul). Descripción: "str → str (NFKC, minúsculas)". Tarjeta: "  ¡café con leche!  ".
-Caja 2 · "Pre-tokenizer" (naranja). Descripción: "str → pre-tokens + offsets". Tarjeta con cuatro chips: [¡] [café] [con] [leche] [!] (cinco chips, con los offsets pequeños debajo: (2,3) (3,7) (8,11) (12,17) (17,18)).
+Caja 2 · "Pre-tokenizer" (naranja). Descripción: "str → pre-tokens + offsets". Tarjeta con cinco chips: [¡] [café] [con] [leche] [!] (con los offsets pequeños debajo: (2,3) (3,7) (8,11) (12,17) (17,18)).
 Caja 3 · "Model (WordPiece)" (verde). Descripción: "pre-token → piezas → ids". Tarjeta con chips: [¡] [café] [con] [le] [##che] [!] y debajo los ids: 12 408 57 301 88 13.
 Caja 4 · "Post-processor" (gris oscuro). Descripción: "añade tokens especiales". Tarjeta: [CLS] [¡] [café] [con] [le] [##che] [!] [SEP] con ids 2 12 408 57 301 88 13 3.
 Caja 5 · "Decoder" (azul). Descripción: "ids → str". Tarjeta: "¡ café con leche !" y una nota pequeña "(WordPiece pierde el espaciado original)".
