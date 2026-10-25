@@ -346,23 +346,9 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-## 3. El algoritmo, formalmente
+## 3. Ejemplo resuelto a mano (el clásico de Sennrich)
 
-Sea el corpus una secuencia (o un multiconjunto de «palabras» con frecuencia) sobre un alfabeto inicial $\Sigma_0$ (aquí, los 256 bytes). **Entrenamiento**, con $M$ fusiones:
-
-$$\text{para } k=1,\dots,M:\quad (a_k,b_k)=\arg\max_{(a,b)}\ \text{count}(a,b);\qquad t_k := a_k b_k;\qquad \Sigma_k=\Sigma_{k-1}\cup\{t_k\}$$
-
-y se reemplaza cada aparición adyacente de $(a_k,b_k)$ por $t_k$ en el corpus. Aquí $\text{count}(a,b)$ es el número de veces que $b$ sigue a $a$ en el corpus **actual**, ponderado por la frecuencia de cada palabra. El tamaño final del vocabulario es $|V|=256+M$ (más tokens especiales).
-
-**Codificación** de un texto nuevo: se parte en trozos (pre-tokenización), cada trozo se convierte a bytes y se aplican las fusiones **en el orden en que se aprendieron**: en cada paso se fusiona el par adyacente cuyo token resultante tiene **menor rango** $k$, hasta que no queda ninguno. El **orden de los merges es parte del tokenizer**: dos listas con las mismas fusiones en distinto orden son tokenizers distintos.
-
-**¿Qué optimiza?** Cada fusión de $(a,b)$ reduce la longitud del corpus en (≈) $\text{count}(a,b)$ tokens, así que BPE es un **algoritmo voraz de compresión**. Formalizar *qué* problema resuelve costó casi 30 años: Zouhar et al. (2023) lo plantean como un problema de optimización combinatoria y prueban que la versión voraz es una aproximación de factor $\tfrac{1}{\sigma}(1-e^{-\sigma})$ (≈ 0.37 como cota empírica) del óptimo; Kozma & Voderholzer (2024) demuestran que encontrar la secuencia óptima de $M$ fusiones es **APX-completo** y que BPE garantiza entre 0.333 y 0.625 del óptimo en el peor caso.
-
-> ⚠️ **Más compresión ≠ mejor modelo.** Schmidt et al. (2024) no encuentran que menos tokens implique mejor rendimiento downstream; la pre-tokenización pesa más de lo que se pensaba. Y Bostrom & Durrett (2020) encuentran que Unigram LM (módulo 03) iguala o supera a BPE al preentrenar. BPE es *estándar*, no *óptimo*.
-""")
-
-nb.md(r"""
-## 4. Ejemplo resuelto a mano (el clásico de Sennrich)
+Antes de la fórmula, ejecútalo a mano: la regla es *«cuenta los pares de símbolos adyacentes, fusiona el más frecuente, repite»*. Es el mismo espíritu que un compresor de diccionario (LZW): sustituir lo que se repite por un símbolo nuevo.
 
 Corpus: «low» ×5, «lower» ×2, «newest» ×6, «widest» ×3. Cada palabra termina con un marcador `</w>` y empieza como secuencia de caracteres. (Es el diccionario del Algoritmo 1 de Sennrich et al., 2016.)
 
@@ -427,11 +413,29 @@ Evita: cambiar números o pares, texto ilegible, movimientos bruscos, elementos 
     """t=0   corpus:  low×5 | lower×2 | newest×6 | widest×3  (cada palabra = caracteres + </w>)
 t=4   pares:   e s:9  s t:9  t </w>:9  w e:8  l o:7  o w:7     (empate a 9)
 t=9   1) e+s→es   2) es+t→est   3) est+</w>→est</w>   4) l+o→lo   5) lo+w→low
-t=25  final:   low</w>×5 | low e r </w>×2 | n e w est</w>×6 | w i d est</w>×3
+t=25  final:   low </w>×5 | low e r </w>×2 | n e w est</w>×6 | w i d est</w>×3
        vocabulario aprendido: es, est, est</w>, lo, low""",
     duration="30 s",
 )
 nb.md(obs(r"""Fíjate en cómo cambian los conteos tras cada fusión: al fusionar `e s`, el par `s t` **desaparece** (ahora la `s` está dentro de `es`) y nace `es t` con el mismo conteo. Eso es lo que hace costoso el algoritmo ingenuo (recontar todo) y lo que explota el conteo incremental de la sección 6: solo cambian los pares **vecinos** de la fusión."""))
+
+nb.md(r"""
+## 4. El algoritmo, formalmente
+
+Acabas de ver el algoritmo funcionar con 16 apariciones de 4 palabras; ahora lo escribimos en general.
+
+Sea el corpus una secuencia (o un multiconjunto de «palabras» con frecuencia) sobre un alfabeto inicial $\Sigma_0$ (aquí, los 256 bytes). **Entrenamiento**, con $M$ fusiones:
+
+$$\text{para } k=1,\dots,M:\quad (a_k,b_k)=\arg\max_{(a,b)}\ \text{count}(a,b);\qquad t_k := a_k b_k;\qquad \Sigma_k=\Sigma_{k-1}\cup\{t_k\}$$
+
+y se reemplaza cada aparición adyacente de $(a_k,b_k)$ por $t_k$ en el corpus. Aquí $\text{count}(a,b)$ es el número de veces que $b$ sigue a $a$ en el corpus **actual**, ponderado por la frecuencia de cada palabra. El tamaño final del vocabulario es $|V|=256+M$ (más tokens especiales).
+
+**Codificación** de un texto nuevo: se parte en trozos (pre-tokenización), cada trozo se convierte a bytes y se aplican las fusiones **en el orden en que se aprendieron**: en cada paso se fusiona el par adyacente cuyo token resultante tiene **menor rango** $k$, hasta que no queda ninguno. El **orden de los merges es parte del tokenizer**: dos listas con las mismas fusiones en distinto orden son tokenizers distintos.
+
+**¿Qué optimiza?** Cada fusión de $(a,b)$ reduce la longitud del corpus en (≈) $\text{count}(a,b)$ tokens, así que BPE es un **algoritmo voraz de compresión**. Formalizar *qué* problema resuelve costó casi 30 años: Zouhar et al. (2023) lo plantean como un problema de optimización combinatoria y prueban que la versión voraz es una aproximación de factor $\tfrac{1}{\sigma}(1-e^{-\sigma})$ (≈ 0.37 como cota empírica) del óptimo; Kozma & Voderholzer (2024) demuestran que encontrar la secuencia óptima de $M$ fusiones es **APX-completo** y que BPE garantiza entre 0.333 y 0.625 del óptimo en el peor caso.
+
+> ⚠️ **Más compresión ≠ mejor modelo.** Schmidt et al. (2024) no encuentran que menos tokens implique mejor rendimiento downstream; la pre-tokenización pesa más de lo que se pensaba. Y Bostrom & Durrett (2020) encuentran que Unigram LM (módulo 03) iguala o supera a BPE al preentrenar. BPE es *estándar*, no *óptimo*.
+""")
 
 nb.md(r"""
 ## 5. De caracteres a **bytes** y la pre-tokenización con regex
@@ -1222,6 +1226,7 @@ try:
 except NotImplementedError as e:
     print("⏳ pendiente:", e)
 ''')
+pb.md("> 👀 **Qué debes observar.** En $V=256$ (solo bytes) las tres curvas valen exactamente 1 byte/token; después suben rápido y se aplanan (rendimientos decrecientes, como en la lección §9.1). El **código** queda por debajo de ES/EN (más símbolos y combinaciones raras). Y el impuesto `tax` > 1 significa que, para el mismo texto en español, el tokenizer entrenado solo en español comprime más que el entrenado en inglés: la referencia mide ≈ 2.1× con corpus sintético.")
 
 pb.md(r"""
 ## TODO 7 · Guardar tu tokenizer
