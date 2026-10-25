@@ -127,7 +127,7 @@ Porque la <i>fertilidad</i> (tokens por palabra) del español suele ser mayor qu
 | LLM-as-embedder 7–8 B (e5-mistral, NV-Embed, Qwen3-Embedding-8B) | 🟡 | NVIDIA, Microsoft, Alibaba — coste de inferencia alto | 2401.00368; 2405.17428; 2506.05176 |
 | Pooling *latent attention* (NV-Embed) | 🟡 | NVIDIA | 2405.17428 |
 | LLM2Vec (decoder → encoder bidireccional) | 🟡 | investigación (McGill/Mila) | 2404.05961 |
-| Embeddings multimodales unificados (Gemini Embedding 2, Jina v4/v5-omni) | 🟡 | Google, Jina — *vista previa / reciente*; tema del módulo 16 | blog de Google (mar-2026); Elastic (may-2026) |
+| Embeddings multimodales unificados (Gemini Embedding 2, Jina v4/v5-omni) | 🟡 | Google (GA abr-2026), Jina — recientes; tema del módulo 16 | blog de Google (mar/abr-2026); Elastic (may-2026) |
 | MoE para embeddings (Nomic Embed v2) | 🟡 | Nomic | 2502.07972 |
 | Elegir embedder **solo** por el promedio de MTEB | 🔴 (mala práctica) | — | ver sección 7 |
 | Evaluar en tu propio golden set con intervalos de confianza | 🟢 | práctica estándar en equipos de search | módulo 15 |
@@ -515,7 +515,7 @@ $$q_{ij}=\operatorname{round}\!\Big(\tfrac{x_{ij}-lo_j}{(hi_j-lo_j)/255}\Big)-12
 
 **Rescoring (clave).** La binaria sola pierde calidad; la receta estándar es **recuperar $k\times$`over` candidatos con Hamming** y **reordenarlos con la query en `float32` contra los vectores `int8`** (que pueden vivir en disco). Es la receta del post de Hugging Face (Shakir, Aarsen, Lee, 2024).
 
-> ⚠️ **Calibra con el corpus, no con las queries**: las queries tienen una distribución distinta (más cortas) y el rango resultante es inadecuado. La documentación de `sentence-transformers` lo desaconseja explícitamente.
+> ⚠️ **Calibra con el corpus, no con las queries**: las queries tienen una distribución distinta (más cortas) y el rango resultante es inadecuado. `sentence-transformers` recomienda calibrar con un conjunto grande de embeddings representativo de lo que vas a cuantizar (`calibration_embeddings`).
 ''')
     nb.code(r'''
 POPCNT = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
@@ -815,18 +815,18 @@ La tabla siguiente resume **solo atributos que pude verificar** (a oct-2026; `�
     nb.code(r'''
 FAMILIAS = pd.DataFrame([
     # familia, acceso, dim. completa / Matryoshka, contexto, multimodal, notas
-    ("multilingual-e5 (small/base/large)", "abierto (MIT)", "— / no", "512 (paper)", False, "prefijos query:/passage:; 94 idiomas según la tarjeta"),
-    ("BGE-M3", "abierto", "— / no", "8192", False, "denso + sparse + multi-vector en un modelo (Chen et al. 2024)"),
+    ("multilingual-e5 (small/base/large)", "abierto (MIT)", "384 / 768 / 1024 · no", "512 (paper)", False, "prefijos query:/passage:; 94 idiomas según la tarjeta"),
+    ("BGE-M3", "abierto (MIT)", "1024 / no", "8192", False, "denso + sparse + multi-vector en un modelo (Chen et al. 2024)"),
     ("gte-multilingual-base", "abierto (Apache-2.0)", "768 / dimensiones elásticas", "8192", False, "305 M parámetros; también genera vectores sparse"),
     ("nomic-embed-text-v2-moe", "abierto (Apache-2.0)", "768 → 256 / sí", "512", False, "MoE: 475 M totales, 305 M activos; ≈ 100 idiomas"),
     ("Qwen3-Embedding (0.6B/4B/8B)", "abierto (Apache-2.0)", "0.6B: hasta 1024 / sí (32–1024)", "32k", False, "decoder, last-token, instrucciones en la query"),
     ("EmbeddingGemma-300m", "pesos con licencia Gemma (gated)", "768 → 128 / sí", "2k", False, "308 M parámetros; prompts por tarea"),
-    ("jina-embeddings-v5-text (nano/small)", "pesos; small bajo CC-BY-NC-4.0", "—", "— (small: 32k según la página)", False, "feb-2026; hay variante omni (may-2026)"),
-    ("gemini-embedding-001 (API)", "API", "3072 / sí (128–3072)", "—", False, "re-normaliza al reducir dimensiones"),
-    ("Gemini Embedding 2 (API, preview mar-2026)", "API", "3072 / sí (128–3072)", "8192 (texto)", True, "texto, imagen, vídeo, audio y PDF en un espacio (módulo 16)"),
+    ("jina-embeddings-v5-text (nano/small)", "pesos; CC-BY-NC-4.0 según la tarjeta", "nano 768 · small 1024 / sí (hasta 32)", "small 32k; nano 8k (la tarjeta de nano dice 32k: verificar)", False, "feb-2026 (239 M / 677 M); LoRA por tarea; hay variante omni (may-2026)"),
+    ("gemini-embedding-001 (API)", "API", "3072 / sí (128–3072)", "2048", False, "solo el vector de 3072 sale normalizado: renormaliza tú al reducir"),
+    ("gemini-embedding-2 (API; preview 10-mar-2026, GA 22-abr-2026)", "API", "3072 / sí (128–3072)", "8192 (texto)", True, "texto, imagen, vídeo, audio y PDF en un espacio (módulo 16)"),
     ("OpenAI text-embedding-3-small/large (API)", "API", "1536 / 3072 · parámetro dimensions", "—", False, "ene-2024; el parámetro recorta dimensiones"),
     ("Cohere Embed v4 (API)", "API", "256/512/1024/1536 / sí", "128k", True, "texto + imágenes en un embedding"),
-    ("Voyage-4 (API)", "API (large: cerrado)", "2048/1024/512/256 / sí + QAT", "32k", False, "salidas float/int8/binario; fecha de lanzamiento con fuentes discrepantes"),
+    ("Voyage-4 (API)", "API (large: cerrado)", "2048/1024/512/256 / sí + QAT", "32k", False, "anunciada el 15-ene-2026 (large, base, lite y nano de pesos abiertos); salidas float/int8/binario"),
 ], columns=["familia", "acceso", "dim / Matryoshka", "contexto", "multimodal", "notas"])
 
 def shortlist(abierto=None, multimodal=None, matryoshka=None):
@@ -868,9 +868,9 @@ else:
     nb.md(r'''## 9 · 🏭 En producción
 
 - **OpenAI** ofrece `text-embedding-3-small` y `-large` (25-ene-2024) con el parámetro `dimensions`, que acorta el vector descartando valores del final conservando sus propiedades (documentación y anuncio de OpenAI). *Es Matryoshka de cara al usuario.*
-- **Google** publicó `gemini-embedding-001` (paper: Lee et al., 2025) y **EmbeddingGemma** (≈ 300 M, pensado para ejecutarse en dispositivo; Google indica que cuantizado cabe en menos de 200 MB de RAM). **Gemini Embedding 2** se anunció en *vista previa pública* el 10-mar-2026 como primer modelo nativamente multimodal de Google (el estado puede haber cambiado: revisa la documentación; módulo 16).
+- **Google** publicó `gemini-embedding-001` (paper: Lee et al., 2025) y **EmbeddingGemma** (≈ 300 M, pensado para ejecutarse en dispositivo; Google indica que cuantizado cabe en menos de 200 MB de RAM). **Gemini Embedding 2** salió en *vista previa pública* el 10-mar-2026 como primer modelo nativamente multimodal de Google y pasó a disponibilidad general (`gemini-embedding-2`) el 22-abr-2026 (blog de Google; módulo 16).
 - **Cohere Embed v4**: dimensiones Matryoshka 256/512/1024/1536, contexto de 128k y entrada multimodal (changelog oficial de Cohere).
-- **Voyage-4** (familia): según la documentación de Voyage en MongoDB/Azure, entrenada con Matryoshka y *quantization-aware training*, con salidas float/int8/binario y un espacio de embeddings compartido entre tamaños (pudiendo indexar con el modelo grande y consultar con uno más barato). Fuentes secundarias discrepan en la fecha de lanzamiento.
+- **Voyage-4** (familia): según la documentación de Voyage en MongoDB/Azure, entrenada con Matryoshka y *quantization-aware training*, con salidas float/int8/binario y un espacio de embeddings compartido entre tamaños (pudiendo indexar con el modelo grande y consultar con uno más barato). La familia (voyage-4-large, voyage-4, voyage-4-lite y voyage-4-nano de pesos abiertos) se anunció el 15-ene-2026 (MongoDB); algunos catálogos de terceros muestran fechas posteriores de versión.
 - **Jina** (v3 con *task LoRA*, v4 multimodal, v5 en feb-2026 y v5-omni en may-2026 según Elastic), **Alibaba** (Qwen3-Embedding, Apache-2.0), **Nomic** (código y datos abiertos) y **Hugging Face** (TEI para servir, módulo 18) cubren el mundo de pesos abiertos.
 - **Elastic** y otros motores aplican cuantización binaria derivada de RaBitQ (BBQ) para reducir memoria (módulo 14).
 
@@ -881,7 +881,7 @@ else:
 1. **Tu golden set manda sobre MTEB.** La librería `mteb` marca explícitamente qué resultados son *zero-shot*; un modelo puede liderar el promedio por haber visto datos de las tareas. Valida con IC (bootstrap) en tus queries (módulo 15).
 2. **El prefijo/instrucción no es opcional.** Las tarjetas de E5, Nomic, Qwen3-Embedding y EmbeddingGemma definen formatos distintos; se reporta (tarjeta de Qwen3-Embedding, citada en un export ONNX de Qdrant) que omitir la instrucción de la query cuesta del orden del 1–5 % en retrieval. Un fallo de prefijo es silencioso: ningún error, solo peor ranking.
 3. **Last-token + padding a la derecha = bug silencioso.** Usa siempre el índice del último token *real* (`attention_mask.sum(1)-1`) o `padding_side="left"`; lo reproducimos en la sección 2.
-4. **Calibra `int8` con el corpus, no con las queries.** `sentence-transformers` lo advierte en su documentación; rangos calculados con pocas queries recortan los valores del corpus.
+4. **Calibra `int8` con el corpus, no con las queries.** `sentence-transformers` pide `calibration_embeddings` representativos; rangos calculados con pocas queries (más cortas, otra distribución) recortan los valores del corpus.
 5. **Renormaliza siempre tras truncar o cuantizar.** No cuesta nada y evita mezclar normas en el producto punto. Con `gemini-embedding-001`, fuentes de terceros indican que solo la salida de 3072 dimensiones viene normalizada: verifica en la documentación y renormaliza.
 6. **Binaria = barata en RAM, pero con rescoring.** El post de Hugging Face (2024) y la documentación de `sentence-transformers` reportan hasta ≈ 96 % del rendimiento con 32× menos memoria *con rescoring*; la cifra depende del modelo y de la dimensión: mídela.
 7. **La dimensión es una decisión de capacidad, no solo de memoria.** Weller et al. (2025) muestran, teórica y empíricamente (dataset sintético LIMIT), que una dimensión fija limita qué conjuntos top-k pueden representarse: dimensiones muy pequeñas fallan en consultas "combinatorias" aunque el promedio de MTEB parezca bueno. Se retoma en el módulo 15.
@@ -967,6 +967,7 @@ La pérdida contrastiva evaluada en **varios prefijos** (anidados) y la **renorm
 - Documentación de `sentence-transformers`: *Embedding Quantization*. <https://sbert.net/examples/applications/embedding-quantization/README.html>
 - OpenAI (2024). *New embedding models and API updates*. <https://openai.com/index/new-embedding-models-and-api-updates/>
 - Google (2026). *Gemini Embedding 2: Our first natively multimodal embedding model*. <https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-embedding-2/>
+- Google (22-abr-2026). *Gemini Embedding 2 is now generally available*. <https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-embedding-2-generally-available/>
 - Google AI for Developers. *EmbeddingGemma model overview*. <https://ai.google.dev/gemma/docs/embeddinggemma>
 - Cohere. *Announcing Embed Multimodal v4* (changelog). <https://docs.cohere.com/v2/changelog/embed-multimodal-v4>
 - MongoDB / Voyage AI. *Dimensions and quantization* (tutorial). <https://www.mongodb.com/docs/voyageai/tutorials/dimensions-and-quantization/>
