@@ -10,9 +10,9 @@ ES_F = {"circle": ("un", "círculo"), "square": ("un", "cuadrado"), "triangle": 
 ES_C = {"red": ("rojo", "roja"), "green": ("verde", "verde"), "blue": ("azul", "azul"), "yellow": ("amarillo", "amarilla")}
 CONCEPTOS = [(f, c) for f in FORMAS for c in COLORES]          # 16 conceptos
 
-def dibuja(forma: str, color: str, rng, S: int = 32) -> np.ndarray:
+def dibuja(forma: str, color: str, rng, S: int = 32, centro=None) -> np.ndarray:
     """Imagen SxSx3 float32 con una figura de color sobre fondo gris con ruido. Posición y tamaño aleatorios."""
-    y, x = np.mgrid[0:S, 0:S]; cx, cy = rng.integers(int(S*.34), int(S*.66), 2); r = rng.integers(max(2, int(S*.19)), int(S*.31))
+    y, x = np.mgrid[0:S, 0:S]; cx, cy = rng.integers(int(S*.34), int(S*.66), 2) if centro is None else centro; r = rng.integers(max(2, int(S*.19)), int(S*.31))
     if forma == "circle": m = (x - cx)**2 + (y - cy)**2 < r * r
     elif forma == "square": m = (abs(x - cx) < r * .8) & (abs(y - cy) < r * .8)
     elif forma == "triangle": m = (y >= cy - r) & (y <= cy + r) & (abs(x - cx) <= (y - (cy - r)) / 2 + .5)
@@ -116,8 +116,9 @@ def celda_palabra(w: str, rng=None) -> np.ndarray:
 
 def celda_icono(k: int, rng) -> np.ndarray:
     """Icono (forma de color) 16x16 sobre una celda blanca: contenido NO textual (como un logo o una figura de la página)."""
-    f, c = CONCEPTOS[k]; ic = dibuja(f, c, rng, S=16).mean(-1)      # gris, 16x16
-    cel = np.ones((CH, CW), np.float32); x0 = int(rng.integers(0, CW - 16)); cel[:, x0:x0 + 16] = ic; return cel
+    f, c = CONCEPTOS[k]; ic = dibuja(f, c, rng, S=16); lum = {"red": .35, "green": .6, "blue": .1, "yellow": .85}[c]   # el color -> nivel de gris
+    mask = np.abs(ic - .5).max(-1) > .25; cel = np.ones((CH, CW), np.float32); x0 = int(rng.integers(0, CW - 16))
+    cel[:, x0:x0 + 16] = np.where(mask, lum, 1.0); return cel
 
 def celda_vacia() -> np.ndarray: return np.ones((CH, CW), np.float32)
 
