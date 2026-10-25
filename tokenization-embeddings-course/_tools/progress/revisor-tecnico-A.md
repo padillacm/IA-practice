@@ -8,8 +8,8 @@ Agente: Revisor técnico · Módulos: 00–08 · Informe: tokenization-embedding
 - [x] 05_patologias_robustez
 - [x] 06_tokenizer_free_bytes_blt
 - [x] 07_hnet_tokenizer_transfer
-- [ ] 08_tokens_multimodales_audio
-- [ ] check_course.py OK + informe final
+- [x] 08_tokens_multimodales_audio
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (qué archivo/celda, decisiones tomadas, comandos largos lanzados y su resultado)

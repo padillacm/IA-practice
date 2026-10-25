@@ -83,3 +83,21 @@ falta. Cambios aplicados en los builders y notebooks regenerados; recomendacione
   en el PDF. Todas las referencias arXiv del mapa de madurez existen (SOMBRERO 2601.22805, ALM 2503.20083, etc.).
 - Sin cambios necesarios. Recomendación: WECHSEL-lite usa los tokens compartidos como diccionario (el original usa un
   diccionario bilingüe de palabras); ya está declarado como «lite».
+
+## 08 · Tokens multimodales y de audio
+- Tasas verificadas: ViT (224/16)² = 196, Chameleon 512² → 1024 tokens (codebook 8192, vocabulario total 65 536),
+  Cosmos FSQ (8,8,8,5,5,5) = 64 000 y compresiones 4x8x8/8x8x8/8x16x16, EnCodec 75 Hz × 10 bits (1.5–24 kbps),
+  SoundStream (strides 2·4·5·8 = 320), Mimi 12.5 Hz × 8 × 11 bits = 1.1 kbps, MusicGen (EnCodec 32 kHz, 50 Hz),
+  128K tokens ≈ 3.6 min a 600 tok/s. Autoevaluación (13 312 bits, 0.0508 bpp, ≈ 472x) correcta.
+- Código: VQ (pérdida codebook + β·commitment, STE, init por datos, reinicio de códigos muertos), FSQ (acotado con
+  tanh y desplazamiento para L par, índice en base mixta, como la implementación de referencia), RVQ con quantizer
+  dropout, códec toy (stride 64 → 125 Hz × 8 bits = 1 kbps por nivel) y μ-law. Correcto. Sin cambios.
+
+## Pendientes y recomendaciones generales
+- `extras/GEMINI_ASSETS.md` está desactualizado (40 de 67 recursos y prompts antiguos de M03-IMG-03 y M06-VID-01):
+  regenerarlo con `gen_gemini_index.py` en la pasada final de consistencia (no se hizo aquí para no pisar a los autores
+  que trabajan en 09–11).
+- Los umbrales de rúbrica de 00–08 están calibrados con corpus sintético/espejo (avisado en cada proyecto); conviene
+  recalibrarlos con datos reales (HF/openaipublic) cuando el entorno lo permita (revisor de ejecutabilidad).
+- `tiktoken` cl100k/o200k no se descargan en este entorno (openaipublic bloqueado): las cifras de 03–05 con esos
+  encodings vienen de la medición de los autores y no se recalcularon aquí; GPT-2 sí se verificó (espejo con SHA-256).
