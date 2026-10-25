@@ -5,7 +5,7 @@ Agente: Revisor pedagógico · Módulos: 00–08 · Informe: tokenization-embedd
 - [x] 02_bpe_desde_cero
 - [x] 03_wordpiece_unigram_sentencepiece
 - [x] 04_diseno_tokenizers_modernos
-- [ ] 05_patologias_robustez
+- [x] 05_patologias_robustez
 - [ ] 06_tokenizer_free_bytes_blt
 - [ ] 07_hnet_tokenizer_transfer
 - [ ] 08_tokens_multimodales_audio

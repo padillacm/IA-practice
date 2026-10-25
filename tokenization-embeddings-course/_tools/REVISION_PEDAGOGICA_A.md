@@ -58,3 +58,17 @@ y algún ejemplo a mano ausente.
 - **Repaso espaciado:** el 🔁 solo preguntaba por 02–03. Añadidas R4 (módulo 01, Cálculo: bytes y tokens máximos de
   «Привет, мир») y R5 (módulo 00, Diagnóstico: ¿una mejora de nDCG de 0.02 en 40 consultas es real? → IC pareado).
 - **Andamiaje del proyecto:** paso 2 sin 🪜 Pista 2 y paso 4 (receta + justificación) sin pistas: añadidas.
+
+## 05 · Patologías y robustez
+- Bien: 🔁 con repaso espaciado de 01, 02/04 y 03/04; intuición («dos entrenamientos que nunca se hablaron») antes de
+  la derivación del gradiente; banco MiniGPT con verdad de referencia que permite **medir** el detector; enfoque
+  defensivo explícito; 👀 en todos los gráficos.
+- **Carga cognitiva:** ≈ 74 celdas sin 🧭. Añadida la ruta núcleo (secciones 3–5, 10–12, lo que usa el proyecto) vs
+  ampliación (6–9: letras, aritmética, espacios, *token healing*).
+- **Reestructurado:** Mapa de madurez movido de §3 a §13 (antes de 🏭), como en 03–04; secciones renumeradas y
+  referencias internas («sección 6/11») actualizadas.
+- **Alineamiento proyecto ↔ solución:** el enunciado del paso 2 listaba U+200B, U+2060, U+FEFF pero la pista y la
+  solución también eliminan U+200C y U+2061–U+2064; enunciado corregido. Añadida una caja 🔁 que contrasta con el
+  `normalizar` del módulo 01 (que conservaba el ZWNJ en persa/índicas): decisión de diseño explícita.
+- **Andamiaje:** el paso 3 (fuzzing + informe de hallazgos) solo tenía 🪜 1; añadida 🪜 2 (cómo convertir la tabla de
+  fallos por clase en hallazgos con evidencia, severidad y mitigación).

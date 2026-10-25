@@ -119,23 +119,11 @@ if banco["frecuencias"] is not None:
 ''')
 
 nb.md(r"""
-## 3. Mapa de madurez
-
-| Tema | Madurez | Evidencia / quién lo trata | Fuente |
-|---|---|---|---|
-| Glitch tokens / tokens sub-entrenados: existencia y detección automática por pesos | 🟢 | Presentes en > 20 modelos abiertos analizados (GPT-2/J, Llama 2/3, Mistral, Qwen1.5, Gemma, Command R, Yi…); método reproducible (código de Cohere) | Rumbelow & Watkins 2023; Land & Bartolo 2024 (EMNLP) |
-| Taxonomía y detección por *clustering* (GlitchHunter) | 🟡 | Un grupo, evaluación en modelos concretos | Li et al. 2024 |
-| Tokens incompletos (bytes parciales) → alucinaciones con «bigramas improbables» | 🟡 | Resultados de un grupo en Llama 3.1 y otros | Jang et al. 2024 |
-| Fallos de conteo de letras por tokenización | 🟡 | Benchmarks (CUTE) y análisis teórico; los modelos de razonamiento lo mitigan deletreando | Edman et al. 2024; Zhang et al. 2024 |
-| Aritmética: alineación de tokens (R2L) | 🟢/🟡 | Medido en GPT-3.5/GPT-4 (2023); el efecto decrece con la escala | Singh & Strouse 2024 |
-| Robustez a typos/formato; mitigación con subword regularization | 🟡 | Persisten fallos en LLM; BPE-dropout ayuda | Chai et al. 2024 |
-| Frontera del prompt y *token healing* | 🟢 (en toolkits) / 🟡 (APIs) | `guidance` lo aplica por defecto en backends locales; corrección exacta a nivel de byte propuesta en 2024 | Lundberg (guidance); Phan et al. 2024 |
-| Inyección con Unicode invisible (*tags*, ancho cero) | 🟡 | Técnica documentada por la comunidad de seguridad; las defensas (strip/normalize) son simples | Documentación de promptfoo; UTS #39 |
-| Ataques que explotan glitch tokens | 🟡 | Demostrados en modelos abiertos | Geiping et al. 2024 |
+> 🧭 **Ruta núcleo vs ampliación.** La lección tiene ≈ 74 celdas (≈ 3 h). *Núcleo (≈ 2 h), lo que usa el proyecto:* secciones 3–5 (por qué existen y cómo detectar tokens sub-entrenados, incluida 5.1), 10 (Unicode invisible e inyección de tokens), 11 (fuzzing) y 12 (tabla resumen). *Ampliación (≈ 1 h):* 6 (letras), 7 (aritmética), 8 (espacios y typos) y 9 (*token healing*); son patologías que verás en entrevistas y en producción, pero el proyecto no las pide.
 """)
 
 nb.md(r"""
-## 4. Intuición primero: dos entrenamientos que nunca se hablaron
+## 3. Intuición primero: dos entrenamientos que nunca se hablaron
 
 El pipeline estándar es **secuencial y desacoplado**: primero se entrena el *tokenizer* con una muestra de texto (a menudo web «cruda»), después se entrena el *modelo* con otro corpus (más filtrado, deduplicado, con otra mezcla).
 Cualquier cadena frecuente en el primero pero ausente en el segundo gana un token que **el modelo nunca ve como entrada ni como objetivo**.
@@ -171,7 +159,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-## 5. 📐 Por qué un token nunca visto acaba «raro»
+## 4. 📐 Por qué un token nunca visto acaba «raro»
 
 Con *cross-entropy*, el gradiente respecto al logit del token $j$ en la posición $t$ es $\,\partial\mathcal L/\partial z_{j}^{(t)}=p_j^{(t)}-\mathbb 1[j=y^{(t)}]$. Para un token $j$ que **nunca es el objetivo** el segundo término vale 0 siempre, así que su fila de salida $\mathbf e_j$ recibe
 
@@ -204,7 +192,7 @@ if banco["snaps"] is not None:
     plt.tight_layout(); plt.show()
     print("coseno medio entre no-vistos: inicio", round(c_sin[0], 3), "-> final", round(c_sin[-1], 3))
 else:
-    print("(GPT-2 real: no hay instantáneas de entrenamiento; la comparación se hace sobre los pesos finales en la sección 6)")
+    print("(GPT-2 real: no hay instantáneas de entrenamiento; la comparación se hace sobre los pesos finales en la sección 5)")
 ''')
 nb.md(r"""
 > 👀 **Qué debes observar.** **Izquierda:** al inicio las filas de embedding son ruido casi ortogonal (coseno ≈ 0); con el entrenamiento, las de los tokens **nunca vistos** se vuelven casi paralelas entre sí (coseno ≈ 0.99), mientras las de tokens frecuentes también se alinean algo (≈ 0.55–0.75: un modelo diminuto y poco entrenado es muy anisótropo, tema del módulo 10) pero claramente menos.
@@ -239,7 +227,7 @@ nb.md(r"""
 
 # ------------------------------- 6. Detección -------------------------------
 nb.md(r"""
-## 6. Detectar tokens sub-entrenados
+## 5. Detectar tokens sub-entrenados
 
 Pipeline de Land & Bartolo (2024), en tres pasos:
 
@@ -288,7 +276,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-### 6.1 Auditar un tokenizer real sin modelo: parciales UTF-8 e inalcanzables
+### 5.1 Auditar un tokenizer real sin modelo: parciales UTF-8 e inalcanzables
 
 Sobre los vocabularios reales de `tiktoken` podemos calcular, solo con el tokenizer, dos categorías de Land & Bartolo: **tokens parciales** (bytes que no forman UTF-8 válido por sí solos; normales en byte-level BPE, pero cada uno es un posible «token incompleto» frágil: Jang et al., 2024) y **tokens inalcanzables** (decodifican a texto cuyo `encode` produce *otros* tokens: el token existe pero el tokenizer nunca lo emite).
 """)
@@ -331,7 +319,7 @@ nb.md(r"""
 
 # ------------------------------- 7. Letras -------------------------------
 nb.md(r"""
-## 7. «¿Cuántas erres tiene *strawberry*?» — el modelo no ve letras
+## 6. «¿Cuántas erres tiene *strawberry*?» — el modelo no ve letras
 
 Un LLM recibe **ids de tokens**, no caracteres. Si `strawberry` se tokeniza como unas pocas piezas, la letra `r` está **dentro** de tokens opacos: el modelo debe haber aprendido, por co-ocurrencia, la «ortografía» de cada token (y combinarla). CUTE (Edman et al., 2024) muestra que los modelos **conocen** la ortografía de sus tokens pero fallan al **manipularla**; Zhang et al. (2024) analizan el conteo y su relación con la tokenización.
 Nosotros medimos lo que el tokenizer *oculta*: en cuántos tokens distintos aparece la letra y cuánto cambia deletreando.
@@ -406,7 +394,7 @@ nb.md(r"""
 
 # ------------------------------- 8. Números -------------------------------
 nb.md(r"""
-## 8. Aritmética: la alineación de tokens importa
+## 7. Aritmética: la alineación de tokens importa
 
 En el módulo 04 viste que GPT-3.5/4 parten los números en grupos de hasta 3 dígitos **de izquierda a derecha**. Para sumar $a+b$ el modelo necesita alinear las *unidades*, *decenas*, *centenas*… de los sumandos con las del resultado;
 si los límites de token no coinciden, la «columna» de las centenas puede estar partida entre dos tokens. Singh & Strouse (2024) forzaron tokenización **R2L** (separando miles con comas) y la precisión de suma subió de 75.6 % a 97.8 % en GPT-3.5 (8-shot, sumandos de 7–9 dígitos; `gpt-3.5-turbo-0301`); en GPT-4 (marzo de 2023) el efecto es algo menor pero persiste.
@@ -457,7 +445,7 @@ nb.md(r"""
 
 # ------------------------------- 9. Espacios, mayúsculas, typos -------------------------------
 nb.md(r"""
-## 9. Sensibilidad a espacios, mayúsculas y typos
+## 8. Sensibilidad a espacios, mayúsculas y typos
 
 Para un tokenizer byte-level, `hello`, ` hello`, `Hello`, ` Hello` y `HELLO` son **cadenas distintas con tokens distintos** (y por tanto filas de embedding distintas). El modelo debe aprender que significan lo mismo; con poco entrenamiento de una variante, el comportamiento diverge (Chai et al. 2024 miden fragilidad a typos y cambios de formato).
 Medimos dos cosas: (a) cuántos tokens cuesta cada variante y qué ids comparten; (b) la **deriva de tokens** ante typos: cuánto cambia la secuencia de ids cuando se corrompe un % de caracteres.
@@ -530,7 +518,7 @@ nb.md(r"""
 
 # ------------------------------- 10. Frontera del prompt -------------------------------
 nb.md(r"""
-## 10. Frontera del prompt y *token healing*
+## 9. Frontera del prompt y *token healing*
 
 Si el prompt termina **a mitad de un token** natural (el usuario escribió `…trab` esperando `trabajado`), el tokenizer greedy produce el token parcial ` trab` y el modelo **nunca vio** ` trab` seguido de `ajado` (en entrenamiento esa secuencia era el token ` trabajado`).
 Sus predicciones sobre el siguiente token se degradan: es el **prompt boundary problem**. *Token healing* (Lundberg, `guidance`) lo corrige así: **(1)** quitar el último token del prompt; **(2)** predecir el siguiente token **restringido** a los que *empiecen por* el texto quitado; así el modelo puede elegir ` trabajado` directamente.
@@ -599,7 +587,7 @@ nb.md(r"""
 
 # ------------------------------- 11. Unicode e inyección -------------------------------
 nb.md(r"""
-## 11. Unicode invisible, homoglifos e inyección de tokens (con enfoque defensivo)
+## 10. Unicode invisible, homoglifos e inyección de tokens (con enfoque defensivo)
 
 Conecta con el módulo 01. Tres familias de problemas **de entrada**, todas por la misma razón: *el modelo lee tokens/bytes, no glifos*.
 
@@ -699,7 +687,7 @@ nb.md(r"""
 
 # ------------------------------- 12. Fuzzing -------------------------------
 nb.md(r"""
-## 12. Fuzzing del tokenizer + modelo
+## 11. Fuzzing del tokenizer + modelo
 
 Un *fuzzer* genera entradas inusuales por **clases** y comprueba **propiedades** que deberían cumplirse siempre. Para un par tokenizer+modelo, propiedades útiles:
 
@@ -766,11 +754,11 @@ ax.set_title("Fuzzing: % de entradas que violan cada propiedad"); plt.colorbar(i
 nb.md(r"""
 > 👀 **Qué debes observar.** Cada fila es una **clase de entrada**, cada columna una **propiedad** (% de entradas que la violan). Tres hallazgos reales del banco: **(1)** la clase `especiales` viola P2 (y P1: el `decode` omite el token de control) cuando el texto contiene `<|endoftext|>`: el tokenizer **fabrica** el token real a partir de texto del usuario (solo ese especial existe en este vocabulario; el resto se tokeniza como texto);
 > **(2)** P5 falla en casi todas las entradas **no ASCII** (acentos raros, CJK/emoji, invisibles, control): los bytes poco frecuentes del corpus son ellos mismos tokens sub-entrenados, un hallazgo que a menudo se pasa por alto en tokenizers byte-level; y la clase `glitch` viola P5 por construcción (son candidatos reproducibles como texto);
-> **(3)** P3 se cumple siempre en un BPE a nivel de byte (≤ 1 token por byte), así que **no** detecta el coste del texto invisible: para eso sirve el ratio tokens/caracteres **visibles** de la sección 11. Un fuzzer es tan bueno como sus propiedades.
+> **(3)** P3 se cumple siempre en un BPE a nivel de byte (≤ 1 token por byte), así que **no** detecta el coste del texto invisible: para eso sirve el ratio tokens/caracteres **visibles** de la sección 10. Un fuzzer es tan bueno como sus propiedades.
 """)
 
 nb.md(r"""
-## 13. Tabla resumen para tu informe de robustez
+## 12. Tabla resumen para tu informe de robustez
 
 | Patología | Síntoma | Causa raíz | Detección | Mitigación |
 |---|---|---|---|---|
@@ -781,6 +769,24 @@ nb.md(r"""
 | Frontera del prompt | Peor completado a mitad de palabra | Dos tokenizaciones del mismo texto | Masa compatible con/sin healing | Token healing, plantillas que terminan en token de control |
 | Unicode invisible / homoglifos | Instrucciones ocultas, filtros eludidos, coste inflado | Bytes ≠ glifos | `inspecciona`, ratio tokens/visibles | `sanitiza` + lista blanca + normalización antes de indexar |
 | Inyección de tokens de control | Roles falsificados | Especiales parseados desde texto | P2 del fuzzer | `disallowed_special`, `split_special_tokens`, plantilla fuera del texto |
+""")
+
+nb.md(r"""
+## 13. Mapa de madurez
+
+Con el catálogo completo de patologías, esta tabla resume qué defensas son estándar y cuáles siguen en investigación.
+
+| Tema | Madurez | Evidencia / quién lo trata | Fuente |
+|---|---|---|---|
+| Glitch tokens / tokens sub-entrenados: existencia y detección automática por pesos | 🟢 | Presentes en > 20 modelos abiertos analizados (GPT-2/J, Llama 2/3, Mistral, Qwen1.5, Gemma, Command R, Yi…); método reproducible (código de Cohere) | Rumbelow & Watkins 2023; Land & Bartolo 2024 (EMNLP) |
+| Taxonomía y detección por *clustering* (GlitchHunter) | 🟡 | Un grupo, evaluación en modelos concretos | Li et al. 2024 |
+| Tokens incompletos (bytes parciales) → alucinaciones con «bigramas improbables» | 🟡 | Resultados de un grupo en Llama 3.1 y otros | Jang et al. 2024 |
+| Fallos de conteo de letras por tokenización | 🟡 | Benchmarks (CUTE) y análisis teórico; los modelos de razonamiento lo mitigan deletreando | Edman et al. 2024; Zhang et al. 2024 |
+| Aritmética: alineación de tokens (R2L) | 🟢/🟡 | Medido en GPT-3.5/GPT-4 (2023); el efecto decrece con la escala | Singh & Strouse 2024 |
+| Robustez a typos/formato; mitigación con subword regularization | 🟡 | Persisten fallos en LLM; BPE-dropout ayuda | Chai et al. 2024 |
+| Frontera del prompt y *token healing* | 🟢 (en toolkits) / 🟡 (APIs) | `guidance` lo aplica por defecto en backends locales; corrección exacta a nivel de byte propuesta en 2024 | Lundberg (guidance); Phan et al. 2024 |
+| Inyección con Unicode invisible (*tags*, ancho cero) | 🟡 | Técnica documentada por la comunidad de seguridad; las defensas (strip/normalize) son simples | Documentación de promptfoo; UTS #39 |
+| Ataques que explotan glitch tokens | 🟡 | Demostrados en modelos abiertos | Geiping et al. 2024 |
 """)
 
 nb.md(r"""
@@ -1008,7 +1014,9 @@ elif cands is not None: print([banco["tokens"][i].decode("utf-8", "replace") for
 pj.md(r"""
 ## Paso 2 · Sanitizar Unicode invisible
 
-**TODO.** `inspecciona(texto)` devuelve un dict con `invisibles` (nº de caracteres de categoría `Cf`, `Co`, `Cn`, `Cs` o del bloque Tags U+E0000–U+E007F), `en_tags` y `palabras_mixtas` (palabras que mezclan escrituras LATIN/CYRILLIC/GREEK). `sanitiza(texto)` aplica NFKC y elimina **tags, ancho cero (U+200B, U+2060, U+FEFF), bidi (U+202A–U+202E, U+2066–U+2069)**, pero **conserva ZWJ (U+200D) y VS16 (U+FE0F)** para no romper emojis compuestos.
+**TODO.** `inspecciona(texto)` devuelve un dict con `invisibles` (nº de caracteres de categoría `Cf`, `Co`, `Cn`, `Cs` o del bloque Tags U+E0000–U+E007F), `en_tags` y `palabras_mixtas` (palabras que mezclan escrituras LATIN/CYRILLIC/GREEK). `sanitiza(texto)` aplica NFKC y elimina **tags, ancho cero (U+200B–U+200C, U+2060–U+2064, U+FEFF), bidi (U+202A–U+202E, U+2066–U+2069)**, pero **conserva ZWJ (U+200D) y VS16 (U+FE0F)** para no romper emojis compuestos.
+
+> 🔁 **Compáralo con tu `normalizar` del módulo 01**, que conservaba el ZWNJ (U+200C) en escrituras como el persa o las índicas. Aquí se elimina siempre porque el corpus de Políglota es ES/EN/código; en un producto con persa sería un error. Anota esa decisión en tu informe.
 
 <details><summary>🪜 Pista 1</summary>
 
@@ -1043,6 +1051,10 @@ pj.md(r"""
 <details><summary>🪜 Pista 1</summary>
 
 Para cada entrada: `ids = bundle["encode"](x)`; P1 = `bundle["decode"](ids) == x`; P2 = `not (set(ids) & especiales_ids)`; P3 = `len(ids) / max(len(x.encode()), 1) <= 1`; P4 = `torch.isfinite(bundle["logits"](torch.tensor([ids[-bundle["ctx"]:]]))).all()`; P5 = `not (set(ids) & glitch_ids)`.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+Guarda también la columna `clase` en cada fila: la celda imprime entonces el % de **fallos** por clase y propiedad (`rep.groupby("clase").mean()`). Cada celda claramente por encima de 0 es un hallazgo candidato: la **evidencia** es esa cifra, la **severidad** depende de si afecta a seguridad (P2) o solo a coste/calidad, y la **mitigación** sale de la tabla resumen de la lección (§12).
 </details>
 """)
 pj.code(r'''
