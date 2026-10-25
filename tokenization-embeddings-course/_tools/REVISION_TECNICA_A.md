@@ -16,3 +16,14 @@ falta. Cambios aplicados en los builders y notebooks regenerados; recomendacione
 - Cifras de la tabla de 12 idiomas (bytes/code point; tokens GPT-2: EN 7, ES 13, tailandés 61, coreano 43) verificadas.
 - **Arreglado:** la caja «Qué debes observar» de NFC vs NFD decía que GPT-2 tiene tokens `ción` o `más`; no los tiene
   (`canción` → `can·ci·ón`, `más` → `m·ás`). Ahora cita `ón`, `ás`, `ño`, que sí existen.
+
+## 02 · BPE desde cero
+- Revisado a fondo: `entrena_incremental` (actualización de vecinos incl. casos solapados `aaa`/`aaaa`, heap con
+  invalidación perezosa) es equivalente al ingenuo con desempate lexicográfico; `_encode_trozo` por rango de merge;
+  puente `a_tiktoken`/`desde_tiktoken` (receta minbpe). Ejemplo de Sennrich resuelto a mano correcto.
+- Afirmaciones verificadas: Zouhar et al. 2023 (≈ 0.37; O(NM)→O(N log M)), Kozma & Voderholzer 2024 (APX-completo,
+  0.333–0.625), Llama 3 (100 K + 28 K), mapeo modelo→encoding de tiktoken 0.14.0 y n_vocab 100 277 / 200 019,
+  Singh & Strouse 2024 (R2L con comas).
+- Arreglado: rango de vocabularios de la tabla de la sección 1 (hasta 262 000).
+- Recomendación (no aplicada): `BPETokenizer.encode` codifica como texto normal un especial no permitido; `tiktoken`
+  lanza error por defecto. Mencionarlo como diferencia de diseño.

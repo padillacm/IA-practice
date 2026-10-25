@@ -270,7 +270,7 @@ nb.md(r"""
 |---|---|---|---|
 | **Palabras** | enorme (cientos de miles) y aun así incompleto | **sí** (OOV → `<unk>`) | corta |
 | **Caracteres / bytes** | diminuto (≤ 256 bytes) | no | **muy larga** (1 token por byte) |
-| **Sub-palabras (BPE)** | intermedio (32 000 – 250 000) | **no** (si es byte-level) | media |
+| **Sub-palabras (BPE)** | intermedio (32 000 – 262 000) | **no** (si es byte-level) | media |
 
 BPE busca el punto medio **aprendiendo de los datos**: las secuencias frecuentes se convierten en tokens («ción», « the»), las raras se descomponen en piezas más pequeñas, y en el peor caso en bytes. Es un **compromiso entre tamaño de vocabulario y longitud de secuencia**: cada token extra en el vocabulario acorta los textos, pero cuesta una fila más en la matriz de embeddings (módulo 09) y una neurona más en la salida softmax.
 
