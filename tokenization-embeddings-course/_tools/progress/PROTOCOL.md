@@ -8,7 +8,7 @@ Ruta del curso: `tokenization-embeddings-course` · Rama: `claude/tokenization-e
 3. Tras **cada subtarea completada** (p. ej. un módulo escrito o revisado): actualiza tu archivo de progreso, ejecuta el builder afectado hasta OK y haz commit + push **solo de tus archivos** (desde la raíz del repo):
    ```bash
    git add <tus rutas> tokenization-embeddings-course/_tools/progress/<tarea>.md
-   git commit -m "<mensaje descriptivo>" -m "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+   git commit -m "<mensaje descriptivo>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_012y6p7GSFWMhSrhx94UWEWH"
    git push -q origin claude/tokenization-embeddings-course || { git pull --rebase --autostash -q origin claude/tokenization-embeddings-course && git push -q origin claude/tokenization-embeddings-course; }
    ```
