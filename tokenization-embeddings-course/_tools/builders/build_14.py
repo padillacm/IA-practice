@@ -892,7 +892,7 @@ for sel in (0.5, 0.2, 0.05, 0.01, 0.002):
     t0 = time.perf_counter(); _, I2 = hnsw.search(Q, 10, params=p); t_in = (time.perf_counter() - t0) / len(Q) * 1e3
     # (c) pre-filtro: fuerza bruta sobre los permitidos
     sub = np.ascontiguousarray(X[ok])
-    t0 = time.perf_counter(); [ (sub @ q) for q in Q ]; t_pre = (time.perf_counter() - t0) / len(Q) * 1e3
+    t0 = time.perf_counter(); [np.argpartition(-(sub @ q), 10)[:10] for q in Q]; t_pre = (time.perf_counter() - t0) / len(Q) * 1e3   # incluye la selección top-k
     filas.append(dict(selectividad=sel, n_permitidos=len(ok), recall_post=recall_vs_gt(np.array([r + [-1] * (10 - len(r)) for r in post]), gt_f),
                       recall_en_grafo=recall_vs_gt(I2, gt_f), recall_pre=1.0, ms_en_grafo=t_in, ms_prefiltro=t_pre))
 tab_f = pd.DataFrame(filas)

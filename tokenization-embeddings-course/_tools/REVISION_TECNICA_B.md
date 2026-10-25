@@ -65,3 +65,14 @@ trec_eval, bootstrap por queries, test pareado por *shift*, sign-flip y Holm cor
 - **Arreglado:** ColBERTv2 a d = 128 y 2 bits se daba como «33 B/token»; el paper codifica cada vector en 20 B (1 bit)
   o 36 B (2 bits): 32 B de residuo + 4 B de id de centroide. Corregido en el texto y en la tabla de costes (el juguete
   sigue usando 1 B de id porque tiene 256 centroides, y ahora se explica).
+
+## 14 · Indexación ANN
+- Verificado: neighbor recall@k contra fuerza bruta del mismo conjunto (incl. el GT filtrado `ok[exacto_topk(X[ok])]`
+  en búsqueda filtrada), latencia por query con batch = 1 y un hilo, tamaño serializado real, coste de IVF,
+  PQ/ADC (compresión 4d/m, refine exacto), OPQ por Procrustes, MiniHNSW (nivel ⌊−ln U·m_L⌋ con P(ℓ ≥ l) = M^{−l},
+  heurística de selección, grado 2M en la capa 0), Vamana con poda α, ejemplo anisótropo de ScaNN (MSE elige c1,
+  pérdida con η = 4 elige c2), estimador de RaBitQ ⟨ō,q⟩/⟨ō,o⟩ y su factor de corrección.
+- **Arreglado:** la latencia del pre-filtro medía solo el producto matricial y no la selección del top-k, lo que
+  favorecía al pre-filtro frente al filtro en grafo; ahora incluye `argpartition`.
+- Recomendación: en la tabla de filtrado, el post-filtro usa efSearch = 100 y el filtro en grafo 64 (presupuestos
+  distintos); y el filtro en grafo se cronometra en lote, no con batch = 1 como el resto del módulo.
