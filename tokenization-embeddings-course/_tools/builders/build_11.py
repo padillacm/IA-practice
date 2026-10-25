@@ -779,7 +779,7 @@ Logits: 16, 15.6, 4. $p=e^{16}/(e^{16}+e^{15.6}+e^{4})\approx 1/(1+e^{-0.4})\app
 </details>
 <details><summary><b>3. (Diagnóstico)</b> Tras entrenar, la pérdida es muy baja, la alineación ≈ 0 y la uniformidad ≈ 0, y el nDCG es pésimo. ¿Qué ha pasado y dónde buscas el bug?</summary>
 
-Colapso: todos los embeddings son (casi) iguales. Busca por qué los negativos no actúan: pérdida sin negativos, temperatura enorme, máscara que anula el denominador, o los mismos vectores usados como consulta y documento.
+Colapso: todos los embeddings son (casi) iguales. Con negativos de verdad en el denominador, un modelo colapsado tendría pérdida ≈ $\log B$ (todas las columnas empatan), así que una pérdida **muy baja** indica que los negativos no entran en la pérdida: pérdida solo de positivos (como `solo_positivos`), máscara que anula el denominador, o un lote en el que cada consulta solo «compite» consigo misma (p. ej. $B=1$). Una temperatura enorme también deja mala uniformidad, pero entonces la pérdida se queda cerca de $\log B$, no baja.
 </details>
 <details><summary><b>4. (Diagnóstico)</b> Al añadir negativos duros de BM25 el nDCG baja. ¿Qué compruebas antes de descartarlos?</summary>
 

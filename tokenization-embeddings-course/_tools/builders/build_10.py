@@ -516,7 +516,7 @@ ax.set_xscale("log", base=2); ax.set(xlabel="k (dimensiones tras whitening)", yl
 ax.legend(fontsize=7); plt.tight_layout(); plt.show()
 for n, r_ in post.items():
     best_k = max(r_["whitening"], key=r_["whitening"].get)
-    print(f"{n:30s} base={r_['base']:.3f} | centrado={r_['centrado']:.3f} | ABTT-1={r_['abtt']:.3f} | whitening k={best_k}: {r_['whitening'][best_k]:.3f} | anisotropía {r_['aniso']:.2f} → {r_['aniso_w']:.2f}")
+    print(f"{n:30s} base={r_['base']:.3f} | centrado={r_['centrado']:.3f} | ABTT-1={r_['abtt']:.3f} | whitening mejor k={best_k} (elegido en test: optimista): {r_['whitening'][best_k]:.3f} | anisotropía {r_['aniso']:.2f} → {r_['aniso_w']:.2f}")
 ''')
 nb.md(r"""
 > 👀 **Qué debes observar.** (1) Tras el whitening completo la anisotropía cae a ≈ 0 por construcción. (2) Que eso **mejore el retrieval** no está garantizado: el whitening iguala *todas* las direcciones, también las de ruido. Con $k$ pequeño se pierde información; con $k$ grande se amplifica ruido; suele haber un óptimo intermedio, y debe elegirse con un conjunto de validación, no con el test.
@@ -816,7 +816,7 @@ pj.code(SRC_METRICS)
 pj.code(SRC_BM25)
 pj.code(CORPUS10)
 pj.code(r'''
-# Partición determinista de las consultas: validación / test (50/50, estratificada por idioma)
+# Partición determinista de las consultas: validación / test (≈ 50/50 por hash del qid; no estratificada)
 import zlib
 split = {q["qid"]: ("val" if zlib.crc32(q["qid"].encode()) % 2 == 0 else "test") for q in queries}
 idx = {s: [i for i, q in enumerate(queries) if split[q["qid"]] == s] for s in ("val", "test")}
