@@ -501,7 +501,7 @@ ax[1].set(xlabel="L_uniform (← más uniforme)", ylabel="L_align (↓ positivos
 plt.tight_layout(); plt.show()
 ''')
 nb.md(r"""
-> 👀 **Qué debes observar.** (1) Hay un $\tau$ intermedio que gana (en la ejecución de referencia, $\tau=0.2$ ≈ 1.00 de nDCG@10 frente a 0.55 con $\tau=1$); $\tau=1$ no separa bien porque todos los negativos pesan igual. (2) **Sin negativos** el modelo colapsa: alineación ≈ 0 (¡perfecta!) pero uniformidad ≈ 0 y nDCG cercano al de un modelo sin entrenar. Por eso no basta con «acercar positivos»: los negativos (o un regularizador de uniformidad) son los que impiden el colapso.
+> 👀 **Qué debes observar.** (1) Hay un $\tau$ intermedio que gana (en la ejecución de referencia, $\tau=0.2$ ≈ 1.00 de nDCG@10 frente a 0.49 con $\tau=1$); $\tau=1$ no separa bien porque todos los negativos pesan igual. (2) **Sin negativos** el modelo colapsa: alineación ≈ 0 (¡perfecta!) pero uniformidad ≈ 0 y nDCG cercano al de un modelo sin entrenar. Por eso no basta con «acercar positivos»: los negativos (o un regularizador de uniformidad) son los que impiden el colapso.
 > (3) En el plano, los buenos modelos están **abajo a la izquierda**: positivos cerca *y* puntos repartidos. El valor óptimo de $\tau$ depende de datos, tamaño de lote y modelo: SimCSE usó 0.05 y E5 0.01; trátalo como hiperparámetro.
 """)
 nb.gemini(
@@ -571,9 +571,10 @@ for i, v in enumerate(neg.values()):
     ax.text(i, v, f"{v:.3f}", ha="center", va="bottom")
 ax.set(ylabel="nDCG@10 (conceptos no vistos)", title="Negativos duros: limpios ayudan, falsos negativos dañan (B=16, τ=0.05)")
 plt.tight_layout(); plt.show()
+print({k: round(v, 3) for k, v in neg.items()})
 ''')
 nb.md(r"""
-> 👀 **Qué debes observar.** En la ejecución de referencia: solo lote 0.88 · con duros limpios 0.92 · con duros **sin filtrar** 0.84. El top de BM25 sin filtrar está lleno de documentos del **mismo concepto** (falsos negativos, mira el porcentaje impreso): usarlos como negativos es peor que no usar negativos duros. En datos reales no conoces el concepto: de ahí los filtros por score (TopK-PercPos) o por cross-encoder.
+> 👀 **Qué debes observar.** En el prototipo de referencia (mismo código, 300 pasos): solo lote 0.88 · con duros limpios 0.92 · con duros **sin filtrar** 0.84; tu ejecución imprime sus propios valores (con 200 pasos las diferencias pueden ser menores). El top de BM25 sin filtrar está lleno de documentos del **mismo concepto** (falsos negativos, mira el porcentaje impreso): usarlos como negativos es peor que no usar negativos duros. En datos reales no conoces el concepto: de ahí los filtros por score (TopK-PercPos) o por cross-encoder.
 """)
 nb.gemini(
     "imagen", "M11-IMG-03", "Minado de negativos duros con filtro de falsos negativos",
@@ -699,7 +700,7 @@ nb.md(r"""
 nb.code(ST11)
 nb.code(ST_RUN)
 nb.md(r"""
-> 👀 **Qué debes observar.** Unos pocos minutos de MNRL suben el nDCG@10 del modelo sobre las consultas de test (en la ejecución de referencia con el mini-BERT local: 0.46 → 0.64). Con `paraphrase-multilingual-MiniLM-L12-v2` real partes de un modelo ya bueno: usa LR baja (2e-5) y vigila que no empeore en otros idiomas (*catastrophic forgetting*).
+> 👀 **Qué debes observar.** Unos pocos minutos de MNRL suben el nDCG@10 del modelo sobre las consultas de test (en la ejecución de referencia con el mini-BERT local: 0.43 → 0.69). Con `paraphrase-multilingual-MiniLM-L12-v2` real partes de un modelo ya bueno: usa LR baja (2e-5) y vigila que no empeore en otros idiomas (*catastrophic forgetting*).
 """)
 nb.code(LORA11)
 nb.md(r"""
@@ -748,10 +749,10 @@ nb.md(r"""
 """)
 nb.md(r"""
 ## 🧠 Secretos de la élite
-1. **El candidato más parecido es el más sospechoso.** En nuestro laboratorio, los negativos de BM25 sin filtrar bajaron el nDCG de 0.88 a 0.84 y los filtrados lo subieron a 0.92. Filtra siempre (umbral relativo al positivo, cross-encoder o deduplicación).
+1. **El candidato más parecido es el más sospechoso.** En nuestro laboratorio, los negativos de BM25 sin filtrar bajaron el nDCG de 0.88 a 0.84 y los filtrados lo subieron a 0.92 (prototipo de 300 pasos); en Políglota real el efecto fue pequeño (proyecto). Filtra siempre (umbral relativo al positivo, cross-encoder o deduplicación).
 2. **InfoNCE se satura en $\log B$.** Lo comprobaste numéricamente: con lotes pequeños la señal está acotada; lotes grandes (o Gradient Cache, gradiente exacto) son una palanca de calidad, no solo de velocidad.
 3. **Sin negativos hay colapso.** Alineación perfecta + uniformidad nula = modelo inútil; vigila $\mathcal L_{\text{unif}}$ durante el entrenamiento como alarma barata.
-4. **$\tau$ es un hiperparámetro de primer orden** (0.05 SimCSE, 0.01 E5, `scale=20` en MNRL): un barrido de 4 valores cambió el nDCG de 0.55 a ≈ 1.00 en el laboratorio.
+4. **$\tau$ es un hiperparámetro de primer orden** (0.05 SimCSE, 0.01 E5, `scale=20` en MNRL): un barrido de 4 valores cambió el nDCG de 0.49 a ≈ 1.00 en el laboratorio.
 5. **Evita duplicados en el lote.** Dos pares que comparten documento o concepto se vuelven falsos negativos mutuos: `BatchSamplers.NO_DUPLICATES` o un muestreador por grupo.
 6. **La pérdida de entrenamiento no es tu métrica.** En Políglota la pérdida bajaba mientras el nDCG de test se estancaba: evalúa en retrieval real cada pocos pasos.
 7. **En benchmarks de ítem conocido, BM25 es durísimo.** Un denso pequeño entrenado desde cero no le gana; ajusta un preentrenado y combina (híbrido), y construye consultas no léxicas en tu *golden set* (módulo 15).
@@ -1040,7 +1041,7 @@ R1 = test_info_nce()
 resultado = experimento()
 ''')
 pj.md(r"""
-> **Nota de calibración.** En la ejecución de referencia (fallback sintético, 300 pasos en CPU), los negativos duros de BM25 **no** mejoraron al entrenamiento solo-lote en este corpus. Hipótesis a contrastar en tu análisis: los documentos sintéticos comparten plantillas y los «duros» que sobreviven al filtro son casi paráfrasis del positivo con otra herramienta o aspecto; con tan pocos pasos el modelo aún no domina los negativos fáciles; y la evaluación de ítem conocido premia el solapamiento léxico. El umbral de R5 refleja esa medición, no lo deseado.
+> **Nota de calibración.** Ejecución de referencia (fallback sintético + stdlib, 300 pasos en CPU): BM25 0.866 · sin entrenar 0.342 · solo lote 0.502 · con duros 0.524 (nDCG@10 test). En un prototipo con 400 pasos los duros quedaron, en cambio, 0.09 por **debajo**: el efecto es pequeño e inestable en este corpus, por eso R5 solo exige no perder más de 0.15. Hipótesis para tu análisis: los documentos sintéticos comparten plantillas y los «duros» que sobreviven al filtro son casi paráfrasis del positivo con otra herramienta o aspecto; con pocos pasos el modelo aún no domina los negativos fáciles; y la evaluación de ítem conocido premia el solapamiento léxico (BM25 sigue muy por encima). El umbral refleja lo medido, no lo deseado.
 """)
 pj.save(PROJECT)
 
