@@ -35,3 +35,16 @@ y algún ejemplo a mano ausente.
 - **Arreglado:** el placeholder de M02-VID-01 decía `low</w>×5` como estado final; tras 5 fusiones es `low </w>×5`
   (dos tokens), como dicen el texto y el prompt.
 - **Arreglado:** 👀 tras el gráfico del TODO 6 del proyecto (barrido de vocabulario e impuesto de idioma).
+
+## 03 · WordPiece, Unigram, SentencePiece
+- Bien: derivación de WordPiece seguida de corpus de 5 palabras a mano; ejemplo `hugs` de Unigram a mano antes del
+  EM completo; 🔁 con preguntas etiquetadas por módulo (01 y 02); proyecto que reutiliza la tubería de §7.1.
+- **Reestructurado:** el **Mapa de madurez** era la §3, antes de la intuición, y nombraba técnicas aún no
+  enseñadas (Unigram, BPE-dropout, likelihood de WordPiece). Ahora es la §10 (antes de 🏭), con frase puente; las
+  secciones 4–10 se renumeraron (3–9) y se corrigieron las referencias internas («sección 9» → 7.1 / 8).
+- **Arreglado:** la caja 🧭 estaba al final de la §9 (Resumen), donde ya no sirve para planificar; se movió al inicio,
+  con los números de sección actualizados y la indicación de hacer 8.2 (exportación a `tiktoken`) antes del proyecto,
+  porque el paso 4 del proyecto la usa.
+- **Andamiaje del proyecto:** el paso 1 ahora remite a `construye_hf` (§7.1) y la 🪜 Pista 2 explicita
+  `pre_tokenizers.Sequence` (combinar dos pre-tokenizers no se decía); el paso 5 (decisión escrita) no tenía pistas:
+  añadidas 🪜 1 (estructura en cuatro frases) y 🪜 2 (qué métricas pesan para sparse vs embedder).

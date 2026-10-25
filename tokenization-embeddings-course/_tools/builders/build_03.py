@@ -110,22 +110,11 @@ print(len(train_texts), "docs de entrenamiento |", {l: len(v) for l, v in test_b
 ''')
 
 nb.md(r"""
-## 3. Mapa de madurez
-
-Estado del arte a **oct-2026**. 🟢 sólido (estándar de industria) · 🟡 emergente · 🔴 experimental.
-
-| Técnica | Madurez | Quién la usa (con respaldo) | Fuente |
-|---|---|---|---|
-| BPE + regex + bytes (tiktoken) | 🟢 | Familia GPT (`cl100k_base`, `o200k_base`); Llama 3 parte del vocabulario de tiktoken (100K) y añade 28K tokens multilingües | Llama 3 (Grattafiori et al. 2024), tiktoken |
-| WordPiece (inferencia *longest-match-first*, prefijo `##`) | 🟢 (en declive para modelos generativos) | BERT (vocabulario de 30 000) y descendientes | Devlin et al. 2018 |
-| SentencePiece (BPE o Unigram, `▁`) | 🟢 | T5 (32 000 *wordpieces*), XLM-R (250 k), Llama 1/2 (BPE vía SentencePiece, dígitos sueltos, *byte fallback*), Gemma 3 (SentencePiece con dígitos separados y bytes) | Raffel 2019; Conneau 2019; Touvron 2023; Gemma 3 report 2025 |
-| Unigram LM (poda por pérdida) | 🟢 | Es el `model_type` por defecto de SentencePiece (la librería con la que se entrenaron T5 y XLM-R) | Kudo 2018; docs de SentencePiece |
-| Subword regularization (muestreo Unigram, BPE-dropout) | 🟡 | Estándar en traducción y ASR; **poco usado en el pretraining de LLMs grandes**; evidencia de robustez a typos en LLMs | Kudo 2018; Provilkov 2020; Chai et al. 2024 |
-| Entrenar el tokenizer con *likelihood* exacto de WordPiece | 🔴 | El código de entrenamiento original de Google no es público; en HF `WordPieceTrainer` entrena con un procedimiento tipo BPE (lo verificamos abajo) | Schuster & Nakajima 2012; experimento de esta lección |
+> 🧭 **Ruta núcleo vs ampliación.** Esta lección es larga (~84 celdas, ≈ 3 h). *Núcleo (≈ 2 h):* secciones 3, 4.1–4.3, 5.1–5.3, 6, 7.1, 8 (introducción y 8.3) y 9. *Ampliación (≈ 1 h):* 4.4 (inferencia *longest-match-first*), 5.4 (muestreo), 7.2–7.3 (morfología y normalizer), 8.1–8.2 (BPE-dropout y exportación a `tiktoken`). El proyecto usa el núcleo más 8.2 (paso 4): haz esa subsección antes del proyecto.
 """)
 
 nb.md(r"""
-## 4. Intuición primero: dos decisiones, no una
+## 3. Intuición primero: dos decisiones, no una
 
 Todo tokenizer de subpalabras responde dos preguntas **independientes**:
 
@@ -179,15 +168,15 @@ nb.md(r"""
 
 # ------------------------------- 5. WordPiece -------------------------------
 nb.md(r"""
-## 5. WordPiece: fusionar por verosimilitud (no por frecuencia)
+## 4. WordPiece: fusionar por verosimilitud (no por frecuencia)
 
-### 5.1 La idea (Schuster & Nakajima, 2012)
+### 4.1 La idea (Schuster & Nakajima, 2012)
 
 WordPiece nació en Google para voz en japonés/coreano: sin espacios entre palabras y con alfabetos enormes, necesitaban un inventario de piezas
 que **maximizara la verosimilitud** de los datos bajo un modelo de lenguaje, no solo que comprimiera. El procedimiento es el mismo esqueleto que BPE
 (empezar en caracteres y fusionar de forma voraz) pero con otro **criterio de selección**.
 
-### 5.2 📐 Derivación
+### 4.2 📐 Derivación
 
 Modela el texto como una secuencia de $N$ piezas independientes; con $c(t)$ ocurrencias de la pieza $t$, la verosimilitud máxima es
 
@@ -281,7 +270,7 @@ def segmenta_con_fusiones(palabra: str, historial: list, prefix: str) -> list:
 ''')
 
 nb.md(r"""
-### 5.3 Un corpus de 5 palabras, resuelto a mano
+### 4.3 Un corpus de 5 palabras, resuelto a mano
 
 Usamos el corpus de juguete clásico: `hug`×10, `pug`×5, `pun`×12, `bun`×4, `hugs`×5. Con prefijo `##` en las piezas internas:
 
@@ -372,7 +361,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-### 5.4 Inferencia WordPiece: *longest-match-first*
+### 4.4 Inferencia WordPiece: *longest-match-first*
 
 Una vez fijado el vocabulario, WordPiece **no** reaplica los merges: segmenta cada palabra buscando, desde el inicio, la **pieza más larga** que esté en el vocabulario
 (las siguientes llevan el prefijo `##`). Si en algún punto no encuentra ninguna, **toda la palabra se convierte en `[UNK]`** (¡no solo el trozo!). Es un algoritmo voraz y, escrito ingenuamente, $O(n^2)$ por palabra.
@@ -411,15 +400,15 @@ for w in ["internacionalización", "wxyzq", "recomendaciones"]:
 ''')
 
 nb.md(r"""
-> 🏭 **Sorpresa de ingeniería (verifícala tú mismo en la sección 9).** En HF `tokenizers`, `WordPieceTrainer` **no implementa el criterio de verosimilitud**: internamente reutiliza la maquinaria de BPE (fusiones por frecuencia) y solo añade
+> 🏭 **Sorpresa de ingeniería (verifícala tú mismo en la sección 7.1).** En HF `tokenizers`, `WordPieceTrainer` **no implementa el criterio de verosimilitud**: internamente reutiliza la maquinaria de BPE (fusiones por frecuencia) y solo añade
 > el prefijo `##` y la inferencia *longest-match-first*. Lo comprobaremos midiendo el solapamiento de vocabularios con `BpeTrainer`.
 """)
 
 # ------------------------------- 6. Unigram LM -------------------------------
 nb.md(r"""
-## 6. Unigram LM (Kudo, 2018): un vocabulario que se *optimiza*, no que se acumula
+## 5. Unigram LM (Kudo, 2018): un vocabulario que se *optimiza*, no que se acumula
 
-### 6.1 El modelo
+### 5.1 El modelo
 
 Un tokenizer Unigram es un **modelo de lenguaje de piezas independientes**: $P(\mathbf{x})=\prod_{i=1}^{M}p(x_i)$, con $\sum_{t\in V}p(t)=1$.
 Una palabra (o frase) $X$ admite **muchas** segmentaciones $\mathbf{x}\in S(X)$ (el conjunto de caminos en un *lattice*). Hay dos usos:
@@ -427,7 +416,7 @@ Una palabra (o frase) $X$ admite **muchas** segmentaciones $\mathbf{x}\in S(X)$ 
 - **Inferencia determinista (Viterbi):** $\mathbf{x}^*=\arg\max_{\mathbf{x}\in S(X)}P(\mathbf{x})$, por programación dinámica en $O(n\cdot L)$ ($L$ = longitud máxima de pieza).
 - **Muestreo (subword regularization):** $\mathbf{x}\sim P(\mathbf{x}\mid X)\propto P(\mathbf{x})^{\alpha}$ con $\alpha\in(0,1]$ (suaviza la distribución).
 
-### 6.2 📐 Entrenamiento: EM sobre una variable oculta
+### 5.2 📐 Entrenamiento: EM sobre una variable oculta
 
 El corpus tiene verosimilitud marginal (suma sobre *todas* las segmentaciones, la segmentación es la variable oculta):
 
@@ -445,7 +434,7 @@ $$
 > 💡 **Contraste con BPE.** BPE nunca *reconsidera*: una fusión hecha es permanente (y sus piezas intermedias quedan en el vocabulario aunque ya nadie las use: es la fuente de muchos «tokens basura», módulo 05).
 > Unigram **revisa** todo el vocabulario en cada ronda contra una función objetivo explícita.
 
-### 6.3 Un ejemplo resuelto a mano: la palabra `hugs`
+### 5.3 Un ejemplo resuelto a mano: la palabra `hugs`
 
 Vocabulario semilla (probabilidades que suman 1): `h`=.10, `u`=.10, `g`=.10, `s`=.10, `hu`=.05, `ug`=.15, `gs`=.05, `hug`=.15, `ugs`=.05, `hugs`=.15.
 
@@ -661,7 +650,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-### 6.4 Subword regularization: muestrear segmentaciones
+### 5.4 Subword regularization: muestrear segmentaciones
 
 Si en lugar de Viterbi **muestreas** $\mathbf{x}\sim P(\mathbf{x}\mid X)^{\alpha}$ durante el entrenamiento del modelo de lenguaje/traducción, el mismo texto aparece con tokenizaciones distintas en cada época
 (*data augmentation* a nivel de tokenización). Kudo (2018) lo propuso con Unigram; Provilkov et al. (2020) con **BPE-dropout** (omitir cada merge con probabilidad $p$). Muestrear exactamente se logra con
@@ -701,7 +690,7 @@ Con $\alpha$ grande el muestreo se concentra en Viterbi; con $\alpha\to0$ la dis
 
 # ------------------------------- 7. SentencePiece -------------------------------
 nb.md(r"""
-## 7. SentencePiece: una *librería*, no un algoritmo
+## 6. SentencePiece: una *librería*, no un algoritmo
 
 **SentencePiece** (Kudo & Richardson, 2018) no inventa un algoritmo de subpalabras: **implementa BPE y Unigram** (más `char` y `word`) con cuatro decisiones de diseño que cambiaron la industria:
 
@@ -799,7 +788,7 @@ nb.md(r"""
 
 # ------------------------------- 8. HF tokenizers -------------------------------
 nb.md(r"""
-## 8. HF `tokenizers`: la tubería de 5 etapas
+## 7. HF `tokenizers`: la tubería de 5 etapas
 
 Casi todo tokenizer moderno de Hugging Face (BERT, GPT-2, Llama 3, T5, Qwen…) se describe como una **tubería** de 5 etapas, implementada en Rust (`tokenizers`) y serializable en **un solo `tokenizer.json`**:
 
@@ -871,7 +860,7 @@ print("   serializable en un solo archivo:", len(demo.to_str()), "caracteres de 
 ''')
 
 nb.md(r"""
-### 8.1 Entrenar las tres familias con **la misma tubería**
+### 7.1 Entrenar las tres familias con **la misma tubería**
 
 Para que la comparación sea justa (¡solo cambia el algoritmo!) usamos el mismo normalizer (NFKC) y el mismo pre-tokenizer (`Metaspace` + puntuación aislada, a la SentencePiece) y variamos el `Model` + `Trainer`.
 Medimos en el **test** por idioma: **fertilidad** (tokens por palabra), **bytes por token** (cuánto texto cubre cada token) y **tasa de `[UNK]`**.
@@ -965,7 +954,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-### 8.2 ¿Qué algoritmo respeta mejor la morfología?
+### 7.2 ¿Qué algoritmo respeta mejor la morfología?
 
 Bostrom & Durrett (2020) encontraron que Unigram produce subpalabras **más alineadas con la morfología** que BPE y que los modelos preentrenados con Unigram igualan o superan a BPE en inglés y japonés.
 Vamos a medirlo con un mini **gold standard** escrito a mano (30 palabras ES + 30 EN con sus morfemas): puntuamos la **F1 de fronteras** entre las piezas del tokenizer y las fronteras morfológicas.
@@ -1048,7 +1037,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-### 8.3 El normalizer decide qué distinciones existen
+### 7.3 El normalizer decide qué distinciones existen
 
 Un normalizer mal elegido destruye información **antes** de que el algoritmo vea nada. El caso clásico para español: `BertNormalizer(lowercase=True, strip_accents=True)` (el de los modelos BERT *uncased*) convierte `está`→`esta`, `sí`→`si`, `él`→`el`, `año`→`ano`.
 Medimos cuántas palabras *distintas* del corpus colapsan en la misma cadena.
@@ -1070,7 +1059,7 @@ for fr in frases: print(f"  {fr!r}\n    BERT-uncased: {sin_tildes.normalize_str(
 
 # ------------------------------- 9. tiktoken -------------------------------
 nb.md(r"""
-## 9. `tiktoken` y su relación con tu BPE del módulo 02
+## 8. `tiktoken` y su relación con tu BPE del módulo 02
 
 `tiktoken` es el tokenizer de OpenAI (código abierto, núcleo en Rust): **solo codifica/decodifica**, no entrena. Un `Encoding` son tres cosas:
 
@@ -1126,11 +1115,11 @@ if TIK:
     iguales = sum(encode_mini(t, e) == e.encode_ordinary(t) for t in todos)
     print(f"mi BPE de 12 líneas == tiktoken.encode_ordinary en {iguales}/{len(todos)} textos de test (ES/EN/código)")
 else:
-    print("tiktoken no disponible en este entorno: salta las celdas siguientes de la sección 9 o configura la caché.")
+    print("tiktoken no disponible en este entorno: salta las celdas siguientes de la sección 8 o configura la caché.")
 ''')
 
 nb.md(r"""
-### 9.1 BPE-dropout y subword regularization con tu propio BPE
+### 8.1 BPE-dropout y subword regularization con tu propio BPE
 
 Ahora que tienes `bpe_pieza(..., dropout=p)`, probemos **BPE-dropout** (Provilkov et al., 2020): en cada paso, cada merge candidato se ignora con probabilidad $p$, así que la misma palabra se segmenta de forma distinta cada vez
 (y con $p=0$ recuperas BPE estándar; con $p=1$, bytes). Medimos cuánto se fragmenta el texto y cuántas segmentaciones distintas aparecen.
@@ -1157,7 +1146,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-### 9.2 Del tokenizer HF a `tiktoken` (y vuelta)
+### 8.2 Del tokenizer HF a `tiktoken` (y vuelta)
 
 Un tokenizer **byte-level BPE** entrenado con HF `tokenizers` (regex + `ByteLevel`) puede **exportarse a un `tiktoken.Encoding`** porque ambos son el mismo objeto matemático: unos `mergeable_ranks` y una regex.
 Solo hay que deshacer el alfabeto «visible» de GPT-2 (`bytes_to_unicode`) y renumerar los ranks (bytes sueltos primero, luego los merges en orden de id). Verificamos **igualdad exacta**.
@@ -1230,7 +1219,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-### 9.3 Seguridad: tokens especiales dentro del texto del usuario
+### 8.3 Seguridad: tokens especiales dentro del texto del usuario
 
 Si el texto del usuario contiene la **cadena literal** `<|endoftext|>`, ¿debe tokenizarse como el token especial? `tiktoken` dice que **no por defecto**: `encode` lanza `ValueError` ante cadenas de tokens especiales (`disallowed_special="all"`) salvo que las permitas explícitamente. En HF existe el equivalente `split_special_tokens`. Es la primera línea de defensa contra la **inyección de tokens de control** (profundizamos en el módulo 05).
 """)
@@ -1247,7 +1236,7 @@ if TIK:
 ''')
 
 nb.md(r"""
-## 10. Resumen: cómo elegir (hoy) entre las tres familias
+## 9. Resumen: cómo elegir (hoy) entre las tres familias
 
 | Si necesitas… | Elige | Por qué |
 |---|---|---|
@@ -1256,8 +1245,23 @@ nb.md(r"""
 | Mejor alineación morfológica / regularización por muestreo | **Unigram** (SentencePiece o HF) | Segmentación probabilística, muestreo nativo (🟢, con ventajas medidas en alineación; ventajas en tareas finales discutidas) |
 | Compatibilidad con un encoder BERT existente | **WordPiece** del modelo original | No lo cambies: el modelo fue entrenado con él |
 | Un tokenizer específico de dominio/idioma | Entrena **tu** vocabulario (módulo 04 y proyecto) | Ver fertilidad y paridad |
+""")
 
-> 🧭 **Ruta núcleo vs ampliación.** Esta lección es larga (~80 celdas). *Núcleo (≈ 2 h):* secciones 4, 5.3, 6.3, 7, 8.1 y 9. *Ampliación (≈ 1 h):* 5.4 (inferencia), 6.4 (muestreo), 8.2 (morfología), 9.1–9.2 (dropout y exportación). Haz el proyecto después del núcleo y vuelve a la ampliación cuando lo necesites.
+nb.md(r"""
+## 10. Mapa de madurez
+
+Ahora que conoces las tres familias, esta tabla resume qué es estándar y qué no.
+
+Estado del arte a **oct-2026**. 🟢 sólido (estándar de industria) · 🟡 emergente · 🔴 experimental.
+
+| Técnica | Madurez | Quién la usa (con respaldo) | Fuente |
+|---|---|---|---|
+| BPE + regex + bytes (tiktoken) | 🟢 | Familia GPT (`cl100k_base`, `o200k_base`); Llama 3 parte del vocabulario de tiktoken (100K) y añade 28K tokens multilingües | Llama 3 (Grattafiori et al. 2024), tiktoken |
+| WordPiece (inferencia *longest-match-first*, prefijo `##`) | 🟢 (en declive para modelos generativos) | BERT (vocabulario de 30 000) y descendientes | Devlin et al. 2018 |
+| SentencePiece (BPE o Unigram, `▁`) | 🟢 | T5 (32 000 *wordpieces*), XLM-R (250 k), Llama 1/2 (BPE vía SentencePiece, dígitos sueltos, *byte fallback*), Gemma 3 (SentencePiece con dígitos separados y bytes) | Raffel 2019; Conneau 2019; Touvron 2023; Gemma 3 report 2025 |
+| Unigram LM (poda por pérdida) | 🟢 | Es el `model_type` por defecto de SentencePiece (la librería con la que se entrenaron T5 y XLM-R) | Kudo 2018; docs de SentencePiece |
+| Subword regularization (muestreo Unigram, BPE-dropout) | 🟡 | Estándar en traducción y ASR; **poco usado en el pretraining de LLMs grandes**; evidencia de robustez a typos en LLMs | Kudo 2018; Provilkov 2020; Chai et al. 2024 |
+| Entrenar el tokenizer con *likelihood* exacto de WordPiece | 🔴 | El código de entrenamiento original de Google no es público; en HF `WordPieceTrainer` entrena con un procedimiento tipo BPE (lo verificamos abajo) | Schuster & Nakajima 2012; experimento de esta lección |
 """)
 
 nb.md(r"""
@@ -1479,7 +1483,7 @@ print(len(train_texts), "docs de entrenamiento;", {l: len(v) for l, v in test_by
 pj.md(r"""
 ## Paso 1 · Entrenar los tres tokenizers con la misma tubería
 
-**TODO.** Implementa `entrena_tokenizer`. Requisitos: normalizer `NFKC`; pre-tokenizer = `Metaspace(replacement="▁", prepend_scheme="always")` seguido de `Punctuation(behavior="isolated")`; modelo y *trainer* según `tipo`; `[UNK]` como único token especial; entrena con `train_from_iterator(textos, trainer)`.
+**TODO.** Implementa `entrena_tokenizer` (es la función `construye_hf` de la lección, §7.1, generalizada). Requisitos: normalizer `NFKC`; pre-tokenizer = `Metaspace(replacement="▁", prepend_scheme="always")` seguido de `Punctuation(behavior="isolated")`; modelo y *trainer* según `tipo`; `[UNK]` como único token especial; entrena con `train_from_iterator(textos, trainer)`.
 
 <details><summary>🪜 Pista 1 (idea)</summary>
 
@@ -1487,7 +1491,7 @@ Solo cambian dos cosas entre los tres tipos: el objeto `models.*` y el `trainers
 </details>
 <details><summary>🪜 Pista 2 (casi la API)</summary>
 
-`models.BPE(unk_token="[UNK]")` + `trainers.BpeTrainer(vocab_size=..., special_tokens=["[UNK]"])`; `models.WordPiece(unk_token="[UNK]")` + `trainers.WordPieceTrainer(..., continuing_subword_prefix="##")`; `models.Unigram()` + `trainers.UnigramTrainer(..., unk_token="[UNK]")`. Asigna `tok.normalizer` y `tok.pre_tokenizer` antes de entrenar.
+`models.BPE(unk_token="[UNK]")` + `trainers.BpeTrainer(vocab_size=..., special_tokens=["[UNK]"])`; `models.WordPiece(unk_token="[UNK]")` + `trainers.WordPieceTrainer(..., continuing_subword_prefix="##")`; `models.Unigram()` + `trainers.UnigramTrainer(..., unk_token="[UNK]")`. Asigna `tok.normalizer = normalizers.NFKC()` y `tok.pre_tokenizer = pre_tokenizers.Sequence([...])` (los dos pre-tokenizers en ese orden) antes de entrenar.
 </details>
 """)
 pj.code(r'''
@@ -1588,6 +1592,15 @@ pj.md(r"""
 ## Paso 5 · La decisión
 
 **TODO.** Asigna a `DECISION` una de `"bpe"`, `"wordpiece"`, `"unigram"` y a `JUSTIFICACION` un texto (≥ 300 caracteres) que cite **al menos tres cifras** de tu tabla (fertilidad, bytes/token, `[UNK]`, F1 morfológica, nDCG@10) **y un riesgo** de tu elección. Piensa en el índice sparse de Políglota (ES/EN/código) y en que más adelante entrenarás un embedder sobre este vocabulario.
+
+<details><summary>🪜 Pista 1 (estructura)</summary>
+
+Cuatro frases: (1) la elección; (2) la métrica que más pesa para Políglota y su cifra frente a las otras dos familias; (3) dos cifras más que la apoyan o la matizan (p. ej. `[UNK]` en estrés y nDCG@10); (4) el riesgo y cómo lo mitigarías.
+</details>
+<details><summary>🪜 Pista 2 (criterios)</summary>
+
+Para un índice sparse importan la F1 morfológica (fronteras ↔ términos con sentido) y el nDCG@10; para el embedder futuro, la fertilidad (longitud de secuencia = coste) y la ausencia de `[UNK]`. Si el nDCG@10 empata entre familias, la decisión la deciden las otras métricas: dilo explícitamente (repasa la tabla de §9 de la lección).
+</details>
 """)
 pj.code(r'''
 DECISION = None        # TODO: "bpe" | "wordpiece" | "unigram"
