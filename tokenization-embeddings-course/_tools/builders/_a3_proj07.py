@@ -10,7 +10,9 @@ import _a3_src07 as S  # noqa: E402
 # Umbrales de la rúbrica: calibrados con lo MEDIDO por la solución de referencia (corpus sintético, FAST_DEV_RUN=True).
 T = {
     "fert_min": 1.6,            # bytes/token de B dividido por el de A, sobre ES (val)
-    "mejora_cero_shot": 0.0,    # bpb0(FVT) <= bpb0(aleatoria) - mejora_cero_shot
+    "mejora_emb": 0.03,         # bpb(FVT) <= bpb(aleatoria) - mejora_emb, tras la fase de solo embeddings (K1 pasos).
+                                # Antes se comparaba el cero-shot, pero la diferencia medida (≈ 0.005-0.009 bpb) cambiaba de
+                                # signo entre entornos; tras K1 pasos la ventaja de FVT es estable.
     "bpb_final_max": 0.30,       # bpb en ES tras la adaptación con la mejor init (<= medido + margen)
     "regresion_max": 0.60,      # aumento relativo máximo de bpb en EN+código tras adaptarse al ES
 }
@@ -135,7 +137,9 @@ try:
         m, c = adapta(BASE, E_new, IDS_B_TGT, K1, K2, eval_B)
         RES["modelos"][nombre] = m; RES["E"][nombre] = E_new; RES.setdefault("curvas", {})[nombre] = c
         print(f"{nombre:11s} bpb 0-shot={c[0][1]:.3f} | tras {K1} pasos (emb) = {[v for s, v in c if s == K1][0]:.3f} | final={c[-1][1]:.3f}")
-    print(f"{'aleatoria':11s} bpb 0-shot={c_r[0][1]:.3f} | final={c_r[-1][1]:.3f}")
+    print(f"{'aleatoria':11s} bpb 0-shot={c_r[0][1]:.3f} | tras {K1} pasos (emb) = {[v for s, v in c_r if s == K1][0]:.3f} | final={c_r[-1][1]:.3f}")
+    RES["bpbK1_aleatoria"] = [v for s, v in c_r if s == K1][0]
+    RES["bpbK1_fvt"] = [v for s, v in RES["curvas"]["FVT"] if s == K1][0]
     RES["mejor"] = min(RES["curvas"], key=lambda n: RES["curvas"][n][-1][1])
     RES["bpb_final"] = RES["curvas"][RES["mejor"]][-1][1]
     RES["bpb0_fvt"] = RES["curvas"]["FVT"][0][1]
@@ -173,8 +177,8 @@ def rubrica(RES, th=THR):
     ok_u = comprueba_inits()
     chk("R1 tus inicializaciones pasan las comprobaciones unitarias (media, FVT, FOCUS)", len(ok_u) >= 5 and all(ok_u.values()), f"{sum(ok_u.values())}/{len(ok_u)}")
     chk("R2 el tokenizer nuevo reduce los tokens en ES (fertilidad B/A >= %.1fx)" % th["fert_min"], RES.get("fert", 0) >= th["fert_min"], f"{RES.get('fert')}")
-    chk("R3 FVT mejora a la init aleatoria en cero-shot (bpb0 FVT <= aleatoria - %.2f)" % th["mejora_cero_shot"],
-        RES.get("bpb0_fvt") is not None and RES["bpb0_fvt"] <= RES["bpb0_aleatoria"] - th["mejora_cero_shot"], f"FVT={RES.get('bpb0_fvt')} vs aleatoria={RES.get('bpb0_aleatoria')}")
+    chk("R3 FVT mejora a la init aleatoria tras la fase de embeddings (bpb FVT <= aleatoria - %.2f)" % th["mejora_emb"],
+        RES.get("bpbK1_fvt") is not None and RES["bpbK1_fvt"] <= RES["bpbK1_aleatoria"] - th["mejora_emb"], f"FVT={RES.get('bpbK1_fvt')} vs aleatoria={RES.get('bpbK1_aleatoria')}")
     chk("R4 tras la adaptación, bpb en ES <= %.2f con la mejor init" % th["bpb_final_max"], RES.get("bpb_final", 99) <= th["bpb_final_max"], f"{RES.get('bpb_final')} ({RES.get('mejor')})")
     chk("R5 la adaptación mejora al modelo base sin adaptar con A (menos bpb en ES)", RES.get("bpb_final", 99) < RES.get("bpb_A_sin_adaptar", 0), f"{RES.get('bpb_final')} < {RES.get('bpb_A_sin_adaptar')}")
     reg = None if "bpb_src_despues" not in RES else RES["bpb_src_despues"] / RES["bpb_src_B_sin_adaptar"] - 1
@@ -223,7 +227,7 @@ Corpus Políglota vía `carga_corpus()` (módulo 00). *Origen:* inglés + códig
 |---|---|
 | R1 · comprobaciones unitarias de las 3 inits | todas ✅ |
 | R2 · fertilidad: bytes/token de B ÷ bytes/token de A en ES | ≥ """ + f"{T['fert_min']}x" + r""" (medido: 1.90x) |
-| R3 · bpb cero-shot FVT vs aleatoria | FVT ≤ aleatoria − """ + f"{T['mejora_cero_shot']}" + r""" (medido: 3.549 vs 3.554, diferencia mínima) |
+| R3 · bpb tras la fase de solo embeddings (K1 pasos), FVT vs aleatoria | FVT ≤ aleatoria − """ + f"{T['mejora_emb']}" + r""" (medido: 0.703 vs 0.779 con FAST_DEV_RUN; en cero-shot la diferencia es mínima, ≈ 0.01 bpb, y no se puntúa) |
 | R4 · bpb final en ES con la mejor init | ≤ """ + f"{T['bpb_final_max']}" + r""" (medido: 0.232, FVT) |
 | R5 · adaptado vs modelo base sin adaptar (tokenizer A) | menos bpb |
 | R6 · regresión en EN+código (aumento relativo de bpb) | ≤ """ + f"{int(T['regresion_max']*100)} %" + r""" (medido: +50 %: el ajuste al ES **sí** hace olvidar) |
