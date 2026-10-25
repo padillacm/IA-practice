@@ -7,8 +7,9 @@ from nbbuild import Notebook  # noqa: E402
 import a3_common as C  # noqa: E402
 import _a3_src08 as S  # noqa: E402
 
-# Umbrales calibrados con lo MEDIDO por la solución de referencia (FAST_DEV_RUN=True; foto real de scikit-learn, audio sintético).
-T = {"bpp_1": 0.50, "psnr_img_min": 19.5, "jpeg_ventaja_min": 0.0, "kbps_4": 4.0, "snr_4_min": 9.0, "ganancia_snr_min": 3.0}
+# Umbrales calibrados con lo MEDIDO por la solución de referencia (FAST_DEV_RUN=True; foto real de scikit-learn, voz real FSDD:
+# SNR 1.46 -> 2.94 dB de 1 a 4 niveles). Con el respaldo sintético el SNR es mayor (5.7 -> 10.1 dB) y también cumple.
+T = {"bpp_1": 0.50, "psnr_img_min": 19.5, "jpeg_ventaja_min": 0.0, "kbps_4": 4.0, "snr_4_min": 2.5, "ganancia_snr_min": 1.0}
 
 IMG_DATA = r'''
 im_tr, fuente_tr = foto("china.jpg"); im_te, fuente_te = foto("flower.jpg")
@@ -172,7 +173,7 @@ En **Políglota Labs** alguien propone guardar las capturas de los PDFs y los au
 
 ## Dataset
 * **Imagen:** dos fotos reales empaquetadas con scikit-learn: entrenas con recortes de `china.jpg` y evalúas en `flower.jpg` completa (generalización a otra foto). Respaldo: imagen sintética.
-* **Audio:** voz sintética de la lección (8 kHz). LibriSpeech pequeño sería lo ideal; en el entorno de autoría no había acceso.
+* **Audio:** voz **real** de la lección: *Free Spoken Digit Dataset* (dígitos hablados en inglés, 6 hablantes, 8 kHz, CC BY-SA 4.0) desde su repositorio oficial en GitHub, concatenado en clips de 1 s; el test usa otras grabaciones. Respaldo sin red: voz sintética «tipo voz» (con aviso). LibriSpeech queda como extensión.
 
 ## Entregables y criterios de evaluación
 | Criterio | Umbral (calibrado con la solución de referencia) |
@@ -181,7 +182,7 @@ En **Políglota Labs** alguien propone guardar las capturas de los PDFs y los au
 | R2 · PSNR en la foto no vista (1 nivel) | ≥ """ + f"{T['psnr_img_min']}" + r""" dB (medido: 20.45 dB; JPEG al mismo bpp: 32.9 dB) |
 | R3 · curva JPEG medida con 7 calidades | PSNR creciente |
 | R4 · tasa del códec con 4 niveles | = """ + f"{T['kbps_4']}" + r""" kbps |
-| R5 · SNR de audio con 4 niveles y ganancia sobre 1 nivel | ≥ """ + f"{T['snr_4_min']}" + r""" dB y ≥ +""" + f"{T['ganancia_snr_min']}" + r""" dB (medido: 10.09 dB con 4 niveles vs 5.72 con 1) |
+| R5 · SNR de audio con 4 niveles y ganancia sobre 1 nivel | ≥ """ + f"{T['snr_4_min']}" + r""" dB y ≥ +""" + f"{T['ganancia_snr_min']}" + r""" dB (medido con voz real FSDD: 2.94 dB con 4 niveles vs 1.46 con 1; con el respaldo sintético, 10.1 vs 5.7) |
 | R6 · conclusión escrita en `CONCLUSION` | ≥ 300 caracteres |
 """)
     nb.code(S.PIP)
@@ -219,7 +220,7 @@ En **Políglota Labs** alguien propone guardar las capturas de los PDFs y los au
     "un tokenizer diminuto entrenado con una sola foto NO compite con JPEG en fidelidad. "
     f"Audio: el códec toy con 4 niveles ({RES['aud'][4]['kbps']:.0f} kbps, 32x menos que PCM-16) logra {RES['aud'][4]['snr']:.1f} dB de SNR frente a {RES['aud'][1]['snr']:.1f} dB con 1 nivel; μ-law necesita decenas de kbps para SNR parecidos. "
     "El valor de los tokens discretos no es la compresión sino que un LM puede predecirlos y mezclarlos con texto. Recomendación para Políglota: para BUSCAR, embeddings continuos (módulo 16); "
-    "tokens discretos solo si hay generación. Límites: una semilla, modelos diminutos sin pérdidas perceptuales/GAN, audio sintético; PSNR/SNR no son calidad perceptual."
+    "tokens discretos solo si hay generación. Límites: una semilla, modelos diminutos sin pérdidas perceptuales/GAN, pocos segundos de voz (dígitos en inglés); PSNR/SNR no son calidad perceptual."
 )
 rubrica(RES)''')
     nb.md("""## Retos extra (nivel experto)

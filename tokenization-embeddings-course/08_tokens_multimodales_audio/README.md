@@ -16,7 +16,7 @@
 5. Conectar con embeddings multimodales (módulo 16) sin adelantarlo.
 
 ## Datasets
-**MNIST** real (`torchvision`, descarga desde el espejo de PyTorch; respaldo: figuras sintéticas), **foto real** empaquetada con scikit-learn (`china.jpg`, `flower.jpg`; sin descargas) y **audio sintético «tipo voz»**. Opcional: LibriSpeech pequeño / pesos de EnCodec desde el hub (no disponibles en el entorno de autoría; con fallback documentado). **Estado de pruebas:** MNIST real, fotos reales de scikit-learn y audio sintético se ejecutaron; EnCodec/Mimi **con pesos reales** y LibriSpeech **no pudieron probarse** (hub bloqueado): la celda de EnCodec se probó con pesos aleatorios (solo formas y tasas).
+**MNIST** real (`torchvision`, descarga desde el espejo de PyTorch; respaldo: figuras sintéticas), **foto real** empaquetada con scikit-learn (`china.jpg`, `flower.jpg`; sin descargas) y **voz real** del *Free Spoken Digit Dataset* (GitHub; respaldo: audio sintético «tipo voz»). Opcional: LibriSpeech pequeño / pesos de EnCodec desde el hub (no disponibles en el entorno de autoría; con fallback documentado). **Estado de pruebas:** MNIST real, fotos reales de scikit-learn, voz real FSDD y el respaldo sintético se ejecutaron; EnCodec/Mimi **con pesos reales** y LibriSpeech **no pudieron probarse** (hub bloqueado): la celda de EnCodec se probó con pesos aleatorios (solo formas y tasas).
 
 ## Lecturas
 Oord et al. 2017 (VQ-VAE) · Esser et al. 2020 (VQGAN) · Mentzer et al. 2023 (FSQ) · Chameleon 2024 · Zeghidour et al. 2021 (SoundStream) · Défossez et al. 2022 (EnCodec) · Défossez et al. 2024 (Moshi/Mimi) · NVIDIA 2025 (Cosmos).

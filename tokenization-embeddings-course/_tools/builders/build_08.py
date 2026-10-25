@@ -31,7 +31,7 @@ nb.md(nb.badge() + r"""
 |---|---|
 | **Nivel** | 🟠 Avanzado |
 | **Duración estimada** | ≈ 6 h (lección ≈ 3.5 h + proyecto ≈ 2.5 h) |
-| **GPU recomendada** | `FAST_DEV_RUN=True`: **CPU** (≈ 6-10 min en total; MNIST y audio sintético, modelos de < 1M parámetros). Modo completo: **T4** (≈ 3-5 unidades de Colab, estimación) |
+| **GPU recomendada** | `FAST_DEV_RUN=True`: **CPU** (≈ 6-10 min en total; MNIST y voz real FSDD, modelos de < 1M parámetros). Modo completo: **T4** (≈ 3-5 unidades de Colab, estimación) |
 | **Prerrequisitos** | 02 (BPE como compresión), 04 (coste de contexto por idioma), 06 (bits por byte, parches); álgebra lineal y PyTorch (convoluciones) |
 | **Madurez del tema** | 🟢 parches ViT y códecs de audio tipo EnCodec · 🟡 VQ/FSQ como interfaz con LLM, Mimi, tokenizers de vídeo · 🔴 tokenizers 1D y modelos «continuos» unificados |
 
@@ -265,14 +265,14 @@ nb.md(obs("""
 El orden de los niveles **importa**: el 1.º captura lo más energético (envolvente, tono) y los demás añaden detalle; por eso se pueden **truncar niveles** para bajar la tasa. La matriz de tokens (niveles x frames) es lo que luego modelan los LMs de audio (MusicGen, Moshi…), ya sea **aplanándola** (más tokens) o con un transformer extra para los niveles.
 """))
 
-nb.md("### 10.1 Audio sintético «tipo voz» y un códec de juguete\n\nNo hay red para LibriSpeech, así que generamos **voz sintética** (pulsos glotales + formantes de vocales + envolvente silábica) a 8 kHz. Es un banco **didáctico**: el audio real tiene mucha más variedad.")
+nb.md("### 10.1 Voz real a 8 kHz y un códec de juguete\n\nUsamos el **Free Spoken Digit Dataset** (FSDD: dígitos hablados en inglés por 6 hablantes, 8 kHz mono, CC BY-SA 4.0), que se descarga de su repositorio oficial en GitHub en segundos; concatenamos las grabaciones y cortamos clips de 1 s. Si no hay red, el respaldo es **voz sintética** (pulsos glotales + formantes de vocales + envolvente silábica) con aviso visible. Es un banco **didáctico** y pequeño: LibriSpeech tiene mucha más variedad.")
 nb.code(S.AUDIO_DATA)
 nb.code(S.AUDIO_MODEL)
 nb.code(S.AUDIO_EVAL)
 nb.md(obs("""
-* **Espectrogramas:** con 1 nivel (1 kbps) se conserva el **contorno grueso** (tono/envolvente) y se pierde el detalle armónico; con 4 niveles (4 kbps) los **armónicos** reaparecen. Eso es el «refinamiento residual» en acción.
-* **SNR vs tasa:** cada nivel extra suma ~1 kbps y mejora el SNR. **μ-law** (cuantización escalar por muestra) necesita **decenas de kbps** para lograr SNRs parecidos: un códec neuronal aprende una representación mucho más compacta *para este tipo de señal*.
-* ⚠️ **Matiz honesto:** el SNR en forma de onda **no es la métrica perceptual** que usan los códecs reales (MUSHRA, ViSQOL, PESQ): un códec puede tener SNR bajo y sonar bien porque conserva el espectro y no la fase. Y nuestro banco es sintético y diminuto: **no extrapoles** el SNR a EnCodec/DAC.
+* **Espectrogramas:** con 1 nivel (1 kbps) se conserva el **contorno grueso** (tono/envolvente) y se pierde el detalle armónico; con 4 niveles (4 kbps) reaparece **parte** del detalle armónico. Eso es el «refinamiento residual» en acción.
+* **SNR vs tasa:** cada nivel extra suma ~1 kbps y mejora el SNR, con rendimientos decrecientes (en la corrida de referencia con voz real FSDD: 1.5 → 2.9 dB de 1 a 4 niveles; el respaldo sintético, más regular, llega a ≈ 10 dB). **μ-law** (cuantización escalar por muestra) necesita **decenas de kbps** para lograr SNRs parecidos: un códec neuronal aprende una representación mucho más compacta *para este tipo de señal*.
+* ⚠️ **Matiz honesto:** el SNR en forma de onda **no es la métrica perceptual** que usan los códecs reales (MUSHRA, ViSQOL, PESQ): un códec puede tener SNR bajo y sonar bien porque conserva el espectro y no la fase. Y nuestro banco es diminuto (unos minutos de dígitos hablados): **no extrapoles** el SNR a EnCodec/DAC.
 """))
 nb.code(S.CODES_PLOT)
 nb.md(obs("""
@@ -424,7 +424,7 @@ README = r"""# Módulo 08 · Tokens multimodales y de audio
 5. Conectar con embeddings multimodales (módulo 16) sin adelantarlo.
 
 ## Datasets
-**MNIST** real (`torchvision`, descarga desde el espejo de PyTorch; respaldo: figuras sintéticas), **foto real** empaquetada con scikit-learn (`china.jpg`, `flower.jpg`; sin descargas) y **audio sintético «tipo voz»**. Opcional: LibriSpeech pequeño / pesos de EnCodec desde el hub (no disponibles en el entorno de autoría; con fallback documentado). **Estado de pruebas:** MNIST real, fotos reales de scikit-learn y audio sintético se ejecutaron; EnCodec/Mimi **con pesos reales** y LibriSpeech **no pudieron probarse** (hub bloqueado): la celda de EnCodec se probó con pesos aleatorios (solo formas y tasas).
+**MNIST** real (`torchvision`, descarga desde el espejo de PyTorch; respaldo: figuras sintéticas), **foto real** empaquetada con scikit-learn (`china.jpg`, `flower.jpg`; sin descargas) y **voz real** del *Free Spoken Digit Dataset* (GitHub; respaldo: audio sintético «tipo voz»). Opcional: LibriSpeech pequeño / pesos de EnCodec desde el hub (no disponibles en el entorno de autoría; con fallback documentado). **Estado de pruebas:** MNIST real, fotos reales de scikit-learn, voz real FSDD y el respaldo sintético se ejecutaron; EnCodec/Mimi **con pesos reales** y LibriSpeech **no pudieron probarse** (hub bloqueado): la celda de EnCodec se probó con pesos aleatorios (solo formas y tasas).
 
 ## Lecturas
 Oord et al. 2017 (VQ-VAE) · Esser et al. 2020 (VQGAN) · Mentzer et al. 2023 (FSQ) · Chameleon 2024 · Zeghidour et al. 2021 (SoundStream) · Défossez et al. 2022 (EnCodec) · Défossez et al. 2024 (Moshi/Mimi) · NVIDIA 2025 (Cosmos).

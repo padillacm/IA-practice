@@ -329,11 +329,44 @@ def voz_sintetica(rng, dur=DUR):
     y += rng.randn(n) * 0.01 * np.abs(y).max(); y = y / (np.abs(y).max() + 1e-8) * 0.8
     return y.astype(np.float32)
 
+def carga_fsdd(n_tr, n_te, seed=SEED):
+    """Voz REAL: Free Spoken Digit Dataset (6 hablantes, dígitos en inglés, 8 kHz mono, CC BY-SA 4.0), desde su repositorio
+    oficial en GitHub. Las grabaciones (~0.4 s) se concatenan y se cortan en clips de 1 s; test = otras grabaciones (índices 45-49)."""
+    import io, urllib.request, concurrent.futures as cf
+    from scipy.io import wavfile
+    base = "https://raw.githubusercontent.com/Jakobovski/free-spoken-digit-dataset/master/recordings/"
+    spk = ["george", "jackson", "lucas", "nicolas", "theo", "yweweler"]
+    lista = lambda idx: [f"{d}_{s}_{i}.wav" for d in range(10) for s in spk for i in idx]
+    def baja(nombre):
+        try:
+            with urllib.request.urlopen(base + nombre, timeout=20) as r:
+                sr, x = wavfile.read(io.BytesIO(r.read()))
+        except Exception:
+            return None
+        x = x.astype(np.float32)
+        return x / (np.abs(x).max() + 1e-8) * 0.8 if sr == SR and x.ndim == 1 else None
+    def clips(nombres, n):
+        with cf.ThreadPoolExecutor(16) as ex:
+            xs = [x for x in ex.map(baja, nombres) if x is not None]
+        sig = np.concatenate(xs); k = min(n, len(sig) // N_AUD)
+        return sig[: k * N_AUD].reshape(k, N_AUD)
+    r = np.random.RandomState(seed + 1)                                     # rng propio: no altera el respaldo sintético
+    tr, te = list(r.permutation(lista(range(45)))), list(r.permutation(lista(range(45, 50))))
+    return clips(tr[: int(2.6 * n_tr) + 10], n_tr), clips(te[: int(2.6 * n_te) + 10], n_te)
+
 rng = np.random.RandomState(SEED)
-N_TR_A = 192 if FAST_DEV_RUN else 2000
-A_TR = torch.from_numpy(np.stack([voz_sintetica(rng) for _ in range(N_TR_A)]))[:, None].to(device)
-A_TE = torch.from_numpy(np.stack([voz_sintetica(rng) for _ in range(24)]))[:, None].to(device)
-print(f"audio sintético 'tipo voz': train={tuple(A_TR.shape)} test={tuple(A_TE.shape)} a {SR} Hz  (PCM 16 bit = {SR*16/1000:.0f} kbps)")
+N_TR_A = 192 if FAST_DEV_RUN else 2000                                       # sin FAST, FSDD da ~1 200 s de train (se usan todos)
+try:
+    a_tr, a_te = carga_fsdd(N_TR_A, 24)
+    assert len(a_tr) >= min(0.9 * N_TR_A, 500) and len(a_te) >= 12, "descarga incompleta"
+    A_TR = torch.from_numpy(a_tr)[:, None].to(device); A_TE = torch.from_numpy(a_te)[:, None].to(device)
+    FUENTE_AUD = "voz REAL (Free Spoken Digit Dataset, GitHub)"
+except Exception as e:
+    print("⚠️  [aviso] FSDD no disponible (", type(e).__name__, ") -> voz SINTÉTICA 'tipo voz' (mismo formato; cifras NO comparables con voz real)")
+    A_TR = torch.from_numpy(np.stack([voz_sintetica(rng) for _ in range(N_TR_A)]))[:, None].to(device)
+    A_TE = torch.from_numpy(np.stack([voz_sintetica(rng) for _ in range(24)]))[:, None].to(device)
+    FUENTE_AUD = "audio sintético 'tipo voz'"
+print(f"{FUENTE_AUD}: train={tuple(A_TR.shape)} test={tuple(A_TE.shape)} a {SR} Hz  (PCM 16 bit = {SR*16/1000:.0f} kbps)")
 '''
 
 AUDIO_MODEL = r'''
@@ -400,7 +433,6 @@ axs[1].set_title("Fidelidad espectral del códec toy"); plt.tight_layout(); plt.
 
 ENCODEC_TRY = r'''
 # EnCodec real (Défossez et al., 2022) con Hugging Face: pesos oficiales 'facebook/encodec_24khz' (requiere acceso al hub).
-import torchaudio
 try:
     from transformers import EncodecModel
     try:
@@ -409,7 +441,12 @@ try:
         from transformers import EncodecConfig
         enc_m = EncodecModel(EncodecConfig()).eval(); real = False            # pesos ALEATORIOS: solo para ver formas y tasas de tokens
         print("[aviso] sin acceso al hub: EnCodec con pesos aleatorios (las formas y la tasa de tokens son reales; el audio decodificado NO).")
-    x24 = torchaudio.functional.resample(A_TE[:1].cpu(), SR, 24000)
+    try:
+        import torchaudio                                                     # opcional: si falta, remuestreo polifásico de SciPy
+        x24 = torchaudio.functional.resample(A_TE[:1].cpu(), SR, 24000)
+    except ImportError:
+        from scipy.signal import resample_poly
+        x24 = torch.from_numpy(resample_poly(A_TE[:1].cpu().numpy(), 24000, SR, axis=-1).astype(np.float32))
     with torch.no_grad():
         out = enc_m.encode(x24, bandwidth=6.0)
     codes = out.audio_codes                                                   # [chunks, B, n_q, T]
