@@ -48,3 +48,13 @@ y algún ejemplo a mano ausente.
 - **Andamiaje del proyecto:** el paso 1 ahora remite a `construye_hf` (§7.1) y la 🪜 Pista 2 explicita
   `pre_tokenizers.Sequence` (combinar dos pre-tokenizers no se decía); el paso 5 (decisión escrita) no tenía pistas:
   añadidas 🪜 1 (estructura en cuatro frases) y 🪜 2 (qué métricas pesan para sparse vs embedder).
+
+## 04 · Diseño de tokenizers modernos
+- Bien: intuición del vocabulario como presupuesto → teoría de parámetros con cifras → mediciones reales; analogía
+  con coste económico (USD por idioma) y ventana de contexto; 6 preguntas etiquetadas; 62 celdas (no necesita 🧭).
+- **Reestructurado:** igual que en 03, el Mapa de madurez era la §3 (antes de la intuición); ahora es la §13 (tras el
+  resumen de decisiones, antes de 🏭). Secciones 4–13 renumeradas (3–12) y referencias internas actualizadas
+  («medido abajo» → «medido en la sección 5/8»).
+- **Repaso espaciado:** el 🔁 solo preguntaba por 02–03. Añadidas R4 (módulo 01, Cálculo: bytes y tokens máximos de
+  «Привет, мир») y R5 (módulo 00, Diagnóstico: ¿una mejora de nDCG de 0.02 en 40 consultas es real? → IC pareado).
+- **Andamiaje del proyecto:** paso 2 sin 🪜 Pista 2 y paso 4 (receta + justificación) sin pistas: añadidas.

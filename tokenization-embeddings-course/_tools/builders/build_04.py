@@ -80,6 +80,16 @@ Cualquier texto se descompone en bytes, así que siempre es representable. Pero 
 
 Define las unidades dentro de las que se aplican los merges; si dos símbolos están en pre-tokens distintos nunca se fusionan. Hoy veremos qué pasa si se **relaja** esa restricción (SuperBPE).
 </details>
+
+<details><summary><b>R4 · (Módulo 01) (Cálculo)</b> La frase «Привет, мир» (ruso) tiene 11 caracteres. ¿Cuántos bytes UTF-8 ocupa y cuántos tokens costaría, como máximo, en un BPE byte-level sin merges para cirílico?</summary>
+
+9 letras cirílicas × 2 bytes + «,» + espacio = **20 bytes** → hasta **20 tokens** (uno por byte), frente a ≈ 3–4 tokens de la frase inglesa equivalente con un vocabulario bueno. Ese cociente es la «prima» que hoy mediremos con contenido paralelo.
+</details>
+
+<details><summary><b>R5 · (Módulo 00) (Diagnóstico)</b> Cambias el tokenizer del índice BM25 y el nDCG@10 sube de 0.81 a 0.83 en 40 consultas. ¿Puedes afirmar que el nuevo es mejor?</summary>
+
+No sin un intervalo: con pocas consultas el IC bootstrap del módulo 00 tiene una anchura de varios puntos. Calcula el IC de la **diferencia por consulta** (pareada) y solo afirma mejora si excluye el 0. Aplica igual a las comparaciones de tokenizers de este módulo.
+</details>
 """)
 
 nb.code(C.pip_cell())
@@ -111,23 +121,7 @@ print({l: len(v) for l, v in test_by_lang.items()}, "docs de test | train:", len
 ''')
 
 nb.md(r"""
-## 3. Mapa de madurez
-
-Estado del arte a **oct-2026**; las cifras de vocabulario cambian con cada versión de modelo.
-
-| Técnica / decisión | Madurez | Quién la usa (con respaldo) | Fuente |
-|---|---|---|---|
-| Vocabularios de 100–260 k (frente a 32 k) | 🟢 | cl100k ≈ 100 k y o200k ≈ 200 k (medido abajo); Llama 3 = 128 256; Qwen2 = 151 643 + 3; Gemma ≈ 256 k | tiktoken; Land & Bartolo 2024; Qwen2 report; Gemma 3 report |
-| Dígitos tratados aparte (sueltos o en grupos) | 🟢 | Llama 1/2 y Gemma 3: dígitos separados; GPT-3.5/4: grupos de hasta 3 dígitos | Touvron 2023; Gemma 3; Singh & Strouse 2024 |
-| Tokenizador específico con código/indentación (espacios agrupados) | 🟢 | cl100k/o200k agrupan espacios; GPT-2 no (medido abajo) | Dagan et al. 2024; medición propia |
-| Vocabulario óptimo según presupuesto de cómputo (leyes de escala con V) | 🟡 | Resultados de NeurIPS 2024 a ≤ 3 B parámetros; extrapolación a modelos grandes no contrastada | Tao et al. 2024 |
-| Equidad multilingüe del tokenizer (paridad) | 🟡 | Medida y reportada (p. ej. Tekken de Mistral frente al SentencePiece anterior); sin estándar común | Petrov et al. 2023; Ahia et al. 2023; docs de Mistral |
-| Tokens que cruzan palabras (SuperBPE) | 🟡 / 🔴 | Resultados a 8 B, solo inglés; adopción en producción no verificada | Liu et al. 2025 (COLM) |
-| Chat templates con tokens de control | 🟢 | Estándar de facto (ChatML, plantillas por modelo en `tokenizer_config`) | Docs de HF `transformers` |
-""")
-
-nb.md(r"""
-## 4. Intuición primero: el vocabulario es un presupuesto
+## 3. Intuición primero: el vocabulario es un presupuesto
 
 Cada token del vocabulario cuesta **parámetros** (una fila de $d$ números en la matriz de embeddings y otra en la de salida), **cómputo** (el softmax final es $O(V\cdot d)$ por token generado) y **datos** (cada fila necesita ver suficientes ejemplos para entrenarse; los tokens raros quedan *sub-entrenados*, módulo 05).
 A cambio, un vocabulario mayor **acorta las secuencias**: menos tokens para el mismo texto = menos cómputo de atención ($O(n^2)$), más texto en la ventana de contexto y menos pasos de decodificación.
@@ -173,7 +167,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-## 5. 📐 Teoría: los números del presupuesto
+## 4. 📐 Teoría: los números del presupuesto
 
 Sea $d$ la dimensión del modelo, $L$ el nº de capas y $V$ el tamaño del vocabulario. Aproximaciones habituales (Transformer denso estándar, FFN $4d$; las variantes GQA/SwiGLU cambian constantes pero no la conclusión):
 
@@ -216,7 +210,7 @@ nb.md(r"""
 
 # ------------------------------- 6. Vocabularios reales -------------------------------
 nb.md(r"""
-## 6. Vocabularios de modelos reales (verificado, fechado)
+## 5. Vocabularios de modelos reales (verificado, fechado)
 
 Cifras **a oct-2026** y solo las que he podido contrastar con una fuente primaria o con una medición propia. Los modelos lanzados después (o cuyos tokenizers no pude abrir) **no** están en la tabla: verifica con `AutoTokenizer.from_pretrained(...).vocab_size`/`len(tokenizer)` (¡las dos cifras pueden diferir por tokens añadidos!).
 
@@ -272,7 +266,7 @@ print(list(REG))
 
 # ------------------------------- 7. Paridad -------------------------------
 nb.md(r"""
-## 7. Multilingüe y «token tax»: medir la paridad
+## 6. Multilingüe y «token tax»: medir la paridad
 
 Un tokenizer entrenado mayoritariamente con inglés necesita **más tokens para decir lo mismo** en otros idiomas. Petrov et al. (2023) lo cuantifican sobre texto **paralelo** (la misma frase traducida) y encuentran diferencias de hasta **15×** entre idiomas
 con los tokenizers de LLM que analizaron, que persisten incluso en los pensados para ser multilingües; Ahia et al. (2023) lo traducen en **precio**: los hablantes de muchos idiomas pagan más por la misma información en APIs comerciales y reciben peor resultado.
@@ -356,7 +350,7 @@ nb.md(r"""
 
 # ------------------------------- 8. Costes -------------------------------
 nb.md(r"""
-## 8. Del token tax al dinero y al contexto útil
+## 7. Del token tax al dinero y al contexto útil
 
 Si una API factura a $p$ dólares por millón de tokens (**valor que debes leer en la tarifa vigente de tu proveedor: aquí es un parámetro ilustrativo**), el coste de procesar la **misma información** en el idioma $\ell$ es
 
@@ -392,7 +386,7 @@ nb.md(r"""
 
 # ------------------------------- 9. Números y código -------------------------------
 nb.md(r"""
-## 9. Números, espacios e indentación
+## 8. Números, espacios e indentación
 
 **Números.** Si «1234567» se parte como `123|456|7` (grupos de 3 de izquierda a derecha, estilo GPT-3.5/4) las columnas de unidades de dos sumandos **no se alinean** con las del resultado.
 Singh & Strouse (2024) mostraron en GPT-3.5/GPT-4 (modelos de marzo de 2023) que tokenizar **de derecha a izquierda** (forzado separando miles con comas) sube la precisión de la suma de 75.6 % a 97.8 % en GPT-3.5 (8-shot, sumandos de 7–9 dígitos), con un efecto algo menor pero presente en GPT-4: el error venía de la **alineación de tokens**, no de «no saber sumar».
@@ -444,7 +438,7 @@ nb.md(r"""
 
 # ------------------------------- 10. Especiales y chat templates -------------------------------
 nb.md(r"""
-## 10. Tokens especiales y *chat templates*
+## 9. Tokens especiales y *chat templates*
 
 Los **tokens especiales** (`<|endoftext|>`, `<s>`, `<|im_start|>`…) no se aprenden por frecuencia: se **reservan** en el vocabulario y se insertan por código. Hay tres familias:
 
@@ -538,7 +532,7 @@ nb.md(r"""
 
 # ------------------------------- 11. SuperBPE -------------------------------
 nb.md(r"""
-## 11. Tokens que cruzan palabras: SuperBPE
+## 10. Tokens que cruzan palabras: SuperBPE
 
 Toda la tubería de módulos 02–03 asume que **un token no cruza una palabra**. Pero «a lot of», «de la», «search engine» funcionan como unidades semánticas. **SuperBPE** (Liu et al., 2025; COLM 2025) añade un **currículo de dos etapas** al BPE:
 
@@ -645,12 +639,12 @@ nb.md(r"""
 
 # ------------------------------- 12. Diseño para Políglota -------------------------------
 nb.md(r"""
-## 12. Receta: diseñar el vocabulario de Políglota
+## 11. Receta: diseñar el vocabulario de Políglota
 
 Un vocabulario se diseña con **tres palancas** y una función de coste:
 
 1. **Mezcla del corpus del tokenizer** (qué proporción de ES, EN, código y, si aplica, otros idiomas). Un corpus «natural» (dominado por inglés) deja pocos merges al resto; suele muestrearse con **temperatura** $p_\ell\propto n_\ell^{\alpha}$ ($\alpha<1$ sube la proporción de idiomas pequeños; XLM-R usa $\alpha=0.3$ para muestrear idiomas al entrenar el modelo).
-2. **Tamaño $V$**: se elige en la **rodilla** de la curva *tokens por KB vs $V$* (cuando añadir 1 k tokens ya ahorra < $\varepsilon$ %), acotado por el presupuesto de parámetros (sección 5).
+2. **Tamaño $V$**: se elige en la **rodilla** de la curva *tokens por KB vs $V$* (cuando añadir 1 k tokens ya ahorra < $\varepsilon$ %), acotado por el presupuesto de parámetros (sección 4).
 3. **Pre-tokenización** (regex): dígitos, espacios/indentación, mayúsculas (módulo 02/03).
 
 **Función de coste (la que usarás en el proyecto):** con tráfico esperado $w_\ell$ por idioma,
@@ -713,29 +707,50 @@ print("mejora % al duplicar V:", mejora.round(1).dropna().to_dict(), "| V* =", V
 nb.md(r"""
 > 👀 **Qué debes observar.** **Izquierda:** cada duplicación de $V$ ahorra menos tokens que la anterior (en nuestra corrida: −16 %, −14 %, −10 %, −7 %). Entre 4 k y 16 k el español sigue mejorando más que el inglés (≈ −21 % frente a ≈ −15 %), mientras el código, que necesita más tokens por KB, mejora menos (≈ −11 %).
 > **Derecha:** $J$ tiene un mínimo interior: pasado cierto $V$, el coste en parámetros supera el ahorro de tokens (con $\lambda=3$ el mínimo cae en 8 000).
-> Ese mínimo **depende de $\lambda$ y del tráfico** (decisiones de producto): cámbialos y verás moverse $V^*$. En un LLM real $\lambda$ sale del presupuesto de parámetros (sección 5) y de las leyes de escala (Tao et al., 2024).
+> Ese mínimo **depende de $\lambda$ y del tráfico** (decisiones de producto): cámbialos y verás moverse $V^*$. En un LLM real $\lambda$ sale del presupuesto de parámetros (sección 4) y de las leyes de escala (Tao et al., 2024).
 """)
 
 nb.md(r"""
-## 13. Resumen de decisiones de diseño
+## 12. Resumen de decisiones de diseño
 
 | Decisión | Pregunta que debes poder responder con datos | Herramienta de esta lección |
 |---|---|---|
-| Tamaño $V$ | ¿dónde está la rodilla *tokens/KB vs V* y cuánto pesan los embeddings? | secciones 5 y 12 |
-| Mezcla de idiomas | ¿qué idioma paga más y es aceptable? | prima de paridad (sección 7) y experimento de mezcla |
-| Números | ¿dígitos sueltos, grupos de 3 o R2L? | sección 9 |
-| Código | ¿se colapsan los runs de espacios? ¿tabs? | sección 9 |
-| Especiales y plantilla | ¿una única fuente de verdad para entrenar y servir? | sección 10 |
-| ¿Cruzar palabras? | ¿ganancia > complejidad? (🟡) | sección 11 |
+| Tamaño $V$ | ¿dónde está la rodilla *tokens/KB vs V* y cuánto pesan los embeddings? | secciones 4 y 11 |
+| Mezcla de idiomas | ¿qué idioma paga más y es aceptable? | prima de paridad (sección 6) y experimento de mezcla |
+| Números | ¿dígitos sueltos, grupos de 3 o R2L? | sección 8 |
+| Código | ¿se colapsan los runs de espacios? ¿tabs? | sección 8 |
+| Especiales y plantilla | ¿una única fuente de verdad para entrenar y servir? | sección 9 |
+| ¿Cruzar palabras? | ¿ganancia > complejidad? (🟡) | sección 10 |
 
+""")
+
+nb.md(r"""
+## 13. Mapa de madurez
+
+Con todo lo visto, esta tabla resume qué decisiones de diseño son estándar y cuáles emergentes.
+
+Estado del arte a **oct-2026**; las cifras de vocabulario cambian con cada versión de modelo.
+
+| Técnica / decisión | Madurez | Quién la usa (con respaldo) | Fuente |
+|---|---|---|---|
+| Vocabularios de 100–260 k (frente a 32 k) | 🟢 | cl100k ≈ 100 k y o200k ≈ 200 k (medido en la sección 5); Llama 3 = 128 256; Qwen2 = 151 643 + 3; Gemma ≈ 256 k | tiktoken; Land & Bartolo 2024; Qwen2 report; Gemma 3 report |
+| Dígitos tratados aparte (sueltos o en grupos) | 🟢 | Llama 1/2 y Gemma 3: dígitos separados; GPT-3.5/4: grupos de hasta 3 dígitos | Touvron 2023; Gemma 3; Singh & Strouse 2024 |
+| Tokenizador específico con código/indentación (espacios agrupados) | 🟢 | cl100k/o200k agrupan espacios; GPT-2 no (medido en la sección 8) | Dagan et al. 2024; medición propia |
+| Vocabulario óptimo según presupuesto de cómputo (leyes de escala con V) | 🟡 | Resultados de NeurIPS 2024 a ≤ 3 B parámetros; extrapolación a modelos grandes no contrastada | Tao et al. 2024 |
+| Equidad multilingüe del tokenizer (paridad) | 🟡 | Medida y reportada (p. ej. Tekken de Mistral frente al SentencePiece anterior); sin estándar común | Petrov et al. 2023; Ahia et al. 2023; docs de Mistral |
+| Tokens que cruzan palabras (SuperBPE) | 🟡 / 🔴 | Resultados a 8 B, solo inglés; adopción en producción no verificada | Liu et al. 2025 (COLM) |
+| Chat templates con tokens de control | 🟢 | Estándar de facto (ChatML, plantillas por modelo en `tokenizer_config`) | Docs de HF `transformers` |
+""")
+
+nb.md(r"""
 ## 14. 🏭 En producción
 
-Cifras de vocabulario **a oct-2026** (ver tabla de la sección 6); verifica siempre contra el modelo exacto.
+Cifras de vocabulario **a oct-2026** (ver tabla de la sección 5); verifica siempre contra el modelo exacto.
 
 - **OpenAI.** `o200k_base` (GPT-4o) amplió el vocabulario de ≈ 100 k a ≈ 200 k; en nuestra medición reduce la prima de hindi de ≈ 4.9× a ≈ 1.6× y la de ruso de ≈ 2.1× a ≈ 1.25× frente a `cl100k` (mini-conjunto paralelo; repítelo con FLORES+).
 - **Meta.** Llama 3 pasó de 32 000 (Llama 2) a 128 256 tokens y reporta una compresión sobre inglés de 3.17 → 3.94 caracteres/token.
 - **Mistral.** Tekken (≈ 130 k + ≈ 1 k de control, basado en tiktoken, > 100 idiomas) sustituye al SentencePiece anterior y Mistral reporta ≈ 30 % mejor compresión en código y varios idiomas (según su guía de tokenización).
-- **Google.** Gemma usa vocabularios de ≈ 256 k con dígitos separados y bytes; la proporción de parámetros en embeddings es muy alta en los modelos pequeños (gráfico de la sección 5).
+- **Google.** Gemma usa vocabularios de ≈ 256 k con dígitos separados y bytes; la proporción de parámetros en embeddings es muy alta en los modelos pequeños (gráfico de la sección 4).
 - **Cohere.** Command R usa ≈ 255 k tokens con embeddings atados (Land & Bartolo 2024); Cohere publicó además el análisis de tokens sub-entrenados que verás en el módulo 05.
 - **Coste real.** Facturación por token + paridad = **prima de precio por idioma** (Ahia et al., 2023). Antes de comprometer un contrato de API para un producto multilingüe, **mide tus textos con el tokenizer del proveedor** y proyecta el coste por idioma.
 - **Evaluación independiente.** Compara tokenizers con un corpus que **no** se usó para entrenarlos (FLORES+, por ejemplo) y siempre sobre *contenido paralelo*.
@@ -747,7 +762,7 @@ nb.md(r"""
 1. **Compara en bits por byte, no por token.** Perplexidad/pérdida por token no es comparable entre vocabularios distintos; Tao et al. (2024) usan una pérdida normalizada por carácter para sus leyes de escala.
 2. **El vocabulario óptimo crece con el cómputo, y los modelos reales están por debajo.** Tao et al. predicen ≥ 216 K para Llama2-70B frente a los 32 K reales; los vocabularios 100–260 k de 2024–2026 van en esa dirección (🟡: resultado a ≤ 3 B parámetros).
 3. **El «token tax» es un coste de producto medible.** Petrov et al. (2023) encuentran diferencias de hasta 15× entre idiomas en los tokenizers que analizaron, y Ahia et al. (2023) lo convierten en precios. Un equipo con usuarios hispanohablantes debe tener este número en su dashboard.
-4. **Los vocabularios de modelo pequeño son «tablas de embeddings».** Pasar de 32 k a 256 k puede mover de ≈ 10 % a ≈ 50 % de los parámetros (gráfico de la sección 5): por eso importa el *weight tying*.
+4. **Los vocabularios de modelo pequeño son «tablas de embeddings».** Pasar de 32 k a 256 k puede mover de ≈ 10 % a ≈ 50 % de los parámetros (gráfico de la sección 4): por eso importa el *weight tying*.
 5. **La pre-tokenización de números cambia la aritmética.** Singh & Strouse (2024): tokenización R2L sube la suma de 75.6 % a 97.8 % en GPT-3.5 (8-shot; efecto menor pero presente en GPT-4, marzo 2023); es un cambio de *una línea de regex* con efecto medible.
 6. **El espacio en blanco se paga en tokens.** Con GPT-2 la indentación cuesta ≈ 15 tokens extra por línea a 16 espacios; la agrupación de `cl100k`/`o200k` la deja en ≈ 1 (medido arriba, sobre código Python real).
 7. **Cambiar el tokenizer de un modelo ya entrenado es caro.** Dagan et al. (2024) reportan que especializar el tokenizer de un modelo preentrenado tras afinarlo con más de 50 B de tokens da ganancias grandes de velocidad y contexto efectivo, pero ese volumen de datos ilustra el coste (módulo 07); por eso se diseña bien a la primera.
@@ -953,6 +968,10 @@ pj.md(r"""
 
 Son dos líneas cada una, reutilizando `entrena_bpe_bytes`, `corpus_mezcla` y `test_by_lang`; en tokens/KB usa `1000 * tokens / bytes`.
 </details>
+<details><summary>🪜 Pista 2</summary>
+
+`entrena_bpe_bytes(corpus_mezcla(prop, TOTAL), V)`; y `{l: 1000 * sum(len(tok.encode(t).ids) for t in test_by_lang[l]) / sum(len(t.encode()) for t in test_by_lang[l]) for l in ("es", "en", "code")}`. Es lo mismo que hiciste en la lección (§11) con la mezcla suavizada.
+</details>
 """)
 pj.code(r'''
 def evalua_candidato(tok: Tokenizer) -> dict:
@@ -992,6 +1011,15 @@ pj.md(r"""
 ## Paso 4 · La receta
 
 **TODO.** Escribe `poliglota_vocab.json` con `{"mezcla": ..., "V": ..., "tokens_por_kb": {...}, "J": ..., "justificacion": "..."}` (justificación ≥ 300 caracteres con **≥ 3 cifras** y **un riesgo**: p. ej. qué idioma pierde con tu elección y qué harías si el tráfico cambia).
+
+<details><summary>🪜 Pista 1</summary>
+
+La fila ganadora es `cand.iloc[0]` (ya está ordenado por `J`); de ahí salen `mezcla`, `V`, `J` y los `tpk_*`. Guarda con `json.dump(receta, open("poliglota_vocab.json", "w"), ensure_ascii=False, indent=2)`.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+Para la justificación compara la ganadora con la mezcla **natural** al mismo `V` (cuánto baja `J` en %), cita el `desbalance` y nombra el idioma con más tokens/KB como riesgo. Plantilla: «Elegimos … porque J baja de … a … (−…%) … El desbalance es … El riesgo es …; si el tráfico de … sube, …».
+</details>
 """)
 pj.code(r'''
 receta = {}      # TODO: dict con la receta (ver enunciado)
