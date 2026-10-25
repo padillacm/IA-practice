@@ -291,7 +291,7 @@ def part2(nb):
     """)
     nb.md("""
     ## 11. 🧠 Secretos de la élite
-    1. **El gap casi nunca importa para ranking dentro de una modalidad, y siempre importa al mezclar.** Medido aquí: con gap grande, ≈ todo el top-10 de un índice mixto son textos; centrar por modalidad lo corrige parcialmente (§5).
+    1. **El gap casi nunca importa para ranking dentro de una modalidad, y siempre importa al mezclar.** Medido aquí: con τ=0.01 (gap ≈ 1) el 100 % de las queries tiene un texto equivocado por delante de la imagen correcta en un índice mixto, y restar el centroide por modalidad **no** lo arregla (§5); con gap ≤ 0.35 no hubo intrusos.
     2. **La temperatura es un hiperparámetro de geometría, no solo de optimización**: $\\tau$ baja ⇒ gap alto (Liang et al.; nuestro barrido). Al comparar dos modelos, compara también su $\\tau$ aprendida.
     3. **Los falsos negativos en el batch** (varias imágenes del mismo concepto) ponen un suelo a la pérdida contrastiva: con pocos conceptos y batches grandes, la pérdida no baja de $\\ln(N/\\text{conceptos})$ aunque el modelo sea perfecto.
     4. **El coste real del multi-vector es el almacenamiento**: ≈ 257.5 KB/página en ColPali (fp16) ⇒ ≈ 257 GB por millón de páginas; decide pooling/binarización/pre-filtro *antes* de indexar.
@@ -324,7 +324,7 @@ def part2(nb):
 
     <details><summary><b>3. (Diagnóstico)</b> Tu índice mixto (imágenes + textos) devuelve casi solo textos para una query de texto. ¿Causa y arreglos?</summary>
 
-    Modality gap: los textos están más cerca entre sí que de las imágenes. Arreglos: índices separados + RRF; centrar cada modalidad (restar su centroide y renormalizar); o un modelo entrenado para un espacio unificado. Mide con un golden set mixto.
+    Modality gap: los textos están más cerca entre sí que de las imágenes. Arreglos: índices separados + RRF; un modelo entrenado para un espacio unificado; centrar cada modalidad (restar su centroide y renormalizar) ayuda a veces, pero en nuestro experimento extremo no bastó. Mide con un golden set mixto.
     </details>
 
     <details><summary><b>4. (Diagnóstico)</b> ColPali brilla en ViDoRe pero en tus PDFs financieros (tablas pequeñas, texto denso) un pipeline OCR+texto le gana. Hipótesis.</summary>
@@ -339,7 +339,7 @@ def part2(nb):
 
     <details><summary><b>6. (Transferencia)</b> ¿Cómo repetirías el experimento de modality gap con CLIP real y qué medirías?</summary>
 
-    Embeder N pares imagen–caption de COCO con `get_image_features/get_text_features`, normalizar, medir ‖centroide_img − centroide_txt‖, el coseno medio intra-modalidad y el sesgo en un índice mixto (fracción de textos en el top-k) antes/después de centrar. Comparar CLIP vs SigLIP/SigLIP 2.
+    Embeder N pares imagen–caption de COCO con `get_image_features/get_text_features`, normalizar, medir ‖centroide_img − centroide_txt‖, el coseno medio intra-modalidad y la «tasa de intrusos» en un índice mixto antes/después de centrar. Comparar CLIP vs SigLIP/SigLIP 2.
     </details>
     """)
     nb.md("""

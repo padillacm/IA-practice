@@ -246,31 +246,37 @@ def part1(nb):
         """,
     )
     nb.md("""
-    > 👀 **Qué debes observar.** El gap **no importa** si solo comparas texto→imágenes (ranking dentro de una modalidad). Importa cuando **mezclas modalidades en el mismo índice** o comparas puntuaciones entre modalidades: el vecino más cercano de un texto tiende a ser otro texto. Lo medimos a continuación.
+    > 👀 **Qué debes observar.** El gap **no importa** si solo comparas texto→imágenes (ranking dentro de una modalidad). Importa cuando **mezclas modalidades en el mismo índice** o comparas puntuaciones entre modalidades: el vecino más cercano de un texto tiende a ser otro texto. Lo medimos a continuación con la «tasa de intrusos».
     """)
     nb.code(r'''
     def centra(z, mu): return torch.nn.functional.normalize(z - mu, dim=-1)
 
-    def sesgo_mixto(zi, zt, Tq, Yq, Y, k=10):
-        """Índice con imágenes + captions de test. Query: captions NUEVAS. Devuelve (fracción de textos en el top-k, precisión del concepto en el top-k)."""
-        idx = torch.cat([zi, zt]); lab = torch.cat([torch.as_tensor(Y), torch.as_tensor(Y)]); es_txt = torch.cat([torch.zeros(len(zi)), torch.ones(len(zt))])
-        top = (Tq @ idx.T).topk(k, dim=1).indices
-        return float(es_txt[top].mean()), float((lab[top] == torch.as_tensor(Yq)[:, None]).float().mean())
+    def tasa_intruso(zi, zt, zq, Y, Yq):
+        """Índice MIXTO (imágenes + captions de test). Para cada caption-query NUEVA: ¿hay un texto de OTRO concepto más cercano
+        que la mejor imagen del concepto correcto? Devuelve (tasa de 'intrusos', margen medio imagen-correcta menos intruso)."""
+        Y, Yq = torch.as_tensor(Y), torch.as_tensor(Yq); si, st = zq @ zi.T, zq @ zt.T
+        mejor_img = torch.where(Y[None, :] == Yq[:, None], si, torch.full_like(si, -9)).max(1).values
+        mejor_txt_mal = torch.where(Y[None, :] != Yq[:, None], st, torch.full_like(st, -9)).max(1).values
+        return float((mejor_txt_mal > mejor_img).float().mean()), float((mejor_img - mejor_txt_mal).mean())
 
     Xq, Tq_, Yq, Lq = make_dataset(10, seed=3)
     filas = []
     for n in ("InfoNCE τ=0.01", "InfoNCE τ aprendida", "InfoNCE τ=0.2", "SigLIP (sigmoide)"):
         M = MODELOS[n]; _, zq = embebe(M["I"], M["Tx"], Xq[:1], Tq_, w2i)
-        f0, p0 = sesgo_mixto(M["zi"], M["zt"], zq, Yq, Yte)
-        mi, mt = M["zi"].mean(0), M["zt"].mean(0)
-        f1, p1 = sesgo_mixto(centra(M["zi"], mi), centra(M["zt"], mt), centra(zq, mt), Yq, Yte)
-        filas.append({"modelo": n, "gap": M["gap"], "% textos en top-10 (original)": f0, "% textos tras centrar": f1, "precisión top-10 original": p0, "precisión top-10 centrado": p1})
+        r0, m0 = tasa_intruso(M["zi"], M["zt"], zq, Yte, Yq); mi, mt = M["zi"].mean(0), M["zt"].mean(0)
+        r1, m1 = tasa_intruso(centra(M["zi"], mi), centra(M["zt"], mt), centra(zq, mt), Yte, Yq)
+        filas.append({"modelo": n, "gap": M["gap"], "intrusos (original)": r0, "intrusos (centrado)": r1, "margen original": m0, "margen centrado": m1})
     sesgo = pd.DataFrame(filas).set_index("modelo"); display(sesgo.round(3))
-    ax = sesgo[["% textos en top-10 (original)", "% textos tras centrar"]].plot(kind="bar", color=[ROJO, VERDE], figsize=(8, 3.4), rot=15); ax.axhline(.5, color=GRIS, ls="--"); ax.set_ylabel("fracción de textos en el top-10"); ax.set_title("Sesgo de modalidad en un índice mixto (50 % = sin sesgo)"); plt.tight_layout(); plt.show()
+    fig, ax = plt.subplots(1, 2, figsize=(11, 3.4)); x = np.arange(len(sesgo)); w = .38
+    ax[0].bar(x - w/2, sesgo["intrusos (original)"], w, color=ROJO, label="original"); ax[0].bar(x + w/2, sesgo["intrusos (centrado)"], w, color=VERDE, label="centrado por modalidad")
+    ax[0].set_xticks(x); ax[0].set_xticklabels(sesgo.index, rotation=15, fontsize=8); ax[0].set_ylabel("tasa de 'intrusos' (texto equivocado > imagen correcta)"); ax[0].legend(frameon=False, fontsize=8); ax[0].set_title("Índice mixto: texto equivocado que supera a la imagen correcta")
+    ax[1].scatter(sesgo["gap"], sesgo["intrusos (original)"], s=70, color=AZUL); [ax[1].annotate(n, (g, r), fontsize=7, xytext=(4, 4), textcoords="offset points") for n, g, r in zip(sesgo.index, sesgo["gap"], sesgo["intrusos (original)"])]
+    ax[1].set_xlabel("modality gap"); ax[1].set_ylabel("tasa de intrusos"); ax[1].set_title("Más gap, más intrusos")
+    plt.tight_layout(); plt.show()
     ''')
     nb.md("""
-    > 👀 **Qué debes observar.** Con gap grande, casi **todo el top-10 son textos** (≈ 100 %): el índice mixto devuelve captions en lugar de imágenes aunque la imagen sea perfectamente relevante. Restar el centroide de cada modalidad lo acerca al 50 %. Es un **arreglo post-hoc barato**, pero cambia la geometría: valídalo en tu métrica (módulo 15) antes de adoptarlo.
-    > En producción, el remedio habitual es **no mezclar** modalidades en un mismo ranking sin calibrar (índices separados + fusión por rangos, RRF del módulo 13) o usar un modelo entrenado para un espacio unificado.
+    > 👀 **Qué debes observar.** Con un gap pequeño o moderado (≤ 0.35 aquí) **no hay intrusos**: el texto correcto→imagen correcta sigue ganando a cualquier texto equivocado. Con $\\tau=0.01$ (gap ≈ 1) **el 100 % de las queries tiene un texto equivocado por delante de la imagen correcta**: el índice mixto es inservible aunque el retrieval texto→imagen *por separado* funcione.
+    > Y ojo: **restar el centroide de cada modalidad no lo arregla** en el caso extremo (las imágenes siguen en un cono estrecho: coseno intra-imagen 0.62). La corrección por media es un parche, no un cambio de geometría; en la práctica se opta por índices separados con fusión por rangos (módulo 13) o por un modelo entrenado para un espacio unificado.
     """)
     nb.code(r'''
     # El pivote visual: ES ↔ EN sin pares ES-EN directos. Para cada caption ES de test, ¿su vecino EN más cercano es del mismo concepto?
