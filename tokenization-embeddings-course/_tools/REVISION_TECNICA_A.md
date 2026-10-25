@@ -49,3 +49,12 @@ falta. Cambios aplicados en los builders y notebooks regenerados; recomendacione
   menor. Se reescribió en la sección 9, en los secretos y en el módulo 05.
 - Recomendación: la tabla de vocabularios dice «Gemma 3 ≈ 262 k / 256 k»; añadir la cifra del tokenizer publicado
   (262 144 piezas) cuando se pueda verificar con HF.
+
+## 05 · Patologías y robustez
+- Indicadores de Land & Bartolo (2024) contrastados con el PDF: distancia coseno de filas de salida a la media de
+  tokens de referencia (bytes 0xF5–0xFF) y norma de entrada para no atados; la variante con PCA del apéndice A no
+  mejora de forma consistente, así que omitirla está bien. Banco MiniGPT con «intrusos» (verdad de referencia) correcto.
+- Auditoría de tiktoken verificada en GPT-2 (344 parciales = 0.68 %, 0 inalcanzables). Phan et al. 2024 (≈ 18 % en FIM),
+  derivación del gradiente para tokens nunca objetivo y token healing coherentes.
+- **Arreglado:** la sección 6 decía que el indicador coseno es «para modelos con embeddings atados»; en el artículo
+  vale con o sin tying (toda la matriz de salida recibe gradiente). Cifras GPT-4 de Singh & Strouse (ver 04).

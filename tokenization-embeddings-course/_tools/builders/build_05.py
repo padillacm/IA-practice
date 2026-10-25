@@ -244,7 +244,7 @@ nb.md(r"""
 Pipeline de Land & Bartolo (2024), en tres pasos:
 
 1. **Análisis del tokenizer** (sin modelo): tokens *parciales UTF-8* (fragmentos de bytes que no decodifican), *inalcanzables* (`encode(decode(t)) ≠ [t]`) y *especiales*.
-2. **Indicadores de pesos**: distancia coseno de la fila de **salida** a la media de los tokens no usados conocidos (modelos con embeddings atados) o norma de la fila de **entrada** (no atados). Dan un *ranking* de candidatos.
+2. **Indicadores de pesos**: distancia coseno de la fila de **salida** a la media de los tokens no usados conocidos (vale con o sin embeddings atados, porque toda la matriz de salida recibe gradiente vía el softmax) y, si los embeddings **no** están atados, además la norma de la fila de **entrada** (sin gradiente, solo weight decay). Dan un *ranking* de candidatos.
 3. **Verificación por comportamiento**: construir prompts donde un token normal tendría alta probabilidad (p. ej. repetición) y comprobar que el candidato queda < 1 %.
 
 Implementamos 2 y 3 sobre el banco (las funciones `ind_coseno`, `ind_norma` y `max_prob_contexto` están arriba) y medimos contra la **verdad** (frecuencia 0 en el corpus del modelo). Referencias de «no usado»: los tokens de bytes `0xF5–0xFF`.
@@ -409,7 +409,7 @@ nb.md(r"""
 ## 8. Aritmética: la alineación de tokens importa
 
 En el módulo 04 viste que GPT-3.5/4 parten los números en grupos de hasta 3 dígitos **de izquierda a derecha**. Para sumar $a+b$ el modelo necesita alinear las *unidades*, *decenas*, *centenas*… de los sumandos con las del resultado;
-si los límites de token no coinciden, la «columna» de las centenas puede estar partida entre dos tokens. Singh & Strouse (2024) forzaron tokenización **R2L** (separando miles con comas) y la precisión de suma subió de ≈ 75.6 % a ≈ 97.8 % en GPT-3.5 y de ≈ 84.4 % a ≈ 98.9 % en GPT-4 (modelos de marzo de 2023).
+si los límites de token no coinciden, la «columna» de las centenas puede estar partida entre dos tokens. Singh & Strouse (2024) forzaron tokenización **R2L** (separando miles con comas) y la precisión de suma subió de 75.6 % a 97.8 % en GPT-3.5 (8-shot, sumandos de 7–9 dígitos; `gpt-3.5-turbo-0301`); en GPT-4 (marzo de 2023) el efecto es algo menor pero persiste.
 
 Medimos la **desalineación** en sí: ¿en qué fracción de sumas aleatorias los límites de grupo (medidos desde las unidades) de $a$, $b$ y $a+b$ coinciden?
 """)
