@@ -72,3 +72,18 @@ y algún ejemplo a mano ausente.
   `normalizar` del módulo 01 (que conservaba el ZWNJ en persa/índicas): decisión de diseño explícita.
 - **Andamiaje:** el paso 3 (fuzzing + informe de hallazgos) solo tenía 🪜 1; añadida 🪜 2 (cómo convertir la tabla de
   fallos por clase en hallazgos con evidencia, severidad y mitigación).
+
+## 06 · Tokenizer-free I (bytes, BLT)
+- Bien: 🔁 con repaso espaciado de 01, 02 y 05; intuición «la tokenización es una heurística de compresión»;
+  experimento propio (n-grama Witten-Bell + TinyGPT + MiniBLT) separado con claridad de las cifras **reportadas**
+  por el paper; honestidad sobre madurez 🟡/🔴.
+- **Carga cognitiva:** ≈ 72 celdas sin 🧭; añadida ruta núcleo (lo que usa el proyecto) vs ampliación (familia de
+  modelos, parcheo incremental, MiniBLT, librerías), con la sugerencia de ejecutar MiniBLT sin estudiarlo si falta
+  tiempo.
+- **Ejemplo a mano:** la teoría del parcheo por entropía (§6) pasaba de la fórmula al código; añadido cálculo
+  de $H$ tras «el servid» (0.80 bits) y tras «el␣» (4 bits) con $\theta_g=2$, enlazado con la analogía del compresor
+  aritmético del módulo 02.
+- **Reestructurado:** Mapa de madurez de §4 a §12 (antes de 🏭); secciones 5–12 renumeradas (4–11), incluidas las
+  subsecciones en `nb.md("### …")` y la referencia interna «sección 8» → 7.
+- **👀 añadidas:** tras la figura «La misma frase agrupada de cuatro maneras» (lección) y tras la figura de resumen
+  del proyecto (incremental / estabilidad / inflación con erratas), con qué hacer si contradice la lección.

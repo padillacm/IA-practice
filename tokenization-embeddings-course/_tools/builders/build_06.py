@@ -65,6 +65,10 @@ nb.md("## 2. 🔁 Conexión con módulos anteriores\n\nResponde antes de seguir 
               "Desaparecen: tokens sub-entrenados/glitch (no hay vocabulario que quede huérfano), dependencia de espacios/mayúsculas como *ids* distintos y gran parte del problema de contar letras. No desaparecen: sesgos de datos, aritmética mal formada, ataques de Unicode (los bytes siguen ahí) ni el coste: la secuencia es más larga o hace falta parchear."))
 
 nb.md(r"""
+> 🧭 **Ruta núcleo vs ampliación.** La lección tiene ≈ 72 celdas (≈ 3 h; las celdas de entrenamiento tardan 1–3 min en CPU). *Núcleo (≈ 2 h), lo que usa el proyecto:* secciones 3, 4 (FLOPs por byte), 6 (teoría del parcheo por entropía), 7.1–7.2 (modelo de entropía y calibración del umbral), 8 (arquitectura BLT) y 10 (qué dice el paper). *Ampliación (≈ 1 h):* 5 (familia ByT5/CANINE/MegaByte/SpaceByte), 7.3 (parcheo incremental), 9 (MiniBLT desde cero y su entrenamiento) y 11 (librerías). Si vas justo de tiempo, ejecuta las celdas de la sección 9 sin estudiarlas y vuelve a ellas tras el proyecto.
+""")
+
+nb.md(r"""
 ## 3. Intuición primero: la tokenización es una heurística de compresión
 
 Un tokenizer BPE es un **compresor sin pérdida con un diccionario fijo**: agrupa los pares de bytes más frecuentes (módulo 02). El transformer gasta **el mismo cómputo en cada token**, aunque
@@ -112,26 +116,7 @@ for c in C.corpus_cells():
 nb.code(S.DATA)
 
 nb.md(r"""
-## 4. Mapa de madurez (a oct-2026)
-
-| Técnica | Madurez | Quién la usa / respaldo público | Fuente |
-|---|---|---|---|
-| Subword BPE (referencia) | 🟢 | Prácticamente todos los LLM abiertos con tokenizer documentado | Módulos 02-04 |
-| CANINE (encoder a nivel de carácter con *downsampling*) | 🟡 | Google Research; pesos publicados; no es base de modelos de frontera | Clark et al., TACL 2022 (arXiv:2103.06874) |
-| ByT5 (T5 byte-a-byte) | 🟡 | Google Research; robusto a ruido, 4x más largo | Xue et al., TACL 2022 (arXiv:2105.13626) |
-| MegaByte (parches fijos, local+global) | 🔴 | Meta; el propio paper de BLT lo ve por detrás de BPE a escala | Yu et al., 2023 (arXiv:2305.07185) |
-| SpaceByte (parche tras cada espacio) | 🔴 | Investigación (autor único); cierra parte de la brecha con BPE | Slagle, 2024 (arXiv:2404.14408) |
-| MambaByte (SSM sobre bytes) | 🔴 | Investigación (COLM 2024); modelos de 353M a 972M (y 1.6B en una prueba de velocidad) | Wang et al., 2024 (arXiv:2401.13660) |
-| **BLT: parches por entropía** | 🟡/🔴 | Meta FAIR; hasta 8B / 4T bytes; ACL 2025; pesos 1B y 7B en HF (acceso controlado) | Pagnoni et al., 2024 (arXiv:2412.09871) |
-| *Byte-ification* de un LLM ya entrenado (Bolmo) | 🔴 | Ai2: Bolmo 1B/7B a partir de Olmo 2 1B / Olmo 3 7B | Minixhofer et al., 2025 (arXiv:2512.15586) |
-| Chunking aprendido de extremo a extremo (H-Net) | 🔴 | Cartesia/CMU (módulo 07) | Hwang, Wang, Gu (arXiv:2507.07955) |
-
-> **Honestidad.** «🟡/🔴» significa: *hay un resultado a escala que respalda la idea, pero no hay evidencia pública de un LLM de frontera en producción con ella*. «Evidencia pública» ≠ «nadie lo usa»:
-> los laboratorios no siempre documentan su tokenizer. Lo que sí es verificable es lo que aparece en los papers y en los repositorios abiertos.
-""")
-
-nb.md(r"""
-## 5. El coste de leer bytes: FLOPs por byte
+## 4. El coste de leer bytes: FLOPs por byte
 
 Para una capa transformer con ancho $d$ y contexto $n$, el forward por posición cuesta aproximadamente
 
@@ -154,7 +139,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-### 5.1 ¿Cuánto mide un «paso» en BPE? Bytes por token según vocabulario e idioma
+### 4.1 ¿Cuánto mide un «paso» en BPE? Bytes por token según vocabulario e idioma
 
 Entrenamos BPE de varios tamaños con `tokenizers` (módulo 02-03) sobre el corpus Políglota y medimos **bytes por token**: es el «patch size» implícito del BPE.
 """)
@@ -166,7 +151,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 6. La familia de modelos a nivel de byte/carácter
+## 5. La familia de modelos a nivel de byte/carácter
 
 | Modelo | Idea | Cómo agrupa | Debilidad señalada |
 |---|---|---|---|
@@ -179,7 +164,7 @@ nb.md(r"""
 | **BLT** (2024) | Parches por **entropía** del siguiente byte + codificador/decodificador locales con *cross-attention* + hash de n-gramas | **dinámica**, controlable | Sin leyes de escala propias; ver «Limitaciones» más abajo |
 | **H-Net** (2025) | El segmentador **se aprende** de extremo a extremo (módulo 07) | aprendida | Escala hasta ≈1.3B (FLOPs de un GPT-3 XL) en el paper |
 """)
-nb.md("### 6.1 Cuatro maneras de agrupar la misma frase\n\nCódigo sencillo para las tres reglas «sin modelo» (stride, espacios, BPE); la regla por entropía llega en la sección 8.")
+nb.md("### 5.1 Cuatro maneras de agrupar la misma frase\n\nCódigo sencillo para las tres reglas «sin modelo» (stride, espacios, BPE); la regla por entropía llega en la sección 7.")
 nb.code(S.SCHEMES_TEXT)
 nb.md(obs("""
 * **Stride** corta en cualquier sitio (`El s|erv|idor…`): una misma palabra se parte de formas distintas según su posición — el modelo debe aprender todas.
@@ -187,7 +172,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 7. Teoría: parches por entropía (BLT)
+## 6. Teoría: parches por entropía (BLT)
 
 **Modelo de entropía.** Se entrena un modelo de lenguaje de bytes *pequeño* $p_e$ en los mismos datos. Para cada posición $i$ se calcula la incertidumbre sobre el *siguiente* byte dado el pasado:
 
@@ -201,6 +186,9 @@ $$\text{Umbral global: } H(x_i) > \theta_g \qquad\qquad \text{Restricción monó
 
 La segunda detecta *rupturas* de una entropía que debería decrecer dentro de un parche (tras la primera letra de una palabra, el resto es más fácil) y sufre menos *entropy drift* cuando el contexto cambia (§4.4).
 
+**Ejemplo a mano** (con $\log_2$, en bits). Tras «el servid» el modelo de entropía casi sabe lo que viene: $p(\texttt{o})=0.9$ y reparte 0.1 entre otros 10 bytes ($0.01$ cada uno):
+$H=-0.9\log_2 0.9-10\cdot0.01\log_2 0.01=0.137+0.664=\mathbf{0.80}$ bits. Tras «el␣» (inicio de palabra) supón 16 iniciales igual de probables: $H=\log_2 16=\mathbf{4}$ bits. Con $\theta_g=2$ bits se abre parche en el inicio de palabra y **no** dentro de «servidor». Es la misma idea que un compresor aritmético (módulo 02, §9.5): lo predecible cuesta pocos bits y se agrupa; lo sorprendente cuesta muchos y recibe su propio paso de cómputo.
+
 **Propiedad clave: parcheo incremental.** Al generar no existen los bytes futuros, así que la función de parcheo debe cumplir $f_p(\boldsymbol{x}_{<i}) = f_p(\boldsymbol{x})_{<i}$. Como $H(x_i)$ solo depende de $\boldsymbol{x}_{<i}$, el parcheo por entropía la cumple. **BPE no**: el mismo prefijo se tokeniza distinto según lo que venga después.
 
 **Bits por byte (bpb).** Para comparar modelos con distinta segmentación no sirve la perplejidad por token:
@@ -210,7 +198,7 @@ $$\mathrm{BPB}(\boldsymbol{x}) \;=\; \frac{\mathcal{L}_{CE}(\boldsymbol{x})}{\ln
 con $\mathcal{L}_{CE}$ la entropía cruzada total (en nats) de la secuencia y $n_{\text{bytes}}$ su longitud en bytes. (Detalle fino: para modelos tokenizados es una *aproximación*, porque asume que la probabilidad de la cadena es la de su tokenización canónica — el paper de H-Net lo advierte.)
 """)
 
-nb.md("### 7.1 Un modelo de entropía como tabla de búsqueda (n-grama) y como transformer\n\nPrimero la **tabla n-grama** con suavizado Witten-Bell (conteos de bytes, orden $n$): no es una red neuronal, pero es exactamente un «modelo de bytes con campo receptivo pequeño».")
+nb.md("### 6.1 Un modelo de entropía como tabla de búsqueda (n-grama) y como transformer\n\nPrimero la **tabla n-grama** con suavizado Witten-Bell (conteos de bytes, orden $n$): no es una red neuronal, pero es exactamente un «modelo de bytes con campo receptivo pequeño».")
 nb.code(S.NGRAM)
 nb.md("Ahora el **transformer diminuto** de bytes (el análogo, en pequeño, de los 100M parámetros del paper):")
 nb.code(S.NN_BYTELM)
@@ -219,16 +207,20 @@ nb.md(obs("""
 * El paper de BLT ablaciona el modelo de entropía y ve **rendimientos decrecientes por encima de ~50M parámetros y 512 bytes de contexto** (§7): el modelo de patching **no necesita ser grande**.
 """))
 
-nb.md("## 8. Parches por entropía en acción")
-nb.md("### 8.1 Calibrar el umbral para un tamaño medio de parche")
+nb.md("## 7. Parches por entropía en acción")
+nb.md("### 7.1 Calibrar el umbral para un tamaño medio de parche")
 nb.code(S.PATCHING)
-nb.md("### 8.2 La entropía del siguiente byte (réplica en pequeño de la Figura 4 del paper)")
+nb.md("### 7.2 La entropía del siguiente byte (réplica en pequeño de la Figura 4 del paper)")
 nb.code(S.ENTROPY_PLOT)
 nb.md(obs("""
 * La entropía **se dispara en el primer byte de una palabra** (qué viene después de un espacio) y **cae dentro de la palabra** cuando ya conoces el comienzo. Las barras naranjas son inicios de parche: tienden a coincidir con inicios de palabra, **sin que nadie le dijera dónde están los espacios**.
 * En código aparecen picos en identificadores y literales, y parches largos en estructuras repetidas. En texto sintético con plantillas, las palabras de la plantilla son casi deterministas (parches largos) y las variables, impredecibles.
 """))
 nb.code(S.STRIP)
+nb.md(obs("""
+* Cada fila es una regla de segmentación y **cada bloque, un paso del transformer grande** (lo que se paga en FLOPs). Cuenta bloques: *stride* corta a ciegas (bloques iguales que parten palabras), *espacios* y *BPE* siguen las palabras, y *entropía* corta donde el siguiente byte es difícil de predecir.
+* Fíjate en que la fila de entropía tiende a coincidir con inicios de palabra **sin saber qué es un espacio**, pero también agrupa palabras muy predecibles en un solo bloque y parte las raras en varios: el cómputo se reparte según la dificultad, no según la ortografía.
+"""))
 nb.code(S.PATCH_PLOTS)
 nb.code(S.ACUERDO)
 nb.md(obs("""
@@ -239,14 +231,14 @@ nb.code(S.LANG)
 nb.md(obs("""
 Con **el mismo $\\theta$** para todos, los idiomas/dominios con menor entropía por byte obtienen parches más largos (menos cómputo por byte) y los más impredecibles obtienen parches más cortos. Así el cómputo **sigue a la densidad de información** — y por eso, en teoría, un modelo de bytes con parches dinámicos no castiga a un idioma solo por su vocabulario (matiz: sí lo penaliza si su *entropía* intrínseca es mayor o está poco representado en el modelo de entropía).
 """))
-nb.md("### 8.3 La propiedad de parcheo incremental")
+nb.md("### 7.3 La propiedad de parcheo incremental")
 nb.code(S.INCREMENTAL)
 nb.md(obs("""
 El parcheo por entropía es incremental por construcción (100%). BPE **no lo es**: si cortas a mitad de palabra, la tokenización del prefijo difiere de la de la palabra completa, así que un generador que decidiera «¿abro token?» mirando solo el pasado no coincidiría con el tokenizer entrenado. Esto es lo que hace que BPE use un tokenizer *aparte* y BLT pueda decidir los parches *durante la generación*.
 """))
 
 nb.md(r"""
-## 9. Arquitectura BLT
+## 8. Arquitectura BLT
 
 BLT tiene **tres** transformers (Figura 2 del paper):
 
@@ -310,7 +302,7 @@ El ahorro de BLT no viene de «pensar menos» sino de **no repetir cómputo caro
 """))
 
 nb.md(r"""
-## 10. Implementación desde cero: *MiniBLT*
+## 9. Implementación desde cero: *MiniBLT*
 
 Implementamos las piezas de la figura en ~80 líneas de PyTorch. **Qué es y qué no es:**
 
@@ -323,7 +315,7 @@ Implementamos las piezas de la figura en ~80 líneas de PyTorch. **Qué es y qu�
 nb.code(S.MINIBLT_1)
 nb.code(S.MINIBLT_2)
 nb.md(r"""
-### 10.1 Baselines y entrenamiento comparado
+### 9.1 Baselines y entrenamiento comparado
 
 Entrenamos tres modelos con el **mismo transformer global** (mismo ancho y capas), la **misma ventana en bytes** (128, como hace BLT para no dar ventaja de contexto) y el mismo presupuesto de pasos:
 (a) transformer **isotrópico sobre bytes**, (b) transformer sobre **tokens BPE** (el baseline de la industria), (c) **MiniBLT** con parches por entropía.
@@ -338,7 +330,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 11. Resultados publicados: qué dice el paper (y qué no)
+## 10. Resultados publicados: qué dice el paper (y qué no)
 
 Cifras **reportadas por los autores** (Pagnoni et al., arXiv:2412.09871, v1 de diciembre 2024; ACL 2025). **No son nuestras mediciones** y pueden no reproducirse con otra receta.
 
@@ -378,12 +370,33 @@ nb.md(obs("""
 Fíjate en el orden causal: el umbral se evalúa **con el pasado** (no hay que mirar adelante), el parche se **cierra** cuando aparece el siguiente byte difícil y solo entonces corre el bloque caro. Es lo que permite generar byte a byte con parches dinámicos.
 """))
 
-nb.md("## 12. Con librerías de industria: ByT5, CANINE y BLT en Hugging Face")
+nb.md("## 11. Con librerías de industria: ByT5, CANINE y BLT en Hugging Face")
 nb.code(S.LIBS)
 nb.md(obs("""
 * **ByT5** no tiene vocabulario que aprender: ids = bytes + 3 reservados; **CANINE** usa directamente *code points* de Unicode (por eso un emoji es 1 posición, pero 4 bytes). Las longitudes muestran el coste: ~1 posición por byte (ByT5) o por carácter (CANINE) frente a ~4 bytes/token de BPE.
 * Para BLT usa el repositorio `facebookresearch/blt` o los pesos del hub; la clase `BltForCausalLM` de `transformers` existe en versiones recientes, pero necesita pesos convertidos: **verifica el nombre del checkpoint** antes de planificar un experimento (los pesos oficiales de Meta son de acceso controlado).
 """))
+
+nb.md(r"""
+## 12. Mapa de madurez (a oct-2026)
+
+Tras ver el mecanismo, el mini-experimento y lo que dice el paper, esta tabla resume qué es sólido y qué no.
+
+| Técnica | Madurez | Quién la usa / respaldo público | Fuente |
+|---|---|---|---|
+| Subword BPE (referencia) | 🟢 | Prácticamente todos los LLM abiertos con tokenizer documentado | Módulos 02-04 |
+| CANINE (encoder a nivel de carácter con *downsampling*) | 🟡 | Google Research; pesos publicados; no es base de modelos de frontera | Clark et al., TACL 2022 (arXiv:2103.06874) |
+| ByT5 (T5 byte-a-byte) | 🟡 | Google Research; robusto a ruido, 4x más largo | Xue et al., TACL 2022 (arXiv:2105.13626) |
+| MegaByte (parches fijos, local+global) | 🔴 | Meta; el propio paper de BLT lo ve por detrás de BPE a escala | Yu et al., 2023 (arXiv:2305.07185) |
+| SpaceByte (parche tras cada espacio) | 🔴 | Investigación (autor único); cierra parte de la brecha con BPE | Slagle, 2024 (arXiv:2404.14408) |
+| MambaByte (SSM sobre bytes) | 🔴 | Investigación (COLM 2024); modelos de 353M a 972M (y 1.6B en una prueba de velocidad) | Wang et al., 2024 (arXiv:2401.13660) |
+| **BLT: parches por entropía** | 🟡/🔴 | Meta FAIR; hasta 8B / 4T bytes; ACL 2025; pesos 1B y 7B en HF (acceso controlado) | Pagnoni et al., 2024 (arXiv:2412.09871) |
+| *Byte-ification* de un LLM ya entrenado (Bolmo) | 🔴 | Ai2: Bolmo 1B/7B a partir de Olmo 2 1B / Olmo 3 7B | Minixhofer et al., 2025 (arXiv:2512.15586) |
+| Chunking aprendido de extremo a extremo (H-Net) | 🔴 | Cartesia/CMU (módulo 07) | Hwang, Wang, Gu (arXiv:2507.07955) |
+
+> **Honestidad.** «🟡/🔴» significa: *hay un resultado a escala que respalda la idea, pero no hay evidencia pública de un LLM de frontera en producción con ella*. «Evidencia pública» ≠ «nadie lo usa»:
+> los laboratorios no siempre documentan su tokenizer. Lo que sí es verificable es lo que aparece en los papers y en los repositorios abiertos.
+""")
 
 nb.md(r"""
 ## 13. 🏭 En producción

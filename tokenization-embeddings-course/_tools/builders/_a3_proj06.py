@@ -301,6 +301,7 @@ Corpus Políglota vía `carga_corpus()` (Wikipedia ES/EN + CodeSearchNet; fallba
     nb.md(hint(1, "Recorre `grid` de menor a mayor `ps` y devuelve el primero que cumpla `flops_por_byte('blt', ps=ps) <= (1-ahorro) * flops_por_byte('bpe', bpt=bpt)`."))
     nb.code(FLOW_COST)
     nb.code(PLOT)
+    nb.md(obs("**Izquierda:** la barra azul (entropía) debe estar en 1.0 —el parcheo es incremental por construcción— y la naranja (BPE) por debajo: cortar el texto a mitad cambia la tokenización del prefijo. **Centro:** cuanto más cerca de 1.0, menos se alteran las palabras que la errata *no* tocó. **Derecha:** por encima de la línea punteada (1.0) la errata **encarece** la secuencia. Si una barra contradice lo que viste en la lección, revisa primero tu `entropia_bits` (TODO 1): todo lo demás depende de ella."))
 
     nb.md("## Paso 6 · Conclusión y rúbrica\n\nEscribe tu recomendación en `CONCLUSION` (≥ 300 caracteres): ¿qué ventajas/limitaciones ves frente a BPE? ¿qué **no** puedes concluir con este banco? (pista: no hemos entrenado un LM de parches en este proyecto, ni usamos datos reales ni varias semillas).")
     nb.code('CONCLUSION = ""   # TODO 7: escribe aquí tu nota técnica para el CTO (>= 300 caracteres)\n')
