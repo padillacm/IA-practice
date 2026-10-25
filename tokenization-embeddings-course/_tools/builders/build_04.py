@@ -535,3 +535,567 @@ nb.md(r"""
 **Errores típicos con plantillas** (los verás en producción): (1) **doble BOS**: la plantilla ya añade `<s>` y el tokenizer lo añade otra vez al tokenizar el texto resultante (`add_special_tokens=False` al re-tokenizar); (2) plantilla de *entrenamiento* ≠ de *servicio* (un `\n` de más);
 (3) olvidar `add_generation_prompt=True`; (4) enmascarar mal la pérdida (entrenar también sobre el prompt del usuario); (5) **inyección de tokens de control** desde el texto del usuario (si el usuario escribe `<|im_end|>` y tu tokenizer lo convierte en el token real, puede cerrar el turno: módulo 05).
 """)
+
+# ------------------------------- 11. SuperBPE -------------------------------
+nb.md(r"""
+## 11. Tokens que cruzan palabras: SuperBPE
+
+Toda la tubería de módulos 02–03 asume que **un token no cruza una palabra**. Pero «a lot of», «de la», «search engine» funcionan como unidades semánticas. **SuperBPE** (Liu et al., 2025; COLM 2025) añade un **currículo de dos etapas** al BPE:
+
+1. **Etapa 1** (hasta un punto de transición $t$): BPE normal con pre-tokenización por espacios → aprende **subpalabras**.
+2. **Etapa 2** (de $t$ a $T$): se **desactiva** la pre-tokenización por espacios y se sigue fusionando → aparecen **superpalabras** (tokens que cruzan espacios).
+
+Resultados que reportan los autores (8 B de parámetros, vocabulario de 200 k, entrenados desde cero, **solo inglés**): hasta ≈ 33 % menos tokens para el mismo texto, +4.0 puntos de media en 30 tareas (+8.2 en MMLU) con ≈ 27 % menos cómputo de inferencia; pero **empeora LAMBADA** (77.0 → 70.6) y exige más CPU/memoria para entrenar el tokenizer, y requiere deduplicar para evitar superpalabras de *boilerplate*.
+Estado: 🟡 (resultado de un grupo, escala 8 B, inglés); no he verificado adopción en producción.
+
+Vamos a implementar la **versión mínima**: etapa 1 con `BpeTrainer` de HF (palabras), etapa 2 con fusiones sobre listas de tokens que **sí pueden cruzar espacios**, y comparamos con BPE estándar al **mismo tamaño total de vocabulario**.
+""")
+
+nb.gemini(
+    "video", "M04-VID-01",
+    "SuperBPE: de subpalabras a superpalabras",
+    "Animación de las dos etapas de SuperBPE sobre la frase «en el caso de la ley» mostrando cómo, al desactivar la pre-tokenización por espacios, aparecen tokens que cruzan palabras.",
+    """Animación explicativa 16:9, estilo diagrama técnico limpio: fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif y monoespaciada para los tokens, sin ilustraciones decorativas, sin voz en off, ritmo calmado. Texto en pantalla en español. Duración total 30 segundos.
+
+Frase de ejemplo (usa exactamente esta): "en el caso de la ley". El símbolo ▁ marca el inicio de palabra.
+
+Escena 1 (0–6 s): Título "SuperBPE: dos etapas". Se muestra la frase como una fila de chips grises, un chip por palabra: [▁en] [▁el] [▁caso] [▁de] [▁la] [▁ley]. Debajo, una barrera vertical roja (#D62728) entre cada par de chips con el texto "pre-tokenización por espacios: ningún token cruza la barrera".
+Escena 2 (6–14 s): Etiqueta "Etapa 1 (BPE normal, hasta el punto de transición t)". Los chips de palabras se parten en subpalabras con una animación suave: [▁en] [▁el] [▁ca][so] [▁de] [▁la] [▁ley] y luego vuelven a fusionarse parcialmente; aparece un contador "|V| crece hasta t".
+Escena 3 (14–20 s): Etiqueta "Transición: se APAGA la pre-tokenización por espacios". Las barreras rojas se desvanecen.
+Escena 4 (20–28 s): Etiqueta "Etapa 2 (de t a T)": los pares adyacentes más frecuentes se fusionan a través de los espacios, uno por uno, con una flecha naranja por cada fusión: [▁en][▁el] → [▁en▁el]; [▁de][▁la] → [▁de▁la]. Resultado final en una fila: [▁en▁el] [▁ca][so] [▁de▁la] [▁ley] (4 chips + 1 = 5 chips de 7 iniciales, mostrados como "7 → 5 tokens").
+Escena 5 (28–30 s): Texto final: "Menos tokens por texto. Límites: probado a 8 B, solo en inglés".
+Evita: números distintos a los indicados, texto ilegible, flechas que se crucen, elementos decorativos, transiciones rápidas, música o voz.""",
+    "Animación de 30 s: la frase «en el caso de la ley» pasa de 7 a 5 tokens al apagar la pre-tokenización por espacios y fusionar a través de las palabras en la etapa 2 de SuperBPE.",
+    """
+ Etapa 1 (palabras):   [▁en] | [▁el] | [▁ca][so] | [▁de] | [▁la] | [▁ley]      (7 tokens; | = barrera de espacios)
+ Transición:           se apaga la pre-tokenización por espacios
+ Etapa 2 (superpalabras): [▁en▁el] [▁ca][so] [▁de▁la] [▁ley]                    (5 tokens)
+""",
+    duration="30 s",
+)
+nb.md(r"""
+> 👀 **Qué debes observar.** La ganancia viene **solo de la etapa 2**, que fusiona pares *entre* palabras que ya son frecuentes (`▁de▁la`, `▁en▁el`). Es compresión pura; que además mejore el modelo (como reportan los autores) es una afirmación empírica aparte y todavía no replicada a gran escala.
+""")
+
+nb.code(r'''
+Counter = collections.Counter
+def bpe_palabras(textos, V: int) -> Tokenizer:
+    t = Tokenizer(models.BPE(unk_token="[UNK]")); t.normalizer = normalizers.NFKC()
+    t.pre_tokenizer = pre_tokenizers.Metaspace(replacement="▁", prepend_scheme="always")
+    t.train_from_iterator(textos, trainers.BpeTrainer(vocab_size=V, special_tokens=["[UNK]"], initial_alphabet=[chr(i) for i in range(32, 127)]))
+    return t
+
+def superbpe(textos, t_etapa1: int, T: int):
+    """Etapa 1: BPE por palabras hasta t_etapa1. Etapa 2: fusiones entre tokens ADYACENTES aunque crucen espacios, hasta T."""
+    base = bpe_palabras(textos, t_etapa1)
+    secs = [base.encode(x).tokens for x in textos]; fusiones = []
+    for _ in range(T - t_etapa1):
+        cnt = Counter()
+        for s in secs: cnt.update(zip(s, s[1:]))
+        if not cnt: break
+        (a, b), _ = max(cnt.items(), key=lambda kv: (kv[1], kv[0])); fusiones.append((a, b))
+        for k, s in enumerate(secs):
+            i, out = 0, []
+            while i < len(s):
+                if i < len(s) - 1 and s[i] == a and s[i + 1] == b: out.append(a + b); i += 2
+                else: out.append(s[i]); i += 1
+            secs[k] = out
+    return base, fusiones
+
+def codifica_super(base, fusiones, texto):
+    s = base.encode(texto).tokens
+    for a, b in fusiones:
+        i, out = 0, []
+        while i < len(s):
+            if i < len(s) - 1 and s[i] == a and s[i + 1] == b: out.append(a + b); i += 2
+            else: out.append(s[i]); i += 1
+        s = out
+    return s
+
+T_TOTAL, T_ETAPA1 = (2000, 1500) if FAST_DEV_RUN else (16000, 12000)
+res_sb = {}
+for lang in ["en", "es"]:
+    tr = [d["text"] for d in train_docs if d["lang"] == lang]; te = test_by_lang[lang]
+    t0 = time.time(); base, fus = superbpe(tr, T_ETAPA1, T_TOTAL); t_tr = time.time() - t0
+    bpe = bpe_palabras(tr, T_TOTAL); nbytes = sum(len(x.encode()) for x in te)
+    n_bpe = sum(len(bpe.encode(x).tokens) for x in te); n_sup = sum(len(codifica_super(base, fus, x)) for x in te)
+    res_sb[lang] = {"bpe": nbytes / n_bpe, "super": nbytes / n_sup, "reduccion": 1 - n_sup / n_bpe, "fusiones": fus, "seg": t_tr}
+    print(f"{lang}: bytes/token BPE {nbytes/n_bpe:.2f} -> SuperBPE {nbytes/n_sup:.2f} | {1-n_sup/n_bpe:.1%} menos tokens | entrenar etapa 2: {t_tr:.0f}s | ejemplos: {[a+b for a, b in fus[:6]]}")
+''')
+
+nb.code(r'''
+fig, ax = plt.subplots(1, 2, figsize=(12, 4.2))
+x = np.arange(2); w = 0.35
+ax[0].bar(x - w / 2, [res_sb[l]["bpe"] for l in ["en", "es"]], w, label=f"BPE (|V|={T_TOTAL})", color=COL["azul"])
+ax[0].bar(x + w / 2, [res_sb[l]["super"] for l in ["en", "es"]], w, label=f"SuperBPE (t={T_ETAPA1})", color=COL["naranja"])
+ax[0].set_xticks(x); ax[0].set_xticklabels(["inglés", "español"]); ax[0].set_ylabel("Bytes por token (test)"); ax[0].set_title("Misma talla de vocabulario, menos tokens"); ax[0].legend()
+for l, c_ in zip(["en", "es"], [COL["verde"], COL["gris"]]):
+    n_palabras = [a.count("▁") + b.count("▁") for a, b in res_sb[l]["fusiones"]]
+    ax[1].plot(np.arange(len(n_palabras)), np.cumsum([1 if (a.count("▁") + b.count("▁")) >= 2 else 0 for a, b in res_sb[l]["fusiones"]]), label=f"{l}: superpalabras acumuladas", color=c_, lw=2)
+ax[1].set_xlabel("Fusión de la etapa 2"); ax[1].set_ylabel("Tokens que cruzan ≥ 1 espacio (acumulado)"); ax[1].set_title("Etapa 2: casi todo son superpalabras"); ax[1].legend()
+plt.tight_layout(); plt.show()
+print("Superpalabras más frecuentes (ES):", [a + b for a, b in res_sb["es"]["fusiones"][:10]])
+print("Superpalabras más frecuentes (EN):", [a + b for a, b in res_sb["en"]["fusiones"][:10]])
+''')
+nb.md(r"""
+> 👀 **Qué debes observar.** **Izquierda:** con el *mismo* tamaño total de vocabulario, SuperBPE cubre más bytes por token (en nuestra escala diminuta la ganancia es de unos pocos %; los autores reportan hasta 33 % con 200 k y gran corpus: la ganancia crece con el vocabulario porque hay más pares frecuentes que fusionar).
+> **Derecha:** casi toda la etapa 2 produce superpalabras. Las primeras son **palabras funcionales** frecuentes (`de la`, `en el`, `of the`): no son «semánticas»; en corpus grandes aparecen colocaciones como `a lot of`.
+> **Límites:** más memoria/CPU para entrenar el tokenizer, riesgo de superpalabras de *boilerplate* si no deduplicas, y el trabajo reporta caídas puntuales (LAMBADA). Es 🟡.
+""")
+
+# ------------------------------- 12. Diseño para Políglota -------------------------------
+nb.md(r"""
+## 12. Receta: diseñar el vocabulario de Políglota
+
+Un vocabulario se diseña con **tres palancas** y una función de coste:
+
+1. **Mezcla del corpus del tokenizer** (qué proporción de ES, EN, código y, si aplica, otros idiomas). Un corpus «natural» (dominado por inglés) deja pocos merges al resto; suele muestrearse con **temperatura** $p_\ell\propto n_\ell^{\alpha}$ ($\alpha<1$ sube la proporción de idiomas pequeños; XLM-R usa $\alpha=0.3$ para muestrear idiomas al entrenar el modelo).
+2. **Tamaño $V$**: se elige en la **rodilla** de la curva *tokens por KB vs $V$* (cuando añadir 1 k tokens ya ahorra < $\varepsilon$ %), acotado por el presupuesto de parámetros (sección 5).
+3. **Pre-tokenización** (regex): dígitos, espacios/indentación, mayúsculas (módulo 02/03).
+
+**Función de coste (la que usarás en el proyecto):** con tráfico esperado $w_\ell$ por idioma,
+$\;J(V,\text{mezcla})=\sum_\ell w_\ell\cdot\text{tokens por KB}_\ell\;+\;\lambda\cdot V/10^{3}$, y se compara también la **peor prima** entre idiomas (equidad).
+
+Primero medimos el efecto de la **mezcla** con un experimento controlado (mismo $V$, mismo total de texto de entrenamiento, solo cambia la proporción).
+""")
+
+nb.code(r'''
+def corpus_mezcla(prop: dict, total_chars: int, semilla: int = SEED) -> list:
+    """Muestrea documentos de train por idioma hasta total_chars*prop[idioma] caracteres (con reposición si hace falta)."""
+    r = random.Random(semilla); out = []
+    for lang, p in prop.items():
+        pool = [d["text"] for d in train_docs if d["lang"] == lang]; acc = 0
+        while acc < p * total_chars:
+            t = r.choice(pool); out.append(t); acc += len(t)
+    r.shuffle(out); return out
+
+def bytes_por_token(tok, lang): 
+    te = test_by_lang[lang]; return sum(len(x.encode()) for x in te) / sum(len(tok.encode(x).ids) for x in te)
+
+TOTAL = 400_000 if FAST_DEV_RUN else 4_000_000
+natural = {"en": 0.80, "es": 0.15, "code": 0.05}
+suav = {k: v ** 0.3 / sum(u ** 0.3 for u in natural.values()) for k, v in natural.items()}      # temperatura alpha = 0.3
+MEZCLAS = {"natural 80/15/5": natural, f"temperatura α=0.3 ({suav['en']:.0%}/{suav['es']:.0%}/{suav['code']:.0%})": suav,
+           "equilibrada 1/3": {"en": 1 / 3, "es": 1 / 3, "code": 1 / 3}, "sesgo ES 20/60/20": {"en": 0.2, "es": 0.6, "code": 0.2}}
+res_mix = {}
+for nombre, prop in MEZCLAS.items():
+    tk = entrena_bpe_bytes(corpus_mezcla(prop, TOTAL), V_PROPIO)
+    res_mix[nombre] = {l: bytes_por_token(tk, l) for l in ["es", "en", "code"]}
+dmix = pd.DataFrame(res_mix).T; print(dmix.round(2))
+fig, ax = plt.subplots(figsize=(9, 4)); dmix[["es", "en", "code"]].plot.bar(ax=ax, rot=15, color=[COL["verde"], COL["azul"], COL["naranja"]])
+ax.set_ylabel("Bytes por token en test (mayor = mejor)"); ax.set_title(f"La mezcla del corpus del tokenizer reparte el vocabulario (|V|={V_PROPIO})"); plt.tight_layout(); plt.show()
+''')
+nb.md(r"""
+> 👀 **Qué debes observar.** Con el mismo $V$ y el mismo volumen de texto, **quien más pesa en la mezcla se lleva más merges**: la mezcla «natural» (80 % inglés) da el mejor inglés y el peor español; el sesgo al español invierte el orden. La mezcla suavizada (temperatura) y la equilibrada reparten mejor, **a costa de una pequeña pérdida en el idioma dominante**.
+> No hay almuerzo gratis: es un reparto de un presupuesto fijo, y la decisión correcta depende del **tráfico** y de la política de equidad del producto (la sección siguiente lo formaliza).
+""")
+
+nb.code(r'''
+# Barrido de V con la mezcla suavizada: ¿dónde está la rodilla?  y función de coste J con tráfico esperado
+trafico = {"es": 0.5, "en": 0.3, "code": 0.2}          # supuesto de producto (parámetro)
+LAMBDA = 3.0                                           # penalización de memoria: "tokens/KB" equivalentes por cada 1 k de vocabulario (parámetro de producto)
+VS = [1000, 2000, 4000, 8000, 16000] if FAST_DEV_RUN else [4000, 8000, 16000, 32000, 64000]
+corp = corpus_mezcla(suav, TOTAL); filas = []
+for V in VS:
+    tk = entrena_bpe_bytes(corp, V)
+    tpk = {l: 1000 / bytes_por_token(tk, l) for l in ["es", "en", "code"]}               # tokens por KB de texto
+    J = sum(trafico[l] * tpk[l] for l in tpk) + LAMBDA * V / 1e3
+    filas.append({"V": V, **{f"tpk_{l}": v for l, v in tpk.items()}, "tokens_prom": sum(trafico[l] * tpk[l] for l in tpk), "J": J})
+dv = pd.DataFrame(filas).set_index("V"); print(dv.round(2))
+mejora = (dv["tokens_prom"].shift(1) - dv["tokens_prom"]) / dv["tokens_prom"].shift(1) * 100
+fig, ax = plt.subplots(1, 2, figsize=(12, 4.2))
+for l, c_ in zip(["es", "en", "code"], [COL["verde"], COL["azul"], COL["naranja"]]): ax[0].plot(dv.index, dv[f"tpk_{l}"], "o-", label=l, color=c_, lw=2)
+ax[0].set_xscale("log"); ax[0].set_xlabel("Tamaño del vocabulario V"); ax[0].set_ylabel("Tokens por KB de texto (menor = mejor)"); ax[0].set_title("Rendimientos decrecientes por idioma"); ax[0].legend()
+ax[1].plot(dv.index, dv["J"], "o-", c=COL["rojo"], lw=2); V_opt = int(dv["J"].idxmin()); ax[1].axvline(V_opt, color=COL["gris"], ls="--")
+ax[1].set_xscale("log"); ax[1].set_xlabel("Tamaño del vocabulario V"); ax[1].set_ylabel("Coste J = Σ w·tokens/KB + λ·V/1000"); ax[1].set_title(f"Mínimo de J en V = {V_opt}"); plt.tight_layout(); plt.show()
+print("mejora % al duplicar V:", mejora.round(1).dropna().to_dict(), "| V* =", V_opt)
+''')
+nb.md(r"""
+> 👀 **Qué debes observar.** **Izquierda:** cada duplicación de $V$ ahorra menos tokens que la anterior (en nuestra corrida: −16 %, −14 %, −10 %, −7 %). Entre 4 k y 16 k el español sigue mejorando más que el inglés (≈ −21 % frente a ≈ −15 %), mientras el código, que necesita más tokens por KB, mejora menos (≈ −11 %).
+> **Derecha:** $J$ tiene un mínimo interior: pasado cierto $V$, el coste en parámetros supera el ahorro de tokens (con $\lambda=3$ el mínimo cae en 8 000).
+> Ese mínimo **depende de $\lambda$ y del tráfico** (decisiones de producto): cámbialos y verás moverse $V^*$. En un LLM real $\lambda$ sale del presupuesto de parámetros (sección 5) y de las leyes de escala (Tao et al., 2024).
+""")
+
+nb.md(r"""
+## 13. Resumen de decisiones de diseño
+
+| Decisión | Pregunta que debes poder responder con datos | Herramienta de esta lección |
+|---|---|---|
+| Tamaño $V$ | ¿dónde está la rodilla *tokens/KB vs V* y cuánto pesan los embeddings? | secciones 5 y 12 |
+| Mezcla de idiomas | ¿qué idioma paga más y es aceptable? | prima de paridad (sección 7) y experimento de mezcla |
+| Números | ¿dígitos sueltos, grupos de 3 o R2L? | sección 9 |
+| Código | ¿se colapsan los runs de espacios? ¿tabs? | sección 9 |
+| Especiales y plantilla | ¿una única fuente de verdad para entrenar y servir? | sección 10 |
+| ¿Cruzar palabras? | ¿ganancia > complejidad? (🟡) | sección 11 |
+
+## 14. 🏭 En producción
+
+Cifras de vocabulario **a oct-2026** (ver tabla de la sección 6); verifica siempre contra el modelo exacto.
+
+- **OpenAI.** `o200k_base` (GPT-4o) amplió el vocabulario de ≈ 100 k a ≈ 200 k; en nuestra medición reduce la prima de hindi de ≈ 4.9× a ≈ 1.6× y la de ruso de ≈ 2.1× a ≈ 1.25× frente a `cl100k` (mini-conjunto paralelo; repítelo con FLORES+).
+- **Meta.** Llama 3 pasó de 32 000 (Llama 2) a 128 256 tokens y reporta una compresión sobre inglés de 3.17 → 3.94 caracteres/token.
+- **Mistral.** Tekken (≈ 130 k + ≈ 1 k de control, basado en tiktoken, > 100 idiomas) sustituye al SentencePiece anterior y Mistral reporta ≈ 30 % mejor compresión en código y varios idiomas (según su guía de tokenización).
+- **Google.** Gemma usa vocabularios de ≈ 256 k con dígitos separados y bytes; la proporción de parámetros en embeddings es muy alta en los modelos pequeños (gráfico de la sección 5).
+- **Cohere.** Command R usa ≈ 255 k tokens con embeddings atados (Land & Bartolo 2024); Cohere publicó además el análisis de tokens sub-entrenados que verás en el módulo 05.
+- **Coste real.** Facturación por token + paridad = **prima de precio por idioma** (Ahia et al., 2023). Antes de comprometer un contrato de API para un producto multilingüe, **mide tus textos con el tokenizer del proveedor** y proyecta el coste por idioma.
+- **Evaluación independiente.** Compara tokenizers con un corpus que **no** se usó para entrenarlos (FLORES+, por ejemplo) y siempre sobre *contenido paralelo*.
+""")
+
+nb.md(r"""
+## 15. 🧠 Secretos de la élite
+
+1. **Compara en bits por byte, no por token.** Perplexidad/pérdida por token no es comparable entre vocabularios distintos; Tao et al. (2024) usan una pérdida normalizada por carácter para sus leyes de escala.
+2. **El vocabulario óptimo crece con el cómputo, y los modelos reales están por debajo.** Tao et al. predicen ≥ 216 K para Llama2-70B frente a los 32 K reales; los vocabularios 100–260 k de 2024–2026 van en esa dirección (🟡: resultado a ≤ 3 B parámetros).
+3. **El «token tax» es un coste de producto medible.** Petrov et al. (2023) encuentran diferencias de hasta 15× entre idiomas en los tokenizers que analizaron, y Ahia et al. (2023) lo convierten en precios. Un equipo con usuarios hispanohablantes debe tener este número en su dashboard.
+4. **Los vocabularios de modelo pequeño son «tablas de embeddings».** Pasar de 32 k a 256 k puede mover de ≈ 10 % a ≈ 50 % de los parámetros (gráfico de la sección 5): por eso importa el *weight tying*.
+5. **La pre-tokenización de números cambia la aritmética.** Singh & Strouse (2024): tokenización R2L ≈ +20 puntos en suma en GPT-3.5/4 (marzo 2023); es un cambio de *una línea de regex* con efecto medible.
+6. **El espacio en blanco se paga en tokens.** Con GPT-2 la indentación cuesta ≈ 15 tokens extra por línea a 16 espacios; la agrupación de `cl100k`/`o200k` la deja en ≈ 1 (medido arriba, sobre código Python real).
+7. **Cambiar el tokenizer de un modelo ya entrenado es caro.** Dagan et al. (2024) reportan que especializar el tokenizer de un modelo preentrenado tras afinarlo con más de 50 B de tokens da ganancias grandes de velocidad y contexto efectivo, pero ese volumen de datos ilustra el coste (módulo 07); por eso se diseña bien a la primera.
+8. **Tokenizers que cruzan palabras (SuperBPE) comprimen más con el mismo vocabulario**, pero la evidencia de mejora de modelo viene de un único grupo a 8 B en inglés (🟡).
+""")
+
+nb.md(r"""
+## 16. ⚠️ Errores comunes
+
+1. Medir la paridad con **texto no paralelo** (los idiomas tienen densidad de información distinta) o con muy pocas frases.
+2. **Comparar perplexidades por token** entre tokenizers.
+3. Fijar `V` «porque lo usa Llama» sin mirar el presupuesto de parámetros ni el tráfico por idioma.
+4. Entrenar el tokenizer con el **corpus natural** (80 % inglés) y sorprenderse del coste en español.
+5. Olvidar los **tokens especiales** en el vocabulario del modelo (fila de embedding no inicializada o sin entrenar → módulo 05).
+6. Usar una **plantilla de chat distinta** en entrenamiento y en servicio, o duplicar BOS.
+7. Cambiar la regex de pre-tokenización de números/espacios **después** de entrenar el modelo.
+8. Citar precios y tamaños de vocabulario sin fecha: cambian cada versión.
+""")
+
+nb.md(r"""
+## 17. Autoevaluación
+
+<details><summary><b>1 · (Cálculo)</b> Un modelo con L = 32, d = 4096 y V = 128 256 sin weight tying: ¿cuántos parámetros hay en embeddings y qué fracción son del total?</summary>
+
+$N_{\text{no-emb}}\approx12\cdot32\cdot4096^2\approx6.44\times10^9$; $N_{\text{emb}}=2\cdot128256\cdot4096\approx1.05\times10^9$; total ≈ 7.49 B → **≈ 14 %** en embeddings. (Es una aproximación genérica: GQA/SwiGLU cambian constantes.)
+</details>
+
+<details><summary><b>2 · (Cálculo)</b> Un texto español mide 2 000 bytes. Con β = 4.0 bytes/token cuesta 500 tokens; con β = 3.2 cuesta 625. Si la API cobra 1 USD por millón de tokens y procesas 10 M de textos así al mes, ¿cuánto cuesta cada opción?</summary>
+
+500 tok × 10 M = 5 000 M tok → **5 000 USD**; 625 tok × 10 M = 6 250 M tok → **6 250 USD** (+25 %). Un tokenizer con 25 % más de tokens cuesta 25 % más (y consume 25 % más de ventana).
+</details>
+
+<details><summary><b>3 · (Diagnóstico)</b> Tu clasificador multilingüe rinde peor en hindi que en español aunque tiene el mismo nº de ejemplos. El tokenizer es cl100k. ¿Qué miras primero?</summary>
+
+La **prima de tokenización** (hindi ≈ 4.9× en nuestra medición con cl100k): las secuencias hindi son mucho más largas (truncan antes en `max_length`, diluyen la atención) y los tokens por byte son casi bytes sueltos. Mide longitudes de secuencia y tasa de truncamiento por idioma; considera un tokenizer con mejor paridad (o200k, Tekken…) o ampliar `max_length` para hindi.
+</details>
+
+<details><summary><b>4 · (Diagnóstico)</b> Tras cambiar la plantilla de chat de tu servicio, la calidad cae 3 puntos sin errores en logs. ¿Causa probable?</summary>
+
+Divergencia entre la plantilla de entrenamiento y la de servicio (un `\n`, un espacio, falta de `add_generation_prompt`, doble BOS). Compara byte a byte la cadena y los ids producidos en servicio con un ejemplo del dataset de post-entrenamiento.
+</details>
+
+<details><summary><b>5 · (Transferencia)</b> Políglota añadirá portugués y quiere mantener V ≈ 32 k para un embedder pequeño. ¿Qué haces?</summary>
+
+Mides la prima actual de pt con un corpus paralelo (FLORES+), reentrenas con mezcla suavizada (temperatura) que suba el peso del portugués y barres V (p. ej. 24 k–48 k) con la función de coste J; decides con tráfico esperado y presupuesto de parámetros. Si el vocabulario viejo ya está en producción, evalúas el coste de re-indexar (módulos 07 y 18).
+</details>
+
+<details><summary><b>6 · (Transferencia)</b> ¿Adoptarías SuperBPE en Políglota? Argumenta.</summary>
+
+Pros: ≈ 6–7 % menos tokens a igual V en nuestra escala (hasta ≈ 33 % reportado con 200 k), menos coste y más contexto. Contras: evidencia 🟡 (8 B, solo inglés), tokenizer más pesado de entrenar, riesgo de superpalabras de boilerplate, y un buscador con BM25/embeddings por token se beneficia de granularidad de palabra para *matching*. Haría un A/B sobre el golden set antes de adoptarlo.
+</details>
+
+<details><summary><b>7 · (Recuerdo)</b> ¿Por qué se compara en «bits por byte» entre tokenizers?</summary>
+
+Porque la pérdida por token depende de cuánto texto cubre cada token; normalizando por bytes/caracteres la comparación es independiente del vocabulario.
+</details>
+""")
+
+nb.md(r"""
+## 18. Referencias
+
+**Papers (verificados)**
+- Tao, C. et al. (2024). *Scaling Laws with Vocabulary: Larger Models Deserve Larger Vocabularies.* NeurIPS 2024. <https://arxiv.org/abs/2407.13623>
+- Petrov, A., La Malfa, E., Torr, P. y Bibi, A. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages.* NeurIPS 2023. <https://arxiv.org/abs/2305.15425>
+- Ahia, O. et al. (2023). *Do All Languages Cost the Same? Tokenization in the Era of Commercial Language Models.* EMNLP 2023. <https://arxiv.org/abs/2305.13707>
+- Liu, A., Hayase, J., Hofmann, V., Oh, S., Smith, N. A. y Choi, Y. (2025). *SuperBPE: Space Travel for Language Models.* COLM 2025. <https://arxiv.org/abs/2503.13423>
+- Singh, A. K. y Strouse, D. J. (2024). *Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs.* <https://arxiv.org/abs/2402.14903>
+- Dagan, G., Synnaeve, G. y Rozière, B. (2024). *Getting the most out of your tokenizer for pre-training and domain adaptation.* <https://arxiv.org/abs/2402.01035>
+- Rust, P. et al. (2021). *How Good is Your Tokenizer? On the Monolingual Performance of Multilingual Language Models.* <https://arxiv.org/abs/2012.15613>
+- Goldman, O. et al. (2024). *Unpacking Tokenization: Evaluating Text Compression and its Correlation with Model Performance.* <https://arxiv.org/abs/2403.06265>
+- Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* <https://arxiv.org/abs/2402.18376>
+- Land, S. y Bartolo, M. (2024). *Fishing for Magikarp.* <https://arxiv.org/abs/2405.05417> (tabla de vocabularios)
+- Llama Team (2024). *The Llama 3 Herd of Models.* <https://arxiv.org/abs/2407.21783> · Gemma Team (2025). *Gemma 3 Technical Report.* <https://arxiv.org/abs/2503.19786> · Yang et al. (2024). *Qwen2 Technical Report.* <https://arxiv.org/abs/2407.10671>
+- Conneau, A. et al. (2019). *Unsupervised Cross-lingual Representation Learning at Scale.* <https://arxiv.org/abs/1911.02116>
+- Touvron, H. et al. (2023). *LLaMA.* <https://arxiv.org/abs/2302.13971>
+
+**Datos, librerías y docs**
+- FLORES+ (`openlanguagedata/flores_plus`) y `Helsinki-NLP/opus-100` en Hugging Face Datasets; `tiktoken` <https://github.com/openai/tiktoken>; Mistral, guía de tokenización <https://docs.mistral.ai/guides/tokenization/>.
+
+**Siguiente:** módulo 05 (qué falla cuando el vocabulario y los datos del modelo no coinciden: glitch tokens, números, letras, Unicode).
+""")
+nb.save(os.path.join(MOD_DIR, f"{SLUG}.ipynb"))
+
+# =====================================================================================
+#                                       PROYECTO
+# =====================================================================================
+pj = Notebook("Proyecto 04 · Benchmark de tokenizers y vocabulario de Políglota", colab_path=PROJ_REL)
+pj.md(pj.badge() + r"""
+
+# Proyecto 04 · Benchmark de fertilidad/paridad y diseño del vocabulario de Políglota
+
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración** | ≈ 2 h |
+| **GPU** | Ninguna (CPU, `FAST_DEV_RUN = True`) |
+| **Prerrequisitos** | Lección del módulo 04 y proyecto 03 |
+
+## Contexto de negocio
+Políglota Labs va a **entrenar su propio embedder** y necesita congelar el vocabulario. Tu CTO pide dos entregables: **(A)** un benchmark honesto de los tokenizers candidatos (los públicos y el tuyo) en **ES / EN / código** y en otros idiomas con texto paralelo,
+y **(B)** una **receta de vocabulario** (mezcla de corpus + tamaño $V$) justificada con una función de coste con el tráfico esperado (50 % ES, 30 % EN, 20 % código).
+
+> **Conexión.** Viene del proyecto 03 (entrenaste y comparaste algoritmos con tubería idéntica). Va hacia el módulo 05 (cómo falla un vocabulario) y, más adelante, hacia el embedder de Políglota (módulos 09–11), que **hereda** este vocabulario.
+
+## Dataset
+Corpus Políglota (`carga_corpus`: HF → espejo Europarl + stdlib → sintético) y texto paralelo (`carga_paralelo`: FLORES+ → opus-100 → 16 frases × 12 idiomas escritas a mano; avisa en pantalla).
+
+## Entregables y rúbrica
+1. `benchmark(registro, par)`: tabla de **prima de paridad** y **bytes/token** por tokenizer e idioma (+ `tokens_por_kb` en ES/EN/código).
+2. `entrena_candidato(prop, V)` y `evalua_candidato(tok)` → tokens por KB por idioma.
+3. `selecciona(...)`: barrido de mezclas × V y elección por la función de coste $J$.
+4. Un archivo `poliglota_vocab.json` con la receta y las métricas, y una decisión escrita.
+
+La rúbrica puntúa de forma automática. Umbrales calibrados con **lo que mide la solución de referencia** (corpus espejo, `FAST_DEV_RUN=True`, mini-conjunto paralelo) menos un margen; los criterios *relativos* se sostienen con otros datos, los absolutos se relajan.
+""")
+pj.code(C.pip_cell())
+pj.code(C.SETUP.strip("\n"))
+for _c in C.cells(C.CORPUS_1) + C.cells(C.CORPUS_2):
+    pj.code(_c)
+pj.code(C.CORPUS_USE.strip("\n"))
+for _c in C.cells(C.PARALELO):
+    pj.code(_c)
+pj.code(C.PARALELO_LOADER.strip("\n") + "\n\npar = carga_paralelo(fast_dev=FAST_DEV_RUN)\nprint('paralelo:', par['source'], '| frases:', par['n'], '| idiomas:', list(par['langs']))")
+pj.code(C.METRICS.strip("\n") + "\n" + C.TOKMETRICS.strip("\n"))
+pj.code(TIK_CELL.strip("\n"))
+pj.code(r'''
+import pandas as pd
+from tokenizers import Tokenizer, models, pre_tokenizers, normalizers, trainers, decoders, Regex
+from tokenizers.pre_tokenizers import ByteLevel
+rng = random.Random(SEED); train_docs, test_docs = [], []
+for lang in ["es", "en", "code"]:
+    pool = [d for d in docs if d["lang"] == lang]; rng.shuffle(pool); cut = int(0.8 * len(pool))
+    train_docs += pool[:cut]; test_docs += pool[cut:]
+test_by_lang = {l: [d["text"] for d in test_docs if d["lang"] == l] for l in ["es", "en", "code"]}
+
+def entrena_bpe_bytes(textos, vocab_size: int) -> Tokenizer:
+    """Byte-level BPE (regex GPT-2). Es el 'tokenizer propio' de Políglota (módulos 02-03)."""
+    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+    t = Tokenizer(models.BPE())
+    t.pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.Split(Regex(PAT), behavior="isolated"), ByteLevel(add_prefix_space=False, use_regex=False)])
+    t.decoder = decoders.ByteLevel()
+    t.train_from_iterator(textos, trainers.BpeTrainer(vocab_size=vocab_size, initial_alphabet=ByteLevel.alphabet(), special_tokens=["<|endoftext|>"]))
+    return t
+
+def corpus_mezcla(prop: dict, total_chars: int, semilla: int = SEED) -> list:
+    """Muestrea documentos de train por idioma hasta total_chars*prop[idioma] caracteres."""
+    r = random.Random(semilla); out = []
+    for lang, p in prop.items():
+        pool = [d["text"] for d in train_docs if d["lang"] == lang]; acc = 0
+        while acc < p * total_chars:
+            t = r.choice(pool); out.append(t); acc += len(t)
+    r.shuffle(out); return out
+
+TOTAL = 400_000 if FAST_DEV_RUN else 4_000_000
+TRAFICO = {"es": 0.5, "en": 0.3, "code": 0.2}          # supuesto de producto
+LAMBDA = 3.0                                           # penalización de vocabulario (tokens/KB por cada 1 k de V)
+natural = {"en": 0.80, "es": 0.15, "code": 0.05}
+suav = {k: v ** 0.3 / sum(u ** 0.3 for u in natural.values()) for k, v in natural.items()}
+MEZCLAS = {"natural": natural, "suavizada": suav, "equilibrada": {"en": 1 / 3, "es": 1 / 3, "code": 1 / 3}, "sesgo_es": {"en": 0.2, "es": 0.6, "code": 0.2}}
+VS = [2000, 4000, 8000] if FAST_DEV_RUN else [8000, 16000, 32000]
+def intenta(f, *a, **k):
+    try: return f(*a, **k)
+    except NotImplementedError as e: print("⏳ pendiente:", e); return None
+REG = {f"tiktoken {n.replace('_base','')}": (lambda s, e=e: e.encode_ordinary(s)) for n, e in TIK.items()}
+REG["BPE propio (natural)"] = (lambda tk: (lambda s: tk.encode(s).ids))(entrena_bpe_bytes(corpus_mezcla(natural, TOTAL), VS[1]))
+print(list(REG))
+''')
+
+pj.md(r"""
+## Paso 1 · Benchmark de paridad
+
+**TODO.** Implementa `benchmark(registro, par)` → `DataFrame` con una fila por (tokenizer, idioma) y columnas `tokens`, `premium` (= tokens del idioma / tokens del inglés) y `bytes_por_token`. Después `tokens_por_kb(registro)` → DataFrame con tokens por KB de texto de test en `es`, `en` y `code` (usa `test_by_lang`).
+
+<details><summary>🪜 Pista 1</summary>
+
+Para cada idioma suma `len(enc(frase))` sobre todas las frases paralelas; la prima divide entre el total del inglés. `bytes_por_token` = bytes UTF-8 totales / tokens totales.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+`tot = {l: sum(len(enc(s)) for s in par["langs"][l]) for l in par["langs"]}`; `byt = {l: sum(len(s.encode()) for s in par["langs"][l]) ...}`; en `tokens_por_kb`: `1000 * tokens / bytes` por idioma sobre `test_by_lang[l]`.
+</details>
+""")
+pj.code(r'''
+def benchmark(registro: dict, par: dict) -> pd.DataFrame:
+    # TODO: filas {"tokenizer","idioma","tokens","premium","bytes_por_token"}
+    raise NotImplementedError("TODO paso 1a")
+
+def tokens_por_kb(registro: dict) -> pd.DataFrame:
+    # TODO: índice = tokenizer, columnas = es/en/code (tokens por KB de texto de test)
+    raise NotImplementedError("TODO paso 1b")
+
+dp = intenta(benchmark, REG, par); tk_kb = intenta(tokens_por_kb, REG)
+if dp is not None: print(dp.pivot_table(index="tokenizer", columns="idioma", values="premium").round(2).to_string())
+if tk_kb is not None: print(tk_kb.round(1))
+''')
+
+pj.md(r"""
+## Paso 2 · Candidatos de vocabulario
+
+**TODO.** `evalua_candidato(tok)` devuelve `{"es": tokens/KB, "en": ..., "code": ...}` sobre el test; `entrena_candidato(prop, V)` entrena un BPE byte-level con el corpus `corpus_mezcla(prop, TOTAL)` y tamaño `V`.
+
+<details><summary>🪜 Pista 1</summary>
+
+Son dos líneas cada una, reutilizando `entrena_bpe_bytes`, `corpus_mezcla` y `test_by_lang`; en tokens/KB usa `1000 * tokens / bytes`.
+</details>
+""")
+pj.code(r'''
+def evalua_candidato(tok: Tokenizer) -> dict:
+    # TODO: tokens por KB en es/en/code (test)
+    raise NotImplementedError("TODO paso 2a")
+
+def entrena_candidato(prop: dict, V: int) -> Tokenizer:
+    # TODO: BPE byte-level con corpus de la mezcla `prop` y tamaño V
+    raise NotImplementedError("TODO paso 2b")
+''')
+
+pj.md(r"""
+## Paso 3 · Selección por coste
+
+**TODO.** `selecciona(mezclas, vs)` entrena todas las combinaciones, calcula para cada una
+$J=\sum_\ell w_\ell\cdot\text{tokens/KB}_\ell+\lambda\,V/1000$ (con `TRAFICO` y `LAMBDA`) y la **peor razón** entre idiomas $\max_\ell \text{tpk}_\ell/\min_\ell \text{tpk}_\ell$ (equidad), y devuelve un `DataFrame` con columnas `mezcla, V, tpk_es, tpk_en, tpk_code, J, desbalance`, ordenado por `J`.
+
+<details><summary>🪜 Pista 1</summary>
+
+Doble bucle `for nombre, prop in mezclas.items(): for V in vs:` + `evalua_candidato(entrena_candidato(prop, V))`.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+`J = sum(TRAFICO[l] * t[l] for l in t) + LAMBDA * V / 1e3`; `desbalance = max(t.values()) / min(t.values())`.
+</details>
+""")
+pj.code(r'''
+def selecciona(mezclas: dict, vs: list) -> pd.DataFrame:
+    # TODO: barrido mezclas x V; columnas mezcla, V, tpk_es, tpk_en, tpk_code, J, desbalance; ordenado por J
+    raise NotImplementedError("TODO paso 3")
+
+cand = intenta(selecciona, MEZCLAS, VS)
+if cand is not None: print(cand.round(2).to_string(index=False))
+''')
+
+pj.md(r"""
+## Paso 4 · La receta
+
+**TODO.** Escribe `poliglota_vocab.json` con `{"mezcla": ..., "V": ..., "tokens_por_kb": {...}, "J": ..., "justificacion": "..."}` (justificación ≥ 300 caracteres con **≥ 3 cifras** y **un riesgo**: p. ej. qué idioma pierde con tu elección y qué harías si el tráfico cambia).
+""")
+pj.code(r'''
+receta = {}      # TODO: dict con la receta (ver enunciado)
+''')
+
+pj.md(r"""
+## Rúbrica (autoevaluación)
+
+Referencia medida (corpus espejo, `FAST_DEV_RUN=True`): prima del hindi con cl100k ≈ 4.9 (umbral > 3.0); mejor candidato J ≈ 269 frente a ≈ 303 de la mezcla natural con V = 4 000 (−11 %; umbral −8 %); desbalance del mejor ≈ 1.2 (umbral ≤ 1.35).
+""")
+pj.code(r'''
+def rubrica():
+    R = []; ok = lambda nombre, cond, pts: R.append((nombre, bool(cond), pts))
+    ok("1a · benchmark devuelve prima 1.0 para el inglés en todos los tokenizers", dp is not None and np.allclose(dp[dp.idioma == "en"]["premium"], 1.0), 2)
+    if dp is not None and "tiktoken o200k" in set(dp.tokenizer) and "tiktoken cl100k" in set(dp.tokenizer):
+        P = dp.pivot_table(index="tokenizer", columns="idioma", values="premium")
+        ok("1a · o200k reduce la prima media (no-inglés) frente a cl100k", P.loc["tiktoken o200k"].mean() < P.loc["tiktoken cl100k"].mean(), 2)
+        ok("1a · la prima del hindi con cl100k > UMBRAL_HI (n pequeño: orientativo)", P.loc["tiktoken cl100k"].get("hi", 0) > UMBRALES["hi_cl100k"], 1)
+    else:
+        ok("1a · tiktoken disponible (o200k y cl100k)", False, 3)
+    ok("1b · tokens por KB calculados para es/en/code", tk_kb is not None and {"es", "en", "code"} <= set(tk_kb.columns), 2)
+    ok("3 · el barrido devuelve mezclas × V ordenado por J", cand is not None and len(cand) == len(MEZCLAS) * len(VS) and cand["J"].is_monotonic_increasing, 2)
+    if cand is not None and len(cand):
+        mejor = cand.iloc[0]; base = cand[(cand.mezcla == "natural") & (cand.V == VS[1])]["J"].iloc[0]
+        ok(f"3 · el mejor candidato mejora a 'natural'@V={VS[1]} en ≥ {UMBRALES['mejora_J']:.0%} de J", mejor["J"] <= base * (1 - UMBRALES["mejora_J"]), 2)
+        ok("3 · el mejor candidato NO es la mezcla 'natural' (con este tráfico 50/30/20)", mejor["mezcla"] != "natural", 1)
+        ok(f"3 · desbalance del mejor ≤ {UMBRALES['desbalance']}", mejor["desbalance"] <= UMBRALES["desbalance"], 1)
+    else:
+        ok("3 · candidatos", False, 4)
+    ok("4 · receta con mezcla, V y J", {"mezcla", "V", "J"} <= set(receta), 1)
+    j = str(receta.get("justificacion", ""))
+    ok("4 · justificación ≥ 300 caracteres con ≥ 3 cifras", len(j) >= 300 and len(re.findall(r"\d+[.,]?\d*", j)) >= 3, 2)
+    tot = sum(p for _, _, p in R); got = sum(p for _, c, p in R if c)
+    for nombre, c, p in R: print(("✅" if c else "⬜"), f"[{p}]", nombre)
+    print(f"\nPuntuación: {got}/{tot}")
+UMBRALES = {"hi_cl100k": 3.0, "mejora_J": 0.08, "desbalance": 1.35}
+rubrica()
+''')
+
+pj.md(r"""
+## ⛔ SPOILER — intenta resolverlo primero
+
+Debajo está la solución de referencia completa; al ejecutarla se redefinen las funciones y la rúbrica final puntúa la referencia.
+""")
+pj.code(r'''
+def benchmark(registro: dict, par: dict) -> pd.DataFrame:
+    langs = list(par["langs"]); filas = []
+    for nombre, enc in registro.items():
+        tot = {l: sum(len(enc(s)) for s in par["langs"][l]) for l in langs}
+        byt = {l: sum(len(s.encode("utf-8")) for s in par["langs"][l]) for l in langs}
+        for l in langs: filas.append({"tokenizer": nombre, "idioma": l, "tokens": tot[l], "premium": tot[l] / tot["en"], "bytes_por_token": byt[l] / tot[l]})
+    return pd.DataFrame(filas)
+
+def tokens_por_kb(registro: dict) -> pd.DataFrame:
+    out = {}
+    for nombre, enc in registro.items():
+        out[nombre] = {l: 1000 * sum(len(enc(t)) for t in test_by_lang[l]) / sum(len(t.encode()) for t in test_by_lang[l]) for l in ["es", "en", "code"]}
+    return pd.DataFrame(out).T
+
+dp = benchmark(REG, par); tk_kb = tokens_por_kb(REG)
+print(dp.pivot_table(index="tokenizer", columns="idioma", values="premium").round(2).to_string()); print(tk_kb.round(1))
+
+def evalua_candidato(tok: Tokenizer) -> dict:
+    return {l: 1000 * sum(len(tok.encode(t).ids) for t in test_by_lang[l]) / sum(len(t.encode()) for t in test_by_lang[l]) for l in ["es", "en", "code"]}
+
+def entrena_candidato(prop: dict, V: int) -> Tokenizer:
+    return entrena_bpe_bytes(corpus_mezcla(prop, TOTAL), V)
+
+def selecciona(mezclas: dict, vs: list) -> pd.DataFrame:
+    filas = []
+    for nombre, prop in mezclas.items():
+        for V in vs:
+            t = evalua_candidato(entrena_candidato(prop, V))
+            J = sum(TRAFICO[l] * t[l] for l in t) + LAMBDA * V / 1e3
+            filas.append({"mezcla": nombre, "V": V, "tpk_es": t["es"], "tpk_en": t["en"], "tpk_code": t["code"], "J": J, "desbalance": max(t.values()) / min(t.values())})
+    return pd.DataFrame(filas).sort_values("J").reset_index(drop=True)
+
+cand = selecciona(MEZCLAS, VS); print(cand.round(2).to_string(index=False))
+''')
+pj.code(r'''
+mejor = cand.iloc[0]; nat = cand[(cand.mezcla == "natural") & (cand.V == VS[1])].iloc[0]
+receta = {"mezcla": mejor["mezcla"], "V": int(mejor["V"]), "J": float(mejor["J"]),
+          "tokens_por_kb": {l: float(mejor[f"tpk_{l}"]) for l in ["es", "en", "code"]},
+          "justificacion": (f"Elijo la mezcla '{mejor['mezcla']}' con V={int(mejor['V'])}: J={mejor['J']:.1f} frente a {nat['J']:.1f} de la mezcla natural 80/15/5 con V={VS[1]} "
+                            f"({1 - mejor['J'] / nat['J']:.0%} menos). Con el tráfico 50 % ES / 30 % EN / 20 % código el español necesita {mejor['tpk_es']:.0f} tokens/KB (frente a {nat['tpk_es']:.0f} con la natural). "
+                            f"Riesgo: el inglés pasa de {nat['tpk_en']:.0f} a {mejor['tpk_en']:.0f} tokens/KB y no se evaluó ningún idioma fuera de ES/EN/código (el BPE propio cuesta casi un token por byte en ruso/hindi/árabe según el benchmark de paridad); "
+                            f"si el tráfico cambia o se añaden idiomas hay que reentrenar con λ y pesos nuevos antes de congelar el vocabulario del embedder.")}
+import json; json.dump(receta, open("poliglota_vocab.json", "w"), ensure_ascii=False, indent=2)
+print(json.dumps({k: v for k, v in receta.items() if k != "justificacion"}, indent=1), "| justificación:", len(receta["justificacion"]), "caracteres")
+rubrica()
+''')
+pj.md(r"""
+## Retos extra (nivel experto)
+
+1. **Equidad explícita.** Añade a $J$ un término de equidad (p. ej. $\mu\cdot(\text{peor prima}-1)$) y mira cómo cambia la mezcla ganadora; ¿qué $\mu$ iguala ES y EN?
+2. **Más idiomas.** Con `carga_paralelo` (FLORES+ si tienes acceso) añade pt/fr/de a la mezcla y mide la prima de hi/ar/ja con y sin ellos.
+3. **SuperBPE para Políglota.** Reutiliza la implementación de la lección y compara bytes/token y el nDCG@10 de BM25 (proyecto 03) con BPE a igual $V$.
+4. **Dígitos.** Entrena con dígitos sueltos vs. grupos de 3 (cambia la regex) y mide tokens/KB en un corpus numérico (facturas, logs).
+5. **Plantilla de chat de Políglota.** Diseña los tokens especiales (roles, `<|doc|>`, `<|code|>`) y escribe un test que verifique que servir y entrenar producen los mismos ids.
+
+## Reflexión (producción y Políglota)
+
+- ¿Qué métrica de tokenización pondrías en el dashboard de producción (por idioma) y qué umbral dispararía una alerta?
+- Si un cliente grande exige soporte de japonés/hindi, ¿cuál es tu plan *sin* reentrenar el embedder? (Pista: módulo 07, tokenizer transfer.)
+- ¿Cómo repartirías el presupuesto de parámetros entre vocabulario y capas para el embedder pequeño de Políglota?
+""")
+pj.save(os.path.join(MOD_DIR, "04_proyecto_diseno_tokenizers_modernos.ipynb"))
