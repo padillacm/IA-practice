@@ -827,3 +827,245 @@ nb.md(r"""
 **12 · Embedders modernos**: familias E5/BGE/GTE/Qwen3-Embedding/EmbeddingGemma, LLMs como embedders, Matryoshka y cuantización, y cómo elegir uno para Políglota frente al que acabas de entrenar.
 """)
 nb.save(LESSON)
+
+# ════════════════════════════════════════════════════════════════════════════════════════
+#  PROYECTO 11
+# ════════════════════════════════════════════════════════════════════════════════════════
+pj = Notebook("Proyecto 11 · Tu embedder ES/EN con negativos duros", colab_path=PROJECT, gpu=True)
+pj.md(pj.badge() + r"""
+# Proyecto 11 · Entrena el embedder de Políglota con negativos duros y mídelo contra baselines
+
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración** | ≈ 2.5 h |
+| **Cómputo** | `FAST_DEV_RUN=True`: CPU/T4, ≈ 5 min. Modo completo (`FAST_DEV_RUN=False`, 10× pasos y corpus mayor): L4 recomendada; unidades ≈ horas reales × tarifa de tu sesión |
+| **Requisitos** | Lección 11 |
+
+## Contexto de negocio
+Producto quiere que **Políglota Labs** deje de depender de embedders ajenos. Tu *tech lead* te pide un primer embedder propio ES/EN/código, entrenado desde cero con InfoNCE, **pares débiles** extraídos del corpus y las consultas etiquetadas de entrenamiento, y una ablación honesta: ¿ayudan los **negativos duros** minados con BM25 (con filtro de falsos negativos)? ¿Cómo queda frente a BM25 y frente a la torre sin entrenar?
+
+**Conexión.** Usa el corpus/métricas del 00 y el pooling del 10; el embedder resultante se compara en el 12 con embedders modernos y se combina con BM25 en el 13.
+
+## Dataset
+Corpus Políglota (`carga_corpus`); consultas partidas ~50/50 en entrenamiento y test de forma determinista.
+
+## Entregables y rúbrica
+Umbrales calibrados con la solución de referencia (semilla 42, `FAST_DEV_RUN=True`, corpus sintético + stdlib: lo que pudo ejecutarse al construir el curso). Con datos reales, ejecuta la solución y usa sus números menos el margen.
+
+| # | Entregable | Criterio |
+|---|---|---|
+| R1 | `info_nce(q, d, tau, d_extra, simetrica)` | coincide con la entropía cruzada calculada a mano (< 1e-5), con y sin negativos extra |
+| R2 | `pares_entrenamiento(docs, q_train)` | ≥ 90 % de los documentos producen un par débil; incluye todos los pares etiquetados |
+| R3 | `mina_duros(pares, perc=0.95)` | ningún negativo con score BM25 ≥ 0.95 × score del positivo; ≥ 50 % de los pares con ≥ 1 negativo |
+| R4 | Embedder entrenado (solo negativos del lote) | nDCG@10 test ≥ torre sin entrenar + 0.10 |
+| R5 | Variante con negativos duros | reportada; nDCG@10 test ≥ la de solo-lote − 0.15 (ver nota de calibración tras la solución) |
+| R6 | Tabla final BM25 / sin entrenar / solo lote / + duros, y 4–5 frases de análisis | impresa |
+""")
+pj.code(SETUP11)
+pj.md("### Utilidades (corpus, métricas, BM25 y bi-encoder de la lección). No hace falta modificarlas.")
+for _src in src_corpus_cells():
+    pj.code(_src)
+pj.code(SRC_METRICS)
+pj.code(SRC_BM25)
+pj.code(CORPUS11)
+pj.code(ENC11)
+pj.code(r'''
+def alineacion(x, y, alpha=2):
+    return (x - y).norm(dim=1).pow(alpha).mean().item()
+
+
+def uniformidad(x, t=2):
+    return torch.pdist(x, p=2).pow(2).mul(-t).exp().mean().log().item()
+''')
+pj.code(TRAIN11)
+pj.code(r'''
+pol_tok = entrena_tokenizer(doc_txt + [q["text"] for q in queries], vocab_size=2000)
+bm25_pol = BM25().fit([tokenize_simple(t) for t in doc_txt], doc_ids)
+PASOS = 300 if FAST_DEV_RUN else 3000
+
+
+def ndcg_test(model):
+    D, Q = codifica(model, pol_tok, doc_txt), codifica(model, pol_tok, [q["text"] for q in q_test])
+    run = {q["qid"]: rank_from_scores((Q @ D.T)[k].numpy(), doc_ids, 100) for k, q in enumerate(q_test)}
+    return evaluate(run, {q["qid"]: qrels[q["qid"]] for q in q_test})["ndcg"]
+''')
+
+pj.md(r"""
+## TODO 1 · `info_nce`
+Positivo de `q[i]` = `d[i]`; los demás `d[j]` del lote son negativos; `d_extra` (M, dim) se añade como columnas; `simetrica=True` promedia con la dirección documento→consulta. `q` y `d` llegan ya normalizados.
+
+<details><summary>🪜 Pista 1</summary>Es una entropía cruzada sobre la matriz de similitudes `q @ D.T / tau`, con etiquetas `0..B-1`.</details>
+<details><summary>🪜 Pista 2</summary>`D = torch.cat([d, d_extra])`; `F.cross_entropy(q @ D.T / tau, torch.arange(B))`; para la simétrica, `F.cross_entropy(d @ q.T / tau, y)` (sin los extra).</details>
+""")
+pj.code(r'''
+def info_nce(q, d, tau=0.05, d_extra=None, simetrica=False):
+    # TODO 1
+    raise NotImplementedError
+
+
+def test_info_nce():
+    torch.manual_seed(0)
+    q, d, h = (F.normalize(torch.randn(n, 8), dim=-1) for n in (4, 4, 3))
+    S = q @ torch.cat([d, h]).T / 0.05
+    manual = -(S[torch.arange(4), torch.arange(4)] - torch.logsumexp(S, 1)).mean()
+    assert abs(info_nce(q, d, 0.05, h) - manual) < 1e-5
+    S2 = q @ d.T / 0.05
+    assert abs(info_nce(q, d, 0.05) + (torch.diag(S2) - torch.logsumexp(S2, 1)).mean()) < 1e-5
+    return True
+
+
+try:
+    R1 = test_info_nce(); print("✅ R1")
+except NotImplementedError:
+    R1 = False; print("⏳ TODO 1 pendiente")
+''')
+
+pj.md(r"""
+## TODO 2 · Pares de entrenamiento
+- **Débiles**: para prosa, (primera frase, id del documento) si el documento tiene ≥ 3 frases; para código, (primera línea, id).
+- **Etiquetados**: (texto de la consulta, id relevante) para cada consulta de `q_train`, **repetidos 5 veces** (son pocos y valiosos).
+
+<details><summary>🪜 Pista 1</summary>`re.split(r"(?<=[.!?])\s+", texto)` parte en frases. Es la misma idea que CCPairs (título → cuerpo) a escala diminuta.</details>
+""")
+pj.code(r'''
+def pares_entrenamiento(docs, q_train):
+    # TODO 2: devuelve (pares, n_debiles)
+    raise NotImplementedError
+''')
+
+pj.md(r"""
+## TODO 3 · Negativos duros con filtro TopK-PercPos
+Para cada par, toma el top-30 de BM25 de su texto, quita el positivo, quita los candidatos con score ≥ `perc` × score del positivo (posibles falsos negativos) y quédate con hasta 10. Devuelve `{índice_del_par: [ids]}`.
+
+<details><summary>🪜 Pista 1</summary>`sc = bm25_pol.scores(tokenize_simple(texto))`; el score del positivo es `sc[doc_ids.index(did)]` (precalcula un dict id → posición).</details>
+""")
+pj.code(r'''
+def mina_duros(pares, perc=0.95, k=30, n=10):
+    # TODO 3
+    raise NotImplementedError
+''')
+
+pj.md(r"""
+## TODO 4 · Entrena, compara y comprueba la rúbrica
+La celda está escrita: entrena la variante solo-lote y la variante con negativos duros (mismos pasos, $\tau=0.05$, $B=32$), mide nDCG@10 en test y evalúa la rúbrica. Después escribe tu análisis (4–5 frases): ¿por qué crees que los negativos duros ayudan o no en este corpus? Mira cuántos negativos por par sobreviven al filtro y qué tipo de documentos son.
+""")
+pj.code(r'''
+def experimento():
+    pares, n_deb = pares_entrenamiento(docs, q_train)
+    duros = mina_duros(pares)
+    base = ndcg_test(BiEncoder(len(pol_tok)).to(device))
+    bm = evaluate({q["qid"]: bm25_pol.search(tokenize_simple(q["text"]), 100) for q in q_test}, {q["qid"]: qrels[q["qid"]] for q in q_test})["ndcg"]
+    m1, h1 = entrena_biencoder(pares, pol_tok, pasos=PASOS, B=32, tau=0.05)
+    m2, h2 = entrena_biencoder(pares, pol_tok, pasos=PASOS, B=32, tau=0.05, duros=duros)
+    r = dict(bm25=bm, sin_entrenar=base, solo_lote=ndcg_test(m1), con_duros=ndcg_test(m2),
+             unif_lote=h1[-1]["unif"], unif_duros=h2[-1]["unif"])
+    pos_of = {d: i for i, d in enumerate(doc_ids)}
+    viol = 0
+    for k_, cand in duros.items():
+        sc = bm25_pol.scores(tokenize_simple(pares[k_][0]))
+        viol += sum(sc[pos_of[c]] >= 0.95 * sc[pos_of[pares[k_][1]]] for c in cand)
+    etiquetados = {(q["text"], did) for q in q_train for did in qrels[q["qid"]]}
+    checks = {"R1 info_nce": R1,
+              "R2 pares": n_deb >= 0.9 * len(docs) and etiquetados <= set(pares),
+              "R3 duros filtrados": viol == 0 and np.mean([len(v) > 0 for v in duros.values()]) >= 0.5,
+              "R4 entrenado ≥ sin entrenar + 0.10": r["solo_lote"] >= r["sin_entrenar"] + 0.10,
+              "R5 con duros ≥ solo lote − 0.15": r["con_duros"] >= r["solo_lote"] - 0.15,
+              "R6 tabla": True}
+    print(f"pares={len(pares)} (débiles={n_deb}) | pares con ≥1 duro={np.mean([len(v) > 0 for v in duros.values()]):.0%}")
+    for k_, v_ in r.items():
+        print(f"   {k_:14s} {v_:.3f}")
+    for k_, ok in checks.items():
+        print(("✅ " if ok else "❌ ") + k_)
+    return r
+
+
+try:
+    resultado = experimento()
+except NotImplementedError:
+    print("⏳ Completa los TODO 1–3.")
+''')
+pj.md(r"""
+## Retos extra
+1. **Curriculum**: entrena 150 pasos solo-lote y después 150 con negativos duros. ¿Cambia la conclusión?
+2. **Negativos duros densos (ANCE)**: mina con tu propio modelo tras 150 pasos y re-entrena.
+3. **Barrido de τ** ∈ {0.02, 0.05, 0.1, 0.2} y pérdida simétrica.
+4. **sentence-transformers**: repite con `MultipleNegativesRankingLoss` sobre un modelo preentrenado (si tienes hub) usando un dataset `(anchor, positive, negative)` con tus negativos duros, y `CachedMultipleNegativesRankingLoss` con lote 256.
+5. **Intervalos de confianza** (módulo 15): bootstrap por consulta de la diferencia solo-lote vs + duros.
+
+## Reflexión
+- ¿Qué parte de tu resultado se debe al tipo de benchmark (ítem conocido con fuerte solapamiento léxico)?
+- ¿Cómo construirías consultas no léxicas para que el *golden set* premie lo que un embedder hace mejor que BM25?
+- ¿Qué cambiarías para entrenar con millones de pares (muestreo, deduplicación, filtros, cómputo)?
+""")
+pj.md(r"""
+---
+## ⛔ SPOILER — intenta resolverlo primero
+Solución de referencia completa.
+""")
+pj.code(r'''
+def info_nce(q, d, tau=0.05, d_extra=None, simetrica=False):
+    D = d if d_extra is None else torch.cat([d, d_extra])
+    y = torch.arange(q.shape[0], device=q.device)
+    loss = F.cross_entropy(q @ D.T / tau, y)
+    if simetrica:
+        loss = (loss + F.cross_entropy(d @ q.T / tau, y)) / 2
+    return loss
+
+
+def pares_entrenamiento(docs, q_train):
+    debiles = []
+    for d in docs:
+        if d["lang"] == "code":
+            debiles.append((d["text"].split("\n")[0], d["id"]))
+        else:
+            fr = re.split(r"(?<=[.!?])\s+", d["text"].strip())
+            if len(fr) >= 3:
+                debiles.append((fr[0], d["id"]))
+    etiquetados = [(q["text"], did) for q in q_train for did in qrels[q["qid"]]]
+    return debiles + etiquetados * 5, len(debiles)
+
+
+def mina_duros(pares, perc=0.95, k=30, n=10):
+    pos_of = {d: i for i, d in enumerate(doc_ids)}
+    duros = {}
+    for i, (texto, did) in enumerate(pares):
+        sc = bm25_pol.scores(tokenize_simple(texto))
+        umbral = perc * sc[pos_of[did]]
+        duros[i] = [doc_ids[j] for j in np.argsort(-sc)[:k] if doc_ids[j] != did and sc[j] < umbral][:n]
+    return duros
+
+
+R1 = test_info_nce()
+resultado = experimento()
+''')
+pj.md(r"""
+> **Nota de calibración.** En la ejecución de referencia (fallback sintético, 300 pasos en CPU), los negativos duros de BM25 **no** mejoraron al entrenamiento solo-lote en este corpus. Hipótesis a contrastar en tu análisis: los documentos sintéticos comparten plantillas y los «duros» que sobreviven al filtro son casi paráfrasis del positivo con otra herramienta o aspecto; con tan pocos pasos el modelo aún no domina los negativos fáciles; y la evaluación de ítem conocido premia el solapamiento léxico. El umbral de R5 refleja esa medición, no lo deseado.
+""")
+pj.save(PROJECT)
+
+README = r"""# Módulo 11 · Aprendizaje contrastivo para embeddings
+
+**Nivel:** 🟠 Avanzado · **Duración:** ≈ 6 h (lección ≈ 3.5 h + proyecto ≈ 2.5 h) · **Cómputo:** `FAST_DEV_RUN` en CPU/T4 (≈ 10–12 min la lección); modo completo con L4/A100 (unidades ≈ horas reales × tarifa de tu sesión de Colab; la lección incluye un estimador de horas por FLOPs)
+
+| Archivo | Contenido |
+|---|---|
+| [`11_aprendizaje_contrastivo.ipynb`](11_aprendizaje_contrastivo.ipynb) | Lección: InfoNCE y temperatura (gradiente) · derivación de la cota de información mutua y comprobación numérica con gaussianas (saturación en log K) · bi-encoder e InfoNCE desde cero (negativos en el lote, duros, simétrica) · laboratorio controlado (mundo de juguete ES/EN/código): barrido de τ, colapso, alineación/uniformidad, negativos duros limpios vs falsos negativos, tamaño de lote · SimCSE, DPR, débil → supervisado (E5/GTE/BGE) · Gradient Cache desde cero con verificación del gradiente · embedder propio de Políglota · sentence-transformers con MNRL y NO_DUPLICATES · LoRA con PEFT · estimación de cómputo |
+| [`11_proyecto_aprendizaje_contrastivo.ipynb`](11_proyecto_aprendizaje_contrastivo.ipynb) | Proyecto Políglota: embedder propio entrenado con pares débiles + etiquetados y negativos duros BM25 filtrados (TopK-PercPos), comparado con BM25 y con la torre sin entrenar |
+| `assets/` | Recursos de Gemini: `M11-IMG-01`, `M11-IMG-02`, `M11-IMG-03` y el video `M11-VID-01` |
+
+## Datos y modelos
+Corpus Políglota canónico (módulo 00) + «mundo de juguete» sintético con verdad conocida para los experimentos controlados (`_tools/builders/a4_common.py`). sentence-transformers sobre `paraphrase-multilingual-MiniLM-L12-v2` si hay hub; si no, un mini-BERT local sin preentrenar (fallback).
+
+## Estado de pruebas (entorno de autoría)
+Hugging Face bloqueado: lección y proyecto ejecutados completos con el corpus sintético + stdlib, el mundo de juguete y el fallback local de sentence-transformers. No se probó con modelos ni datos reales, ni en GPU. Umbrales de la rúbrica calibrados con esa ejecución.
+
+## Lecturas clave
+Oord et al. 2018 · Poole et al. 2019 · Wang & Isola 2020 · Gao, Yao & Chen 2021 (SimCSE) · Karpukhin et al. 2020 (DPR) · Wang et al. 2022 (E5) · Moreira et al. 2024 (NV-Retriever) · Gao et al. 2021 (Gradient Cache).
+
+Los notebooks se generan con `python tokenization-embeddings-course/_tools/builders/build_11.py` (desde la raíz del repo).
+"""
+(ROOT / MOD / "README.md").write_text(README, encoding="utf-8")
+(ROOT / MOD / "assets").mkdir(exist_ok=True)
+(ROOT / MOD / "assets" / ".gitkeep").touch()
+print("OK README y assets/")
