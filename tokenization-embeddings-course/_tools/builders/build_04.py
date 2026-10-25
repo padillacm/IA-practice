@@ -395,7 +395,7 @@ nb.md(r"""
 ## 9. Números, espacios e indentación
 
 **Números.** Si «1234567» se parte como `123|456|7` (grupos de 3 de izquierda a derecha, estilo GPT-3.5/4) las columnas de unidades de dos sumandos **no se alinean** con las del resultado.
-Singh & Strouse (2024) mostraron en GPT-3.5/GPT-4 (modelos de marzo de 2023) que tokenizar **de derecha a izquierda** (forzado separando miles con comas) sube la precisión de la suma de ≈ 75.6 % a ≈ 97.8 % (GPT-3.5) y de ≈ 84.4 % a ≈ 98.9 % (GPT-4): el error venía de la **alineación de tokens**, no de «no saber sumar».
+Singh & Strouse (2024) mostraron en GPT-3.5/GPT-4 (modelos de marzo de 2023) que tokenizar **de derecha a izquierda** (forzado separando miles con comas) sube la precisión de la suma de 75.6 % a 97.8 % en GPT-3.5 (8-shot, sumandos de 7–9 dígitos), con un efecto algo menor pero presente en GPT-4: el error venía de la **alineación de tokens**, no de «no saber sumar».
 Llama 1/2 y Gemma 3 optan por **dígitos sueltos** (alineación perfecta, secuencias más largas). Es un diseño con trade-offs; la evidencia a escala actual es 🟡.
 
 **Espacios.** GPT-2 usaba un token por espacio de indentación; cl100k/o200k tienen tokens para **runs de espacios**. Dagan et al. (2024) muestran que la regex de pre-tokenización y el tamaño cambian velocidad, contexto efectivo y rendimiento en código. Medimos ambos efectos.
@@ -748,7 +748,7 @@ nb.md(r"""
 2. **El vocabulario óptimo crece con el cómputo, y los modelos reales están por debajo.** Tao et al. predicen ≥ 216 K para Llama2-70B frente a los 32 K reales; los vocabularios 100–260 k de 2024–2026 van en esa dirección (🟡: resultado a ≤ 3 B parámetros).
 3. **El «token tax» es un coste de producto medible.** Petrov et al. (2023) encuentran diferencias de hasta 15× entre idiomas en los tokenizers que analizaron, y Ahia et al. (2023) lo convierten en precios. Un equipo con usuarios hispanohablantes debe tener este número en su dashboard.
 4. **Los vocabularios de modelo pequeño son «tablas de embeddings».** Pasar de 32 k a 256 k puede mover de ≈ 10 % a ≈ 50 % de los parámetros (gráfico de la sección 5): por eso importa el *weight tying*.
-5. **La pre-tokenización de números cambia la aritmética.** Singh & Strouse (2024): tokenización R2L ≈ +20 puntos en suma en GPT-3.5/4 (marzo 2023); es un cambio de *una línea de regex* con efecto medible.
+5. **La pre-tokenización de números cambia la aritmética.** Singh & Strouse (2024): tokenización R2L sube la suma de 75.6 % a 97.8 % en GPT-3.5 (8-shot; efecto menor pero presente en GPT-4, marzo 2023); es un cambio de *una línea de regex* con efecto medible.
 6. **El espacio en blanco se paga en tokens.** Con GPT-2 la indentación cuesta ≈ 15 tokens extra por línea a 16 espacios; la agrupación de `cl100k`/`o200k` la deja en ≈ 1 (medido arriba, sobre código Python real).
 7. **Cambiar el tokenizer de un modelo ya entrenado es caro.** Dagan et al. (2024) reportan que especializar el tokenizer de un modelo preentrenado tras afinarlo con más de 50 B de tokens da ganancias grandes de velocidad y contexto efectivo, pero ese volumen de datos ilustra el coste (módulo 07); por eso se diseña bien a la primera.
 8. **Tokenizers que cruzan palabras (SuperBPE) comprimen más con el mismo vocabulario**, pero la evidencia de mejora de modelo viene de un único grupo a 8 B en inglés (🟡).

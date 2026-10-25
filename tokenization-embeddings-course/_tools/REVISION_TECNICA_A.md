@@ -38,3 +38,14 @@ falta. Cambios aplicados en los builders y notebooks regenerados; recomendacione
   (fuente única). Con qrels binarios los números no cambian.
 - **Arreglado:** prompt M03-IMG-03 decía «cuatro chips» y listaba cinco.
 - Recomendación: `puntuaciones(..., "verosimilitud")` no trata el caso `a == b` (p. ej. `##a##a`), donde c_a baja 2m.
+
+## 04 · Diseño de tokenizers modernos
+- Fórmulas de presupuesto (12·L·d², V·d / 2·V·d, ahorro lineal vs cuadrático) y sus cifras (≈ 10–13 % → 46–54 %;
+  autoevaluación ≈ 14 %) verificadas. Tao et al. 2024 (≥ 216 K para Llama2-70B; ARC-C 29.1→32.0), Qwen2
+  (151 643 + 3), SuperBPE (−33 % tokens, +4.0 en 30 tareas, +8.2 MMLU, −27 % cómputo; LAMBADA 77.0→70.6) y
+  Dagan et al. 2024 (> 50 B tokens) contrastados con los artículos.
+- **Arreglado (04 y 05):** se citaba GPT-4 «84.4 % → 98.9 %» (Singh & Strouse 2024); el artículo solo da cifras
+  exactas para GPT-3.5 (75.6 % → 97.8 %, 8-shot, sumandos de 7–9 dígitos) y describe el efecto en GPT-4 como algo
+  menor. Se reescribió en la sección 9, en los secretos y en el módulo 05.
+- Recomendación: la tabla de vocabularios dice «Gemma 3 ≈ 262 k / 256 k»; añadir la cifra del tokenizer publicado
+  (262 144 piezas) cuando se pueda verificar con HF.
