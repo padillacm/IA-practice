@@ -151,3 +151,11 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Precios (3-small 0.02 $, 3-large 0.13 $, `gemini-embedding-001` 0.15 $ con GA 14-jul-2025) | ✅ | Ya contrastados por la revisión técnica |
 | TEI, pgvector (GitHub), Qdrant (documentación), blog de cuantización de HF | ✅ | |
 | Mapa de madurez / 🏭 | ✅ | Interleaving en Bing/Yahoo según Chapelle et al. 2012; hedged requests en Google según Dean & Barroso; aliases de Qdrant documentados |
+
+## 19 · Playbook de élite
+| Referencia | Estado | Nota |
+|---|---|---|
+| 13 IDs arXiv de la tabla de fallos y referencias (Land & Bartolo, Singh & Strouse, Petrov, Ahia, Boucher & Anderson, BEIR, LIMIT, vec2text, Lost in the Middle, Bruch, Dai & Callan, Nogueira & Cho, Thomas, Soboroff, ACORN) | ✅ | Autor y año coinciden; cada «fallo documentado» corresponde a lo que dice su paper |
+| Venues | ✏️ | NeurIPS 2021 D&B, SIGIR 2009/2019/2024, TOIS 42(1) y 30(1), ICLR 2026, CIKM 2007, EMNLP 2024/2023, NeurIPS 2023, USENIX Security 2023, TACL 12, SIGMOD 2024, IRR 2025; Nogueira & Cho y Singh & Strouse preprint |
+| Rumbelow & Watkins 2023 (LessWrong) | ✅ | Verificado en el bloque A |
+| Mapa de madurez / 🏭 (RRF en Elasticsearch/OpenSearch, Qdrant, Weaviate, Vespa; MUVERA de Google Research) | ✅ | Documentación oficial de cada motor; MUVERA en research.google |

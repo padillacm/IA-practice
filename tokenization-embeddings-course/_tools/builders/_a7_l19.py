@@ -634,21 +634,21 @@ La CV estima el rendimiento esperado del **procedimiento** «elegir α en datos 
 </details>
 ''')
     nb.md(r'''## 📚 Referencias
-* Thakur, N. et al. (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. https://arxiv.org/abs/2104.08663
-* Cormack, G., Clarke, C., Büttcher, S. (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*. SIGIR.
-* Bruch, S., Gai, S., Ingber, A. (2022). *An Analysis of Fusion Functions for Hybrid Retrieval*. https://arxiv.org/abs/2210.11934
-* Dai, Z., Callan, J. (2019). *Deeper Text Understanding for IR with Contextual Neural Language Modeling*. SIGIR. https://arxiv.org/abs/1905.09217
-* Nogueira, R. & Cho, K. (2019). *Passage Re-ranking with BERT*. https://arxiv.org/abs/1901.04085
-* Weller, O., Boratko, M., Naim, I., Lee, J. (2025). *On the Theoretical Limitations of Embedding-Based Retrieval*. https://arxiv.org/abs/2508.21038
-* Thomas, P. et al. (2023). *Large language models can accurately predict searcher preferences*. https://arxiv.org/abs/2309.10621 · Soboroff, I. (2024). *Don't Use LLMs to Make Relevance Judgments*. https://arxiv.org/abs/2409.15133
-* Smucker, M., Allan, J., Carterette, B. (2007). *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*. CIKM.
-* Land, S. & Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models*. https://arxiv.org/abs/2405.05417
-* Singh, A. & Strouse, D. J. (2024). *Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs*. https://arxiv.org/abs/2402.14903
-* Petrov, A. et al. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages*. https://arxiv.org/abs/2305.15425
-* Boucher, N. & Anderson, R. (2021). *Trojan Source: Invisible Vulnerabilities*. https://arxiv.org/abs/2111.00169
-* Morris, J. X. et al. (2023). *Text Embeddings Reveal (Almost) As Much As Text*. https://arxiv.org/abs/2310.06816
-* Liu, N. F. et al. (2023). *Lost in the Middle: How Language Models Use Long Contexts*. https://arxiv.org/abs/2307.03172
-* Chapelle, O. et al. (2012). *Large-scale validation and analysis of interleaved search evaluation*. ACM TOIS. · Kohavi, R., Tang, D., Xu, Y. (2020). *Trustworthy Online Controlled Experiments*. Cambridge UP.
-* Patel, L. et al. (2024). *ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data*. https://arxiv.org/abs/2403.04871
+* Thakur, N. et al. (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS 2021 (Datasets & Benchmarks). https://arxiv.org/abs/2104.08663
+* Cormack, G., Clarke, C., Büttcher, S. (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*. SIGIR 2009.
+* Bruch, S., Gai, S., Ingber, A. (2022). *An Analysis of Fusion Functions for Hybrid Retrieval*. ACM TOIS 42(1), 2023. https://arxiv.org/abs/2210.11934
+* Dai, Z., Callan, J. (2019). *Deeper Text Understanding for IR with Contextual Neural Language Modeling*. SIGIR 2019. https://arxiv.org/abs/1905.09217
+* Nogueira, R. & Cho, K. (2019). *Passage Re-ranking with BERT*. Preprint. https://arxiv.org/abs/1901.04085
+* Weller, O., Boratko, M., Naim, I., Lee, J. (2025). *On the Theoretical Limitations of Embedding-Based Retrieval*. ICLR 2026. https://arxiv.org/abs/2508.21038
+* Thomas, P. et al. (2023). *Large language models can accurately predict searcher preferences*. SIGIR 2024. https://arxiv.org/abs/2309.10621 · Soboroff, I. (2024). *Don't Use LLMs to Make Relevance Judgments*. Information Retrieval Research 1(1) (2025). https://arxiv.org/abs/2409.15133
+* Smucker, M., Allan, J., Carterette, B. (2007). *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*. CIKM 2007.
+* Land, S. & Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models*. EMNLP 2024. https://arxiv.org/abs/2405.05417
+* Singh, A. & Strouse, D. J. (2024). *Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs*. Preprint. https://arxiv.org/abs/2402.14903
+* Petrov, A. et al. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages*. NeurIPS 2023. https://arxiv.org/abs/2305.15425
+* Boucher, N. & Anderson, R. (2021). *Trojan Source: Invisible Vulnerabilities*. USENIX Security 2023. https://arxiv.org/abs/2111.00169
+* Morris, J. X. et al. (2023). *Text Embeddings Reveal (Almost) As Much As Text*. EMNLP 2023. https://arxiv.org/abs/2310.06816
+* Liu, N. F. et al. (2023). *Lost in the Middle: How Language Models Use Long Contexts*. TACL 12 (2024). https://arxiv.org/abs/2307.03172
+* Chapelle, O. et al. (2012). *Large-scale validation and analysis of interleaved search evaluation*. ACM TOIS 30(1). · Kohavi, R., Tang, D., Xu, Y. (2020). *Trustworthy Online Controlled Experiments*. Cambridge UP.
+* Patel, L. et al. (2024). *ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data*. SIGMOD 2024. https://arxiv.org/abs/2403.04871
 * Material del curso: `extras/GUIA_ENTREVISTAS.md` (preguntas con respuestas modelo y rúbrica) y `extras/LECTURA_PAPERS.md` (lectura guiada por módulo).
 ''')
