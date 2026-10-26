@@ -95,7 +95,7 @@ def test_evaluacion():
 def test_informe():
     _requiere("config", "eval", "tok", "recall_ann", "p99_frio", "dev_config")
     md = genera_informe(); RES["informe"] = md
-    for h in ("Decisiones", "test ciego", "Costos", "Criterios de aceptación", "Limitaciones"):
+    for h in ("Decisiones", "test ciego", "Costes", "Criterios de aceptación", "Limitaciones"):
         assert h.lower() in md.lower(), f"falta la sección «{h}»"
     assert md.count("✅") + md.count("❌") >= len(ACEPTACION), "la tabla de aceptación debe tener una fila por criterio"
     assert os.path.exists("poliglota_informe.md") and os.path.exists("poliglota_config.json")
@@ -167,7 +167,7 @@ Corpus Políglota canónico (`carga_corpus`, módulo 00: Wikipedia ES/EN + CodeS
     nb.code(GIVEN_SRC)
     nb.code(RUBRICA_SRC)
 
-    nb.md("## 1. Tokenizer: informe de costo por idioma (TODO 1)\nEntrena un BPE byte-level con `entrena_bpe(doc_texts, V)` y devuelve un `DataFrame` con columnas `lang`, `fertilidad` (tokens/palabra) y `bytes_por_token` para `es`, `en` y `code`.")
+    nb.md("## 1. Tokenizer: informe de coste por idioma (TODO 1)\nEntrena un BPE byte-level con `entrena_bpe(doc_texts, V)` y devuelve un `DataFrame` con columnas `lang`, `fertilidad` (tokens/palabra) y `bytes_por_token` para `es`, `en` y `code`.")
     nb.md(hint("Agrupa los documentos por `d['lang']`, codifica cada texto con `tk.encode(t).ids` y suma tokens, palabras (`t.split()`) y bytes (`t.encode()`).",
                "`n_tok = sum(len(tk.encode(t).ids) for t in tx)`; `fertilidad = n_tok / sum(len(t.split()) for t in tx)`; `bytes_por_token = sum(len(t.encode()) for t in tx) / n_tok`."))
     nb.code(r'''
@@ -220,9 +220,9 @@ def evalua_test(svc) -> dict:
 
 corre(test_evaluacion)
 ''')
-    nb.md("## 6. Informe técnico (TODO 6)\nGenera el Markdown **desde `RES`** (nada de números a mano) con las secciones: *Decisiones*, *Resultados en test ciego*, *Costos y latencia*, *Criterios de aceptación* (tabla con ✅/❌ por cada criterio de `ACEPTACION`) y *Limitaciones*. Guárdalo en `poliglota_informe.md` y la config en `poliglota_config.json`.")
+    nb.md("## 6. Informe técnico (TODO 6)\nGenera el Markdown **desde `RES`** (nada de números a mano) con las secciones: *Decisiones*, *Resultados en test ciego*, *Costes y latencia*, *Criterios de aceptación* (tabla con ✅/❌ por cada criterio de `ACEPTACION`) y *Limitaciones*. Guárdalo en `poliglota_informe.md` y la config en `poliglota_config.json`.")
     nb.md(hint("Calcula primero un `dict` `checks` criterio → bool con los mismos umbrales del texto de `ACEPTACION`, luego formatea la tabla con un `join`.",
-               "Costo: `1e7 * 400 / 1e6 * 0.02`; `checks['calidad_vs_bm25'] = e['final'] >= e['bm25'] and e['delta_bm25']['ci_low'] > -0.03`; `open('poliglota_informe.md','w').write(md)`; `json.dump(RES['config'], open('poliglota_config.json','w'))`."))
+               "Coste: `1e7 * 400 / 1e6 * 0.02`; `checks['calidad_vs_bm25'] = e['final'] >= e['bm25'] and e['delta_bm25']['ci_low'] > -0.03`; `open('poliglota_informe.md','w').write(md)`; `json.dump(RES['config'], open('poliglota_config.json','w'))`."))
     nb.code(r'''
 def genera_informe() -> str:
     # TODO 6
@@ -317,7 +317,7 @@ Fertilidad BPE 4k: es {tok.loc['es', 'fertilidad']:.2f} · en {tok.loc['en', 'fe
 Servicio {e['final']:.3f} vs BM25 {e['bm25']:.3f} · Δ = {e['delta_bm25']['diff']:+.3f} (IC95 [{e['delta_bm25']['ci_low']:+.3f}, {e['delta_bm25']['ci_high']:+.3f}]) ·
 por idioma (servicio/BM25): {', '.join(f'{l} {f:.3f}/{b:.3f}' for l, (f, b) in e['slices'].items())}.
 
-## Costos y latencia
+## Costes y latencia
 Re-embedding 10 M × 400 tokens: {coste:.0f} $ (API 0.02 $/1M, oct-2026) · RAM índice 10 M: {RES['ram_10M_gb']:.1f} GB · p50/p99 frío {RES['p50_frio']:.1f}/{RES['p99_frio']:.1f} ms (CPU) · hit rate {RES['hit_rate']:.2f} · recall ANN {RES['recall_ann']:.3f}.
 
 ## Criterios de aceptación
@@ -355,8 +355,10 @@ ax.set_title("Políglota v1.0 en test ciego"); ax.legend(); plt.tight_layout(); 
 1. **Modelos reales**: con `FAST_DEV_RUN=False` en una T4, repite con `multilingual-e5-small/base` (o tu embedder del módulo 11) y compara las decisiones con las del fallback. ¿Cambia la fusión elegida?
 2. **Reranker** (módulo 13): añade un cross-encoder sobre el top-20 y extiende `ACEPTACION` con su latencia.
 3. **Multimodal** (módulo 16): añade el retriever visual del proyecto 16 como tercera lista en la RRF y un slice «capturas» al informe.
-4. **Migración** (módulo 18): publica `v2-d…` junto a la versión actual, ajusta un adaptador y escribe en el informe el plan blue/green con costos.
+4. **Migración** (módulo 18): publica `v2-d…` junto a la versión actual, ajusta un adaptador y escribe en el informe el plan blue/green con costes.
 5. **Interleaving** (módulo 18): simula clics con los qrels de test y compara tu servicio con BM25 por potencia.
+6. **Robustez** (módulos 01 y 05): pasa las queries de test por el fuzzer del proyecto 05 (ZWSP, NFD, homoglifos, mayúsculas) y comprueba la invariante «mismo top-10 que la query limpia». Añade a `ACEPTACION` un criterio de estabilidad (p. ej. ≥ 95 % de queries con el mismo top-10).
+7. **Privacidad** (módulos 17 y 18): añade a *Limitaciones* el riesgo de inversión de embeddings y las medidas del módulo 18 (control de acceso al índice, borrado propagado, sin texto de queries en logs).
 
 ## 🤔 Reflexión (5 pts)
 1. ¿Qué decisión de tu configuración es la **más frágil** (la que más podría cambiar con datos reales) y qué medirías primero en la beta?
@@ -379,7 +381,7 @@ README = r"""# Módulo 20 · Capstone: Políglota completo
 1. Fijar criterios de aceptación medibles antes de construir.
 2. Integrar tokenizer, analizador, embedder, fusión, índice y servicio.
 3. Decidir cada componente en dev con reglas explícitas; evaluar una vez en test ciego.
-4. Proyectar memoria, costo y latencia a 10 M de chunks.
+4. Proyectar memoria, coste y latencia a 10 M de chunks.
 5. Generar un informe técnico de decisiones desde las métricas.
 
 ## Piezas integradas (todas reutilizadas)

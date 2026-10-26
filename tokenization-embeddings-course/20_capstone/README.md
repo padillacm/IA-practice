@@ -12,7 +12,7 @@
 1. Fijar criterios de aceptación medibles antes de construir.
 2. Integrar tokenizer, analizador, embedder, fusión, índice y servicio.
 3. Decidir cada componente en dev con reglas explícitas; evaluar una vez en test ciego.
-4. Proyectar memoria, costo y latencia a 10 M de chunks.
+4. Proyectar memoria, coste y latencia a 10 M de chunks.
 5. Generar un informe técnico de decisiones desde las métricas.
 
 ## Piezas integradas (todas reutilizadas)

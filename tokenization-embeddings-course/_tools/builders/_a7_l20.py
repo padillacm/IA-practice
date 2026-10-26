@@ -77,18 +77,18 @@ def lesson(nb):
 
 **Nivel:** 🔴 Experto · **Duración:** ≈ 6 h (lección ≈ 2.5 h + proyecto ≈ 3.5 h) · **GPU:** no necesaria en `FAST_DEV_RUN` (CPU, ≈ 2 min); T4/L4 para modelos reales y el corpus completo (≈ 1–3 unidades de Colab) · **Prerrequisitos:** módulos 00–19.
 
-> 🧭 **Ruta núcleo vs ampliación.** Núcleo: §1 criterios de aceptación → §2–§5 decisiones por componente → §7 evaluación en test ciego → §8 informe. Ampliación: §6 servicio bajo carga y §9 multimodal opcional.
+> 🧭 **Ruta núcleo vs ampliación.** Núcleo (lo que usa el proyecto): §1 criterios de aceptación → §2–§5 decisiones por componente → §6 servicio (TODO 4 del proyecto) → §7 evaluación en test ciego → §8 informe. Ampliación: la simulación de carga de §6 (puedes ejecutarla sin estudiarla) y §9 multimodal opcional.
 
-**Hilo conductor — Políglota v1.0.** Has construido cada pieza por separado: tokenizer (02–05), embedder (09–12), híbrido (13), índice (14), evaluación (15), multimodal (16), interpretabilidad (17), servicio (18) y criterios de diseño (19). Esta lección es la **solución de referencia del sistema completo**: integra las piezas en un pipeline, **decide cada componente con datos de dev**, evalúa una sola vez en un **test ciego** contra el baseline BM25 del módulo 00 y genera automáticamente el **informe técnico** con métricas, costos, latencia y criterios de aceptación. El proyecto te pide hacer lo mismo con tus propias decisiones.
+**Hilo conductor — Políglota v1.0.** Has construido cada pieza por separado: tokenizer (02–05), embedder (09–12), híbrido (13), índice (14), evaluación (15), multimodal (16), interpretabilidad (17), servicio (18) y criterios de diseño (19). Esta lección es la **solución de referencia del sistema completo**: integra las piezas en un pipeline, **decide cada componente con datos de dev**, evalúa una sola vez en un **test ciego** contra el baseline BM25 del módulo 00 y genera automáticamente el **informe técnico** con métricas, costes, latencia y criterios de aceptación. El proyecto te pide hacer lo mismo con tus propias decisiones.
 
 > **Estado del arte a octubre de 2026.** Las piezas usadas son 🟢/🟡 (ver mapa de madurez). Las cifras de este notebook salen del corpus **sintético** + fallbacks si no hay acceso a Hugging Face: el *procedimiento* es el entregable; los números, de tu ejecución.
 ''')
     nb.md(r'''## 🎯 Objetivos de aprendizaje
-1. **Definir** criterios de aceptación medibles *antes* de construir (calidad, latencia, memoria, costo).
+1. **Definir** criterios de aceptación medibles *antes* de construir (calidad, latencia, memoria, coste).
 2. **Integrar** tokenizer, analizador léxico, embedder, fusión híbrida, índice ANN y servicio en un pipeline reproducible.
 3. **Decidir** cada componente en un split de desarrollo con reglas explícitas, sin tocar el test.
 4. **Evaluar** una única vez en test ciego con IC pareados y desglose por idioma contra el baseline del módulo 00.
-5. **Proyectar** memoria, costo y latencia a la escala de producción (10 M de chunks).
+5. **Proyectar** memoria, coste y latencia a la escala de producción (10 M de chunks).
 6. **Redactar** un informe técnico de decisiones (ADR) generado desde las métricas y verificar los criterios de aceptación.
 ''')
     nb.md(r'''## 🔁 Conexión con módulos anteriores
@@ -98,7 +98,7 @@ Porque todas las decisiones (vocabulario, dimensión, fusión, índice) son sele
 </details>
 <details><summary><b>2 · (M04)</b> ¿Qué métricas reportamos siempre de un tokenizer?</summary>
 
-Fertilidad (tokens/palabra) y bytes por token, por idioma, y la prima de paridad respecto al inglés.
+Fertilidad (tokens/palabra) y bytes por token, por idioma, y la prima de tokens respecto al inglés.
 </details>
 <details><summary><b>3 · (M13)</b> ¿Por qué RRF es una buena opción por defecto para fusionar?</summary>
 
@@ -108,26 +108,41 @@ Usa solo rangos: no necesita calibrar scores de escalas distintas y no tiene pes
 
 Modelo/checkpoint, preprocesado (normalización, truncado, prefijo, dimensión y precisión) y servidor. Va en la clave de caché y en los metadatos del índice.
 </details>
+<details><summary><b>5 · (M00, diagnóstico)</b> ¿Por qué el listón del capstone es el BM25 del módulo 00 y no «el mejor embedder de MTEB»?</summary>
+
+Porque es el sistema que ya funciona con **tus** datos, sin GPU y sin entrenar: un sistema nuevo que no le gana en tu golden set (con IC pareado y por idioma) no justifica su coste. BEIR mostró que muchos densos zero-shot pierden contra BM25 fuera de dominio (módulos 00 y 15). Y las métricas son las mismas del 00 (nDCG@10 con ganancia lineal, IC bootstrap por queries): cambiarlas a mitad de curso haría incomparables los números.
+</details>
+<details><summary><b>6 · (M10 + M12, cálculo)</b> $v = (0.6, 0.8, 0, 0)$ y $w = (0.6, 0, 0.8, 0)$ son unitarios. Recorta ambos a 2 dimensiones. ¿Qué coseno da el producto escalar sin renormalizar y cuál tras renormalizar?</summary>
+
+Recortados: $v' = (0.6, 0.8)$, $w' = (0.6, 0)$. Sin renormalizar, $v'\cdot w' = 0.36$ (no es un coseno: $\lVert w'\rVert = 0.6$). Renormalizando: $w'' = (1, 0)$, coseno $= 0.6$. Por eso `EmbedderRecortado` aplica `l2n` tras recortar (Matryoshka, módulo 12; normalización y anisotropía, módulo 10).
+</details>
 ''')
-    nb.md(r'''## 🗺️ Mapa de madurez de las piezas de Políglota v1.0 (a oct-2026)
-| Pieza | Elección de referencia | Madurez | Fuente / módulo |
-|---|---|---|---|
-| Normalización | NFC en indexación y consulta | 🟢 | UAX #15 · M01 |
-| Tokenizer (costo y contexto) | BPE byte-level (HF `tokenizers`) | 🟢 | Sennrich et al. 2016; Wang et al. 2019 · M02–M04 |
-| Analizador léxico de BM25 | palabras + partes de identificadores | 🟢 | Robertson & Zaragoza 2009 · M00, M13 |
-| Embedder | bi-encoder multilingüe (e5) o fallback; dimensión recortada (Matryoshka) | 🟢 / 🟡 (Matryoshka en modelos sin entrenarla) | Wang et al. 2024; Kusupati et al. 2022 · M10–M12 |
-| Precisión del índice | int8 calibrado | 🟢 | Shakir et al. 2024 · M12 |
-| Fusión | RRF (lineal solo si gana con IC) | 🟢 | Cormack et al. 2009; Bruch et al. 2022 · M13 |
-| Índice | Flat o HNSW según el árbol de M19 | 🟢 | Malkov & Yashunin 2016; Douze et al. 2024 · M14 |
-| Evaluación | test ciego, bootstrap pareado, slices | 🟢 | Smucker et al. 2007 · M15 |
-| Multimodal (opcional) | OCR + texto; ColPali en 2ª etapa | 🟡 | Faysse et al. 2024 · M16 |
-| Servicio | caché versionada + alias + FastAPI | 🟢 | M18 |
+    nb.md(r'''## 🧩 Qué integra este capstone (y qué queda como reto)
+Antes de construir, sitúa cada módulo. La columna «dónde» es tu índice de repaso: si una sección te resulta opaca, vuelve al módulo de la izquierda.
+
+| Módulo | Qué aporta a Políglota v1.0 | Dónde |
+|---|---|---|
+| 00 | corpus, golden set, nDCG@10, BM25 baseline, IC bootstrap | §0, §2, §7 |
+| 01 | NFC en indexación y consulta (y en la clave de caché) | §2, §6 |
+| 02–04 | BPE byte-level, fertilidad, bytes/token y prima de tokens → coste | §2, §8 |
+| 05 | robustez ante Unicode invisible y tokens raros | reto 6 del proyecto |
+| 06–08 | tokenizer-free y tokens multimodales: 🔴/🟡, fuera de la v1.0 | §9 (opcional) |
+| 07, 09 | el embedder trae su tokenizer: no se cambia sin *tokenizer transfer* | §2 (👀) |
+| 10–12 | bi-encoder, normalización, Matryoshka (dimensión) e int8 | §3 |
+| 11 | tu embedder contrastivo propio como candidato | reto 1 del proyecto |
+| 13 | BM25 + denso con RRF o lineal (elegida con CV) | §4 |
+| 14 | Flat vs HNSW, neighbor recall, p99 | §5 |
+| 15 | dev / test ciego estratificado, test pareado, slices | §1, §3, §7 |
+| 16 | retriever visual en 2ª etapa | §9, reto 3 |
+| 17 | los vectores son datos sensibles (inversión) | reto 7 del proyecto |
+| 18 | caché versionada, alias, servicio, latencia | §6 |
+| 19 | árbol del índice, trampas T1–T2, regla «lo simple salvo prueba» | §4, §5, §7 |
 ''')
     nb.gemini(
         "imagen", "M20-IMG-01", "Arquitectura de Políglota v1.0",
         "El sistema completo que se integra en el capstone, con cada caja etiquetada con el módulo del curso que la construyó.",
         """Diagrama de arquitectura técnico, fondo blanco, paleta sobria: azul #1F6FEB (ruta de consulta), naranja #F28E2B (ruta de indexación), verde #2CA02C (evaluación e informe), gris #6B7280 (almacenamiento). Sans-serif legible, flechas claras, cajas con esquinas suaves.
-Arriba, de izquierda a derecha (naranja), título "Indexación": "Docs ES/EN + código" → "Normalización NFC (M01)" → "Chunking" → "Tokenizer BPE: costo y fertilidad (M02–M04)" → bifurcación en dos cajas: "BM25 · palabras + identificadores (M00, M13)" y "Embedder · dimensión recortada + int8 (M10–M12)" → cilindros grises "Índice invertido" y "Índice vectorial Flat/HNSW (M14)".
+Arriba, de izquierda a derecha (naranja), título "Indexación": "Docs ES/EN + código" → "Normalización NFC (M01)" → "Chunking" → "Tokenizer BPE: coste y fertilidad (M02–M04)" → bifurcación en dos cajas: "BM25 · palabras + identificadores (M00, M13)" y "Embedder · dimensión recortada + int8 (M10–M12)" → cilindros grises "Índice invertido" y "Índice vectorial Flat/HNSW (M14)".
 Abajo, de izquierda a derecha (azul), título "Consulta": "Usuario" → "API FastAPI /search (M18)" → "Caché LRU versionada (M18)" → flechas a los dos índices → "Fusión RRF (M13)" → "Top-10".
 A la derecha, una columna verde: "Evaluación: dev para decidir · test ciego una vez · IC pareado · slices (M15, M19)" → "Informe técnico + criterios de aceptación (M20)".
 Una caja punteada gris opcional junto al embedder: "Opcional: páginas/capturas → ColPali MaxSim en 2ª etapa (M16)".
@@ -172,11 +187,16 @@ ACEPTACION = {
 DECISIONES, METRICAS = {}, {}          # se rellenan sección a sección y alimentan el informe
 pd.DataFrame(ACEPTACION.items(), columns=["criterio", "umbral"])
 ''')
+    nb.md(r'''✍️ **Antes de construir, a mano: ¿qué dejan libre los criterios?** Dos de ellos se pueden comprobar con papel:
+* **Coste:** $10^7 \cdot 400 = 4\times10^9$ tokens × 0.02 $/1M = **80 $** ≤ 500 $: el re-embedding no restringe nada (como vimos en el módulo 18, lo caro es operar, no embeber). Con una prima de tokens de 1.3 en la mitad española subiría a ≈ 92 $: sigue holgado.
+* **RAM ≤ 16 GB para 10 M:** con HNSW (≈ 256 B/vector de grafo) quedan $16\times10^9/10^7 - 256 = 1\,344$ B/vector. En int8 (1 B/dim) cabe hasta $d \approx 1\,344$; en float32 (4 B/dim), solo $d \le 336$. Este criterio es el que de verdad empuja hacia **dimensión recortada + int8** (§3).
+
+Esta es la forma de leer unos criterios de aceptación: identificar cuáles **restringen** el diseño antes de medir nada.''')
 
     # ─────────────── §2 Tokenizer ───────────────
-    nb.md(r'''## 2. Tokenizer: costo por idioma y ¿sirve como analizador de BM25?
+    nb.md(r'''## 2. Tokenizer: coste por idioma y ¿sirve como analizador de BM25?
 El tokenizer de Políglota cumple dos papeles distintos que no conviene confundir:
-1. **Costo y contexto**: cuántos tokens paga cada idioma (fertilidad, bytes/token) → presupuesto de embedding y de contexto en RAG.
+1. **Coste y contexto**: cuántos tokens paga cada idioma (fertilidad, bytes/token) → presupuesto de embedding y de contexto en RAG.
 2. **Analizador léxico** para BM25: aquí no se busca comprimir, sino que los términos de la query coincidan con los del documento.
 
 Entrenamos BPE byte-level con HF `tokenizers` (módulos 02–03) con varios tamaños de vocabulario sobre los documentos.''')
@@ -220,7 +240,7 @@ DECISIONES["tokenizer_costo"] = "BPE byte-level 4k (HF tokenizers), solo para pr
 print("elegido en dev:", mejor_lex)
 df_lex.round(3)
 ''')
-    nb.md(r'''> 👀 **Qué debes observar:** los tokens de un BPE de LLM **no** son un buen analizador léxico: trocean palabras en piezas que coinciden por azar entre documentos no relacionados, y BM25 pierde. Partir identificadores (`split_ident`) es lo que ayuda en código. Decisión de ingeniería: el tokenizer del LLM se usa para **costos**, y BM25 usa su propio analizador. (El embedder trae su propio tokenizer: no se cambia sin *tokenizer transfer*, módulo 07.)''')
+    nb.md(r'''> 👀 **Qué debes observar:** los tokens de un BPE de LLM **no** son un buen analizador léxico: trocean palabras en piezas que coinciden por azar entre documentos no relacionados, y BM25 pierde. Partir identificadores (`split_ident`) es lo que ayuda en código. Decisión de ingeniería: el tokenizer del LLM se usa para **costes**, y BM25 usa su propio analizador. (El embedder trae su propio tokenizer: no se cambia sin *tokenizer transfer*, módulo 07.)''')
 
     # ─────────────── §3 Embedder ───────────────
     nb.md(r'''## 3. Embedder: modelo, dimensión y precisión (decididos en dev)
@@ -402,22 +422,22 @@ for nombre, rr in (("vs BM25", r_bm), ("vs denso", r_de)):
 El informe se **genera** desde `DECISIONES` y `METRICAS`: si cambias una decisión y re-ejecutas, el informe se actualiza solo (nada de copiar números a mano). Se guarda como `poliglota_informe.md` junto a `poliglota_config.json`.''')
     nb.gemini(
         "imagen", "M20-IMG-02", "Anatomía de un informe técnico de decisiones",
-        "La estructura de una página del informe que genera el capstone: decisiones con evidencia, resultados en test ciego, costos/latencia y tabla de criterios de aceptación.",
+        "La estructura de una página del informe que genera el capstone: decisiones con evidencia, resultados en test ciego, costes/latencia y tabla de criterios de aceptación.",
         """Maqueta de documento técnico de una página, vista frontal, fondo blanco, paleta: azul #1F6FEB (títulos), verde #2CA02C (criterio cumplido), naranja #F28E2B (criterio no cumplido), gris #6B7280 (texto de relleno). Sans-serif legible.
 Título arriba: "Políglota v1.0 · Informe técnico de decisiones". Debajo, cinco bloques apilados con encabezados azules:
 1 "Decisiones (tomadas en dev)": tabla de 3 columnas "Componente | Decisión | Evidencia" con filas "Tokenizer", "Analizador BM25", "Embedder", "Fusión", "Índice" (el contenido de las celdas en líneas grises, sin números).
 2 "Resultados en test ciego": una barra horizontal con tres segmentos rotulados "BM25", "denso", "Políglota" y un intervalo de confianza dibujado como bigote.
-3 "Costos y latencia": tres pastillas "re-embedding $", "RAM GB/réplica", "p50 / p99 ms".
+3 "Costes y latencia": tres pastillas "re-embedding $", "RAM GB/réplica", "p50 / p99 ms".
 4 "Criterios de aceptación": tabla "Criterio | Umbral | Valor | OK" con cinco filas: cuatro con un ✓ verde y una con un ✗ naranja.
 5 "Limitaciones y siguiente iteración": tres viñetas grises.
 Al margen derecho, una flecha gris vertical con el texto "generado desde las métricas, no escrito a mano".
 Evita: números concretos, logotipos, texto ilegible, sombras decorativas.""",
-        "Maqueta de una página de informe con decisiones, resultados en test, costos y latencia, criterios de aceptación y limitaciones.",
+        "Maqueta de una página de informe con decisiones, resultados en test, costes y latencia, criterios de aceptación y limitaciones.",
         """
 # Políglota v1.0 · Informe técnico
 [Decisiones (dev)]  Componente | Decisión | Evidencia
 [Test ciego]        BM25 | denso | Políglota (IC95)
-[Costos/latencia]   $ re-embedding · GB/réplica · p50/p99
+[Costes/latencia]   $ re-embedding · GB/réplica · p50/p99
 [Aceptación]        Criterio | Umbral | Valor | ✓/✗
 [Limitaciones]      • • •        ← generado desde METRICAS/DECISIONES
 """)
@@ -444,7 +464,7 @@ informe = f"""# Políglota v1.0 · Informe técnico de decisiones
 ## Decisiones (tomadas en dev)
 | Componente | Decisión | Evidencia |
 |---|---|---|
-| Tokenizer (costo) | {DECISIONES['tokenizer_costo']} | fertilidad code/es ≈ {df_tok[(df_tok.vocab == 4000) & (df_tok.lang == 'code')].fertilidad.item() / df_tok[(df_tok.vocab == 4000) & (df_tok.lang == 'es')].fertilidad.item():.1f}× |
+| Tokenizer (coste) | {DECISIONES['tokenizer_costo']} | fertilidad code/es ≈ {df_tok[(df_tok.vocab == 4000) & (df_tok.lang == 'code')].fertilidad.item() / df_tok[(df_tok.vocab == 4000) & (df_tok.lang == 'es')].fertilidad.item():.1f}× |
 | Analizador BM25 | {DECISIONES['analizador_bm25']} | mejor nDCG@10 en dev entre 3 analizadores |
 | Embedder | {DECISIONES['modelo']} · d={DECISIONES['dim']} · {DECISIONES['precision']} | menor d a ≤ 0.01 de la completa; int8 pierde {METRICAS['dev_nd_dim'][dim] - METRICAS['dev_nd_int8']:+.3f} |
 | Fusión | {DECISIONES['fusion']}{f" (α={ALFA:.2f})" if DECISIONES['fusion'] == 'lineal' else ''} | lineal(CV) − RRF en dev: Δ={METRICAS['fusion_delta']['diff']:+.3f}, IC95 [{METRICAS['fusion_delta']['ci_low']:+.3f}, {METRICAS['fusion_delta']['ci_high']:+.3f}] |
@@ -455,7 +475,7 @@ informe = f"""# Políglota v1.0 · Informe técnico de decisiones
 nDCG@10: **Políglota {METRICAS['test_final']:.3f}** · BM25 {METRICAS['test_bm25']:.3f} · denso {METRICAS['test_denso']:.3f}.
 Δ vs BM25 = {METRICAS['delta_bm25']['diff']:+.3f} (IC95 [{METRICAS['delta_bm25']['ci_low']:+.3f}, {METRICAS['delta_bm25']['ci_high']:+.3f}], p = {METRICAS['delta_bm25']['p_value']:.3f}).
 
-## Costos y latencia (proyección a 10 M chunks × 400 tokens)
+## Costes y latencia (proyección a 10 M chunks × 400 tokens)
 Re-embedding: {coste_reembed:.0f} $ con API a 0.02 $/1M (oct-2026) · RAM del índice: {METRICAS['ram_10M_gb']:.1f} GB/réplica · latencia (CPU, batch=1): p50 {METRICAS['p50_frio']:.1f} ms / p99 {METRICAS['p99_frio']:.1f} ms en frío; hit rate Zipf {METRICAS['hit_rate']:.2f}.
 
 ## Criterios de aceptación
@@ -487,6 +507,22 @@ Para buscar en capturas y PDFs (módulo 16) sin rehacer el sistema:
 El proyecto 16 (*Políglota Visual*) ya contiene el estudiante visual y MaxSim sobre patches: su salida (`S_visual`, matriz queries × páginas) se fusiona con `rrf_mat(S_den, S_lex, S_visual)`.''')
 
     # ─────────────── Cierre ───────────────
+    nb.md(r'''## 🗺️ Mapa de madurez de las piezas de Políglota v1.0 (a oct-2026)
+Cierra el sistema mirando la madurez de cada pieza que acabas de integrar: casi todo es 🟢, y lo 🟡 es justo lo que el informe debe señalar como riesgo.
+
+| Pieza | Elección de referencia | Madurez | Fuente / módulo |
+|---|---|---|---|
+| Normalización | NFC en indexación y consulta | 🟢 | UAX #15 · M01 |
+| Tokenizer (coste y contexto) | BPE byte-level (HF `tokenizers`) | 🟢 | Sennrich et al. 2016; Wang et al. 2019 · M02–M04 |
+| Analizador léxico de BM25 | palabras + partes de identificadores | 🟢 | Robertson & Zaragoza 2009 · M00, M13 |
+| Embedder | bi-encoder multilingüe (e5) o fallback; dimensión recortada (Matryoshka) | 🟢 / 🟡 (Matryoshka en modelos sin entrenarla) | Wang et al. 2024; Kusupati et al. 2022 · M10–M12 |
+| Precisión del índice | int8 calibrado | 🟢 | Shakir et al. 2024 · M12 |
+| Fusión | RRF (lineal solo si gana con IC) | 🟢 | Cormack et al. 2009; Bruch et al. 2022 · M13 |
+| Índice | Flat o HNSW según el árbol de M19 | 🟢 | Malkov & Yashunin 2016; Douze et al. 2024 · M14 |
+| Evaluación | test ciego, bootstrap pareado, slices | 🟢 | Smucker et al. 2007 · M15 |
+| Multimodal (opcional) | OCR + texto; ColPali en 2ª etapa | 🟡 | Faysse et al. 2024 · M16 |
+| Servicio | caché versionada + alias + FastAPI | 🟢 | M18 |
+''')
     nb.md(r'''## 🏭 En producción
 * El patrón que has integrado — normalización simétrica, BM25 + denso con RRF, reranking opcional, índice HNSW/IVF cuantizado, caché versionada y alias de colección — es el que documentan los motores de búsqueda y vector DBs de uso general (Elasticsearch/OpenSearch, Vespa, Qdrant, Weaviate, pgvector) en sus guías de búsqueda híbrida (consultadas oct-2026).
 * **Contextual Retrieval** (Anthropic, 2024) es un ejemplo publicado de mejora sobre este mismo esqueleto: añadir a cada chunk un resumen de contexto antes de embeber e indexar con BM25, combinado con reranking.
@@ -499,7 +535,7 @@ El proyecto 16 (*Políglota Visual*) ya contiene el estudiante visual y MaxSim s
 3. **Las decisiones interactúan**: dimensión y precisión del embedder fijan la memoria, que fija el índice, que fija la latencia; decide en ese orden y re-verifica al final.
 4. **Informe generado, no escrito a mano**: cada cifra del informe sale de una variable; así no hay números obsoletos tras re-ejecutar.
 5. **La regla «lo simple salvo prueba en contra»** (RRF salvo que lineal gane con IC) protege contra el *winner's curse* del módulo 19.
-6. **El tokenizer del LLM no es el analizador de tu BM25**: úsalo para costos y contexto; el analizador léxico se elige por nDCG.
+6. **El tokenizer del LLM no es el analizador de tu BM25**: úsalo para costes y contexto; el analizador léxico se elige por nDCG.
 7. **Un criterio en ❌ con explicación vale más que diez en ✅ con umbrales ajustados a posteriori.**
 ''')
     nb.md(r'''## ⚠️ Errores comunes
@@ -525,7 +561,7 @@ La versión servida debe incluir `dim` y `precision`; si la clave de caché o el
 </details>
 <details><summary><b>4 · (Transferencia)</b> Añades un slice de capturas (multimodal). ¿Qué cambia en los criterios de aceptación y en el informe?</summary>
 
-Un criterio por slice (no peor que OCR+texto en capturas, con IC), el costo de almacenamiento multi-vector (en SSD) y la latencia de la segunda etapa MaxSim en el presupuesto de p99; el informe añade la decisión «OCR vs visual vs ambos» con su evidencia (módulo 16).
+Un criterio por slice (no peor que OCR+texto en capturas, con IC), el coste de almacenamiento multi-vector (en SSD) y la latencia de la segunda etapa MaxSim en el presupuesto de p99; el informe añade la decisión «OCR vs visual vs ambos» con su evidencia (módulo 16).
 </details>
 <details><summary><b>5 · (Transferencia)</b> La CTO pide pasar a GPU y a 100 M de chunks. ¿Qué secciones re-ejecutas y por qué?</summary>
 

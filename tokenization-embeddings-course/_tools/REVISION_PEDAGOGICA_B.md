@@ -52,3 +52,22 @@ como punto de partida en cada módulo.
   NFC al indexar y queries sin normalizar → ítem «simetría» de la checklist).
 - Autoevaluación: la pregunta 6 estaba marcada (Cálculo) sin cálculo; ahora (Diagnóstico).
 - Terminología: «impuesto de idioma» y «prima de paridad» → **prima de tokens** (también en la lección 20).
+
+## 20 · Capstone
+- Bien: integración real con criterios de aceptación fijados **antes** de construir, cada componente decidido en dev
+  con una regla escrita, test ciego usado una vez, informe generado desde las métricas; el proyecto replica el
+  procedimiento con 🪜 1/2 en los 6 TODO y una rúbrica que comprueba también las secciones del informe.
+- **Añadida la tabla «🧩 Qué integra este capstone (y qué queda como reto)»**: módulo → qué aporta → sección. Deja
+  explícito qué módulos no entran en la v1.0 y por qué (06–08 por madurez; 07/09: el embedder trae su tokenizer) y
+  sirve de índice de repaso. Para cerrar huecos de integración se añadieron dos retos al proyecto: **robustez**
+  (fuzzer del 05 + normalización del 01 sobre las queries de test, con criterio de estabilidad del top-10) y
+  **privacidad** (17–18: riesgo de inversión y medidas en *Limitaciones*). El reto 1 ya permitía usar el embedder
+  propio del 11.
+- **Ejemplo a mano añadido** tras `ACEPTACION`: qué criterios restringen el diseño (coste 80 $, ≈ 92 $ con prima de
+  tokens 1.3 → no restringe; RAM ≤ 16 GB → 1 344 B/vector → $d \le 1\,344$ en int8 y $\le 336$ en float32), que
+  motiva la decisión dimensión + int8 de §3.
+- **Reestructurado:** Mapa de madurez de antes de la Gemini de arquitectura a justo antes de 🏭.
+- **🧭 corregida:** el servicio (§6) estaba en ampliación pero el TODO 4 del proyecto lo exige; ahora es núcleo
+  (solo la simulación de carga queda como ampliación).
+- **Repaso espaciado:** añadidas R5 (M00, Diagnóstico: por qué el listón es el BM25 del 00 y las métricas del 00) y
+  R6 (M10 + M12, Cálculo: recortar dimensiones sin renormalizar da 0.36 en vez de coseno 0.6).

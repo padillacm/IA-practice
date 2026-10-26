@@ -2,7 +2,7 @@
 Agente: Revisor pedagógico · Módulos: 09–20 · Informe: tokenization-embeddings-course/_tools/REVISION_PEDAGOGICA_B.md
 - [x] 18_produccion
 - [x] 19_playbook_elite
-- [ ] 20_capstone
+- [x] 20_capstone
 - [ ] 09_capa_embedding_llm
 - [ ] 10_embeddings_contextuales_oraciones
 - [ ] 11_aprendizaje_contrastivo
