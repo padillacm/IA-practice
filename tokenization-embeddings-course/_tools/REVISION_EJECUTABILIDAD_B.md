@@ -24,6 +24,8 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 | 14 proyecto | 36 s | OK | Ídem | 6/6; plantilla 0/6 sin romper | pip sin `-U` |
 | 15 lección | 76 s | OK | Sintético (HF `wikimedia/wikipedia` + CodeSearchNet → 403; aviso ⚠️); ranx real: coincide con las métricas propias (≤ 1.1e-16) | — | — |
 | 15 proyecto | 7 s | OK | Ídem | 12/12 (umbrales numéricos solo con sintético + FAST_DEV_RUN; con datos reales solo estructurales) | — |
+| 16 lección | 268 s | OK | Mundo de juguete de imágenes generadas (por diseño, sin descarga); `USE_REAL_MODELS=False` (CLIP/SigLIP reales opcionales) | — | — |
+| 16 proyecto | 125 s | OK | Corpus sintético (HF 403, aviso ⚠️) renderizado como páginas | 11/11 (plantilla 0/11 sin romper) | — |
 <!-- TABLA -->
 
 ## Cambios aplicados (en builders; notebooks regenerados)
