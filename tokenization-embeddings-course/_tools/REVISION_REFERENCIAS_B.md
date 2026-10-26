@@ -55,3 +55,13 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Mapa de madurez («quién la usa»: SBERT, E5 *average pooling*, DPR `[CLS]`, SGPT, INSTRUCTOR, `paraphrase-multilingual-*`) | ✅ | Todos descritos así en sus papers/model cards |
 | `sentence-transformers` (PyPI, `Transformer`/`Pooling`) | ✅ | |
 | Prompts Gemini | ✅ | Sin datos técnicos verificables más allá de fórmulas ya revisadas |
+
+## 11 · Aprendizaje contrastivo
+| Referencia | Estado | Nota |
+|---|---|---|
+| 22 IDs arXiv (Oord, Poole, McAllester & Stratos, Tschannen, Wang & Isola, Wang & Liu, SimCLR, Henderson, SimCSE, DPR, ANCE, RocketQA, TAS-B, NV-Retriever, Robinson, Gradient Cache, E5, GTE, C-Pack, Nomic Embed, Qwen3 Embedding, LoRA) | ✅ | Autor y año coinciden |
+| *RocketQA.* | ✏️ | Título completo (*An Optimized Training Approach to Dense Passage Retrieval for Open-Domain Question Answering*), NAACL 2021 |
+| Venues | ✏️ | Años añadidos a los que solo decían «ICML/ICLR/EMNLP/CVPR»; ANCE ICLR 2021, TAS-B SIGIR 2021, Gradient Cache RepL4NLP 2021, C-Pack SIGIR 2024, Nomic Embed TMLR, SimCLR ICML 2020, LoRA ICLR 2022 (según arXiv/actas); CPC, Henderson, NV-Retriever, E5, GTE y Qwen3 Embedding como preprint |
+| Cifras (CCPairs ≈ 270M, TopK-PercPos 95 %, τ 0.05/0.01, `scale=20`) | ✅ | Ya contrastadas por la revisión técnica |
+| `sentence-transformers` (`MultipleNegativesRankingLoss`, `CachedMultipleNegativesRankingLoss`, `BatchSamplers.NO_DUPLICATES`, `mine_hard_negatives`, `add_adapter`) | ✅ | API pública de la librería (v3+) |
+| Mapa de madurez / 🏭 | ✅ | Cada «quién la usa» con su informe técnico (E5, GTE, BGE, Nomic, Qwen3, DPR, ANCE, RocketQA, NV-Retriever) |
