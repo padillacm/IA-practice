@@ -102,12 +102,13 @@ nb = Notebook("Módulo 09 · La capa de embedding en LLMs", colab_path=LESSON)
 
 nb.md(nb.badge() + r"""
 # Módulo 09 · La capa de embedding en LLMs
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
 | **Nivel** | 🟡 Intermedio |
-| **Duración** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
-| **Cómputo** | CPU basta (modelos diminutos en `FAST_DEV_RUN`); GPT-2 small (124M) corre en CPU. T4 opcional. **0 unidades de Colab** necesarias |
+| **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+| **GPU recomendada** | CPU basta (modelos diminutos en `FAST_DEV_RUN`); GPT-2 small (124M) corre en CPU. T4 opcional. **0 unidades de Colab** necesarias |
 | **Prerrequisitos** | 02 (BPE), 05 (tokens sub-entrenados), 07 (inicialización de vocabulario nuevo), PyTorch y atención |
 | **Hilo conductor** | Políglota Labs: antes de construir *embedders* (10–12) hay que entender la tabla de vectores que usa cualquier modelo de texto: la **capa de embedding** |
 
@@ -118,7 +119,7 @@ nb.md(nb.badge() + r"""
 """)
 
 nb.md(r"""
-## Objetivos de aprendizaje
+## 🎯 Objetivos de aprendizaje
 Al terminar podrás:
 1. **Explicar** que `nn.Embedding` equivale a `one_hot @ E` y **deducir** por qué solo las filas de los tokens vistos reciben gradiente de entrada.
 2. **Calcular** el peso de la capa de embedding/unembedding en el total de parámetros y **cuantificar** lo que ahorra el *weight tying* (Press & Wolf, 2017).
@@ -213,9 +214,9 @@ nb.gemini(
     Diagrama técnico limpio, fondo blanco, formato 16:9, estilo de infografía de ingeniería (sin ilustraciones decorativas). Paleta: azul #1F6FEB para la entrada, naranja #F28E2B para la salida, verde #2CA02C para el Transformer, gris #6B7280 para texto secundario. Tipografía sans-serif legible.
     Composición de izquierda a derecha en seis bloques unidos por flechas gruesas:
     1) Caja gris «Texto: "El gato come pescado"».
-    2) Caja «Tokenizer (BPE)» con salida «ids: [1212, 8745, 5981, 22104]».
-    3) Una matriz grande azul rotulada «E  (V × d)» con 6 filas visibles etiquetadas «fila 0», «fila 1», …, «fila V-1»; de los ids salen flechas finas azules que resaltan SOLO las filas 1212, 8745, 5981 y 22104. Debajo: «lookup = one-hot × E».
-    4) Cuatro vectores horizontales de d casillas azules, rotulados «e₁ e₂ e₃ e₄ (d = 768)».
+    2) Caja «Tokenizer (BPE de GPT-2)» con siete fichas «El», «Ġg», «ato», «Ġcome», «Ġp», «esc», «ado» y debajo «ids: [9527, 308, 5549, 1282, 279, 3798, 4533]».
+    3) Una matriz grande azul rotulada «E  (V × d)» con 6 filas visibles etiquetadas «fila 0», «fila 1», …, «fila V-1»; de los ids salen flechas finas azules que resaltan SOLO esas 7 filas (9527, 308, 5549, 1282, 279, 3798, 4533). Debajo: «lookup = one-hot × E».
+    4) Siete vectores horizontales de d casillas azules apilados, rotulados «e₁ … e₇ (d = 768)».
     5) Una pila verde rotulada «Transformer (N bloques)» que produce un vector «h (d)» marcado «último estado oculto».
     6) Una matriz naranja rotulada «W_U (V × d)  — unembedding», una caja «logits = h · W_Uᵀ  (V valores)» y una caja «softmax → p(siguiente token)» con un histograma de barras naranjas muy bajas salvo dos altas.
     Entre las matrices azul y naranja dibuja una línea punteada gris de doble flecha con el texto «weight tying: W_U = E (misma matriz)».
@@ -224,10 +225,10 @@ nb.gemini(
     """,
     "Diagrama del recorrido token id → lookup en E → Transformer → unembedding W_U → softmax, con weight tying.",
     """
-    Texto ─► Tokenizer ─► ids [1212, 8745, 5981, 22104]
+    Texto ─► Tokenizer GPT-2 ─► El|Ġg|ato|Ġcome|Ġp|esc|ado = ids [9527, 308, 5549, 1282, 279, 3798, 4533]
                               │ lookup (one-hot × E)
                               ▼
-        E (V×d)  fila 1212 ─► e1   fila 8745 ─► e2 ...  (solo esas filas)
+        E (V×d)  fila 9527 ─► e1   fila 308 ─► e2 ...  (solo esas 7 filas)
                               ▼
                      Transformer (N bloques) ─► h (d)
                               ▼
@@ -436,7 +437,7 @@ nb.gemini(
     "imagen", "M09-IMG-02", "Weight tying: una matriz, dos gradientes",
     "Muestra gráficamente que, con weight tying, la matriz recibe gradiente disperso por la vía de entrada y gradiente denso por la vía de salida, y que las filas huérfanas se arrastran hacia −h̄.",
     """
-    Diagrama técnico limpio, fondo blanco, 16:9, estilo de infografía de ingeniería sin elementos decorativos. Paleta: azul #1F6FEB (vía de entrada), naranja #F28E2B (vía de salida), verde #2CA02C (filas bien entrenadas), gris #6B7280 (texto secundario).
+    Diagrama técnico limpio, fondo blanco, 16:9, estilo de infografía de ingeniería sin elementos decorativos. Paleta: azul #1F6FEB (vía de entrada), naranja #F28E2B (vía de salida), verde #2CA02C (filas bien entrenadas), gris #6B7280 (texto secundario). Tipografía sans-serif legible.
     Centro: una matriz vertical grande rotulada «E = W_U  (V × d)» con 10 filas horizontales; las filas 2 y 7 están coloreadas en verde y rotuladas «token frecuente»; las filas 4, 5 y 9 están en gris y rotuladas «token casi nunca visto».
     Panel izquierdo (azul), título «Vía de entrada (dispersa)»: una flecha azul desde la caja «contexto: token 2, token 7» hacia SOLO las filas 2 y 7 con el texto «gradiente solo en filas usadas».
     Panel derecho (naranja), título «Vía de salida (densa)»: una caja «h (estado oculto)» con flechas naranjas hacia TODAS las filas, con grosor mayor en las filas frecuentes; sobre las filas grises, un pequeño vector naranja apuntando hacia la izquierda rotulado «−h̄ (todas se empujan en la misma dirección)».
@@ -819,7 +820,7 @@ nb.gemini(
     "Resume el procedimiento de extensión de vocabulario: palabra partida en trozos → token nuevo → fila nueva en E inicializada por media de sub-tokens, con las alternativas y cómo se mide (bpb, fuga).",
     """
     Diagrama técnico limpio, fondo blanco, 16:9, sin elementos decorativos. Paleta: azul #1F6FEB (filas existentes), verde #2CA02C (fila nueva bien inicializada), naranja #F28E2B (alternativas), gris #6B7280 (texto secundario). Tipografía sans-serif.
-    Arriba a la izquierda: la palabra «serialización» y debajo cuatro fichas azules con el texto «Ġser», «ializ», «ac», «ión» y la etiqueta «tokenizer original: 4 tokens».
+    Arriba a la izquierda: la palabra «serialización» y debajo cuatro fichas azules con el texto «Ġserial», «iz», «aci», «ón» y la etiqueta «tokenizer original (GPT-2): 4 tokens».
     Flecha hacia la derecha con el texto «add_tokens(" serialización")» hasta una única ficha verde «Ġserialización» con la etiqueta «tokenizer extendido: 1 token».
     Centro: una matriz vertical azul «E (V × d)» con 8 filas; debajo se añade una fila verde nueva rotulada «fila V (nueva)». Desde las cuatro filas azules de las piezas salen flechas finas que convergen en la fila verde con el rótulo «media de sub-tokens».
     A la derecha, tres recuadros naranjas apilados con títulos: «random: N(0, 0.02²)», «mean: media de todas las filas (todas las filas nuevas idénticas)», «subtoken: media de las piezas (recomendada)».
@@ -828,9 +829,9 @@ nb.gemini(
     """,
     "Extensión de vocabulario: palabra en 4 piezas → 1 token nuevo cuya fila se inicializa con la media de las piezas; alternativas random/mean; métricas bpb y masa filtrada.",
     """
-    "serialización" ─ tokenizer original ─► [Ġser][ializ][ac][ión]   (4 tokens)
+    "serialización" ─ tokenizer original ─► [Ġserial][iz][aci][ón]   (4 tokens, GPT-2)
                      add_tokens          ─► [Ġserialización]          (1 token)
-    E (V×d) + fila nueva:  e_new = media(e_Ġser, e_ializ, e_ac, e_ión)   ← subtoken
+    E (V×d) + fila nueva:  e_new = media(e_Ġserial, e_iz, e_aci, e_ón)   ← subtoken
        alternativas: random N(0,0.02²) · mean (todas idénticas)
     medir: bits por byte · masa filtrada en tokens nuevos
     """,
@@ -852,7 +853,7 @@ Antes de los Transformers, la tabla $E$ **era** el producto: embeddings *estáti
 """)
 
 nb.md(r"""
-## 8. Mapa de madurez (a oct-2026)
+## 🗺️ Mapa de madurez (a oct-2026)
 
 | Técnica | Madurez | Quién la usa (verificable) | Fuente |
 |---|---|---|---|
@@ -901,7 +902,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-## Autoevaluación
+## 📝 Autoevaluación
 
 <details><summary><b>1. (Cálculo)</b> Un modelo tiene $V=128\,000$, $d=2048$ y 1.2 mil millones de parámetros con embeddings desatados. ¿Cuántos parámetros ahorra el tying y qué fracción del total es?</summary>
 
@@ -940,7 +941,7 @@ No hay unembedding ni «masa filtrada»; la inicialización por media de sub-tok
 """)
 
 nb.md(r"""
-## Referencias
+## 📚 Referencias
 **Papers**
 - Press, O., & Wolf, L. (2017). *Using the Output Embedding to Improve Language Models.* EACL 2017. [arXiv:1608.05859](https://arxiv.org/abs/1608.05859)
 - Inan, H., Khosravi, K., & Socher, R. (2016). *Tying Word Vectors and Word Classifiers: A Loss Framework for Language Modeling.* ICLR 2017. [arXiv:1611.01462](https://arxiv.org/abs/1611.01462)
@@ -981,9 +982,9 @@ pj.md(pj.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟡 Intermedio |
-| **Duración** | ≈ 2 h |
-| **Cómputo** | CPU (≈ 3–5 min en `FAST_DEV_RUN`); GPT-2 small si hay acceso al hub. 0 unidades de Colab |
-| **Requisitos** | Lección 09 completa |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | CPU (≈ 3–5 min en `FAST_DEV_RUN`); GPT-2 small si hay acceso al hub. 0 unidades de Colab |
+| **Prerrequisitos** | Lección 09 completa |
 
 ## Contexto de negocio
 Eres ML engineer en **Políglota Labs**. El equipo va a ajustar un LM pequeño para generar *snippets* y consultas sintéticas sobre la documentación técnica (las usarás para entrenar el embedder en el módulo 11).
