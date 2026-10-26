@@ -75,3 +75,34 @@ seguridad además de capacidad.
   (incluye la motivación de seguridad, issue #215).
 - 🧠 #8 reescrito: ids reservados al entrenar (byte_fallback 256 + 3) y su semántica control vs user-defined.
   Lección: 85 → 88 celdas (lo nuevo marcado como ampliación).
+
+## 06 · Tokenizer-free (bytes, BLT)
+Diagnóstico: el mejor 🧠 del bloque (contexto igualado en bytes, *entropy drift*, umbral como perilla de inferencia,
+FLOP ≠ reloj), todo con sección del paper. Un hueco de evaluación:
+- 🧠 #1 ampliado: **bpb entre idiomas depende de la codificación** (una escritura de 3 bytes/carácter reparte sus bits
+  entre más bytes); para comparar idiomas, texto paralelo y bits por frase/carácter. Es aritmética, sin cifra nueva.
+
+## 07 · H-Net y tokenizer transfer
+Diagnóstico: 🏭 y 🧠 concretos (ratio loss, STE, LR por etapa, baseline GPT-2 vs Llama 3, ZeTT). Conexión que faltaba
+con los slots reservados:
+- 🏭 (HF): usar los slots reservados antes de redimensionar, inicializándolos como tokens nuevos (enlaza 04 §11.3).
+
+## 08 · Tokens multimodales y de audio
+Revisado sin cambios: 🧠 ya cubre perplejidad del codebook (medida en la lección), FSQ, *quantizer dropout*, split RVQ
+de Mimi, tasa de frames como coste, métricas perceptuales y tokenizers 1D, con fuentes. Recomendación no aplicada (para
+no sobrecargar una lección de ≈ 6 min de CPU): una celda que convierta tasas de frames × niveles en tokens por minuto
+de audio frente a texto transcrito, para cerrar el hilo «coste de contexto» de 00/04.
+
+## Cobertura de la lista de huecos del encargo (00–08)
+| Tema | Dónde queda cubierto |
+|---|---|
+| Elegir y auditar un vocabulario antes del pretraining | 04 §11.1 (nuevo) + §11 receta |
+| Por qué no se cambia el tokenizer después | 04 §11.1 (nuevo), 02 🏭, 07 |
+| Tokenizer ↔ mezcla de datos ↔ leyes de escala | 02 §9.7 (nuevo), 04 §11 y §11.3 (nuevo), 04 §4 (Tao et al.) |
+| Desempates y determinismo de merges | 02 §8, §9.6 y 🧠 #1 (ya existía) |
+| Tokens reservados y espacio para fine-tuning | 04 §11.3 (nuevo), 03 🧪 (nuevo), 07 🏭 |
+| Chat templates y bugs de especiales | 04 §9 (doble BOS), 05 §10 (inyección, `split_special_tokens`), 03 🧪 |
+| Costo real por idioma | 00 🧪 (nuevo, FLOPs), 04 §6–7 |
+| Evaluación más allá de fertilidad | 04 §11.1 (Rényi + contraejemplo, % de V visto) |
+| bpb vs loss por token | 04 §11.2 (nuevo), 06 🧠 #1 (ampliado) |
+| Seguridad | 01, 05 §10, 05 §10.1 (nuevo: canal lateral), 02 §9.7 (fuga de la mezcla), 03 🧪 |
