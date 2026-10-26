@@ -13,7 +13,7 @@ Agente: Revisor técnico · Módulos: 09–20 · Informe: tokenization-embedding
 - [x] 19_playbook_elite
 - [x] 20_capstone
 - [x] extras/GUIA_ENTREVISTAS.md y extras/LECTURA_PAPERS.md
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (decisiones tomadas)
