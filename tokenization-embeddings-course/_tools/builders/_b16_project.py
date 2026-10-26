@@ -113,6 +113,9 @@ def build(nb):
         a.imshow(render_doc(i, rz), cmap="gray", vmin=0, vmax=1); a.set_title(f"captura del doc {ids[i]} · σ={rz}", fontsize=9); a.axis("off")
     plt.tight_layout(); plt.show(); print("términos clave del doc 0:", CLAVE[0])
     ''')
+    nb.md("""
+    > 👀 **Qué debes observar:** la misma captura sin ruido y con σ = 0.3, y la de otro documento. Antes de seguir, **apuesta**: ¿quién sufrirá más con el ruido, el OCR por plantillas (que solo tiene que acertar palabras de un vocabulario cerrado) o el retriever visual (que compara parches de píxeles)? La sección 3 lo mide; si el resultado contradice tu intuición, busca la causa en cómo está construido cada sistema, no en el azar.
+    """)
 
     nb.md("""
     ## 1. Destilación visual → texto (TODO 1)

@@ -7,7 +7,7 @@ ES/EN. Duración total ≈ 104 h; ritmo sugerido de **8 h/semana**, unas 13 sema
 
 1. **Antes de empezar (10 min):** responde de memoria la caja **🔁 Conexión con módulos anteriores** sin desplegar
    las respuestas. Si fallas más de una, repasa esa sección del módulo citado antes de seguir.
-2. **Lección:** sigue la caja **🧭 Ruta núcleo vs ampliación** si la hay (módulos 01, 02, 03, 05 y 06). El núcleo
+2. **Lección:** sigue la caja **🧭 Ruta núcleo vs ampliación** si la hay (módulos 01, 02, 03, 05, 06, 13, 14, 15, 18, 19 y 20). El núcleo
    es lo que necesita el proyecto; la ampliación puede esperar a la semana siguiente (eso ya es repaso espaciado).
 3. **Ejemplos a mano:** hazlos con papel *antes* de ejecutar la celda que los comprueba.
 4. **👀 Qué debes observar:** léela después de mirar el gráfico, no antes. Primero escribe tu propia conclusión.
@@ -35,18 +35,18 @@ ES/EN. Duración total ≈ 104 h; ritmo sugerido de **8 h/semana**, unas 13 sema
 | 4–5 | 06 · Tokenizer-free I: bytes y BLT | 🔴 | 5 | T4 (CPU en FAST_DEV) | patcher entrópico vs BPE | 02, 05 |
 | 5 | 07 · H-Net y tokenizer transfer | 🔴 | 6 | L4 rec. (CPU en FAST_DEV) | cambiar el tokenizer de un modelo | 05, 06 |
 | 6 | 08 · Tokens multimodales y audio | 🟠 | 6 | T4 | tokens VQ de imagen y audio | 02, 06 |
-| 7 | 09 · Capa de embedding en LLMs | 🟡 | 5 | CPU/T4 | análisis de embeddings + vocab de dominio | 05, 07 |
+| 7 | 09 · Capa de embedding en LLMs | 🟡 | 5 | CPU/T4 | análisis de embeddings + vocab de dominio | 02, 05, 07 |
 | 7 | 10 · Embeddings contextuales y de oraciones | 🟡 | 5 | CPU/T4 | pooling y whitening en retrieval | 09 |
-| 8 | 11 · Aprendizaje contrastivo | 🟠 | 6 | L4/A100 rec. (T4 en FAST_DEV) | embedder ES/EN propio | 10 |
-| 9 | 12 · Embedders modernos | 🟠 | 5 | T4/L4 | comparativa con Matryoshka y cuantización | 11 |
-| 9 | 13 · Dense, sparse y late interaction | 🟠 | 5 | T4 | retrieval híbrido + reranking | 00, 12 |
-| 10 | 14 · Indexación y ANN | 🟠 | 5 | CPU/T4 | índice con curvas recall/latencia/memoria | 08, 13 |
-| 10–11 | 15 · Evaluación de retrieval | 🟠 | 5 | CPU | banco de evaluación con IC | 00, 13 |
-| 11 | 16 · Embeddings multimodales | 🟠 | 5 | L4 rec. (T4 en FAST_DEV) | búsqueda en PDFs con imágenes | 08, 12 |
-| 12 | 17 · Interpretabilidad y geometría | 🔴 | 5 | T4/L4 | SAE sobre embeddings | 09, 12 |
-| 12 | 18 · Producción | 🟠 | 5 | CPU/T4 | servicio con caché y versionado | 14, 15 |
-| 13 | 19 · Playbook de élite | 🔴 | 4 | CPU | 3 casos de system design | todo |
-| 13 | 20 · Capstone: Políglota completo | 🔴 | 6 | T4/L4 | Políglota completo | todo |
+| 8 | 11 · Aprendizaje contrastivo | 🟠 | 6 | L4/A100 rec. (T4 en FAST_DEV) | embedder ES/EN propio | 09, 10 |
+| 9 | 12 · Embedders modernos | 🟠 | 5 | T4/L4 | comparativa con Matryoshka y cuantización | 10, 11 |
+| 9 | 13 · Dense, sparse y late interaction | 🟠 | 5 | T4 | retrieval híbrido + reranking | 00, 11, 12 |
+| 10 | 14 · Indexación y ANN | 🟠 | 5 | CPU/T4 | índice con curvas recall/latencia/memoria | 08, 12, 13 |
+| 10–11 | 15 · Evaluación de retrieval | 🟠 | 5 | CPU | banco de evaluación con IC | 00, 13, 14 |
+| 11 | 16 · Embeddings multimodales | 🟠 | 5 | L4 rec. (T4 en FAST_DEV) | búsqueda en PDFs con imágenes | 08, 11, 13, 15 |
+| 12 | 17 · Interpretabilidad y geometría | 🔴 | 5 | T4/L4 | SAE sobre embeddings | 09–12, 15 |
+| 12 | 18 · Producción | 🟠 | 5 | CPU/T4 | servicio con caché y versionado | 12–15, 17 |
+| 13 | 19 · Playbook de élite | 🔴 | 4 | CPU | 3 casos de system design | todo (sobre todo 04, 12–15, 18) |
+| 13 | 20 · Capstone: Políglota completo | 🔴 | 6 | T4/L4 | Políglota completo | 00–19 |
 
 Bloque A (00–08) ≈ 43 h · Bloque B (09–17) ≈ 46 h · Producción y cierre (18–20) ≈ 15 h.
 
@@ -87,7 +87,13 @@ flowchart LR
   VQ -. "k-means ↔ PQ" .-> ANN
   ANN --> PROD["Producción (18)"]
   EVAL --> PROD
-  PROD --> CAP["Capstone Políglota (20)"]
+  INT -. "inversión de embeddings" .-> PROD
+  U -. "NFC en la clave de caché" .-> PROD
+  VOC -. "prima de tokens = coste" .-> PROD
+  PROD --> PB["Playbook (19)"]
+  EVAL --> PB
+  PB --> CAP["Capstone Políglota (20)"]
+  PROD --> CAP
 ```
 
 Ideas que atraviesan el curso (vuelve a ellas en cada módulo):
@@ -154,12 +160,88 @@ Ideas que atraviesan el curso (vuelve a ellas en cada módulo):
 
 **Convenciones de escritura del bloque A** (pasada de consistencia): *coste/costes* (no «costo»), *video* (no «vídeo»), tuteo singular; grafías oficiales: GPT-2, Llama 3, SentencePiece, `tiktoken`, Hugging Face, ByT5, MegaByte (MEGABYTE en el título del paper), H-Net, EnCodec, SoundStream, FLORES-200/FLORES+. Detalle en `_tools/REVISION_CONSISTENCIA.md`.
 
-## 5. Bloque B (09–20) · para ampliar por el revisor pedagógico B
+## 5. Bloque B (09–20)
 
-> Esta sección la completa el revisor pedagógico del bloque B: glosario ES/EN de los términos de 09–20 (pooling,
-> anisotropía, InfoNCE, hard negatives, Matryoshka, SPLADE, MaxSim, HNSW, IVF-PQ, RRF, modality gap, SAE…),
-> rutas abreviadas adicionales y cualquier ajuste de tiempos tras la revisión.
+**Columna «Requiere» confirmada** (revisión pedagógica B) contra los prerrequisitos de cada lección y lo que usan
+sus proyectos; se corrigieron 09, 11–18 en la tabla de la sección 2. Los tiempos no cambian.
 
-| Español | Inglés | Definición breve | Módulo |
+**Cómo estudiar el bloque B.** Además de lo de la sección 1:
+- Las cajas **🧭** del bloque están en 13, 14, 15, 18, 19 y 20 (y 16–17 si la tienen): el núcleo es siempre lo que usa
+  el proyecto.
+- Cada lección tiene ejemplos **✍️ a mano** antes del código (pooling, whitening, InfoNCE, int8/binaria, MaxSim, PQ,
+  bootstrap pareado, punto de equilibrio API/GPU, PSI, team-draft, árbol del índice, criterios de aceptación):
+  hazlos en papel.
+- Los **🔁** del bloque B repasan a propósito módulos lejanos: métricas e IC del 00 (en 11, 13, 19, 20), Unicode del
+  01 (18, 19), prima de tokens del 04 (09, 10, 15, 18), VQ del 08 (12, 14). Si fallas una, vuelve a ese módulo.
+- Las conclusiones de las 👀 y las notas de calibración que dependen del **corpus o modelo de respaldo** lo dicen
+  explícitamente; con datos y modelos reales, defiende la **forma** de las curvas, no los números.
+- En 20 hay una tabla **«🧩 Qué integra este capstone»**: úsala como índice de repaso final del curso.
+
+**Rutas abreviadas adicionales:**
+- *Solo embeddings para RAG (≈ 30 h):* 00 → 10 → 11 → 12 → 13 → 14 → 15 → 18 → 20 (núcleo de cada 🧭).
+- *Evaluación y decisiones (≈ 15 h):* 00 → 15 → 19 → 20 §1, §7 y §8.
+- *Entrevistas de system design:* 12 (§5) → 14 (§1, §10) → 18 → 19 (lección + proyecto) → `extras/GUIA_ENTREVISTAS.md`.
+
+### Glosario ES/EN · Bloque B (09–20)
+
+Misma convención que el bloque A: término técnico en inglés cuando es el habitual, **coste/costes**, **prima de
+tokens**, **tokenizer**, **pipeline** (m.).
+
+| Español (como se usa en el curso) | Inglés | Definición breve | Módulo |
 |---|---|---|---|
-| *(pendiente)* | | | |
+| matriz de embeddings (de entrada) | embedding matrix / input embeddings | tabla $V\times d$: fila = vector de un token; lookup = one-hot·E | 09 |
+| matriz de salida (*unembedding*) | unembedding / LM head | $W_U$: los logits son productos escalares con el estado oculto | 09 |
+| pesos atados | weight tying | la misma matriz como entrada y salida | 09 |
+| cuello de botella del softmax | softmax bottleneck | rango ≤ d+1 de los log-probs de un LM | 09 |
+| inicialización por subtokens | subtoken (mean) initialization | fila nueva = media de las filas de sus piezas | 09, 07 |
+| pooling (media, CLS, máximo, último token) | pooling | cómo se resume una secuencia de estados en un vector | 10, 12 |
+| anisotropía | anisotropy | los vectores comparten una dirección dominante; el coseno medio es > 0 | 09, 10 |
+| blanqueado | whitening | $(x-\mu)U\Lambda^{-1/2}$: media 0 y covarianza identidad | 10 |
+| bi-encoder / cross-encoder | bi-encoder / cross-encoder | codificar por separado (indexable) / el par junto (reranker) | 10, 13 |
+| prefijos e instrucciones | query/passage prefixes, instructions | texto fijo que indica el papel (`query:`) o la tarea | 10, 12 |
+| aprendizaje contrastivo | contrastive learning | acercar pares positivos y alejar negativos | 11 |
+| InfoNCE | InfoNCE (MNRL en sentence-transformers) | entropía cruzada sobre la matriz de similitudes del lote | 11 |
+| temperatura | temperature ($\tau$) | escala de los logits; pequeña = se concentra en los negativos duros | 11 |
+| negativos del lote | in-batch negatives | los positivos de otros pares hacen de negativos | 11 |
+| negativos duros / falsos negativos | hard negatives / false negatives | parecidos pero irrelevantes / relevantes sin juicio | 11 |
+| alineación y uniformidad | alignment / uniformity | dos propiedades del espacio contrastivo (Wang & Isola) | 11 |
+| Gradient Cache | Gradient Cache | lotes grandes con memoria constante, gradiente exacto | 11 |
+| Matryoshka (MRL) | Matryoshka Representation Learning | prefijos del vector útiles por sí solos; se renormaliza al recortar | 12 |
+| cuantización int8 / binaria | scalar (int8) / binary quantization | 1 byte o 1 bit por dimensión; binaria + rescoring | 12, 18 |
+| reordenado con mayor precisión | rescoring | recuperar candidatos con binaria y reordenar con float/int8 | 12 |
+| MTEB / MMTEB | Massive (Multilingual) Text Embedding Benchmark | banco público de tareas de embeddings | 12, 15 |
+| sparse aprendido | learned sparse retrieval (SPLADE) | pesos por término del vocabulario aprendidos por un MLM | 13 |
+| interacción tardía | late interaction (ColBERT) | un vector por token y puntuación MaxSim | 13 |
+| MaxSim | MaxSim | suma, por token de la query, de su máxima similitud en el documento | 13 |
+| MUVERA | MUVERA (fixed dimensional encodings) | multi-vector → un vector de dimensión fija | 13 |
+| fusión por rango recíproco | Reciprocal Rank Fusion (RRF) | $\sum 1/(k+\text{rango})$; $k=60$ por convención | 13, 20 |
+| combinación lineal (convexa) | convex/linear combination | $\alpha$·denso + (1−α)·BM25 normalizados; α sin fuga (CV) | 13, 19 |
+| troceado tardío | late chunking | embeber el documento entero y trocear después | 13 |
+| búsqueda aproximada de vecinos | approximate nearest neighbor (ANN) | top-k con error controlado a cambio de latencia/memoria | 14 |
+| exhaustividad de vecinos | neighbor recall@k | fracción del top-k exacto que devuelve el índice (≠ Recall@k de relevancia) | 14 |
+| fichero invertido | IVF (inverted file) | listas por centroide; se recorren `nprobe` listas | 14 |
+| cuantización por producto | product quantization (PQ), OPQ | VQ por subespacios; distancias con tablas (ADC) | 14 |
+| HNSW | Hierarchical Navigable Small World | grafo por capas; `M`, `efConstruction`, `efSearch` | 14 |
+| Vamana / DiskANN | Vamana / DiskANN | grafo pensado para SSD con PQ en RAM | 14 |
+| RaBitQ / ScaNN | RaBitQ / ScaNN (anisotropic quantization) | cuantizaciones con garantías / orientadas al producto escalar | 14 |
+| búsqueda filtrada | filtered search (pre/post-filtering, ACORN) | top-k restringido por metadatos | 14, 18 |
+| test ciego | held-out / blind test | split que se usa una sola vez, al final | 15, 20 |
+| bootstrap pareado / permutación de signos | paired bootstrap / sign-flip test | IC y p-valor de la diferencia por query | 15 |
+| comparaciones múltiples (Holm) | multiple comparisons (Holm–Bonferroni) | corregir p-valores al comparar muchos sistemas | 15 |
+| acuerdo entre anotadores | inter-annotator agreement (Cohen's κ) | fiabilidad de los juicios | 15 |
+| LLM como juez | LLM-as-judge | etiquetar relevancia con un LLM (🟡, validar con humanos) | 15 |
+| sesgo de *pooling* | pooling bias | los qrels favorecen a los sistemas que los generaron | 15, 19 |
+| límite de dimensión | LIMIT (Weller et al. 2025) | conjuntos top-k que un embedding de dimensión d no representa | 15 |
+| deriva | drift (PSI) | cambio de la distribución de queries o documentos; PSI sin etiquetas | 15, 18 |
+| brecha de modalidad | modality gap | imágenes y textos ocupan conos separados en CLIP | 16 |
+| SigLIP / ColPali | SigLIP / ColPali | contrastivo con sigmoide / late interaction sobre páginas | 16 |
+| autoencoder disperso | sparse autoencoder (SAE) | descompone un embedding en rasgos dispersos interpretables | 17 |
+| inversión de embeddings | embedding inversion (vec2text) | reconstruir el texto a partir del vector | 17, 18 |
+| micro-batching dinámico | dynamic micro-batching | agrupar peticiones con `max_wait` para ganar throughput | 18 |
+| latencia de cola | tail latency (p99), hedged requests | lo que ve 1 de cada 100 usuarios; se amplifica con *fan-out* | 14, 18 |
+| despliegue azul/verde con alias | blue/green, collection alias | índice nuevo en paralelo y cambio atómico de puntero | 18 |
+| adaptador entre versiones | embedding adapter (ridge / Procrustes), BCT | puente lineal v2 → v1 sin re-embeber | 18 |
+| intercalado | interleaving (team-draft) | evaluación online pareada dentro de la misma impresión | 18 |
+| maldición del ganador | winner's curse | el mejor de muchos está sesgado al alza | 19 |
+| criterios de aceptación | acceptance criteria | umbrales fijados antes de construir | 20 |
+| registro de decisiones | ADR (architecture decision record) | informe de decisiones con alternativas y evidencia | 20 |

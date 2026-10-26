@@ -162,3 +162,18 @@ como punto de partida en cada módulo.
   enlazado con el bootstrap del 00 y el interleaving del 18.
 - **Repaso espaciado:** añadida R5 (04 + 01, Diagnóstico): global sube y ES baja → truncado por prima de tokens o
   normalización asimétrica, visibles solo por slice.
+
+## 16 · Embeddings multimodales
+- Bien: intuición «dos torres, un espacio» con analogía two-tower; CLIP en miniatura desde cero → SigLIP 2 y
+  modelos reales (opcionales, protegidos con flags); modality gap medido; ColPali de juguete; árbol OCR vs visual;
+  🔁 con 08, 11, 13 y 15; proyecto con REF calibrado y 🪜 en los TODO.
+- **Reestructurado:** Mapa de madurez de la cabecera a justo antes de 🏭 (de `_b16_lesson1.py` a `_b16_lesson2.py`);
+  su fila de video remitía a §7 y es §8.
+- **🧭 corregida:** decía «núcleo 1–5 (… ColPali)» y «ampliación 6–8 (… decisión)», pero ColPali es §6 y el árbol de
+  decisión §9; ahora núcleo = 1–6 (lo que usa el proyecto) y ampliación = 7–9.
+- **Ejemplo a mano añadido** en §5: modality gap en 2D (gap = 0.85; la query de texto prefiere el texto, 0.8, a la
+  imagen del mismo concepto, 0.6) y la corrección por centroide de modalidad como el centrado por idioma del 10.
+- **Repaso espaciado:** añadida R5 (M01, Diagnóstico: ligadura «ﬁ» del OCR → NFKC, misma normalización en ambos lados).
+- **👀 añadida** tras la figura de capturas del proyecto, formulada como **predicción** a contrastar (en la ejecución de
+  referencia el OCR por plantillas resiste el ruido mejor que el retriever visual, así que no se anticipa el resultado).
+- Terminología: «vídeo» → **video** (forma canónica) en lección, proyecto y README del 16.

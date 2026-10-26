@@ -16,7 +16,7 @@ def part1(nb):
     | **Prerrequisitos** | 08 (tokens multimodales: patches ViT), 11 (InfoNCE), 13 (late interaction / MaxSim), 15 (evaluación) |
     | **Hilo conductor** | Políglota Labs quiere que el buscador encuentre también **PDFs, capturas y diagramas** de la documentación |
 
-    > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h): secciones 1–5 (CLIP, SigLIP, modality gap, ColPali en miniatura). Ampliación (≈ 2 h): 6–8 (embeddings unificados, audio/vídeo, decisión OCR vs visual).
+    > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h, lo que usa el proyecto): secciones 1–6 (CLIP, SigLIP, modality gap, retrieval visual de documentos y ColPali en miniatura). Ampliación (≈ 2 h): 7–9 (embeddings unificados, audio y video, árbol de decisión OCR vs visual).
     > Las celdas con modelos reales están marcadas **(opcional, no probada en CPU)** y protegidas con flags.
     """)
     nb.md("""
@@ -26,7 +26,7 @@ def part1(nb):
     3. **Explicar y programar** MaxSim (late interaction) sobre *patch embeddings* de una página, y **diagnosticar** por qué un único vector medio falla.
     4. **Comparar** un pipeline OCR + texto con un embedding visual según el tipo de consulta y el nivel de ruido, y **estimar** el coste de almacenamiento multi-vector.
     5. **Situar** los embeddings unificados (Gemini Embedding 2, Jina v4, VLM2Vec) con sus capacidades **verificadas y fechadas**.
-    6. **Razonar** sobre audio y vídeo en espacios de embedding y sobre qué se pierde al promediar frames.
+    6. **Razonar** sobre audio y video en espacios de embedding y sobre qué se pierde al promediar frames.
     7. **Decidir** cuándo usar OCR+texto, embedding visual o ambos.
     """)
     nb.md("""
@@ -50,20 +50,11 @@ def part1(nb):
 
     Métricas por query + bootstrap/test pareado con IC (nunca dos medias sueltas). Lo usaremos en el proyecto con `poliglota_eval.py`.
     </details>
-    """)
-    nb.md("""
-    ## 🗺️ Mapa de madurez (estado a oct-2026)
 
-    | Técnica | Madurez | Quién / dónde | Fuente |
-    |---|---|---|---|
-    | CLIP (contraste imagen-texto con InfoNCE) | 🟢 sólido | Base de casi todo el ecosistema texto-imagen | Radford et al. 2021 |
-    | SigLIP (pérdida sigmoide) y SigLIP 2 (multilingüe, captioning + auto-distilación + datos curados) | 🟢 sólido / 🟡 SigLIP 2 en adopción | Google; codificadores de visión de PaliGemma | Zhai et al. 2023; Tschannen et al. 2025 |
-    | Modality gap: existencia y medición | 🟢 sólido (fenómeno); 🟡 cuánto importa en producto | Investigación; práctica de índices mixtos | Liang et al. 2022 |
-    | Retrieval visual de documentos con multi-vector (ColPali / ColQwen) | 🟡 emergente (resultados fuertes en ViDoRe; coste de almacenamiento) | ILLUIN y comunidad; también Jina v4 (dense + multi-vector) | Faysse et al. 2024; Günther et al. 2025 |
-    | Un único vector por captura de pantalla (DSE) | 🟡 emergente | Investigación (Waterloo) | Ma et al. 2024 |
-    | Embeddings unificados multimodales (texto, imagen, vídeo, audio, PDF en un espacio) | 🟡 emergente: Gemini Embedding 2 (preview mar-2026, GA abr-2026 según prensa) | Google; también Jina v4, VLM2Vec en investigación | ver §6 |
-    | Espacios de audio/vídeo (CLAP, ImageBind) | 🟡 / 🔴 | Investigación | Elizalde 2022; Girdhar 2023 |
-    | Embeddings de vídeo con orden temporal fino | 🔴 experimental | — | (§7) |
+    <details><summary><b>5.</b> (Módulo 01, Diagnóstico) El OCR de un PDF devuelve «conﬁguración» con la ligadura «ﬁ» (U+FB01). ¿Qué le pasa a BM25 con la query «configuración» y qué normalización lo arregla?</summary>
+
+    No hay coincidencia: «ﬁ» es un solo code point distinto de «f» + «i», así que el término del documento es otro. **NFKC** descompone la ligadura de compatibilidad (módulo 01). Es una de las razones por las que la ruta «OCR + texto» (sección 6) necesita el mismo normalizador en indexación y consulta, y una ventaja de la ruta visual, que no pasa por el texto.
+    </details>
     """)
 
     nb.md("""
@@ -201,6 +192,8 @@ def part1(nb):
     2. **Aprendizaje contrastivo**: con temperatura baja la optimización *conserva* esa separación; la temperatura modifica su tamaño.
 
     **Cómo se mide:** $\\text{gap}=\\lVert\\bar z_i-\\bar z_t\\rVert_2$ con $\\bar z$ el centroide de cada modalidad (embeddings normalizados). Medimos primero el modelo **sin entrenar** y comparamos.
+
+    ✍️ **Ejemplo a mano (2D).** Imágenes $(1, 0)$ y $(0.8, 0.6)$, centroide $(0.9, 0.3)$; textos $(0, 1)$ y $(0.6, 0.8)$, centroide $(0.3, 0.9)$. gap $= \\lVert(0.6, -0.6)\\rVert = 0.85$. En un índice mixto, la query de texto $(0, 1)$ da coseno 0.8 con el texto $(0.6, 0.8)$ y solo 0.6 con la imagen $(0.8, 0.6)$, aunque describan lo mismo: **los documentos de la misma modalidad que la query ganan por geometría**, no por relevancia. Restar a cada vector el centroide de su modalidad (y renormalizar) es la corrección simple que probaremos; es el mismo centrado por grupo que el centrado por idioma del módulo 10.
     """)
     nb.code(r'''
     torch.manual_seed(0); I0, T0 = TorreImagen(), TorreTexto(len(w2i)); zi0, zt0 = embebe(I0, T0, Xte, Tte, w2i)

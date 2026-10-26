@@ -1,4 +1,4 @@
-"""Lección 16 · parte 2: ColPali en miniatura, unificados, audio/vídeo, decisión, cierre."""
+"""Lección 16 · parte 2: ColPali en miniatura, unificados, audio/video, decisión, cierre."""
 from _a6_src16 import PAGES_SRC
 
 
@@ -194,11 +194,11 @@ def part2(nb):
     # ───────── 7. Unificados ─────────
     nb.md("""
     ## 7. Embeddings unificados multimodales
-    La tendencia 2025–2026 es **un solo modelo y un solo espacio** para texto, imágenes, vídeo, audio y documentos, en lugar de una torre por modalidad.
+    La tendencia 2025–2026 es **un solo modelo y un solo espacio** para texto, imágenes, video, audio y documentos, en lugar de una torre por modalidad.
 
     | Modelo | Qué ofrece (fuente) | Madurez |
     |---|---|---|
-    | **Gemini Embedding 2** (Google) | Primer modelo de embeddings nativamente multimodal de Google: texto, imágenes, vídeo, audio y PDFs en un único espacio; >100 idiomas; Matryoshka (dim. por defecto 3 072). Lanzado en *preview* el **10-mar-2026** y GA el **22-abr-2026**. Según la cobertura de prensa que pude consultar (no pude abrir blog.google/ai.google.dev desde mi entorno), límites por petición de ≈ 8 192 tokens de texto, 6 imágenes, vídeo hasta 120 s, audio hasta 80 s y PDFs de hasta 6 páginas, y **espacio incompatible con `gemini-embedding-001`** (hay que re-embeber). **Verifica límites y precios en la documentación oficial.** | 🟡 |
+    | **Gemini Embedding 2** (Google) | Primer modelo de embeddings nativamente multimodal de Google: texto, imágenes, video, audio y PDFs en un único espacio; >100 idiomas; Matryoshka (dim. por defecto 3 072). Lanzado en *preview* el **10-mar-2026** y GA el **22-abr-2026**. Según la cobertura de prensa que pude consultar (no pude abrir blog.google/ai.google.dev desde mi entorno), límites por petición de ≈ 8 192 tokens de texto, 6 imágenes, video hasta 120 s, audio hasta 80 s y PDFs de hasta 6 páginas, y **espacio incompatible con `gemini-embedding-001`** (hay que re-embeber). **Verifica límites y precios en la documentación oficial.** | 🟡 |
     | **jina-embeddings-v4** (Jina AI) | Texto + imágenes (incluidos documentos visuales); produce **vectores densos y multi-vector (late interaction)** (Günther et al., 2025) | 🟡 |
     | **VLM2Vec / MMEB** | Convierte VLMs en embedders multimodales con un benchmark de 36 tareas (Jiang et al., 2024) | 🟡 / 🔴 |
     | **ImageBind** (Meta) | Un espacio de 6 modalidades con *imágenes como pivote* (Girdhar et al., CVPR 2023) | 🟡 |
@@ -223,11 +223,11 @@ def part2(nb):
         print("Sin GEMINI_API_KEY: celda omitida (opcional).")
     ''')
 
-    # ───────── 8. Audio y vídeo ─────────
+    # ───────── 8. Audio y video ─────────
     nb.md("""
-    ## 8. Audio y vídeo en espacios de embedding
+    ## 8. Audio y video en espacios de embedding
     - **Audio**: CLAP (audio ↔ texto) e ImageBind; para voz, la ruta habitual sigue siendo **ASR (p. ej. Whisper) → texto → embedder**, que conserva la exactitud léxica. Los embeddings de audio nativos (Gemini Embedding 2 declara audio sin transcripción) ganan cuando importa el sonido no verbal (música, eventos) o se quiere evitar el coste/latencia de ASR. 🟡
-    - **Vídeo**: se suele **muestrear fotogramas** (p. ej. 1–2 fps), embeberlos y combinarlos. Lo que se pierde al combinar es el **orden temporal**. Lo medimos.
+    - **Video**: se suele **muestrear fotogramas** (p. ej. 1–2 fps), embeberlos y combinarlos. Lo que se pierde al combinar es el **orden temporal**. Lo medimos.
     """)
     nb.code(r'''
     def video(forma, color, direccion, rng, n_frames=8):
@@ -249,8 +249,8 @@ def part2(nb):
     ax.set_title("Promediar frames borra el orden temporal"); plt.tight_layout(); plt.show(); print(f"(el mismo vector medio SÍ identifica el concepto forma×color: precisión {acc_col:.2f})")
     ''')
     nb.md("""
-    > 👀 **Qué debes observar.** El vector medio de frames identifica **qué** aparece (forma y color) pero **no hacia dónde se mueve**: la dirección queda al azar (≈ 0.5) porque la media es invariante al orden. Conservar el orden (concatenar, atención temporal, modelos de vídeo nativos) lo resuelve en el juguete.
-    > Implicación práctica: un embedding de vídeo basado en frames sirve para «encontrar el clip donde sale X», no para «el clip donde alguien *entra* en vez de *salir*».
+    > 👀 **Qué debes observar.** El vector medio de frames identifica **qué** aparece (forma y color) pero **no hacia dónde se mueve**: la dirección queda al azar (≈ 0.5) porque la media es invariante al orden. Conservar el orden (concatenar, atención temporal, modelos de video nativos) lo resuelve en el juguete.
+    > Implicación práctica: un embedding de video basado en frames sirve para «encontrar el clip donde sale X», no para «el clip donde alguien *entra* en vez de *salir*».
     """)
 
     # ───────── 9. Decisión ─────────
@@ -280,6 +280,22 @@ def part2(nb):
     nb.md("""
     > 👀 **Qué debes observar.** La primera pregunta evita pagar por visión cuando no hace falta (nuestro experimento: OCR perfecto en texto limpio). La tercera es de **coste**: el multi-vector no es gratis (§6.3). La mejor práctica actual es **híbrida**: índice de texto + índice visual y fusión por rangos.
     > Idea para Políglota: la documentación técnica tiene muchos diagramas de arquitectura y capturas de consola: ahí el índice visual aporta; en README y referencias API, no.
+    """)
+    nb.md("""
+    ## 🗺️ Mapa de madurez (estado a oct-2026)
+    Ya has entrenado un CLIP en miniatura, medido el modality gap y construido un ColPali de juguete; la tabla sitúa esas técnicas y las más nuevas (embeddings unificados, audio y video) por madurez antes de ver cómo se usan en producción.
+
+
+    | Técnica | Madurez | Quién / dónde | Fuente |
+    |---|---|---|---|
+    | CLIP (contraste imagen-texto con InfoNCE) | 🟢 sólido | Base de casi todo el ecosistema texto-imagen | Radford et al. 2021 |
+    | SigLIP (pérdida sigmoide) y SigLIP 2 (multilingüe, captioning + auto-distilación + datos curados) | 🟢 sólido / 🟡 SigLIP 2 en adopción | Google; codificadores de visión de PaliGemma | Zhai et al. 2023; Tschannen et al. 2025 |
+    | Modality gap: existencia y medición | 🟢 sólido (fenómeno); 🟡 cuánto importa en producto | Investigación; práctica de índices mixtos | Liang et al. 2022 |
+    | Retrieval visual de documentos con multi-vector (ColPali / ColQwen) | 🟡 emergente (resultados fuertes en ViDoRe; coste de almacenamiento) | ILLUIN y comunidad; también Jina v4 (dense + multi-vector) | Faysse et al. 2024; Günther et al. 2025 |
+    | Un único vector por captura de pantalla (DSE) | 🟡 emergente | Investigación (Waterloo) | Ma et al. 2024 |
+    | Embeddings unificados multimodales (texto, imagen, video, audio, PDF en un espacio) | 🟡 emergente: Gemini Embedding 2 (preview mar-2026, GA abr-2026 según prensa) | Google; también Jina v4, VLM2Vec en investigación | ver §6 |
+    | Espacios de audio/video (CLAP, ImageBind) | 🟡 / 🔴 | Investigación | Elizalde 2022; Girdhar 2023 |
+    | Embeddings de video con orden temporal fino | 🔴 experimental | — | (§8) |
     """)
     nb.md("""
     ## 10. 🏭 En producción
@@ -332,9 +348,9 @@ def part2(nb):
     Resolución de entrada insuficiente para texto pequeño; dominio distinto al de entrenamiento; las queries son léxicas (identificadores, cifras exactas) donde BM25/OCR son mejores; ViDoRe no representa tu distribución. Evalúa por tipo de consulta e híbrido.
     </details>
 
-    <details><summary><b>5. (Transferencia)</b> Quieres buscar clips de vídeo de demos de producto en Políglota. ¿Qué pipeline propones y qué no cubrirá?</summary>
+    <details><summary><b>5. (Transferencia)</b> Quieres buscar clips de video de demos de producto en Políglota. ¿Qué pipeline propones y qué no cubrirá?</summary>
 
-    Muestreo de frames (+ ASR de la voz → texto) y embedder multimodal; fusión de índices de texto (transcripción) y visual. No cubrirá bien el **orden/dirección temporal** ni acciones finas: añade metadatos o un modelo de vídeo nativo.
+    Muestreo de frames (+ ASR de la voz → texto) y embedder multimodal; fusión de índices de texto (transcripción) y visual. No cubrirá bien el **orden/dirección temporal** ni acciones finas: añade metadatos o un modelo de video nativo.
     </details>
 
     <details><summary><b>6. (Transferencia)</b> ¿Cómo repetirías el experimento de modality gap con CLIP real y qué medirías?</summary>
