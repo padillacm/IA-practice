@@ -262,31 +262,36 @@ def part1(nb):
     """)
     nb.md("""
     ### 5b. 🧪 Hubness: el documento que aparece en todas las búsquedas
-    Otra patología geométrica con consecuencias directas en retrieval: en alta dimensión, unos pocos puntos (**hubs**) aparecen entre los $k$ vecinos más cercanos de muchísimos otros, y muchos puntos (**anti-hubs**) no aparecen en ninguno (Radovanović, Nanopoulos & Ivanović, JMLR 2010, *Hubs in Space*: la asimetría de la distribución de la *k-ocurrencia* $N_k$ crece con la dimensión intrínseca). En un buscador, un hub es «el documento que sale para todo» y un anti-hub es un documento que nadie encuentra. Remedios clásicos: **centrar** (restar la media, que también quita la anisotropía de §5) y **CSLS** (Conneau et al., ICLR 2018), que penaliza a cada documento por su similitud media con sus vecinos: $\\mathrm{CSLS}(q,d)=2\\cos(q,d)-r(q)-r(d)$; para ordenar documentos de una query fija solo importa $-r(d)$.
-    Medimos $N_{10}$ con los documentos como queries (lo estándar en esta literatura) y la precisión@10 de faceta, con las mismas funciones de §5.
+    Otra patología geométrica con consecuencias directas en retrieval: en alta dimensión, unos pocos puntos (**hubs**) aparecen entre los $k$ vecinos más cercanos de muchísimos otros, y muchos puntos (**anti-hubs**) no aparecen en ninguno (Radovanović, Nanopoulos & Ivanović, JMLR 2010, *Hubs in Space*: la asimetría de la distribución de la *k-ocurrencia* $N_k$ crece con la dimensión intrínseca). En un buscador, un hub es «el documento que sale para todo» y un anti-hub, un documento que nadie encuentra. Remedios clásicos: **centrar** (restar la media: la misma anisotropía de §5 empeora la hubness) y **CSLS** (Conneau et al., ICLR 2018), que penaliza a cada documento por su similitud media con sus $k$ vecinos: $\\mathrm{CSLS}(q,d)=2\\cos(q,d)-r(q)-r(d)$; para ordenar los documentos de una query fija solo importa $-r(d)$.
+    Primero el mecanismo con datos controlados (gaussianas con una dirección común, como un embedding anisótropo, a varias dimensiones) y después la medición en nuestros embeddings LSI. $N_{10}$ se mide con los documentos como queries, lo estándar en esta literatura.
     """)
     nb.code(r'''
     from scipy.stats import skew
     def k_ocurrencia(M, k=10, csls=False):
+        """N_k de cada punto (en cuántas listas top-k de los demás aparece) y las listas; coseno, sin el propio punto."""
         M = M / np.linalg.norm(M, axis=1, keepdims=True); S = M @ M.T; np.fill_diagonal(S, -9)
         if csls:
             r = np.sort(S, axis=1)[:, -k:].mean(1); S = S - r[None, :]          # penaliza documentos «populares»
         top = np.argpartition(-S, k, axis=1)[:, :k]
         return np.bincount(top.ravel(), minlength=len(M)), top
-    variantes = {"LSI-64": E, "LSI-64 con rogue": E_rogue, "rogue + centrado": E_rogue - E_rogue.mean(0), "rogue + CSLS": E_rogue}
-    filas_h, Nk_all = [], {}
-    for nombre, M in variantes.items():
-        Nk, top = k_ocurrencia(M, csls=nombre.endswith("CSLS")); Nk_all[nombre] = Nk
-        filas_h.append({"variante": nombre, "asimetría de N10": skew(Nk), "máx N10": int(Nk.max()), "% anti-hubs (N10 = 0)": 100 * (Nk == 0).mean(),
-                        "% apariciones del 1 % top": 100 * np.sort(Nk)[::-1][: max(1, len(Nk) // 100)].sum() / Nk.sum(),
-                        "precisión@10 de faceta": float((facet[top] == facet[:, None]).mean())})
-    d_hub = pd.DataFrame(filas_h).set_index("variante"); display(d_hub.round(3))
+    def resumen_hub(Nk):
+        return {"asimetría N10": skew(Nk), "máx N10": int(Nk.max()), "% anti-hubs (N10 = 0)": 100 * (Nk == 0).mean()}
+    rng_h = np.random.default_rng(SEED); filas_h, Nk_d100 = [], {}
+    for d in (20, 100, 500):
+        G = rng_h.standard_normal((2000, d)) + 1.0                                  # nube con una dirección común (anisótropa)
+        for nombre, M, cs in (("coseno crudo", G, False), ("centrado", G - G.mean(0), False), ("CSLS", G, True)):
+            Nk, _ = k_ocurrencia(M, csls=cs); filas_h.append({"d": d, "variante": nombre, **resumen_hub(Nk)})
+            if d == 100: Nk_d100[nombre] = Nk
+    d_hub = pd.DataFrame(filas_h).set_index(["d", "variante"]); display(d_hub.round(2))
+    Nk_lsi, top_lsi = k_ocurrencia(E)
+    print("Políglota, LSI-64:", {k: round(float(v), 2) for k, v in resumen_hub(Nk_lsi).items()}, f"· precisión@10 de faceta = {(facet[top_lsi] == facet[:, None]).mean():.3f}")
     fig, ax = plt.subplots(figsize=(8, 3.6))
-    for (nombre, Nk), c in zip(Nk_all.items(), [AZUL, ROJO, VERDE, NARANJA]):
-        ax.hist(Nk, bins=np.arange(0, max(v.max() for v in Nk_all.values()) + 2, 2), histtype="step", lw=2, color=c, label=nombre)
-    ax.set_yscale("log"); ax.set_xlabel("$N_{10}$: en cuántas listas top-10 aparece cada documento"); ax.set_ylabel("nº de documentos (log)")
+    for (nombre, Nk), c in zip(Nk_d100.items(), [ROJO, VERDE, NARANJA]):
+        ax.hist(Nk, bins=np.arange(0, Nk_d100["coseno crudo"].max() + 5, 4), histtype="step", lw=2, color=c, label=f"d = 100 · {nombre}")
+    ax.hist(Nk_lsi, bins=np.arange(0, Nk_d100["coseno crudo"].max() + 5, 4), histtype="step", lw=2, ls="--", color=AZUL, label="Políglota LSI-64")
+    ax.set_yscale("log"); ax.set_xlabel("$N_{10}$: en cuántas listas top-10 aparece cada punto"); ax.set_ylabel("nº de puntos (log)")
     ax.set_title("Distribución de la k-ocurrencia (hubness)"); ax.legend(fontsize=8); plt.tight_layout(); plt.show()
     ''')
     nb.md("""
-    > 👀 **Qué debes observar.** La media de $N_{10}$ es siempre 10 (cada lista tiene 10 huecos); lo que cambia es la **cola**. Con la dimensión dominante la distribución se estira: unos pocos documentos acaparan muchas apariciones y crece el porcentaje de anti-hubs, a la vez que cae la precisión de faceta. Centrar y CSLS acortan la cola (comprueba en la tabla cuánto de la precisión recuperan). En producción es una señal **sin etiquetas** barata: la concentración del top-1 sobre el tráfico (módulo 18 §9) y la lista de documentos que nunca aparecen en ningún top-k delatan hubs y anti-hubs antes de que un usuario se queje de que «siempre sale el mismo».
+    > 👀 **Qué debes observar.** La media de $N_{10}$ es siempre 10 (cada lista tiene 10 huecos); lo que cambia es la **cola**. Con una dirección común, la asimetría crece con la dimensión (en la ejecución de referencia ≈ 1.5 a d = 20 y ≈ 4.7–5.5 a d = 100–500, con un punto que aparece en 250–317 de las 2000 listas y un 13–19 % de anti-hubs); **centrar** la elimina casi por completo (asimetría 0.1–0.4) y **CSLS** la reduce sin tocar los vectores. En Políglota con LSI la hubness es baja (asimetría ≈ 0.4, sin anti-hubs relevantes): LSI sale casi centrado y los documentos forman clusters compactos por faceta. Un embedder Transformer real es anisótropo (§5), así que **mídelo**: en producción es una señal sin etiquetas barata (la concentración del top-1 sobre el tráfico, módulo 18 §9, y la lista de documentos que nunca aparecen en ningún top-k) antes de que un usuario se queje de que «siempre sale el mismo».
     """)

@@ -81,3 +81,15 @@ celdas no se añadió sección nueva. Hueco puntual: la **reproducibilidad numé
   en CI, nunca hash del vector como identidad, clave = texto normalizado + versión. Medido en esta revisión con el
   `MiniEncoder` del §2 (CPU, 1 hilo): el mismo texto solo o en un lote de 32 con padding sale idéntico bit a bit en
   float32 y bf16 (se dice explícitamente que el efecto aparece con kernels sensibles al lote). Referencia añadida.
+
+## 17 · Interpretabilidad y geometría
+Diagnóstico: 🧠 excelente y medido (control tasks, leer ≠ usar, diferencia de medias frente a SAE, estabilidad entre
+semillas, rogue dimensions, vec2text). Faltaba la patología geométrica con más impacto directo en un buscador:
+**hubness** (no aparecía en ningún módulo).
+- **Añadido §5b** (1 celda + 👀): k-ocurrencia $N_{10}$, asimetría, máximo y % de anti-hubs; mecanismo con gaussianas
+  con una dirección común a d = 20/100/500 (crudo, centrado, CSLS) y medición en LSI-64 de Políglota. Medido:
+  asimetría 1.46 → 4.68 → 5.53 al subir d (máx N10 hasta 317 de 2000 listas, hasta 18.6 % de anti-hubs); centrar la
+  baja a 0.1–0.4 y CSLS a ≈ 0.6–0.8; LSI-64 de Políglota apenas tiene hubness (0.38), y se explica por qué (casi
+  centrado, clusters compactos) y que un Transformer anisótropo hay que medirlo. Enlace con el monitor sin etiquetas
+  de 18 §9. Fuentes: Radovanović et al. (JMLR 2010) y CSLS de Conneau et al. (ICLR 2018).
+- 🧠 #6 ampliado (hubness como primo de las dimensiones dominantes). Referencias añadidas. Lección 66 → 69 celdas, 104 s.

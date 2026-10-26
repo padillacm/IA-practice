@@ -3,7 +3,7 @@ Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization
 - [x] 20_capstone
 - [x] 19_playbook_elite
 - [x] 18_produccion
-- [ ] 17_interpretabilidad_geometria
+- [x] 17_interpretabilidad_geometria
 - [x] 16_embeddings_multimodales
 - [x] 15_evaluacion_retrieval
 - [x] 14_indexacion_ann
@@ -16,4 +16,3 @@ Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization
 
 ## Notas para retomar
 - (decisiones tomadas)
-- 18 y 17 saltados de momento (el verificador de referencias B los estaba editando); volver al final.
