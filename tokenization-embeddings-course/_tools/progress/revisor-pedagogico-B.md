@@ -5,7 +5,7 @@ Agente: Revisor pedagógico · Módulos: 09–20 · Informe: tokenization-embedd
 - [x] 20_capstone
 - [x] 09_capa_embedding_llm
 - [x] 10_embeddings_contextuales_oraciones
-- [ ] 11_aprendizaje_contrastivo
+- [x] 11_aprendizaje_contrastivo
 - [ ] 12_embedders_modernos
 - [ ] 13_dense_sparse_late_interaction
 - [ ] 14_indexacion_ann

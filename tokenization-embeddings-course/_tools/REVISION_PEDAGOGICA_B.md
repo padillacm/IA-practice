@@ -97,3 +97,16 @@ como punto de partida en cada módulo.
 - **Andamiaje del proyecto:** TODO 2/3 solo tenían 🪜 1 → 🪜 2 con la API (SVD de la covarianza, dict de medias);
   la recomendación escrita del TODO 5 no tenía guía → 🪜 1 con estructura de cuatro frases (incluido el riesgo de
   versión de μ/W en producción, puente con el 18).
+
+## 11 · Aprendizaje contrastivo
+- Bien: intuición «recuperar = clasificar entre todos los documentos»; derivación de la cota de Oord con sus límites
+  (Poole et al.); laboratorio controlado de temperatura/colapso; desde cero → `sentence-transformers`; analogía de
+  la softmax muestreada del two-tower (y corrección logQ en la autoevaluación); la nota de calibración del proyecto
+  marca con claridad que el efecto de los duros es del corpus de respaldo e inestable. Mapa ya al final.
+- **Ejemplo a mano añadido** antes del gradiente: una fila con cosenos (0.8, 0.5, 0.1) a τ = 1 (p = 0.45, pérdida
+  0.80) y τ = 0.1 (p = 0.952, pérdida 0.049; el negativo duro recibe 50× más empuje que el fácil), enlazado con la
+  cabeza del LM (09) y la softmax muestreada de recsys.
+- **Repaso espaciado:** el 🔁 solo repasaba 09–10. Añadida R4 (M00, Diagnóstico): qrels incompletos → falsos
+  negativos al minar con BM25 («no visto ≠ no relevante», como los no clics en recsys).
+- **Andamiaje del proyecto:** TODO 2 y TODO 3 solo tenían 🪜 1 → añadidas 🪜 2 coherentes con la solución
+  (filtro **relativo** TopK-PercPos explicado).

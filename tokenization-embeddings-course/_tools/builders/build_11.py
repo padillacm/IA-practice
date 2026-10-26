@@ -330,6 +330,11 @@ Es el mismo problema con «tokens» = documentos: $p(d\mid q)=\text{softmax}_d(f
 
 Porque el entrenamiento ajustó el espacio que produce **ese** pooling; otro pooling es otra función que nunca se optimizó.
 </details>
+
+<details><summary><b>4.</b> (00, Diagnóstico) Usarás el top de BM25 (módulo 00) como «negativos duros»: documentos parecidos a la consulta que no están en los qrels. ¿Por qué algunos de ellos serán, en realidad, relevantes?</summary>
+
+Porque los qrels del golden set son **incompletos**: se anotó lo que alguien juzgó, no todo el corpus. Un documento con mucho solapamiento léxico y sin juicio puede ser relevante; tratarlo como negativo enseña al modelo a alejar lo que debería acercar (falso negativo, sección 5). Es el mismo problema de los «no clics» en recsys: no visto ≠ no relevante.
+</details>
 """)
 nb.code(SETUP11)
 nb.md("### Utilidades del curso: corpus Políglota, métricas y BM25 canónicos (módulo 00)")
@@ -379,6 +384,12 @@ nb.md(r"""
 Para un lote de $B$ pares $(q_i, d_i)$ con embeddings normalizados $\mathbf u_i=f(q_i)$, $\mathbf v_j=f(d_j)$:
 $$\mathcal L_{\text{InfoNCE}}=-\frac1B\sum_{i=1}^{B}\log\frac{\exp(\mathbf u_i\cdot\mathbf v_i/\tau)}{\sum_{j=1}^{B}\exp(\mathbf u_i\cdot\mathbf v_j/\tau)}.$$
 **Símbolos.** $B$ = tamaño del lote; $\mathbf u_i\cdot\mathbf v_j=\cos(q_i,d_j)\in[-1,1]$; $\tau>0$ = **temperatura**; el numerador es el positivo y el denominador suma el positivo y los $B-1$ negativos del lote. Si se añaden negativos duros $\mathbf v^-_m$, entran como columnas extra del denominador.
+
+✍️ **Ejemplo a mano ($B = 3$, una fila).** La consulta $q_1$ tiene cosenos $(0.8,\ 0.5,\ 0.1)$ con $(d_1, d_2, d_3)$; $d_1$ es su positivo.
+* Con $\tau = 1$: $e^{0.8}, e^{0.5}, e^{0.1} = 2.23, 1.65, 1.11$ → $p = (0.45, 0.33, 0.22)$ → $\mathcal L_1 = -\ln 0.45 = 0.80$.
+* Con $\tau = 0.1$: $e^{8}, e^{5}, e^{1} = 2981, 148, 2.7$ → $p = (0.952, 0.047, 0.001)$ → $\mathcal L_1 = 0.049$.
+
+Con $\tau = 0.1$ el negativo $d_2$ (coseno 0.5, el «duro») recibe 50 veces más empuje que $d_3$; con $\tau = 1$ apenas 1.5 veces más. Es una clasificación de 3 clases (módulo 09: la cabeza del LM hace lo mismo sobre $V$ tokens) y es la *softmax muestreada* de un two-tower de recsys. La sección siguiente lo formaliza.
 
 ### Temperatura: qué hace con el gradiente
 Con $p_{ij}=\text{softmax}_j(\mathbf u_i\cdot\mathbf v_j/\tau)$:
@@ -938,6 +949,7 @@ pj.md(r"""
 - **Etiquetados**: (texto de la consulta, id relevante) para cada consulta de `q_train`, **repetidos 5 veces** (son pocos y valiosos).
 
 <details><summary>🪜 Pista 1</summary>`re.split(r"(?<=[.!?])\s+", texto)` parte en frases. Es la misma idea que CCPairs (título → cuerpo) a escala diminuta.</details>
+<details><summary>🪜 Pista 2</summary>Recorre `docs`: si `d["lang"] == "code"`, el par es `(d["text"].split("\n")[0], d["id"])`; si no, parte en frases y añade `(frases[0], d["id"])` solo cuando hay ≥ 3. Los etiquetados: `[(q["text"], did) for q in q_train for did in qrels[q["qid"]]]`. Devuelve `(debiles + etiquetados * 5, len(debiles))`.</details>
 """)
 pj.code(r'''
 def pares_entrenamiento(docs, q_train):
@@ -950,6 +962,7 @@ pj.md(r"""
 Para cada par, toma el top-30 de BM25 de su texto, quita el positivo, quita los candidatos con score ≥ `perc` × score del positivo (posibles falsos negativos) y quédate con hasta 10. Devuelve `{índice_del_par: [ids]}`.
 
 <details><summary>🪜 Pista 1</summary>`sc = bm25_pol.scores(tokenize_simple(texto))`; el score del positivo es `sc[doc_ids.index(did)]` (precalcula un dict id → posición).</details>
+<details><summary>🪜 Pista 2</summary>`umbral = perc * sc[pos_of[did]]`; recorre `np.argsort(-sc)[:k]` y conserva `doc_ids[j]` si `!= did` y `sc[j] < umbral`; corta a `[:n]`. El filtro es **relativo** al positivo (como en la sección 5 de la lección): un candidato casi tan bueno como el positivo es probablemente un falso negativo.</details>
 """)
 pj.code(r'''
 def mina_duros(pares, perc=0.95, k=30, n=10):
