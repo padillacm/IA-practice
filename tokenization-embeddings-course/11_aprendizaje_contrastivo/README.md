@@ -12,7 +12,7 @@
 Corpus Políglota canónico (módulo 00) + «mundo de juguete» sintético con verdad conocida para los experimentos controlados (`_tools/builders/a4_common.py`). sentence-transformers sobre `paraphrase-multilingual-MiniLM-L12-v2` si hay hub; si no, un mini-BERT local sin preentrenar (fallback).
 
 ## Estado de pruebas (entorno de autoría)
-Hugging Face bloqueado: lección y proyecto ejecutados completos con el corpus sintético + stdlib, el mundo de juguete y el fallback local de sentence-transformers. No se probó con modelos ni datos reales, ni en GPU. Umbrales de la rúbrica calibrados con esa ejecución.
+Hugging Face bloqueado: lección y proyecto ejecutados completos con el corpus sintético + stdlib, el mundo de juguete y el fallback local de sentence-transformers. No se probó con modelos ni datos reales, ni en GPU. Umbrales de la rúbrica calibrados con esa ejecución. Revisión de ejecutabilidad (oct-2026, CPU, `FAST_DEV_RUN`): lección 219 s y proyecto 114 s, sin errores y reproducibles (dos ejecuciones con cifras idénticas; el vocabulario WordPiece del fallback de sentence-transformers se construye ahora de forma determinista). El `Trainer` de sentence-transformers necesita `accelerate` (añadido al `pip`).
 
 ## Lecturas clave
 Oord et al. 2018 · Poole et al. 2019 · Wang & Isola 2020 · Gao, Yao & Chen 2021 (SimCSE) · Karpukhin et al. 2020 (DPR) · Wang et al. 2022 (E5) · Moreira et al. 2024 (NV-Retriever) · Gao et al. 2021 (Gradient Cache).

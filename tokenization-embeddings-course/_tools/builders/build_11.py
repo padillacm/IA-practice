@@ -584,7 +584,7 @@ plt.tight_layout(); plt.show()
 print({k: round(v, 3) for k, v in neg.items()})
 ''')
 nb.md(r"""
-> 👀 **Qué debes observar.** En el prototipo de referencia (mismo código, 300 pasos): solo lote 0.88 · con duros limpios 0.92 · con duros **sin filtrar** 0.84; tu ejecución imprime sus propios valores (con 200 pasos las diferencias pueden ser menores). El top de BM25 sin filtrar está lleno de documentos del **mismo concepto** (falsos negativos, mira el porcentaje impreso): usarlos como negativos es peor que no usar negativos duros. En datos reales no conoces el concepto: de ahí los filtros por score (TopK-PercPos) o por cross-encoder.
+> 👀 **Qué debes observar.** En el prototipo de referencia (mismo código, 300 pasos): solo lote 0.88 · con duros limpios 0.92 · con duros **sin filtrar** 0.84. Con `FAST_DEV_RUN` (200 pasos) la ejecución de referencia dio 0.766 · 0.728 · 0.754: con tan pocos pasos el modelo aún no domina los negativos fáciles y las diferencias son del orden del ruido (el orden puede invertirse); con `FAST_DEV_RUN=False` (1000 pasos) deberías ver el efecto. El top de BM25 sin filtrar está lleno de documentos del **mismo concepto** (falsos negativos, mira el porcentaje impreso): con entrenamiento suficiente, usarlos como negativos es peor que no usar negativos duros. En datos reales no conoces el concepto: de ahí los filtros por score (TopK-PercPos) o por cross-encoder.
 """)
 nb.gemini(
     "imagen", "M11-IMG-03", "Minado de negativos duros con filtro de falsos negativos",
@@ -710,7 +710,7 @@ nb.md(r"""
 nb.code(ST11)
 nb.code(ST_RUN)
 nb.md(r"""
-> 👀 **Qué debes observar.** Unos pocos minutos de MNRL suben el nDCG@10 del modelo sobre las consultas de test (en la ejecución de referencia con el mini-BERT local: 0.43 → 0.69). Con `paraphrase-multilingual-MiniLM-L12-v2` real partes de un modelo ya bueno: usa LR baja (2e-5) y vigila que no empeore en otros idiomas (*catastrophic forgetting*).
+> 👀 **Qué debes observar.** Unos pocos minutos de MNRL suben el nDCG@10 del modelo sobre las consultas de test (en la ejecución de referencia con el mini-BERT local: 0.40 → 0.58). Con `paraphrase-multilingual-MiniLM-L12-v2` real partes de un modelo ya bueno: usa LR baja (2e-5) y vigila que no empeore en otros idiomas (*catastrophic forgetting*).
 """)
 nb.code(LORA11)
 nb.md(r"""
@@ -759,7 +759,7 @@ nb.md(r"""
 """)
 nb.md(r"""
 ## 🧠 Secretos de la élite
-1. **El candidato más parecido es el más sospechoso.** En nuestro laboratorio, los negativos de BM25 sin filtrar bajaron el nDCG de 0.88 a 0.84 y los filtrados lo subieron a 0.92 (prototipo de 300 pasos); en Políglota real el efecto fue pequeño (proyecto). Filtra siempre (umbral relativo al positivo, cross-encoder o deduplicación).
+1. **El candidato más parecido es el más sospechoso.** En nuestro laboratorio, los negativos de BM25 sin filtrar bajaron el nDCG de 0.88 a 0.84 y los filtrados lo subieron a 0.92 (prototipo de 300 pasos; con 200 pasos las diferencias se pierden en el ruido); en Políglota real el efecto fue pequeño (proyecto). Filtra siempre (umbral relativo al positivo, cross-encoder o deduplicación).
 2. **InfoNCE se satura en $\log B$.** Lo comprobaste numéricamente: con lotes pequeños la señal está acotada; lotes grandes (o Gradient Cache, gradiente exacto) son una palanca de calidad, no solo de velocidad.
 3. **Sin negativos hay colapso.** Alineación perfecta + uniformidad nula = modelo inútil; vigila $\mathcal L_{\text{unif}}$ durante el entrenamiento como alarma barata.
 4. **$\tau$ es un hiperparámetro de primer orden** (0.05 SimCSE, 0.01 E5, `scale=20` en MNRL): un barrido de 4 valores cambió el nDCG de 0.49 a ≈ 1.00 en el laboratorio.
@@ -1051,7 +1051,7 @@ R1 = test_info_nce()
 resultado = experimento()
 ''')
 pj.md(r"""
-> **Nota de calibración.** Ejecución de referencia (fallback sintético + stdlib, 300 pasos en CPU): BM25 0.866 · sin entrenar 0.342 · solo lote 0.502 · con duros 0.524 (nDCG@10 test). En un prototipo con 400 pasos los duros quedaron, en cambio, 0.09 por **debajo**: el efecto es pequeño e inestable en este corpus, por eso R5 solo exige no perder más de 0.15. Hipótesis para tu análisis: los documentos sintéticos comparten plantillas y los «duros» que sobreviven al filtro son casi paráfrasis del positivo con otra herramienta o aspecto; con pocos pasos el modelo aún no domina los negativos fáciles; y la evaluación de ítem conocido premia el solapamiento léxico (BM25 sigue muy por encima). El umbral refleja lo medido, no lo deseado.
+> **Nota de calibración.** Ejecución de referencia (fallback sintético + stdlib, 300 pasos en CPU): BM25 0.866 · sin entrenar 0.342 · solo lote 0.500 · con duros 0.533 (nDCG@10 test; revisión de ejecutabilidad oct-2026, idéntico en dos ejecuciones). En un prototipo con 400 pasos los duros quedaron, en cambio, 0.09 por **debajo**: el efecto es pequeño e inestable en este corpus, por eso R5 solo exige no perder más de 0.15. Hipótesis para tu análisis: los documentos sintéticos comparten plantillas y los «duros» que sobreviven al filtro son casi paráfrasis del positivo con otra herramienta o aspecto; con pocos pasos el modelo aún no domina los negativos fáciles; y la evaluación de ítem conocido premia el solapamiento léxico (BM25 sigue muy por encima). El umbral refleja lo medido, no lo deseado.
 """)
 pj.save(PROJECT)
 
@@ -1069,7 +1069,7 @@ README = r"""# Módulo 11 · Aprendizaje contrastivo para embeddings
 Corpus Políglota canónico (módulo 00) + «mundo de juguete» sintético con verdad conocida para los experimentos controlados (`_tools/builders/a4_common.py`). sentence-transformers sobre `paraphrase-multilingual-MiniLM-L12-v2` si hay hub; si no, un mini-BERT local sin preentrenar (fallback).
 
 ## Estado de pruebas (entorno de autoría)
-Hugging Face bloqueado: lección y proyecto ejecutados completos con el corpus sintético + stdlib, el mundo de juguete y el fallback local de sentence-transformers. No se probó con modelos ni datos reales, ni en GPU. Umbrales de la rúbrica calibrados con esa ejecución.
+Hugging Face bloqueado: lección y proyecto ejecutados completos con el corpus sintético + stdlib, el mundo de juguete y el fallback local de sentence-transformers. No se probó con modelos ni datos reales, ni en GPU. Umbrales de la rúbrica calibrados con esa ejecución. Revisión de ejecutabilidad (oct-2026, CPU, `FAST_DEV_RUN`): lección 219 s y proyecto 114 s, sin errores y reproducibles (dos ejecuciones con cifras idénticas; el vocabulario WordPiece del fallback de sentence-transformers se construye ahora de forma determinista). El `Trainer` de sentence-transformers necesita `accelerate` (añadido al `pip`).
 
 ## Lecturas clave
 Oord et al. 2018 · Poole et al. 2019 · Wang & Isola 2020 · Gao, Yao & Chen 2021 (SimCSE) · Karpukhin et al. 2020 (DPR) · Wang et al. 2022 (E5) · Moreira et al. 2024 (NV-Retriever) · Gao et al. 2021 (Gradient Cache).
