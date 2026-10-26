@@ -107,3 +107,28 @@ y algún ejemplo a mano ausente.
   referencia «parches ViT (sección 6)» → 5.
 - **👀 añadida** tras la figura de tasa-distorsión del proyecto (imagen y audio), formulada sin presuponer el
   resultado frente a JPEG y con la conclusión que el alumno debe poder defender.
+
+## Transversal
+- **Patrón corregido en 03–08:** el Mapa de madurez iba al principio (antes de la intuición) en seis lecciones y
+  nombraba técnicas aún no enseñadas. Ahora va siempre al final, justo antes de 🏭, como en 00–02. Si el bloque B
+  tiene el mismo patrón, conviene aplicarle el mismo cambio.
+- **Ejemplos a mano añadidos** donde la secuencia saltaba de la fórmula al código: BM25 (00), entropía del parcheo
+  (06), routing/ratio loss/FVT (07), VQ (08); y en 02 el ejemplo se movió delante de la formalización.
+- **🧭** ahora en 01, 02, 03 (movida al inicio), 05 y 06 (nuevas): todas las lecciones de más de ~70 celdas.
+- **👀 tras todos los gráficos de proyectos** (00, 01, 02, 06, 07, 08), que no tenían ninguna.
+- `GUIA_DE_ESTUDIO.md` creada (ruta y tiempos 00–20, rutas abreviadas, mapa mermaid, glosario ES/EN del bloque A
+  y sección vacía para el revisor pedagógico B); enlazada desde el README del curso.
+- `check_course.py`: Todo OK.
+
+## Pendientes y recomendaciones (no aplicadas)
+- **Duraciones:** la lección 00 se estima en ≈ 1 h con 65 celdas (métricas, BM25 propio, bootstrap); 1.5 h es más
+  realista. No se cambió para no descuadrar las 104 h del SYLLABUS.
+- **Repaso espaciado:** los 🔁 de 06–08 repasan 01–06, pero ninguno vuelve a las métricas del módulo 00 salvo el 04;
+  conviene que el 🔁 del 09 o del 13 retome nDCG/IC bootstrap antes de la evaluación de retrieval.
+- **Terminología:** se alterna «prima», «token tax» e «impuesto de idioma» (02, 04); la guía de estudio los
+  recoge como sinónimos. Unificar en la pasada final de consistencia.
+- **Celdas Gemini:** todas tienen placeholder ASCII útil y 👀 detrás; `extras/GEMINI_ASSETS.md` sigue pendiente de
+  regenerar (lo dejó anotado la revisión técnica): los prompts no cambiaron en esta revisión, solo el placeholder
+  de M02-VID-01.
+- **Avisos de datos sintéticos:** claros en todos los notebooks; la guía de estudio añade cómo leer las rúbricas
+  con datos reales (criterios relativos frente a absolutos).

@@ -53,7 +53,7 @@ flowchart LR
 | 19 | Playbook de élite | 🔴 | 4 | CPU | System design |
 | 20 | Capstone: Políglota completo | 🔴 | 6 | T4/L4 | Integración |
 
-Extras: `extras/GUIA_ENTREVISTAS.md`, `extras/LECTURA_PAPERS.md`, `extras/GEMINI_ASSETS.md`.
+Guía de estudio (ruta, tiempos, mapa de conceptos y glosario): `GUIA_DE_ESTUDIO.md`. Extras: `extras/GUIA_ENTREVISTAS.md`, `extras/LECTURA_PAPERS.md`, `extras/GEMINI_ASSETS.md`.
 
 ## Stack
 PyTorch · Hugging Face (`transformers`, `tokenizers`, `datasets`) · `tiktoken` · `sentencepiece` · `sentence-transformers` ·

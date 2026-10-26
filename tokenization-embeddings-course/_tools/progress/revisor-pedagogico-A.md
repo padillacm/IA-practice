@@ -9,7 +9,7 @@ Agente: Revisor pedagógico · Módulos: 00–08 · Informe: tokenization-embedd
 - [x] 06_tokenizer_free_bytes_blt
 - [x] 07_hnet_tokenizer_transfer
 - [x] 08_tokens_multimodales_audio
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
-- (decisiones tomadas)
+- Madurez movida al final en 03–08; 🧭 en 05–06; GUIA_DE_ESTUDIO.md creada. Revisión completa.
