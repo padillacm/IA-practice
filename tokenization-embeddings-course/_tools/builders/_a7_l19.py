@@ -12,7 +12,7 @@ def lesson(nb):
 
 **Prerrequisitos:** todo el curso, en especial 04 (vocabularios), 12 (embedders), 13 (híbrido), 14 (ANN), 15 (evaluación) y 18 (producción).
 
-> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 1.5 h, lo que usa el proyecto): §1 árboles de decisión · §2 trampas de evaluación · §4 costes a escala (la rúbrica A del proyecto usa sus fórmulas) · §6 checklist. Ampliación (≈ 1 h): §3 gap offline/online · §5 galería de fallos · §7 cultura.
+> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 1.5 h, lo que usa el proyecto): §1 árboles de decisión · §2 trampas de evaluación · §4 costes a escala (la rúbrica A del proyecto usa sus fórmulas) · §6 checklist. Ampliación (≈ 1 h): §3 gap offline/online · §4b chunking · §5 galería de fallos · §7 cultura.
 
 **Hilo conductor — Políglota.** Políglota Labs ha crecido: hay tres equipos, dos clientes enterprise y una entrevista de *staff engineer* la semana que viene. Las lecciones anteriores **enumeraban** buenas prácticas; aquí las convertimos en **código que decide, mide y revisa**: árboles de decisión ejecutables, trampas de evaluación reproducidas con números, una calculadora de costes a escala, una galería de fallos reales reproducidos y un *linter* de PRs. Este módulo produce además `extras/GUIA_ENTREVISTAS.md` y `extras/LECTURA_PAPERS.md`.
 
@@ -428,6 +428,52 @@ tab.round(1)
 ''')
     nb.md(r'''> 👀 **Qué debes observar:** el embedding inicial es un pago único que crece lineal con $N$; la **memoria se paga cada mes y por réplica**, y a partir de ~100 M de chunks domina con holgura: ahí la cuantización deja de ser una optimización y pasa a ser la arquitectura. Fíjate también en `ram_gb_por_replica`: con 1 B de vectores float32 ninguna máquina normal lo aloja → sharding (y la cola de §3 del módulo 18) o DiskANN. Todos los precios de infraestructura de esta celda son **supuestos**.''')
 
+    # ─────────────── §4b Chunking (revisión élite) ───────────────
+    nb.md(r'''## 4b. Chunking: la decisión que fija $N$ (y que casi nadie mide)
+En la calculadora anterior $N$ es «número de chunks», no de documentos: el tamaño de chunk multiplica la memoria, el coste de embedding (por los tokens repetidos si hay solapamiento) y la latencia del ANN, y a la vez cambia la calidad. Tres hechos que un equipo de retrieval sabe:
+* **Truncado vs troceado.** Un embedder tiene un `max_seq_length`; lo que pasa de ahí se tira sin aviso (F1 del §5). Trocear evita perder texto, pero cada chunk pierde el contexto del documento (de ahí *late chunking*, módulo 13 §9, y *Contextual Retrieval*, módulo 20 🏭).
+* **Agregación al documento.** Si el usuario quiere documentos, el score del documento se agrega desde sus chunks: el máximo (**MaxP**) o solo el primer chunk (**FirstP**); Dai & Callan (2019) lo compararon con BERT como reranker: en Robust04 MaxP superó a FirstP (nDCG@20 0.469 frente a 0.444 con títulos), pero en ClueWeb09-B con descripciones ganó FirstP (0.272 frente a 0.262); la mejor agregación depende de dónde está la información en tus documentos. Detalle útil: añadían el **título** al principio de cada pasaje para devolverle contexto.
+* **Chunks cortos = más vectores y más casi duplicados** en el top-k (el mismo documento ocupa varias posiciones): hay que deduplicar por documento antes de evaluar o de pasarlos al LLM.
+
+🧪 Troceamos el corpus de Políglota en ventanas de $w$ palabras (sin solapamiento, y $w$ = 32 con 50 % de solapamiento), embebemos cada chunk con v2 y con BM25 sobre chunks, agregamos a documento con MaxP y FirstP y medimos nDCG@10 a nivel de documento frente al documento entero.''')
+    nb.code(r'''
+def trocea(texto, w, solape=0):
+    p = texto.split(); paso = max(w - solape, 1)
+    return [" ".join(p[i:i + w]) for i in range(0, max(len(p) - solape, 1), paso)] or [texto]
+
+def agrega(Sc, dueno, primero):
+    """Score de documento = máximo de sus chunks (MaxP) o el de su primer chunk (FirstP)."""
+    S = np.full((Sc.shape[0], len(doc_ids)), -1e9)
+    vistos = set()
+    for j, d in enumerate(dueno):
+        if primero and d in vistos:
+            continue
+        vistos.add(d); S[:, d] = np.maximum(S[:, d], Sc[:, j])
+    return S
+
+filas_ch = [{"w": "doc entero", "vectores/doc": 1.0, "denso MaxP": nd(Q2 @ D2.T), "denso FirstP": nd(Q2 @ D2.T), "BM25 MaxP": nd(S_BM25)}]
+for w, sol in ((16, 0), (32, 0), (32, 16), (64, 0), (128, 0)):
+    ch, dueno = [], []
+    for i, t in enumerate(doc_texts):
+        for c in trocea(t, w, sol):
+            ch.append(c); dueno.append(i)
+    Sd = Q2 @ l2n(VERS["v2"].encode_docs(ch)).T
+    bm_c = BM25().fit([tokenize_simple(c) for c in ch], [f"c{j}" for j in range(len(ch))])
+    Sb = np.array([bm_c.scores(tokenize_simple(q)) for q in q_texts])
+    filas_ch.append({"w": f"{w}" + (f" (solape {sol})" if sol else ""), "vectores/doc": len(ch) / len(doc_texts),
+                     "denso MaxP": nd(agrega(Sd, dueno, False)), "denso FirstP": nd(agrega(Sd, dueno, True)),
+                     "BM25 MaxP": nd(agrega(Sb, dueno, False))})
+df_ch = pd.DataFrame(filas_ch)
+fig, ax = plt.subplots(figsize=(9, 4)); x = np.arange(len(df_ch))
+for j, (col, c) in enumerate((("denso MaxP", AZUL), ("denso FirstP", GRIS), ("BM25 MaxP", NARANJA))):
+    ax.bar(x + (j - 1) * .27, df_ch[col], .27, color=c, label=col)
+ax.set_xticks(x); ax.set_xticklabels([f"{a}\n×{v:.1f} vect." for a, v in zip(df_ch.w, df_ch["vectores/doc"])], fontsize=8)
+ax.set_xlabel("tamaño de chunk w (palabras) · vectores por documento"); ax.set_ylabel("nDCG@10 (documento)")
+ax.set_title("Chunking: calidad frente a tamaño del índice"); ax.set_ylim(0, 1.05); ax.legend(fontsize=8); plt.tight_layout(); plt.show()
+df_ch.round(3)
+''')
+    nb.md(r'''> 👀 **Qué debes observar** (cifras de la ejecución de referencia, respaldo SVD + corpus sintético): (1) los chunks **muy cortos** hunden al denso (w = 16: 0.742 frente a 0.861 del documento entero) y multiplican el índice por ≈ 7: un trozo de 16 palabras ya no contiene el tema. (2) **No hay agregación universal**: con w = 16 MaxP gana a FirstP (0.742 frente a 0.695), pero con w = 64 gana FirstP (0.881 frente a 0.863), porque estos documentos definen su tema en la primera frase (como un artículo de Wikipedia); es el mismo resultado mixto que Dai & Callan encontraron entre Robust04 y ClueWeb09. (3) BM25 sobre chunks medianos supera al documento entero (0.874 frente a 0.861 con w = 64): la normalización por longitud trata mejor trozos homogéneos. (4) El **solapamiento** (w = 32, solape 16) no mejora aquí y multiplica el índice por 1.6 frente a sin solape. Con un encoder real y documentación de miles de palabras los números cambian; la regla de playbook no es un tamaño: es **medir el chunking como cualquier otra decisión** (en dev, con nDCG al nivel de lo que consume el usuario y la memoria al lado) y deduplicar por documento.''')
+
     # ─────────────── §5 Fallos reales ───────────────
     nb.md(r'''## 5. Fallos reales documentados (y su reproducción mínima)
 | Fallo | Qué pasó | Fuente | Módulo |
@@ -551,6 +597,7 @@ Has aplicado ya cada decisión con números; la tabla dice cuáles de esas regla
 5. **Los fallos caros son silenciosos**: tests de contrato (normalización, tokenización, norma, versión) en CI, no solo métricas (§5).
 6. **A gran escala la arquitectura la decide la memoria por réplica**, no la calidad del embedder (§4).
 7. **Sospecha de mejoras < IC**: si la diferencia pareada no excluye el 0, la respuesta correcta a «¿cuál es mejor?» es «no lo sabemos todavía».
+8. **El tamaño de chunk es un hiperparámetro con factura**: fija $N$ (memoria, coste, latencia) y la calidad a la vez, y la agregación (MaxP/FirstP) depende de dónde está la información en tus documentos (§4b). Se elige en dev como la fusión o la dimensión, nunca por la cifra «512 tokens con 10 % de solape» de un tutorial.
 ''')
     nb.md(r'''## ⚠️ Errores comunes
 * Elegir arquitectura por popularidad («todos usan HNSW») en vez de por N, memoria, filtros y actualizaciones.
@@ -590,6 +637,7 @@ La CV estima el rendimiento esperado del **procedimiento** «elegir α en datos 
 * Thakur, N. et al. (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. https://arxiv.org/abs/2104.08663
 * Cormack, G., Clarke, C., Büttcher, S. (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*. SIGIR.
 * Bruch, S., Gai, S., Ingber, A. (2022). *An Analysis of Fusion Functions for Hybrid Retrieval*. https://arxiv.org/abs/2210.11934
+* Dai, Z., Callan, J. (2019). *Deeper Text Understanding for IR with Contextual Neural Language Modeling*. SIGIR. https://arxiv.org/abs/1905.09217
 * Nogueira, R. & Cho, K. (2019). *Passage Re-ranking with BERT*. https://arxiv.org/abs/1901.04085
 * Weller, O., Boratko, M., Naim, I., Lee, J. (2025). *On the Theoretical Limitations of Embedding-Based Retrieval*. https://arxiv.org/abs/2508.21038
 * Thomas, P. et al. (2023). *Large language models can accurately predict searcher preferences*. https://arxiv.org/abs/2309.10621 · Soboroff, I. (2024). *Don't Use LLMs to Make Relevance Judgments*. https://arxiv.org/abs/2409.15133
