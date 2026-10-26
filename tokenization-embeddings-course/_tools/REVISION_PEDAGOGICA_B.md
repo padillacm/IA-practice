@@ -147,3 +147,18 @@ como punto de partida en cada módulo.
 - **Proyecto:** TODO 5 tenía 🪜 2 sin 🪜 1 → añadida; TODO 6–7 (no dominados con 3 objetivos, elección con SLA) sin
   pistas → 🪜 1/2 coherentes con la solución. 👀 añadidas tras las curvas recall/latencia/memoria (plantilla y
   solución), incluida la lectura «si Flat cumple el SLA, no hace falta ANN».
+
+## 15 · Evaluación de retrieval
+- Bien: el módulo de referencia del bloque en estadística: nDCG con ejemplo resuelto a mano antes de la
+  implementación canónica y sus tests, bootstrap/permutación/Holm, golden set con acuerdo entre anotadores, LLM-judge
+  marcado 🟡 debatido, LIMIT replicado en miniatura, análisis de errores por slices; 🔁 con 00, 10, 13 y 14;
+  proyecto con 🪜 1/2 en todos los TODO.
+- **Reestructurado:** Mapa de madurez de la cabecera a justo antes de 🏭 (pasa de `_b15_lesson1.py` a
+  `_b15_lesson3.py`), con frase puente.
+- **🧭 corregida:** el análisis de errores (§11) estaba en ampliación, pero es el TODO 5 del proyecto: ahora es núcleo.
+- **👀 añadida** tras la Gemini M15-IMG-2 (era la única celda Gemini del bloque sin ella): 5 de 10 pares alcanzables
+  con $d = 2$, límite geométrico y por qué BM25 no lo sufre.
+- **Ejemplo a mano añadido** en §5.1: bootstrap pareado con 4 diferencias por query (dos remuestreos calculados),
+  enlazado con el bootstrap del 00 y el interleaving del 18.
+- **Repaso espaciado:** añadida R5 (04 + 01, Diagnóstico): global sube y ES baja → truncado por prima de tokens o
+  normalización asimétrica, visibles solo por slice.

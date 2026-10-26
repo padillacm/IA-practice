@@ -17,8 +17,8 @@ def part1(nb):
     | **Prerrequisitos** | 00 (BM25 + mini golden set), 10 (similitud y pooling), 12 (embedders y MTEB), 13 (híbrido, RRF), 14 (recall en ANN) |
     | **Hilo conductor** | Políglota Labs necesita saber **si el nuevo embedder es mejor de verdad** antes de migrar el índice |
 
-    > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h): secciones 1–6 (métricas, tests, benchmarks, golden sets, bootstrap).
-    > Ampliación (≈ 2 h): secciones 7–11 (LLM-as-judge, límite teórico de la dimensión, contaminación, drift, análisis de errores).
+    > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h, lo que usa el proyecto): secciones 1–6 (métricas, benchmarks, bootstrap y tests, golden sets) y 11 (análisis de errores: TODO 5 del proyecto).
+    > Ampliación (≈ 2 h): secciones 7–10 (LLM-as-judge, límite teórico de la dimensión, contaminación, drift).
     > Si vas justo de tiempo, haz el núcleo y salta a la autoevaluación.
     """)
 
@@ -58,22 +58,13 @@ def part1(nb):
 
     **No.** El recall del ANN mide fidelidad al vecino exacto *del mismo embedder*; el de este módulo mide cuántos documentos **relevantes según humanos** recuperas. Un ANN con recall 1.0 sobre un embedder malo sigue siendo malo. Son dos capas de error que se componen.
     </details>
+
+    <details><summary><b>5.</b> (Módulos 04 y 01, Diagnóstico) Un embedder nuevo sube el nDCG@10 global, pero las queries en español empeoran. Antes de culpar al modelo, ¿qué dos causas del bloque A comprobarías?</summary>
+
+    (a) **Truncado por prima de tokens** (04): si el nuevo modelo tiene peor fertilidad en español, los documentos ES se cortan antes en `max_seq_length` y pierden contenido; (b) **normalización asimétrica** (01): texto ES con acentos en NFD en el índice y NFC en las queries (o al revés). Ambas se ven solo **por slice** de idioma, que es lo que construye la sección 11; el número global las esconde.
+    </details>
     """)
 
-    nb.md("""
-    ## 🗺️ Mapa de madurez (estado a oct-2026)
-
-    | Técnica / práctica | Madurez | Quién / dónde se usa | Fuente |
-    |---|---|---|---|
-    | nDCG@10, Recall@k, MRR@10 con qrels fijos | 🟢 sólido | BEIR, MTEB (retrieval usa nDCG@10 como métrica principal), TREC | Thakur et al. 2021; Muennighoff et al. 2022 |
-    | Benchmarks públicos multi-dominio (BEIR, MTEB/MMTEB, MIRACL) | 🟢 sólido (con límites de contaminación) | Estándar de facto para comparar embedders | Thakur 2021; Enevoldsen 2025; Zhang 2022 |
-    | Bootstrap / tests pareados sobre queries | 🟢 sólido en IR clásico, 🟡 poco adoptado en papers de embeddings | Comunidad TREC/SIGIR | Smucker et al. 2007; Urbano et al. 2019 |
-    | Golden sets propios + anotación con acuerdo κ | 🟢 sólido | Equipos de búsqueda en producción | práctica de la industria |
-    | LLM-as-judge para relevancia | 🟡 emergente y **debatido** | Investigación (Bing/TREC) y equipos de evaluación | Thomas et al. 2023; Soboroff 2024; Clarke & Dietz 2024 |
-    | Benchmarks con parte privada contra overfitting (RTEB) | 🟡 emergente (beta lanzada oct-2025) | Hugging Face / comunidad MTEB | RTEB (HF blog, 2025) |
-    | Límite teórico de la dimensión del embedding (LIMIT) | 🟡 emergente (resultado teórico sólido; relevancia práctica en discusión) | Investigación (Google DeepMind / JHU) | Weller et al., ICLR 2026 |
-    | Monitorización de drift con set canario | 🟢 sólido como práctica; 🟡 como tooling específico de embeddings | Producción | módulo 18 |
-    """)
 
     # ───────────────────────── 1. Intuición ─────────────────────────
     nb.md("""

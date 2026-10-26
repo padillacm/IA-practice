@@ -167,6 +167,8 @@ def part2(nb):
     1. Tienes $n$ valores por query $x_1..x_n$ (p. ej. nDCG@10 de cada una).
     2. Repite $B$ veces: remuestrea $n$ valores **con reemplazo** y calcula su media $\\bar x^*_b$.
     3. El IC 95 % es el intervalo $[q_{2.5\\%},\\,q_{97.5\\%}]$ de las $\\bar x^*_b$.
+
+    ✍️ **Ejemplo a mano (pareado, 4 queries).** Diferencias B − A por query: $(0.10,\\ -0.05,\\ 0.20,\\ 0.00)$, media $0.0625$. Un remuestreo con reemplazo saca las queries $(1, 1, 3, 4)$ → media $(0.10 + 0.10 + 0.20 + 0)/4 = 0.10$; otro saca $(2, 2, 4, 1)$ → $0.0$. Tras miles de remuestreos, los percentiles 2.5 y 97.5 de esas medias son el IC. Remuestreamos **diferencias por query** (pareado) porque A y B se miden sobre las mismas queries: la dificultad de cada query se cancela, como en el team-draft interleaving del módulo 18 o en el bootstrap del módulo 00. Con solo 4 queries, el IC incluirá el 0 casi seguro: el ejemplo enseña el mecanismo, no una conclusión.
     """)
     nb.gemini(
         "video", "M15-VID-1", "Bootstrap: remuestrear queries y construir el intervalo de confianza",

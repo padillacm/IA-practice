@@ -173,6 +173,9 @@ def part3(nb):
         """,
     )
     nb.md("""
+    > 👀 **Qué debes observar:** con 5 documentos en un círculo ($d = 2$), una query es una dirección y su top-2 son siempre dos vecinos **adyacentes**: solo 5 de los $\\binom{5}{2} = 10$ pares son alcanzables, por mucho que entrenes. Ese es el límite de LIMIT en miniatura: no es un fallo de entrenamiento sino de **geometría**. BM25 no lo sufre porque cada término es su propia dimensión (el vocabulario hace de $d$ enorme), y lo comprobarás en la celda siguiente.
+    """)
+    nb.md("""
     ### 8.2 LIMIT en miniatura: BM25 contra un «embedding» de dimensión baja
     Réplica de la construcción del paper: $n$ personas, un atributo único por **cada par** de personas («le gusta *kobelu*» solo a las personas $i$ y $j$); la query «¿a quién le gusta *kobelu*?» tiene exactamente 2 relevantes.
     Evaluamos BM25 (espacio de dimensión ≈ tamaño del vocabulario) y LSI con dimensión $d$ creciente.
@@ -340,6 +343,22 @@ def part3(nb):
     > Ojo con el tamaño de cada slice: con pocas queries por bin, **calcula IC también por slice** antes de actuar.
     """)
 
+    nb.md("""
+    ## 🗺️ Mapa de madurez (estado a oct-2026)
+    Ya has implementado las métricas, la estadística, el golden set, el juez LLM, LIMIT, la contaminación, el drift y el análisis de errores; la tabla separa lo consolidado de lo que sigue en debate (🟡) antes de ver cómo lo hacen los equipos en producción.
+
+
+    | Técnica / práctica | Madurez | Quién / dónde se usa | Fuente |
+    |---|---|---|---|
+    | nDCG@10, Recall@k, MRR@10 con qrels fijos | 🟢 sólido | BEIR, MTEB (retrieval usa nDCG@10 como métrica principal), TREC | Thakur et al. 2021; Muennighoff et al. 2022 |
+    | Benchmarks públicos multi-dominio (BEIR, MTEB/MMTEB, MIRACL) | 🟢 sólido (con límites de contaminación) | Estándar de facto para comparar embedders | Thakur 2021; Enevoldsen 2025; Zhang 2022 |
+    | Bootstrap / tests pareados sobre queries | 🟢 sólido en IR clásico, 🟡 poco adoptado en papers de embeddings | Comunidad TREC/SIGIR | Smucker et al. 2007; Urbano et al. 2019 |
+    | Golden sets propios + anotación con acuerdo κ | 🟢 sólido | Equipos de búsqueda en producción | práctica de la industria |
+    | LLM-as-judge para relevancia | 🟡 emergente y **debatido** | Investigación (Bing/TREC) y equipos de evaluación | Thomas et al. 2023; Soboroff 2024; Clarke & Dietz 2024 |
+    | Benchmarks con parte privada contra overfitting (RTEB) | 🟡 emergente (beta lanzada oct-2025) | Hugging Face / comunidad MTEB | RTEB (HF blog, 2025) |
+    | Límite teórico de la dimensión del embedding (LIMIT) | 🟡 emergente (resultado teórico sólido; relevancia práctica en discusión) | Investigación (Google DeepMind / JHU) | Weller et al., ICLR 2026 |
+    | Monitorización de drift con set canario | 🟢 sólido como práctica; 🟡 como tooling específico de embeddings | Producción | módulo 18 |
+    """)
     # ───────────────────────── Cierre ─────────────────────────
     nb.md("""
     ## 12. 🏭 En producción
