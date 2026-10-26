@@ -4,7 +4,7 @@
 
 | Archivo | Contenido |
 |---|---|
-| [`19_playbook_elite.ipynb`](19_playbook_elite.ipynb) | Lección: **árboles de decisión ejecutables** (tokenizer, embedder, índice, híbrido) con el umbral Flat→HNSW **medido** con FAISS · **cuatro trampas de evaluación reproducidas** (tuning en test vs CV, *winner's curse*, dependencia del golden set, sesgo de *pooling*) · **gap offline/online** (mezcla de tráfico, interfaz top-3, modelo de clic) · **calculadora de costos a escala** (1 M–1 B docs, float32/int8/binario) · **fallos reales documentados** + galería de 4 fallos silenciosos reproducidos (truncado, producto punto sin normalizar, tildes índice≠query, caché sin versión) · **linter de PRs** · cultura de equipos top |
+| [`19_playbook_elite.ipynb`](19_playbook_elite.ipynb) | Lección: **árboles de decisión ejecutables** (tokenizer, embedder, índice, híbrido) con el umbral Flat→HNSW **medido** con FAISS · **cuatro trampas de evaluación reproducidas** (tuning en test vs CV, *winner's curse*, dependencia del golden set, sesgo de *pooling*) · **gap offline/online** (mezcla de tráfico, interfaz top-3, modelo de clic) · **calculadora de costes a escala** (1 M–1 B docs, float32/int8/binario) · **fallos reales documentados** + galería de 4 fallos silenciosos reproducidos (truncado, producto punto sin normalizar, tildes índice≠query, caché sin versión) · **linter de PRs** · cultura de equipos top |
 | [`19_proyecto_playbook_elite.ipynb`](19_proyecto_playbook_elite.ipynb) | Proyecto: **3 casos de system design** (documentación global, código interno con permisos, PDFs escaneados de salud) con plantilla estructurada, rúbrica automática de 100 puntos (capacidad, restricciones, requisitos, evaluación/operación), revisión de una propuesta con errores, TODOs, pistas 🪜 y soluciones de referencia tras ⛔ SPOILER |
 | `assets/` | Recursos de Gemini: `M19-IMG-01.png`, `M19-IMG-02.png`, `M19-IMG-03.png` |
 
@@ -14,7 +14,7 @@ Este módulo produce también [`extras/GUIA_ENTREVISTAS.md`](../extras/GUIA_ENTR
 1. Codificar y justificar con mediciones árboles de decisión de tokenizer, embedder, índice e híbrido.
 2. Reproducir y cuantificar trampas de evaluación.
 3. Explicar y recalcular el gap offline/online.
-4. Estimar costos de retrieval a escala con supuestos explícitos.
+4. Estimar costes de retrieval a escala con supuestos explícitos.
 5. Diagnosticar fallos reales y silenciosos; revisar PRs con una checklist ejecutable.
 6. Resolver casos de system design con números y defenderlos frente a una rúbrica.
 

@@ -133,11 +133,11 @@ def project(nb):
 | **Nivel** | 🔴 Experto |
 | **Duración** | ≈ 1.5 h |
 | **GPU** | No necesaria (solo cálculo; < 10 s de ejecución) |
-| **Requiere** | Lección 19 (árboles de decisión, costos a escala, checklist) · 14 (índices) · 16 (multimodal) · 18 (costos, migración, privacidad) |
+| **Requiere** | Lección 19 (árboles de decisión, costes a escala, checklist) · 14 (índices) · 16 (multimodal) · 18 (costes, migración, privacidad) |
 | **Conecta con** | `extras/GUIA_ENTREVISTAS.md` (las preguntas de system design usan estos casos) · **Módulo 20** (el capstone aplica la plantilla de diseño a Políglota) |
 
 ## 🏢 Contexto de negocio
-Políglota Labs firma tres clientes a la vez. Para cada uno, el VP de ingeniería quiere un **documento de diseño de una página** con números, no adjetivos: capacidad, memoria, costo, presupuesto de latencia, arquitectura de retrieval, plan de evaluación, migración y riesgos. Es también exactamente el formato de una entrevista de *system design* de búsqueda/embeddings en un laboratorio top.
+Políglota Labs firma tres clientes a la vez. Para cada uno, el VP de ingeniería quiere un **documento de diseño de una página** con números, no adjetivos: capacidad, memoria, coste, presupuesto de latencia, arquitectura de retrieval, plan de evaluación, migración y riesgos. Es también exactamente el formato de una entrevista de *system design* de búsqueda/embeddings en un laboratorio top.
 
 ## 📦 Datos
 No hay dataset: los tres casos son **especificaciones** (`CASOS`). Los supuestos de precios y hardware (`SUP`) son los de los módulos 18–19 (precio de API fechado oct-2026; GPU, RAM y QPS por réplica **supuestos**).
@@ -147,7 +147,7 @@ Para cada caso, una función `diseno_CX()` que devuelve un `dict` con la plantil
 
 | Bloque | Qué mide | Pts |
 |---|---|---|
-| A · Capacidad | nº de chunks/páginas, tokens, RAM float32, costo de embedding, réplicas: cada uno a ±15 % de la referencia calculada con las fórmulas de la lección | 30 |
+| A · Capacidad | nº de chunks/páginas, tokens, RAM float32, coste de embedding, réplicas: cada uno a ±15 % de la referencia calculada con las fórmulas de la lección | 30 |
 | B · Restricciones | RAM del índice elegido ≤ 70 % de la máquina (recalculada por la rúbrica a partir de tu `indice`); suma del presupuesto de latencia ≤ SLA; réplicas ≥ referencia | 25 |
 | C · Requisitos del caso | tokenizer, multilingüe, BM25 si hay identificadores, on-prem, ACL, streaming, multimodal, privacidad (según el caso) | 25 |
 | D · Evaluación y operación | golden set ≥ 200 queries estratificado con test ciego, IC pareado, plan online, rollback, ≥ 3 riesgos | 20 |
@@ -183,7 +183,7 @@ dict(capacidad={"n_unidades", "tokens_totales", "ram_gb_float32", "coste_embeddi
 
     nb.md("## 2. Caso C1 · Políglota Docs Global (TODO 1)")
     nb.md(hint("Empieza por la capacidad: chunks = docs × tokens/doc ÷ tokens/chunk; RAM = chunks × 4·d B. Compara con 70 % de 64 GB y usa el árbol `elige_indice` de la lección. Presupuesto de latencia: la suma de las cuatro partidas debe caber en 150 ms.",
-               "`n = 5e6*2400/400`; `ram = n*4*768/1e9` (≈ 92 GB → no cabe) ⇒ `indice='hnsw_int8'` (≈ 31 GB con grafo). Costo API: `5e6*2400/1e6*0.02`. Etapas: `['bm25','denso','reranker']` con `rerank` ≈ 2 ms × 40 docs."))
+               "`n = 5e6*2400/400`; `ram = n*4*768/1e9` (≈ 92 GB → no cabe) ⇒ `indice='hnsw_int8'` (≈ 31 GB con grafo). Coste API: `5e6*2400/1e6*0.02`. Etapas: `['bm25','denso','reranker']` con `rerank` ≈ 2 ms × 40 docs."))
     nb.code(r'''
 def diseno_C1() -> dict:
     # TODO 1: devuelve el diccionario completo de la plantilla para C1
@@ -192,8 +192,8 @@ def diseno_C1() -> dict:
 corre(lambda: evalua_diseno("C1_docs_global", diseno_C1())["total"])
 ''')
     nb.md("## 3. Caso C2 · Búsqueda de código interna con permisos (TODO 2)")
-    nb.md(hint("Tres requisitos mandan: on-prem (costo con la fórmula de GPU, embedder autohospedado), ACL que deja ~2 % de candidatos (¡post-filtrar devolvería casi siempre < k resultados!) y commits cada minuto.",
-               "`filtros='pre_servidor'` (con 2 % de 4 M = 80 k candidatos, la fuerza bruta sobre ellos cabe en el SLA) o `'grafo'` (ACORN); `indice='hnsw'` (16.4 GB + grafo ≈ 17.4 GB ≤ 22.4 GB); costo = `1.2e9/(20000*3600*0.6)*0.8`."))
+    nb.md(hint("Tres requisitos mandan: on-prem (coste con la fórmula de GPU, embedder autohospedado), ACL que deja ~2 % de candidatos (¡post-filtrar devolvería casi siempre < k resultados!) y commits cada minuto.",
+               "`filtros='pre_servidor'` (con 2 % de 4 M = 80 k candidatos, la fuerza bruta sobre ellos cabe en el SLA) o `'grafo'` (ACORN); `indice='hnsw'` (16.4 GB + grafo ≈ 17.4 GB ≤ 22.4 GB); coste = `1.2e9/(20000*3600*0.6)*0.8`."))
     nb.code(r'''
 def diseno_C2() -> dict:
     # TODO 2
@@ -211,9 +211,9 @@ def diseno_C3() -> dict:
 
 corre(lambda: evalua_diseno("C3_soporte_pdfs", diseno_C3())["total"])
 ''')
-    nb.md("## 5. Informe (TODO 4)\nJunta los tres diseños en una tabla comparativa (caso, índice, precisión/modalidad, RAM por réplica recalculada, costo de embedding, latencia presupuestada, nota) y un gráfico de puntos por bloque.")
+    nb.md("## 5. Informe (TODO 4)\nJunta los tres diseños en una tabla comparativa (caso, índice, precisión/modalidad, RAM por réplica recalculada, coste de embedding, latencia presupuestada, nota) y un gráfico de puntos por bloque.")
     nb.md(hint("Recorre `{'C1_docs_global': diseno_C1, ...}`, llama a `evalua_diseno(..., verbose=False)` y a `ram_de_diseno`.",
-               "`filas.append({'caso': k, 'indice': dz['indice'], 'RAM GB': ram_de_diseno(CASOS[k], dz), 'costo $': dz['capacidad']['coste_embedding_usd'], 'latencia ms': sum(dz['latencia_ms'].values()), 'nota': r['total']})`; para el gráfico, `pd.DataFrame({k: r['por_bloque']})` y `.plot.bar()`."))
+               "`filas.append({'caso': k, 'indice': dz['indice'], 'RAM GB': ram_de_diseno(CASOS[k], dz), 'coste $': dz['capacidad']['coste_embedding_usd'], 'latencia ms': sum(dz['latencia_ms'].values()), 'nota': r['total']})`; para el gráfico, `pd.DataFrame({k: r['por_bloque']})` y `.plot.bar()`."))
     nb.code(r'''
 def informe() -> pd.DataFrame:
     # TODO 4: tabla comparativa + gráfico de barras de puntos por bloque y caso
@@ -277,7 +277,7 @@ def diseno_C3() -> dict:
                     "borrado propagado a índice/caché/backups en ≤ 30 días", "logs sin texto de queries (redacción de PII)"],
         justificacion="El índice visual completo pesaría 4 M × 1030 × 128 × 2 B ≈ 1.05 TB: imposible en RAM. Primera etapa OCR+texto "
                       "(16.4 GB float32 + grafo, cabe en 128 GB) y MaxSim visual solo sobre el top-K leído de SSD: une la precisión visual "
-                      "con el costo del texto. Ruido en vectores NO sustituye a los controles de acceso (módulo 18).")
+                      "con el coste del texto. Ruido en vectores NO sustituye a los controles de acceso (módulo 18).")
 
 def informe() -> pd.DataFrame:
     fns = {"C1_docs_global": diseno_C1, "C2_codigo_interno": diseno_C2, "C3_soporte_pdfs": diseno_C3}
@@ -285,7 +285,7 @@ def informe() -> pd.DataFrame:
     for k, f in fns.items():
         dz = f(); r = evalua_diseno(k, dz, verbose=False); bloques[k] = r["por_bloque"]
         filas.append({"caso": CASOS[k]["titulo"], "índice": dz["indice"], "modalidad": dz.get("modalidad", "texto"),
-                      "RAM GB/réplica": round(ram_de_diseno(CASOS[k], dz), 1), "costo embedding $": round(dz["capacidad"]["coste_embedding_usd"], 1),
+                      "RAM GB/réplica": round(ram_de_diseno(CASOS[k], dz), 1), "coste embedding $": round(dz["capacidad"]["coste_embedding_usd"], 1),
                       "latencia ms": sum(dz["latencia_ms"].values()), "SLA ms": CASOS[k]["sla_p99_ms"], "nota": r["total"]})
     ax = pd.DataFrame(bloques).T.plot.bar(stacked=True, figsize=(8, 4), color=[AZUL, VERDE, NARANJA, GRIS], rot=0)
     ax.set_ylabel("puntos"); ax.set_title("Rúbrica por bloque y caso (solución de referencia)"); ax.axhline(80, color=ROJO, ls="--")
@@ -302,7 +302,7 @@ display(informe())
 ## 🚀 Retos extra
 1. **Sensibilidad**: ¿con qué `d` (Matryoshka) cabe C1 en float32? ¿Con cuántos GB de RAM pasaría C3 a tener el visual en memoria con binarización (1 bit/dim)?
 2. **Cuarto caso**: un marketplace con 300 M de productos, 5 000 QPS y filtros de precio/categoría. Escribe `CASOS['C4']`, amplía `requisitos_caso` y diseña.
-3. **Rúbrica más estricta**: añade un criterio de costo mensual de infraestructura con la calculadora `costo_sistema` de la lección.
+3. **Rúbrica más estricta**: añade un criterio de coste mensual de infraestructura con la calculadora `costo_sistema` de la lección.
 4. **Entrevista simulada**: toma un caso y explícalo en voz alta en 10 minutos con la estructura de `extras/GUIA_ENTREVISTAS.md` (requisitos → capacidad → arquitectura → evaluación → operación → riesgos).
 
 ## 🤔 Reflexión
@@ -318,7 +318,7 @@ README = r"""# Módulo 19 · Playbook de élite: decisiones, trampas y revisión
 
 | Archivo | Contenido |
 |---|---|
-| [`19_playbook_elite.ipynb`](19_playbook_elite.ipynb) | Lección: **árboles de decisión ejecutables** (tokenizer, embedder, índice, híbrido) con el umbral Flat→HNSW **medido** con FAISS · **cuatro trampas de evaluación reproducidas** (tuning en test vs CV, *winner's curse*, dependencia del golden set, sesgo de *pooling*) · **gap offline/online** (mezcla de tráfico, interfaz top-3, modelo de clic) · **calculadora de costos a escala** (1 M–1 B docs, float32/int8/binario) · **fallos reales documentados** + galería de 4 fallos silenciosos reproducidos (truncado, producto punto sin normalizar, tildes índice≠query, caché sin versión) · **linter de PRs** · cultura de equipos top |
+| [`19_playbook_elite.ipynb`](19_playbook_elite.ipynb) | Lección: **árboles de decisión ejecutables** (tokenizer, embedder, índice, híbrido) con el umbral Flat→HNSW **medido** con FAISS · **cuatro trampas de evaluación reproducidas** (tuning en test vs CV, *winner's curse*, dependencia del golden set, sesgo de *pooling*) · **gap offline/online** (mezcla de tráfico, interfaz top-3, modelo de clic) · **calculadora de costes a escala** (1 M–1 B docs, float32/int8/binario) · **fallos reales documentados** + galería de 4 fallos silenciosos reproducidos (truncado, producto punto sin normalizar, tildes índice≠query, caché sin versión) · **linter de PRs** · cultura de equipos top |
 | [`19_proyecto_playbook_elite.ipynb`](19_proyecto_playbook_elite.ipynb) | Proyecto: **3 casos de system design** (documentación global, código interno con permisos, PDFs escaneados de salud) con plantilla estructurada, rúbrica automática de 100 puntos (capacidad, restricciones, requisitos, evaluación/operación), revisión de una propuesta con errores, TODOs, pistas 🪜 y soluciones de referencia tras ⛔ SPOILER |
 | `assets/` | Recursos de Gemini: `M19-IMG-01.png`, `M19-IMG-02.png`, `M19-IMG-03.png` |
 
@@ -328,7 +328,7 @@ Este módulo produce también [`extras/GUIA_ENTREVISTAS.md`](../extras/GUIA_ENTR
 1. Codificar y justificar con mediciones árboles de decisión de tokenizer, embedder, índice e híbrido.
 2. Reproducir y cuantificar trampas de evaluación.
 3. Explicar y recalcular el gap offline/online.
-4. Estimar costos de retrieval a escala con supuestos explícitos.
+4. Estimar costes de retrieval a escala con supuestos explícitos.
 5. Diagnosticar fallos reales y silenciosos; revisar PRs con una checklist ejecutable.
 6. Resolver casos de system design con números y defenderlos frente a una rúbrica.
 

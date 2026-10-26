@@ -1,7 +1,7 @@
 # Progreso: revisor-pedagogico-B
 Agente: Revisor pedagógico · Módulos: 09–20 · Informe: tokenization-embeddings-course/_tools/REVISION_PEDAGOGICA_B.md
 - [x] 18_produccion
-- [ ] 19_playbook_elite
+- [x] 19_playbook_elite
 - [ ] 20_capstone
 - [ ] 09_capa_embedding_llm
 - [ ] 10_embeddings_contextuales_oraciones

@@ -12,9 +12,9 @@ def lesson(nb):
 
 **Prerrequisitos:** todo el curso, en especial 04 (vocabularios), 12 (embedders), 13 (híbrido), 14 (ANN), 15 (evaluación) y 18 (producción).
 
-> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 1.5 h): §1 árboles de decisión · §2 trampas de evaluación · §5 galería de fallos · §6 checklist. Ampliación (≈ 1 h): §3 gap offline/online · §4 costos a escala · §7 cultura.
+> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 1.5 h, lo que usa el proyecto): §1 árboles de decisión · §2 trampas de evaluación · §4 costes a escala (la rúbrica A del proyecto usa sus fórmulas) · §6 checklist. Ampliación (≈ 1 h): §3 gap offline/online · §5 galería de fallos · §7 cultura.
 
-**Hilo conductor — Políglota.** Políglota Labs ha crecido: hay tres equipos, dos clientes enterprise y una entrevista de *staff engineer* la semana que viene. Las lecciones anteriores **enumeraban** buenas prácticas; aquí las convertimos en **código que decide, mide y revisa**: árboles de decisión ejecutables, trampas de evaluación reproducidas con números, una calculadora de costos a escala, una galería de fallos reales reproducidos y un *linter* de PRs. Este módulo produce además `extras/GUIA_ENTREVISTAS.md` y `extras/LECTURA_PAPERS.md`.
+**Hilo conductor — Políglota.** Políglota Labs ha crecido: hay tres equipos, dos clientes enterprise y una entrevista de *staff engineer* la semana que viene. Las lecciones anteriores **enumeraban** buenas prácticas; aquí las convertimos en **código que decide, mide y revisa**: árboles de decisión ejecutables, trampas de evaluación reproducidas con números, una calculadora de costes a escala, una galería de fallos reales reproducidos y un *linter* de PRs. Este módulo produce además `extras/GUIA_ENTREVISTAS.md` y `extras/LECTURA_PAPERS.md`.
 
 > **Estado del arte a octubre de 2026.** Las reglas de los árboles son **heurísticas razonadas** con su fuente o con una medición en este notebook; los umbrales concretos dependen de tu hardware y de tus datos: re-mídelos.
 ''')
@@ -22,7 +22,7 @@ def lesson(nb):
 1. **Codificar** árboles de decisión para tokenizer, embedder, índice e híbrido, y **justificar** sus umbrales con mediciones.
 2. **Reproducir y cuantificar** cuatro trampas de evaluación: tuning en test, *winner's curse*, dependencia del golden set y sesgo de *pooling*.
 3. **Explicar** el gap offline/online y **recalcular** la comparación de sistemas con la mezcla real de tráfico.
-4. **Estimar** el costo total de un sistema de retrieval de 1 M a 1 B de documentos (embedding, memoria, réplicas) con supuestos explícitos.
+4. **Estimar** el coste total de un sistema de retrieval de 1 M a 1 B de documentos (embedding, memoria, réplicas) con supuestos explícitos.
 5. **Diagnosticar** fallos reales documentados y reproducir versiones mínimas de los más comunes.
 6. **Revisar** PRs de tokenización/embeddings con una checklist ejecutable.
 ''')
@@ -43,22 +43,23 @@ Mucha más potencia por impresión (comparación pareada dentro de la misma impr
 
 Porque el tokenizer se entrenó con datos distintos de los del modelo: hay tokens que el modelo casi nunca vio y cuyos embeddings quedaron sin entrenar (Land & Bartolo 2024).
 </details>
-''')
-    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026) de las decisiones de este playbook
-🟢 sólido · 🟡 emergente · 🔴 experimental.
+<details><summary><b>5 · (M00, diagnóstico)</b> Con 40 queries, A tiene nDCG@10 = 0.61 y B = 0.63; el IC bootstrap pareado de B − A es [−0.01, 0.05]. ¿Despliegas B diciendo que «es mejor»?</summary>
 
-| Decisión / técnica | Madurez | Quién la usa (respaldado) | Fuente |
-|---|---|---|---|
-| BM25 como baseline obligatorio | 🟢 | BEIR lo mostró fuerte fuera de dominio | Thakur et al. 2021 |
-| Fusión híbrida (RRF / lineal) | 🟢 | Elasticsearch/OpenSearch, Qdrant, Weaviate, Vespa | Cormack et al. 2009; Bruch et al. 2022 |
-| Reranker cross-encoder en 2ª etapa | 🟢 | práctica estándar en búsqueda y RAG | Nogueira & Cho 2019 |
-| Bi-encoder multilingüe abierto + fine-tuning de dominio | 🟢 | e5, BGE-M3, Qwen3-Embedding, EmbeddingGemma | módulos 11–12 |
-| HNSW en RAM / IVF-PQ / DiskANN en SSD | 🟢 | FAISS, Lucene, pgvector, Qdrant, DiskANN | módulo 14 |
-| Cuantización binaria + rescoring | 🟡 | sentence-transformers, varias vector DBs | Shakir et al. 2024 |
-| Late interaction (ColBERT/PLAID/MUVERA) | 🟡 | ColBERTv2, PLAID; MUVERA (Google Research) | módulo 13 |
-| LLM-as-judge para qrels | 🟡 | útil con validación humana; sesgos conocidos | Thomas et al. 2023; Soboroff 2024 |
-| Tokenizer-free (BLT, H-Net) para retrieval | 🔴 | investigación | módulos 06–07 |
-| Límites de dimensión (LIMIT) como criterio de diseño | 🟡 | — | Weller et al. 2025 |
+No: el IC incluye el 0, así que con esas 40 queries no sabes si B es mejor. Desde el módulo 00 el IC bootstrap por queries es la unidad de decisión; las cuatro trampas de §2 son formas de engañarse incluso **con** IC (elegir en test, elegir el mejor de muchos, golden set sesgado, pooling).
+</details>
+<details><summary><b>6 · (M01 + M02, transferencia)</b> Indexas con NFC y la app móvil envía las queries sin normalizar. ¿Qué ves en las métricas y qué ítem de la checklist de §6 lo caza?</summary>
+
+Fallos de búsqueda en las queries con acentos o composición distinta (NFD en iOS/macOS es habitual): bytes distintos → tokens distintos (BPE byte-level del 02) → BM25 sin coincidencia y vectores algo distintos. Nada lanza excepción. Lo caza el ítem 2, **simetría** de normalización y tokenización entre indexación y consulta.
+</details>
+''')
+    nb.md(r'''## 💡 Intuición: un playbook es código que decide, mide y revisa
+Un piloto no memoriza el manual: sigue **checklists** y cada ítem existe porque algo falló alguna vez. Un playbook de retrieval es lo mismo, con una diferencia: muchas de sus reglas se pueden **ejecutar**. Este módulo tiene tres verbos y cada uno se convierte en código:
+
+* **Decidir** (§1, §4): árboles que reciben requisitos (N, d, RAM, idiomas, latencia, privacidad) y devuelven una decisión **con sus razones** y sus umbrales medidos, igual que un sistema de reglas de recsys que puedes auditar.
+* **Medir sin engañarte** (§2, §3): las trampas que inflan o desinflan un número, reproducidas con datos de Políglota para que veas su tamaño.
+* **Revisar** (§5, §6): fallos reales y un *linter* de PRs que los detecta antes de producción.
+
+Cómo se aprende aquí: **ejemplo resuelto** (los árboles aplicados a mano en §1) → **práctica guiada** (el calentamiento del proyecto: revisar la propuesta de un becario) → **práctica independiente** (tres casos de *system design* con rúbrica). Es la misma escalera que usan las entrevistas de *staff*.
 ''')
     nb.md("## 0. Preparación\nLas mismas piezas canónicas del curso (corpus, métricas, BM25, estadística pareada, embedders v1/v2 con fallback) y el mini golden set de **paráfrasis** ES↔EN↔código del módulo 13.")
     nb.code(C.CODE_PIP)
@@ -83,7 +84,14 @@ print({"BM25": round(nd(S_BM25), 3), "v1": round(nd(Q1 @ D1.T), 3), "v2": round(
 
     # ─────────────── §1 Árboles de decisión ───────────────
     nb.md(r'''## 1. Árboles de decisión ejecutables
-Un árbol de decisión en una diapositiva no se puede testear. Lo escribimos como **funciones** que devuelven la decisión **y sus razones**, para poder aplicarlas a escenarios, revisarlas en un PR y cambiar un umbral cuando una medición lo contradiga.''')
+Un árbol de decisión en una diapositiva no se puede testear. Lo escribimos como **funciones** que devuelven la decisión **y sus razones**, para poder aplicarlas a escenarios, revisarlas en un PR y cambiar un umbral cuando una medición lo contradiga.
+
+✍️ **Ejemplo resuelto a mano (el árbol del índice).** 10 M de vectores de $d = 768$; el grafo HNSW con $M = 32$ cuesta $2\cdot 32\cdot 4 = 256$ B por vector. Memoria: float32 $= 10^7\cdot 768\cdot 4$ B $= 30.7$ GB; int8 $= 7.7$ GB; grafo $= 2.56$ GB. Regla: usar como mucho el 70 % de la RAM.
+* **Máquina de 64 GB** (presupuesto 44.8 GB): float32 + grafo = 33.3 GB → cabe → **HNSW float32**.
+* **Máquina de 16 GB** (presupuesto 11.2 GB): float32 no cabe; int8 + grafo = 10.2 GB → **HNSW + int8**, con rescore en float32 desde disco (módulo 12).
+* Antes de todo eso, la primera pregunta: ¿cabe la **fuerza bruta** en el SLA? Ese umbral no se cita: lo medimos en la celda siguiente.
+
+Hazlo en papel y comprueba que la salida de `elige_indice` coincide con tus dos líneas.''')
     nb.gemini(
         "imagen", "M19-IMG-01", "Árbol de decisión del índice vectorial",
         "La versión visual del árbol `elige_indice`: de N, memoria, filtros y actualizaciones a Flat, HNSW, HNSW+int8, IVF-PQ o DiskANN.",
@@ -171,11 +179,11 @@ def elige_tokenizer(usa_modelo_preentrenado: bool, n_scripts: int = 1, mucho_cod
     """Árbol de decisión del tokenizer (módulos 02–07)."""
     if usa_modelo_preentrenado:
         return "usa el tokenizer DEL MODELO", ["cambiarlo exige tokenizer transfer y reentrenar embeddings (módulo 07)",
-                                               "mide fertilidad/paridad para presupuestar costo y contexto (módulo 04)"]
+                                               "mide fertilidad/paridad para presupuestar coste y contexto (módulo 04)"]
     r = ["byte-level o byte_fallback: ningún texto queda fuera del vocabulario (módulos 02–03)"]
     dec = "BPE byte-level"
     if n_scripts >= 3:
-        dec = "BPE byte-level o Unigram con byte_fallback, vocabulario grande (≥ 100 k)"; r.append("muchos scripts: el vocabulario se reparte; mide la prima de paridad por idioma (04)")
+        dec = "BPE byte-level o Unigram con byte_fallback, vocabulario grande (≥ 100 k)"; r.append("muchos scripts: el vocabulario se reparte; mide la prima de tokens por idioma (04)")
     if mucho_codigo:
         r.append("código: pre-tokenización que preserve espacios/indentación y divida dígitos (regex tipo o200k, 02/04)")
     if texto_ruidoso:
@@ -188,7 +196,7 @@ def elige_embedder(privacidad_on_prem: bool, multilingue: bool, pares_dominio: i
     if privacidad_on_prem or not presupuesto_gpu is False and p99_ms_embed < 20:
         base = "open weights autohospedado"; r.append("privacidad/latencia: el texto no sale y no hay viaje de red a una API")
     else:
-        base = "API comercial o open weights"; r.append("sin restricción de residencia: compara costo total (módulo 18)")
+        base = "API comercial o open weights"; r.append("sin restricción de residencia: compara coste total (módulo 18)")
     if multilingue:
         r.append("multilingüe: familias e5 multilingüe, BGE-M3, Qwen3-Embedding, EmbeddingGemma, Gemini Embedding (módulo 12; verifica versiones)")
     if pares_dominio >= 1000:
@@ -260,7 +268,9 @@ T1 = {"reportado (α elegido en test)": reportado, "honesto (CV 5 pliegues)": ho
 print({k: round(v, 3) for k, v in T1.items()}, "· α* en test =", alfas[PQ_A.mean(1).argmax()])
 ''')
     nb.md(r'''### T2 · *Winner's curse*: elegir el mejor de muchos
-Generamos 20 configuraciones **casi equivalentes** (v2 restringido a 64 dimensiones aleatorias de 128: como 20 semillas o 20 combinaciones de hiperparámetros) y elegimos la mejor en un *dev* de 55 queries. ¿Cuánto rinde en el *test* (las otras 55)?''')
+Generamos 20 configuraciones **casi equivalentes** (v2 restringido a 64 dimensiones aleatorias de 128: como 20 semillas o 20 combinaciones de hiperparámetros) y elegimos la mejor en un *dev* de 55 queries. ¿Cuánto rinde en el *test* (las otras 55)?
+
+✍️ **Cuánto optimismo esperar, a mano.** Si las 20 configuraciones valen lo mismo y la medición en dev tiene un ruido de desviación típica $\sigma$, la ganadora está por encima de la media, en esperanza, ≈ $1.87\,\sigma$ (el máximo esperado de 20 normales estándar; con 40, ≈ $2.16\,\sigma$). Con $\sigma = 0.015$ de nDCG eso son ≈ **+0.03 de ventaja que no existe**. Es la regresión a la media de los *rankings* de recsys: el ítem con mejor CTR tras pocas impresiones suele ser el que tuvo suerte.''')
     nb.code(r'''
 rng = np.random.default_rng(SEED); perm = rng.permutation(len(qids)); dev, te = perm[:55], perm[55:]
 cfg = []
@@ -389,14 +399,14 @@ df_gap.round(3)
 ''')
     nb.md(r'''> 👀 **Qué debes observar:** la relación es monótona a grandes rasgos pero **no** preserva el orden fino: sistemas con nDCG@10 casi iguales pueden ordenarse distinto por nDCG@3 y por éxito en top-3, y diferencias offline de 0.01–0.02 desaparecen en la métrica online. Optimiza la métrica que se parece a la interfaz (aquí, @3) y confirma online (interleaving, módulo 18). El modelo de clic es de **juguete**: sus parámetros son supuestos.''')
 
-    # ─────────────── §4 Costos a escala ───────────────
-    nb.md(r'''## 4. Costos a escala: de 1 M a 1 B de documentos
+    # ─────────────── §4 Costes a escala ───────────────
+    nb.md(r'''## 4. Costes a escala: de 1 M a 1 B de documentos
 Una calculadora con **supuestos explícitos** (cámbialos): embedding inicial por API (0.02 $/1M tokens, oct-2026), 400 tokens por chunk, $d = 768$, RAM a 3 $/GB-mes (**supuesto** ilustrativo para instancias con mucha memoria; mira tu proveedor), 1 réplica cada 500 QPS (**supuesto**) y 2 réplicas mínimo por disponibilidad. Comparamos float32, int8 y binario + rescore (float32 en SSD a 0.1 $/GB-mes, **supuesto**).''')
     nb.code(r'''
 SUP = dict(precio_tok=0.02, tok_chunk=400, d=768, usd_gb_ram_mes=3.0, usd_gb_ssd_mes=0.10, qps_por_replica=500, replicas_min=2, grafo_b=256)
 
 def costo_sistema(N, precision, qps, sup=SUP):
-    """Costo inicial (embedding) y mensual (RAM + SSD de todas las réplicas). Devuelve dict en USD."""
+    """Coste inicial (embedding) y mensual (RAM + SSD de todas las réplicas). Devuelve dict en USD."""
     bpv = {"float32": 4 * sup["d"], "int8": sup["d"], "binario+rescore": sup["d"] / 8}[precision]
     ram_gb = N * (bpv + sup["grafo_b"]) / 1e9
     ssd_gb = N * 4 * sup["d"] / 1e9 if precision != "float32" else 0.0
@@ -413,7 +423,7 @@ for j, (p, c) in enumerate(zip(precs, [GRIS, AZUL, VERDE])):
     ax.bar(x + (j - 1) * w, t.ram_mes + t.ssd_mes, w, color=c, label=f"{p} · infra mensual")
     ax.scatter(x + (j - 1) * w, t.embedding_inicial, color=NARANJA, marker="D", zorder=3, label="embedding inicial (una vez)" if j == 0 else None)
 ax.set_yscale("log"); ax.set_xticks(x); ax.set_xticklabels(["1 M", "10 M", "100 M", "1 B"]); ax.set_xlabel("documentos (chunks)")
-ax.set_ylabel("USD (log)"); ax.set_title("Costo a escala (1 000 QPS, d=768, supuestos de SUP)"); ax.legend(fontsize=8); plt.tight_layout(); plt.show()
+ax.set_ylabel("USD (log)"); ax.set_title("Coste a escala (1 000 QPS, d=768, supuestos de SUP)"); ax.legend(fontsize=8); plt.tight_layout(); plt.show()
 tab.round(1)
 ''')
     nb.md(r'''> 👀 **Qué debes observar:** el embedding inicial es un pago único que crece lineal con $N$; la **memoria se paga cada mes y por réplica**, y a partir de ~100 M de chunks domina con holgura: ahí la cuantización deja de ser una optimización y pasa a ser la arquitectura. Fíjate también en `ram_gb_por_replica`: con 1 B de vectores float32 ninguna máquina normal lo aloja → sharding (y la cola de §3 del módulo 18) o DiskANN. Todos los precios de infraestructura de esta celda son **supuestos**.''')
@@ -424,7 +434,7 @@ tab.round(1)
 |---|---|---|---|
 | Tokens «glitch» (SolidGoldMagikarp) | tokens del vocabulario casi ausentes del entrenamiento del modelo producen comportamiento anómalo | Rumbelow & Watkins 2023 (LessWrong); Land & Bartolo 2024 (arXiv:2405.05417) | 05 |
 | Aritmética sensible a la tokenización de números | la dirección de troceo de dígitos (L2R vs R2L) cambia la exactitud | Singh & Strouse 2024 (arXiv:2402.14903) | 04–05 |
-| Impuesto de idioma | el mismo contenido cuesta varias veces más tokens en algunos idiomas | Petrov et al. 2023 (arXiv:2305.15425); Ahia et al. 2023 (arXiv:2305.13707) | 04 |
+| Prima de tokens por idioma | el mismo contenido cuesta varias veces más tokens en algunos idiomas | Petrov et al. 2023 (arXiv:2305.15425); Ahia et al. 2023 (arXiv:2305.13707) | 04 |
 | Trojan Source / caracteres invisibles | Unicode bidi e invisibles hacen que lo que ves no sea lo que se procesa | Boucher & Anderson 2021 (arXiv:2111.00169) | 01, 05 |
 | Retrievers densos frágiles fuera de dominio | en BEIR, BM25 supera a muchos densos zero-shot | Thakur et al. 2021 (arXiv:2104.08663) | 00, 15 |
 | Límite de dimensión | hay conjuntos top-k que un embedding de dimensión fija no puede representar | Weller et al. 2025 (arXiv:2508.21038) | 15 |
@@ -464,7 +474,7 @@ La checklist humana (para la descripción del PR):
 2. **Simetría**: misma normalización Unicode y tokenización en indexación y consulta; prefijos `query:`/`passage:` correctos.
 3. **Vectores**: normalizados si la métrica es coseno/producto; dimensión y dtype comprobados al cargar.
 4. **Evaluación**: golden set con test ciego, IC pareado vs producción, slices por idioma; hiperparámetros elegidos fuera del test.
-5. **Costo y latencia**: tokens/s medidos, p99 con batch = 1, memoria proyectada a N de producción.
+5. **Coste y latencia**: tokens/s medidos, p99 con batch = 1, memoria proyectada a N de producción.
 6. **Privacidad**: ¿se envía texto a terceros? ¿los vectores nuevos heredan la clasificación? ¿el borrado se propaga?
 7. **Rollback**: alias o flag para volver atrás en minutos.
 
@@ -505,13 +515,33 @@ Sin atribuir prácticas internas que no están publicadas, lo que sí se lee en 
 * **Mirar los datos**: leer 50 errores antes de cambiar la arquitectura (el análisis por slices del módulo 15 es la versión sistemática).
 * **Documentos de diseño y post-mortems sin culpables**: las decisiones (§1) se escriben con sus alternativas y se revisan cuando una medición las contradice.
 * **Etiquetar la madurez**: separar lo sólido de lo prometedor (🟢/🟡/🔴) es parte del rigor, no una opinión.
+
+Ninguna de estas prácticas es un consejo suelto: cada una ya la **ejecutaste** en este notebook. Evaluación antes que el modelo → criterios de aceptación del capstone (módulo 20, §1); baselines fuertes → BM25 en T3 y en `elige_hibrido`; ablaciones con IC → T1–T2; mirar los datos → F1–F4 de §5; documentos de diseño → los tres casos del proyecto. Úsala como índice para repasar, no como lista para memorizar.
+''')
+    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026) de las decisiones de este playbook
+Has aplicado ya cada decisión con números; la tabla dice cuáles de esas reglas descansan en evidencia consolidada y cuáles son apuestas razonables que conviene volver a medir.
+
+🟢 sólido · 🟡 emergente · 🔴 experimental.
+
+| Decisión / técnica | Madurez | Quién la usa (respaldado) | Fuente |
+|---|---|---|---|
+| BM25 como baseline obligatorio | 🟢 | BEIR lo mostró fuerte fuera de dominio | Thakur et al. 2021 |
+| Fusión híbrida (RRF / lineal) | 🟢 | Elasticsearch/OpenSearch, Qdrant, Weaviate, Vespa | Cormack et al. 2009; Bruch et al. 2022 |
+| Reranker cross-encoder en 2ª etapa | 🟢 | práctica estándar en búsqueda y RAG | Nogueira & Cho 2019 |
+| Bi-encoder multilingüe abierto + fine-tuning de dominio | 🟢 | e5, BGE-M3, Qwen3-Embedding, EmbeddingGemma | módulos 11–12 |
+| HNSW en RAM / IVF-PQ / DiskANN en SSD | 🟢 | FAISS, Lucene, pgvector, Qdrant, DiskANN | módulo 14 |
+| Cuantización binaria + rescoring | 🟡 | sentence-transformers, varias vector DBs | Shakir et al. 2024 |
+| Late interaction (ColBERT/PLAID/MUVERA) | 🟡 | ColBERTv2, PLAID; MUVERA (Google Research) | módulo 13 |
+| LLM-as-judge para qrels | 🟡 | útil con validación humana; sesgos conocidos | Thomas et al. 2023; Soboroff 2024 |
+| Tokenizer-free (BLT, H-Net) para retrieval | 🔴 | investigación | módulos 06–07 |
+| Límites de dimensión (LIMIT) como criterio de diseño | 🟡 | — | Weller et al. 2025 |
 ''')
     nb.md(r'''## 🏭 En producción
 * **Fusión híbrida** como opción de primera clase: RRF disponible en Elasticsearch/OpenSearch y en vector DBs como Qdrant y Weaviate (documentación oficial); Bruch et al. (2022) analizan cuándo la combinación convexa supera a RRF.
 * **Reranking en dos etapas**: el patrón retrieve → rerank (Nogueira & Cho 2019) sigue siendo la forma estándar de gastar cómputo donde importa; el presupuesto de latencia fija K (§1, `elige_hibrido`).
 * **Evaluación con humanos + LLM**: los juicios con LLM aceleran el pooling, pero su validez depende de calibrarlos con humanos (Thomas et al. 2023 frente a Soboroff 2024).
 * **Interleaving online** para cribar y A/B para confirmar (Chapelle et al. 2012; Kohavi et al. 2020).
-* **Costos**: la memoria por réplica domina a gran escala; la cuantización (int8/binaria + rescoring) y Matryoshka son las palancas principales (módulos 12 y 18).
+* **Costes**: la memoria por réplica domina a gran escala; la cuantización (int8/binaria + rescoring) y Matryoshka son las palancas principales (módulos 12 y 18).
 ''')
     nb.md(r'''## 🧠 Secretos de la élite
 1. **Un umbral sin medición es una opinión**: `N_FLAT_MAX` sale de §1 en *tu* hardware; los árboles de decisión se versionan y se testean como código.
@@ -527,7 +557,7 @@ Sin atribuir prácticas internas que no están publicadas, lo que sí se lee en 
 * Comparar sistemas con golden sets distintos, o con un golden set construido a partir de uno de ellos.
 * Reportar el mejor de N experimentos sin decir N.
 * Optimizar nDCG@10 cuando la interfaz muestra 3 resultados.
-* Calcular el costo de embedding y olvidar la memoria mensual por réplica.
+* Calcular el coste de embedding y olvidar la memoria mensual por réplica.
 * Revisar PRs de embeddings como si fueran PRs de código normal (sin contrato de versión ni evaluación pareada).
 ''')
     nb.md(r'''## 📝 Autoevaluación
@@ -551,7 +581,7 @@ Sospechar sesgo de pooling (T4): juzgar (humanos o LLM validado) los documentos 
 
 F1: `max_seq_len ≥ p95 de longitud de chunk en tokens del tokenizer del modelo` (ya está como MEDIA). F2: test de contrato que compruebe $\lVert v\rVert \approx 1$ en una muestra del índice si la métrica es IP/coseno, y que la norma no correlacione con la longitud.
 </details>
-<details><summary><b>6 · (Cálculo)</b> En T1, ¿por qué el número «honesto» de la CV no es el rendimiento del α final?</summary>
+<details><summary><b>6 · (Diagnóstico)</b> En T1, ¿por qué el número «honesto» de la CV no es el rendimiento del α final?</summary>
 
 La CV estima el rendimiento esperado del **procedimiento** «elegir α en datos de entrenamiento»; el α final (elegido con todo) puede ser distinto en cada pliegue. Para reportar el α final hace falta un test que no se usó para elegirlo.
 </details>

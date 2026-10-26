@@ -32,3 +32,23 @@ como punto de partida en cada módulo.
   del 15).
 - **Repaso espaciado:** el 🔁 solo repasaba 12–17. Añadidas R5 (M04 + M00, Cálculo: prima de tokens 1.3 en un corpus
   mitad ES → factura +15 %) y R6 (M01, Diagnóstico: «café» NFC vs NFD en la clave de caché).
+
+## 19 · Playbook de élite
+- Bien: no es una lista; las reglas son **código** (árboles `elige_*` con razones y umbral `N_FLAT_MAX` medido),
+  las trampas T1–T4 se reproducen con números, los fallos F1–F4 se reproducen y el linter de PRs es ejecutable.
+  👀 tras los 7 gráficos y las 3 Gemini. El proyecto ya seguía la escalera ejemplo → guiada (calentamiento:
+  revisar la propuesta del becario con la rúbrica) → independiente (C1–C3), con 🪜 1/2 en todos los TODO.
+- **Añadido 💡 Intuición** (faltaba): el playbook como checklist de piloto que se ejecuta, con los tres verbos
+  decidir / medir / revisar mapeados a secciones, y la escalera de práctica explícita para el alumno.
+- **Reestructurado:** Mapa de madurez de la cabecera a justo antes de 🏭, con frase puente.
+- **Ejemplos a mano añadidos:** el árbol del índice aplicado a 10 M × 768 con 64 y 16 GB (33.3 GB → HNSW float32;
+  10.2 GB → HNSW + int8), que coincide con la salida de `elige_indice`; y el optimismo esperado del *winner's curse*
+  (máximo esperado de 20 normales ≈ 1.87σ → ≈ +0.03 de nDCG ficticio con σ = 0.015; analogía con el CTR de recsys).
+- **🧭 corregida:** §4 (costes a escala) pasa a núcleo porque el bloque A de la rúbrica del proyecto usa sus fórmulas;
+  §5 (galería de fallos) pasa a ampliación.
+- **§7 Cultura** dejaba de ser lista suelta: añadido el cierre que remite cada práctica a dónde se ejecutó en el
+  notebook o en el capstone.
+- **Repaso espaciado:** añadidas R5 (M00, Diagnóstico: IC pareado que incluye el 0) y R6 (M01 + M02, Transferencia:
+  NFC al indexar y queries sin normalizar → ítem «simetría» de la checklist).
+- Autoevaluación: la pregunta 6 estaba marcada (Cálculo) sin cálculo; ahora (Diagnóstico).
+- Terminología: «impuesto de idioma» y «prima de paridad» → **prima de tokens** (también en la lección 20).
