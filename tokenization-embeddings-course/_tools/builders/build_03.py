@@ -1272,7 +1272,7 @@ Cifras de tamaño de vocabulario **a oct-2026** y sujetas a cambio entre version
 - **OpenAI.** `tiktoken` expone `r50k_base`, `p50k_base`, `cl100k_base` (GPT-3.5/GPT-4) y `o200k_base` (GPT-4o); medimos arriba `n_vocab` = 100 277 y 200 019 (incluyen tokens especiales). Todo es byte-level BPE + regex. Fuente: repositorio de `tiktoken` (MIT) y `tiktoken.encoding_for_model`.
 - **Meta.** Llama 1/2 usan BPE vía SentencePiece con dígitos separados y *byte fallback* (Touvron et al. 2023; Llama 2 tiene 32 000 piezas según el análisis de Land & Bartolo 2024). **Llama 3 cambió a un vocabulario de 128 K** construido a partir de los 100 K tokens de tiktoken más 28 K para idiomas no ingleses; sobre una muestra de inglés la compresión mejoró de 3.17 a 3.94 caracteres por token (Llama 3 herd of models, 2024).
 - **Google.** BERT: WordPiece de 30 000 (Devlin et al. 2018). T5: SentencePiece de 32 000 *wordpieces*, entrenado con una mezcla 10:1:1:1 de inglés:alemán:francés:rumano (Raffel et al. 2019). Gemma 3: SentencePiece con dígitos separados, espacios preservados y codificación a nivel de byte; el informe da ≈ 262 k entradas en el texto y 256 k en un pie de tabla (inconsistencia del propio informe).
-- **Mistral.** Los tokenizers v1–v2 son SentencePiece; **Tekken** (desde Mistral NeMo) es BPE basado en tiktoken, entrenado con más de 100 idiomas, con ≈ 130 k piezas + ≈ 1 k tokens de control, y Mistral reporta mejor compresión que el SentencePiece anterior (≈ 30 % en código y varios idiomas) según su guía de tokenización.
+- **Mistral.** Los tokenizers v1–v2 son SentencePiece; **Tekken** (desde Mistral NeMo) es BPE basado en tiktoken, entrenado con más de 100 idiomas, con ≈ 130 k piezas + ≈ 1 k tokens de control, según su guía de tokenización; el anuncio de Mistral NeMo (jul-2024) reporta ≈ 30 % más compresión que el tokenizer SentencePiece anterior en código fuente, chino, italiano, francés, alemán, español y ruso (2x en coreano, 3x en árabe).
 - **Hugging Face.** `tokenizers` (Rust) es el motor detrás de `AutoTokenizer`; un `tokenizer.json` serializa las 5 etapas. Song et al. (2021) propusieron un WordPiece de tiempo lineal.
 - **Trade-offs de escala.** Entrenar un SentencePiece Unigram con 1 M de subcadenas semilla sobre decenas de GB es costoso en memoria; por eso se muestrea (`input_sentence_size`, `shuffle_input_sentence`) y se pondera por idioma. Entrenar BPE/WordPiece con HF es mucho más rápido que Unigram (lo viste en los tiempos).
 """)
@@ -1351,32 +1351,32 @@ Entrena (o afina) con tokenización muestreada (Unigram `alpha≈0.1–0.5` o BP
 nb.md(r"""
 ## 15. Referencias
 
-**Papers (verificados: autor, año, título, enlace)**
+**Papers (verificados: autor, año, título, venue y enlace; revisados de nuevo el 26-oct-2026)**
 - Schuster, M. y Nakajima, K. (2012). *Japanese and Korean voice search.* ICASSP 2012. <https://ieeexplore.ieee.org/document/6289079>
 - Wu, Y. et al. (2016). *Google's Neural Machine Translation System: Bridging the Gap between Human and Machine Translation.* <https://arxiv.org/abs/1609.08144>
-- Sennrich, R., Haddow, B. y Birch, A. (2016). *Neural Machine Translation of Rare Words with Subword Units.* <https://arxiv.org/abs/1508.07909>
-- Kudo, T. (2018). *Subword Regularization: Improving Neural Network Translation Models with Multiple Subword Candidates.* <https://arxiv.org/abs/1804.10959>
-- Kudo, T. y Richardson, J. (2018). *SentencePiece: A simple and language independent subword tokenizer and detokenizer for Neural Text Processing.* <https://arxiv.org/abs/1808.06226>
-- Provilkov, I., Emelianenko, D. y Voita, E. (2020). *BPE-Dropout: Simple and Effective Subword Regularization.* <https://arxiv.org/abs/1910.13267>
-- Bostrom, K. y Durrett, G. (2020). *Byte Pair Encoding is Suboptimal for Language Model Pretraining.* <https://arxiv.org/abs/2004.03720>
-- Song, X. et al. (2021). *Fast WordPiece Tokenization.* <https://arxiv.org/abs/2012.15524>
-- Uzan, O., Schmidt, C. W., Tanner, C. y Pinter, Y. (2024). *Greed is All You Need: An Evaluation of Tokenizer Inference Methods.* <https://arxiv.org/abs/2403.01289>
-- Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* <https://arxiv.org/abs/2402.18376>
-- Goldman, O. et al. (2024). *Unpacking Tokenization: Evaluating Text Compression and its Correlation with Model Performance.* <https://arxiv.org/abs/2403.06265>
+- Sennrich, R., Haddow, B. y Birch, A. (2016). *Neural Machine Translation of Rare Words with Subword Units.* ACL 2016. <https://arxiv.org/abs/1508.07909>
+- Kudo, T. (2018). *Subword Regularization: Improving Neural Network Translation Models with Multiple Subword Candidates.* ACL 2018. <https://arxiv.org/abs/1804.10959>
+- Kudo, T. y Richardson, J. (2018). *SentencePiece: A simple and language independent subword tokenizer and detokenizer for Neural Text Processing.* EMNLP 2018 (demo). <https://arxiv.org/abs/1808.06226>
+- Provilkov, I., Emelianenko, D. y Voita, E. (2020). *BPE-Dropout: Simple and Effective Subword Regularization.* ACL 2020. <https://arxiv.org/abs/1910.13267>
+- Bostrom, K. y Durrett, G. (2020). *Byte Pair Encoding is Suboptimal for Language Model Pretraining.* Findings of EMNLP 2020. <https://arxiv.org/abs/2004.03720>
+- Song, X. et al. (2021). *Fast WordPiece Tokenization.* EMNLP 2021. <https://arxiv.org/abs/2012.15524>
+- Uzan, O., Schmidt, C. W., Tanner, C. y Pinter, Y. (2024). *Greed is All You Need: An Evaluation of Tokenizer Inference Methods.* ACL 2024. <https://arxiv.org/abs/2403.01289>
+- Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* EMNLP 2024. <https://arxiv.org/abs/2402.18376>
+- Goldman, O. et al. (2024). *Unpacking Tokenization: Evaluating Text Compression and its Correlation with Model Performance.* Findings of EMNLP 2024. <https://arxiv.org/abs/2403.06265>
 - Dagan, G., Synnaeve, G. y Rozière, B. (2024). *Getting the most out of your tokenizer for pre-training and domain adaptation.* <https://arxiv.org/abs/2402.01035>
-- Chai, Y. et al. (2024). *Tokenization Falling Short: On Subword Robustness in Large Language Models.* <https://arxiv.org/abs/2406.11687>
-- Devlin, J. et al. (2018). *BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.* <https://arxiv.org/abs/1810.04805>
-- Raffel, C. et al. (2019). *Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer (T5).* <https://arxiv.org/abs/1910.10683>
-- Conneau, A. et al. (2019). *Unsupervised Cross-lingual Representation Learning at Scale (XLM-R).* <https://arxiv.org/abs/1911.02116>
+- Chai, Y. et al. (2024). *Tokenization Falling Short: On Subword Robustness in Large Language Models.* Findings of EMNLP 2024. <https://arxiv.org/abs/2406.11687>
+- Devlin, J. et al. (2018). *BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.* NAACL 2019. <https://arxiv.org/abs/1810.04805>
+- Raffel, C. et al. (2019). *Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer (T5).* JMLR 21 (2020). <https://arxiv.org/abs/1910.10683>
+- Conneau, A. et al. (2019). *Unsupervised Cross-lingual Representation Learning at Scale (XLM-R).* ACL 2020. <https://arxiv.org/abs/1911.02116>
 - Touvron, H. et al. (2023). *LLaMA: Open and Efficient Foundation Language Models.* <https://arxiv.org/abs/2302.13971>
 - Llama Team, Meta (2024). *The Llama 3 Herd of Models.* <https://arxiv.org/abs/2407.21783>
 - Gemma Team (2025). *Gemma 3 Technical Report.* <https://arxiv.org/abs/2503.19786>
-- Land, S. y Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* <https://arxiv.org/abs/2405.05417>
+- Land, S. y Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* EMNLP 2024. <https://arxiv.org/abs/2405.05417>
 
 **Librerías y documentación**
 - `tiktoken` (OpenAI, MIT): <https://github.com/openai/tiktoken> · `sentencepiece` (Google): <https://github.com/google/sentencepiece> · `tokenizers` (Hugging Face): <https://github.com/huggingface/tokenizers>
 - Hugging Face LLM Course, cap. 6: Unigram <https://huggingface.co/learn/llm-course/chapter6/7> y construcción de tokenizers bloque a bloque <https://huggingface.co/learn/llm-course/chapter6/8>
-- Mistral AI, guía de tokenización (Tekken): <https://docs.mistral.ai/guides/tokenization/>
+- Mistral AI, guía de tokenización (Tekken): <https://docs.mistral.ai/guides/tokenization/> · anuncio de Mistral NeMo (18-jul-2024, cifras de compresión de Tekken): <https://mistral.ai/news/mistral-nemo/>
 
 **Siguiente:** módulo 04 (diseño de tokenizers modernos: tamaño del vocabulario, paridad multilingüe, costes) y proyecto de este módulo.
 """)

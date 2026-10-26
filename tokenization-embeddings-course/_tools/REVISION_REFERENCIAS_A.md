@@ -65,3 +65,18 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | `tiktoken` (incl. `_educational.py`), `minbpe`, HF `tokenizers`, `subword-nmt` | ✅ | Repositorios públicos existentes |
 | 🏭 mapeo modelo → encoding de `tiktoken` 0.14.0 | ✅ | Verificado por la revisión técnica en el código instalado |
 | Mapa de madurez | ✅ | Cada fila con fuente; SuperBPE 🟡 «8B en el artículo» confirmado |
+
+## 03 · WordPiece, Unigram, SentencePiece
+| Referencia | Estado | Nota |
+|---|---|---|
+| Schuster & Nakajima 2012, *Japanese and Korean voice search*, ICASSP 2012 (IEEE 6289079) | ✅ | Registro de IEEE Xplore confirmado |
+| Wu et al. 2016 (GNMT), arXiv:1609.08144 | ✅ | |
+| Sennrich et al. 2016; Kudo 2018; Kudo & Richardson 2018 | ✏️ | Añadidos venues (ACL 2016, ACL 2018, EMNLP 2018 demo) |
+| Provilkov et al. 2020; Bostrom & Durrett 2020; Song et al. 2021 | ✏️ | Venues (ACL 2020, Findings EMNLP 2020, EMNLP 2021) |
+| Uzan et al. 2024; Schmidt et al. 2024; Goldman et al. 2024; Chai et al. 2024 | ✏️ | Venues (ACL 2024, EMNLP 2024, Findings EMNLP 2024 ×2); afirmaciones de 🧠 2–4 coinciden con los abstracts |
+| Dagan, Synnaeve & Rozière 2024, arXiv:2402.01035 | ✅ | |
+| Devlin et al. 2018 (BERT); Raffel et al. 2019 (T5); Conneau et al. 2019 (XLM-R) | ✏️ | Venues (NAACL 2019, JMLR 2020, ACL 2020); XLM-R α = 0.3 y T5 10:1:1:1 coherentes con los papers |
+| Touvron et al. 2023 (LLaMA); Llama Team 2024; Gemma Team 2025; Land & Bartolo 2024 | ✅ | |
+| Mistral, guía de tokenización (Tekken: BPE sobre tiktoken, ≈ 130 k + 1 k de control, > 100 idiomas) | ✏️ | La cifra «≈ 30 % mejor compresión» no está en la guía sino en el anuncio de Mistral NeMo (jul-2024), y se limita a código y 7 idiomas (2x coreano, 3x árabe): reescrito y añadida la fuente |
+| `tiktoken`, `sentencepiece`, `tokenizers`, HF LLM Course cap. 6.7 y 6.8 | ✅ | |
+| Mapa de madurez | ✅ | «Quién la usa» respaldado (BERT 30 000, T5 32 000, XLM-R 250 k, Llama 1/2, Gemma 3); WordPiece por verosimilitud 🔴 respaldado por el experimento de la lección |
