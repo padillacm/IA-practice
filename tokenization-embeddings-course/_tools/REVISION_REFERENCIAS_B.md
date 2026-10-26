@@ -159,3 +159,13 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Venues | ✏️ | NeurIPS 2021 D&B, SIGIR 2009/2019/2024, TOIS 42(1) y 30(1), ICLR 2026, CIKM 2007, EMNLP 2024/2023, NeurIPS 2023, USENIX Security 2023, TACL 12, SIGMOD 2024, IRR 2025; Nogueira & Cho y Singh & Strouse preprint |
 | Rumbelow & Watkins 2023 (LessWrong) | ✅ | Verificado en el bloque A |
 | Mapa de madurez / 🏭 (RRF en Elasticsearch/OpenSearch, Qdrant, Weaviate, Vespa; MUVERA de Google Research) | ✅ | Documentación oficial de cada motor; MUVERA en research.google |
+
+## 20 · Capstone
+| Referencia | Estado | Nota |
+|---|---|---|
+| 11 IDs arXiv (Sennrich, Wang/Cho/Gu, mE5, MRL, Bruch, HNSW, Faiss, BEIR, ColPali…) | ✅ | Autor y año coinciden |
+| «*HNSW*», «*BEIR*», «*ColPali*», Bruch et al. sin título, *Binary and Scalar Embedding Quantization* | ✏️ | Títulos completos |
+| Venues | ✏️ | ACL 2016, AAAI 2020 (también en `LECTURA_PAPERS.md`), FnTIR 3(4), NeurIPS 2022, SIGIR 2009, TOIS 2023, TPAMI 2020, CIKM 2007, NeurIPS 2021 D&B, ICLR 2025; Faiss preprint |
+| Anthropic, *Introducing Contextual Retrieval* (5.7 % → 3.7 % / 2.9 % / 1.9 %; 50–100 tokens; 1.02 $/M tokens) | ✏️ | Cifras coinciden con el post (bloque A); añadida la fecha (19-sep-2024) |
+| Precio de re-embedding (0.02 $/1M ⇒ 80 $ ≤ 500 $) | ✅ | Coincide con el 18 |
+| Mapa de madurez / 🏭 | ✅ | Todas las piezas con fuente o módulo del curso |

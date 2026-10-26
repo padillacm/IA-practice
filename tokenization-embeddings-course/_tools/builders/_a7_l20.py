@@ -611,15 +611,15 @@ Un criterio por slice (no peor que OCR+texto en capturas, con IC), el coste de a
 </details>
 ''')
     nb.md(r'''## 📚 Referencias
-* Sennrich, Haddow, Birch (2016). *Neural Machine Translation of Rare Words with Subword Units*. https://arxiv.org/abs/1508.07909 · Wang, Cho, Gu (2019). *Neural Machine Translation with Byte-Level Subwords*. https://arxiv.org/abs/1909.03341
-* Robertson & Zaragoza (2009). *The Probabilistic Relevance Framework: BM25 and Beyond*. Foundations and Trends in IR.
-* Wang et al. (2024). *Multilingual E5 Text Embeddings: A Technical Report*. https://arxiv.org/abs/2402.05672 · Kusupati et al. (2022). *Matryoshka Representation Learning*. https://arxiv.org/abs/2205.13147
-* Cormack, Clarke, Büttcher (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*. SIGIR · Bruch, Gai, Ingber (2022). https://arxiv.org/abs/2210.11934
-* Malkov & Yashunin (2016). *HNSW*. https://arxiv.org/abs/1603.09320 · Douze et al. (2024). *The Faiss library*. https://arxiv.org/abs/2401.08281
-* Smucker, Allan, Carterette (2007). *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*. CIKM · Thakur et al. (2021). *BEIR*. https://arxiv.org/abs/2104.08663
-* Faysse et al. (2024). *ColPali*. https://arxiv.org/abs/2407.01449
-* Shakir, Aarsen, Lee (2024). *Binary and Scalar Embedding Quantization* (blog de Hugging Face). https://huggingface.co/blog/embedding-quantization
-* Anthropic (2024). *Introducing Contextual Retrieval*. https://www.anthropic.com/news/contextual-retrieval
+* Sennrich, Haddow, Birch (2016). *Neural Machine Translation of Rare Words with Subword Units*. ACL 2016. https://arxiv.org/abs/1508.07909 · Wang, Cho, Gu (2019). *Neural Machine Translation with Byte-Level Subwords*. AAAI 2020. https://arxiv.org/abs/1909.03341
+* Robertson & Zaragoza (2009). *The Probabilistic Relevance Framework: BM25 and Beyond*. Foundations and Trends in IR 3(4).
+* Wang et al. (2024). *Multilingual E5 Text Embeddings: A Technical Report*. https://arxiv.org/abs/2402.05672 · Kusupati et al. (2022). *Matryoshka Representation Learning*. NeurIPS 2022. https://arxiv.org/abs/2205.13147
+* Cormack, Clarke, Büttcher (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*. SIGIR 2009 · Bruch, Gai, Ingber (2022). *An Analysis of Fusion Functions for Hybrid Retrieval*. ACM TOIS 42(1), 2023. https://arxiv.org/abs/2210.11934
+* Malkov & Yashunin (2016). *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs*. IEEE TPAMI 42(4), 2020. https://arxiv.org/abs/1603.09320 · Douze et al. (2024). *The Faiss library*. Preprint. https://arxiv.org/abs/2401.08281
+* Smucker, Allan, Carterette (2007). *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*. CIKM 2007 · Thakur et al. (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS 2021 (Datasets & Benchmarks). https://arxiv.org/abs/2104.08663
+* Faysse et al. (2024). *ColPali: Efficient Document Retrieval with Vision Language Models*. ICLR 2025. https://arxiv.org/abs/2407.01449
+* Shakir, Aarsen, Lee (2024). *Binary and Scalar Embedding Quantization for Significantly Faster & Cheaper Retrieval* (blog de Hugging Face). https://huggingface.co/blog/embedding-quantization
+* Anthropic (19-sep-2024). *Introducing Contextual Retrieval*. https://www.anthropic.com/news/contextual-retrieval
 * Hugging Face `tokenizers`: https://github.com/huggingface/tokenizers · FAISS: https://github.com/facebookresearch/faiss
 * Material del curso: `extras/GUIA_ENTREVISTAS.md` y `extras/LECTURA_PAPERS.md`.
 ''')

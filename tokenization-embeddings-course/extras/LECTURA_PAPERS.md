@@ -29,7 +29,7 @@
 * ⭐⭐⭐ Sennrich, Haddow, Birch (2016). *Neural Machine Translation of Rare Words with Subword Units*. ACL 2016. arXiv:1508.07909. 🟢
   - ¿Qué problema de vocabulario abierto resuelve y qué hiperparámetro controla el trade-off longitud/vocabulario?
   - ¿Por qué el algoritmo original aprende merges dentro de palabras y no entre ellas?
-* ⭐⭐ Wang, Cho, Gu (2019). *Neural Machine Translation with Byte-Level Subwords*. arXiv:1909.03341. 🟢
+* ⭐⭐ Wang, Cho, Gu (2019). *Neural Machine Translation with Byte-Level Subwords*. AAAI 2020. arXiv:1909.03341. 🟢
 * ⭐⭐ Zouhar et al. (2023). *A Formal Perspective on Byte-Pair Encoding*. Findings of ACL 2023. arXiv:2306.16837. 🟢 (BPE como aproximación voraz a un problema de compresión).
 * ⭐ Kozma & Voderholzer (2024). *Theoretical Analysis of Byte-Pair Encoding*. Preprint, arXiv:2411.08671.
 
