@@ -110,3 +110,15 @@ como punto de partida en cada módulo.
   negativos al minar con BM25 («no visto ≠ no relevante», como los no clics en recsys).
 - **Andamiaje del proyecto:** TODO 2 y TODO 3 solo tenían 🪜 1 → añadidas 🪜 2 coherentes con la solución
   (filtro **relativo** TopK-PercPos explicado).
+
+## 12 · Embedders modernos
+- Bien: 🔁 con 04, 09, 10 y 11; pooling encoder/decoder desde cero; árbol de decisión; lectura crítica de MTEB;
+  autoevaluación con 7 preguntas (6 etiquetadas); proyecto con rúbrica R1–R9 calibrada y 🪜 en los TODO difíciles.
+- **Reestructurado:** Mapa de madurez de la cabecera (§0, antes de la intuición) a justo antes de 🏭, con frase puente.
+- **Ejemplo a mano añadido** en §5: cuantización int8 de un valor (0.12 → 30 → 0.1196) y binaria de dos vectores de 4
+  dimensiones (H = 2 → producto ±1 = 0), con la observación de que la binaria tira la magnitud (motivo del rescoring).
+- **Repaso espaciado:** añadida R5 (M08 + M02, Cálculo): 24 576 bits (float32) vs 768 (binario) vs 13 (token VQ de
+  8 192) como puntos de una curva tasa-distorsión; puente con PQ (14).
+- **Proyecto:** el TODO 7 (frontera de Pareto + recomendación + gráfico) no tenía pistas → 🪜 1 (skyline de dos
+  objetivos, analogía tasa-distorsión del 08) y 🪜 2 (API). Añadidas 👀 tras el gráfico de la frontera (plantilla y
+  solución), formuladas sin presuponer el resultado con datos reales.

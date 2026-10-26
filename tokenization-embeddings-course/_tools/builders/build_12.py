@@ -110,28 +110,12 @@ La dimensión oculta $d_{model}$ (p. ej. 1024 en un decoder de ≈ 0.6 B). Un em
 
 Porque la <i>fertilidad</i> (tokens por palabra) del español suele ser mayor que la del inglés en vocabularios sesgados al inglés: el mismo texto ocupa más tokens y se trunca antes en `max_seq_length`. Por eso Políglota fija `max_len` en tokens, no en caracteres.
 </details>
+<details><summary><b>5 · (M08 + M02, Cálculo)</b> ¿Cuántos bits ocupa un vector de 768 dimensiones en float32 y en binario? Compáralo con un token VQ de un codebook de 8 192 entradas.</summary>
+
+float32: $768 \times 32 = 24\,576$ bits; binario: **768 bits** (32× menos); un token VQ: $\log_2 8192 = 13$ bits. Las tres son compresión con pérdida (módulo 08) con distinto punto en la curva tasa-distorsión; la binaria es una cuantización escalar de 1 bit por dimensión, y el PQ del módulo 14 queda entre medias (VQ por subespacios). Como en bits por byte (02), lo que importa es la calidad por bit.
+</details>
 ''')
 
-    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
-🟢 sólido (estándar de industria) · 🟡 emergente (resultados publicados, adopción parcial) · 🔴 experimental.
-
-| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
-|---|---|---|---|
-| Encoders contrastivos multilingües pequeños/medianos (E5, BGE-M3, GTE) | 🟢 | Microsoft (E5), BAAI (BGE-M3), Alibaba (mGTE) | Wang et al. 2024 (2402.05672); Chen et al. 2024 (2402.03216); Zhang et al. 2024 (2407.19669) |
-| Prefijos / instrucciones de query y documento | 🟢 | E5 (`query:`/`passage:`), Qwen3-Embedding (`Instruct:`), EmbeddingGemma (prompts por tarea) | tarjetas de modelo; Wang et al. 2023 (2401.00368) |
-| **Matryoshka (MRL)**: truncar + renormalizar | 🟢 | OpenAI (`dimensions`), Cohere Embed v4, Nomic v2, EmbeddingGemma, Qwen3-Embedding, Gemini Embedding, Voyage | Kusupati et al. 2022 (2205.13147); docs de cada proveedor |
-| Cuantización `int8` de embeddings | 🟢 | `sentence-transformers`, Voyage (salida int8), Cohere | HF blog (Shakir, Aarsen, Lee 2024); docs |
-| Cuantización **binaria** + rescoring | 🟡 | Cohere/Voyage ofrecen salida binaria; Elastic BBQ (vía RaBitQ, módulo 14). La calidad depende del modelo | HF blog 2024; Elastic Search Labs |
-| *Quantization-aware training* de embedders | 🟡 | Voyage-4 (según su documentación en MongoDB/Azure) | docs de Voyage |
-| LLM-as-embedder 0.5–1 B (Qwen3-Embedding-0.6B, Jina v5) | 🟢 | Alibaba, Jina | 2506.05176; página del modelo |
-| LLM-as-embedder 7–8 B (e5-mistral, NV-Embed, Qwen3-Embedding-8B) | 🟡 | NVIDIA, Microsoft, Alibaba — coste de inferencia alto | 2401.00368; 2405.17428; 2506.05176 |
-| Pooling *latent attention* (NV-Embed) | 🟡 | NVIDIA | 2405.17428 |
-| LLM2Vec (decoder → encoder bidireccional) | 🟡 | investigación (McGill/Mila) | 2404.05961 |
-| Embeddings multimodales unificados (Gemini Embedding 2, Jina v4/v5-omni) | 🟡 | Google (GA abr-2026), Jina — recientes; tema del módulo 16 | blog de Google (mar/abr-2026); Elastic (may-2026) |
-| MoE para embeddings (Nomic Embed v2) | 🟡 | Nomic | 2502.07972 |
-| Elegir embedder **solo** por el promedio de MTEB | 🔴 (mala práctica) | — | ver sección 7 |
-| Evaluar en tu propio golden set con intervalos de confianza | 🟢 | práctica estándar en equipos de search | módulo 15 |
-''')
 
     # ───────────────────────────── 2. Setup ─────────────────────────────
     nb.md(r'''## 0 · Preparación del entorno
@@ -513,6 +497,8 @@ $$q_{ij}=\operatorname{round}\!\Big(\tfrac{x_{ij}-lo_j}{(hi_j-lo_j)/255}\Big)-12
 
 **Binaria.** $b_{ij}=\mathbb{1}[x_{ij}>0]$, empaquetado 8 bits por byte. La similitud se aproxima con la **distancia de Hamming** (XOR + popcount). Para vectores $\pm1$, $\langle a,b\rangle=d-2\,H(a,b)$: es decir, ordenar por Hamming ordena por producto punto de los signos.
 
+✍️ **Ejemplo a mano.** *int8:* en una dimensión con $[lo, hi] = [-0.5, 0.5]$, el paso es $1/255 \approx 0.00392$; $x = 0.12$ → $\operatorname{round}(0.62/0.00392) - 128 = 158 - 128 = $ **30**, y al decodificar $30 + 128 = 158 \to 158 \cdot 0.00392 - 0.5 = 0.1196$ (error $4\times10^{-4}$, menor que medio paso). *Binaria:* $a = (0.12, -0.50, 0.33, 0.01) \to$ `1011`, $b = (0.20, 0.10, -0.30, 0.05) \to$ `1101`; difieren en $H = 2$ bits, y en $\pm1$: $\langle a, b\rangle = 4 - 2\cdot2 = 0$ (compruébalo: $1 - 1 - 1 + 1$). Fíjate en que $a_4 = 0.01$ cuenta igual que $a_3 = 0.33$: la binaria tira la magnitud, y por eso hace falta el rescoring.
+
 **Rescoring (clave).** La binaria sola pierde calidad; la receta estándar es **recuperar $k\times$`over` candidatos con Hamming** y **reordenarlos con la query en `float32` contra los vectores `int8`** (que pueden vivir en disco). Es la receta del post de Hugging Face (Shakir, Aarsen, Lee, 2024).
 
 > ⚠️ **Calibra con el corpus, no con las queries**: las queries tienen una distribución distinta (más cortas) y el rango resultante es inadecuado. `sentence-transformers` recomienda calibrar con un conjunto grande de embeddings representativo de lo que vas a cuantizar (`calibration_embeddings`).
@@ -865,6 +851,28 @@ else:
 ''')
 
     # ───────────────────────────── 12. Producción ─────────────────────────────
+    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
+Ya has visto por dentro cada pieza (pooling last-token, prefijos, Matryoshka, int8/binaria, MTEB); la tabla las sitúa por madurez antes de pasar a cómo las usa la industria.
+
+🟢 sólido (estándar de industria) · 🟡 emergente (resultados publicados, adopción parcial) · 🔴 experimental.
+
+| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
+|---|---|---|---|
+| Encoders contrastivos multilingües pequeños/medianos (E5, BGE-M3, GTE) | 🟢 | Microsoft (E5), BAAI (BGE-M3), Alibaba (mGTE) | Wang et al. 2024 (2402.05672); Chen et al. 2024 (2402.03216); Zhang et al. 2024 (2407.19669) |
+| Prefijos / instrucciones de query y documento | 🟢 | E5 (`query:`/`passage:`), Qwen3-Embedding (`Instruct:`), EmbeddingGemma (prompts por tarea) | tarjetas de modelo; Wang et al. 2023 (2401.00368) |
+| **Matryoshka (MRL)**: truncar + renormalizar | 🟢 | OpenAI (`dimensions`), Cohere Embed v4, Nomic v2, EmbeddingGemma, Qwen3-Embedding, Gemini Embedding, Voyage | Kusupati et al. 2022 (2205.13147); docs de cada proveedor |
+| Cuantización `int8` de embeddings | 🟢 | `sentence-transformers`, Voyage (salida int8), Cohere | HF blog (Shakir, Aarsen, Lee 2024); docs |
+| Cuantización **binaria** + rescoring | 🟡 | Cohere/Voyage ofrecen salida binaria; Elastic BBQ (vía RaBitQ, módulo 14). La calidad depende del modelo | HF blog 2024; Elastic Search Labs |
+| *Quantization-aware training* de embedders | 🟡 | Voyage-4 (según su documentación en MongoDB/Azure) | docs de Voyage |
+| LLM-as-embedder 0.5–1 B (Qwen3-Embedding-0.6B, Jina v5) | 🟢 | Alibaba, Jina | 2506.05176; página del modelo |
+| LLM-as-embedder 7–8 B (e5-mistral, NV-Embed, Qwen3-Embedding-8B) | 🟡 | NVIDIA, Microsoft, Alibaba — coste de inferencia alto | 2401.00368; 2405.17428; 2506.05176 |
+| Pooling *latent attention* (NV-Embed) | 🟡 | NVIDIA | 2405.17428 |
+| LLM2Vec (decoder → encoder bidireccional) | 🟡 | investigación (McGill/Mila) | 2404.05961 |
+| Embeddings multimodales unificados (Gemini Embedding 2, Jina v4/v5-omni) | 🟡 | Google (GA abr-2026), Jina — recientes; tema del módulo 16 | blog de Google (mar/abr-2026); Elastic (may-2026) |
+| MoE para embeddings (Nomic Embed v2) | 🟡 | Nomic | 2502.07972 |
+| Elegir embedder **solo** por el promedio de MTEB | 🔴 (mala práctica) | — | ver sección 7 |
+| Evaluar en tu propio golden set con intervalos de confianza | 🟢 | práctica estándar en equipos de search | módulo 15 |
+''')
     nb.md(r'''## 9 · 🏭 En producción
 
 - **OpenAI** ofrece `text-embedding-3-small` y `-large` (25-ene-2024) con el parámetro `dimensions`, que acorta el vector descartando valores del final conservando sus propiedades (documentación y anuncio de OpenAI). *Es Matryoshka de cara al usuario.*
@@ -1254,6 +1262,13 @@ Una configuración está en la **frontera de Pareto** si ninguna otra tiene a la
 - `frontera_pareto(df)`: devuelve las filas no dominadas ordenadas por `bytes_vec` creciente (recorre en orden de memoria y conserva una fila solo si su `ndcg10` supera estrictamente el mejor visto).
 - `recomienda(df, presupuesto_gb, n_docs)`: entre las filas que caben en el presupuesto (`bytes_vec * n_docs / 1e9 <= presupuesto_gb`), elige la de mayor `ndcg10` (desempate: menos bytes, luego menos `ms_query`).
 Después dibuja la frontera (`bytes_vec` en escala log vs `ndcg10`) coloreando por precisión.
+
+<details><summary>🪜 Pista 1 (idea)</summary>
+Es el «skyline» de un problema con dos objetivos: si ordenas por memoria creciente, una fila solo entra en la frontera si mejora el mejor nDCG visto hasta entonces. Es la misma lectura que la curva tasa-distorsión del módulo 08 (bits frente a calidad).
+</details>
+<details><summary>🪜 Pista 2 (casi la API)</summary>
+<code>d = df.sort_values(["bytes_vec", "ndcg10"], ascending=[True, False])</code>; recorre <code>d.itertuples()</code> guardando <code>r.Index</code> cuando <code>r.ndcg10 &gt; mejor</code>; devuelve <code>d.loc[keep]</code>. Para <code>recomienda</code>: filtra con la condición de presupuesto y <code>sort_values(["ndcg10", "bytes_vec", "ms_query"], ascending=[False, True, True]).iloc[0]</code>. El gráfico: <code>ax.scatter</code> por grupo de <code>precision</code>, <code>ax.plot</code> de la frontera y <code>ax.set_xscale("log", base=2)</code>.
+</details>
 ''')
     nb.code(r'''
 def frontera_pareto(df):
@@ -1278,6 +1293,7 @@ except (NotImplementedError, AttributeError, TypeError) as e:
     FRONT = REC = None
     print("⏳ pendiente:", repr(e))
 ''')
+    nb.md(r'''> 👀 **Qué debes observar:** ¿qué precisiones forman la frontera? Si contiene puntos que no son `float32` (la solución de referencia los tiene: R7), a igual memoria te conviene más recortar **bits** que dimensiones; si no, comprueba tus `bytes_vec`. Mira dónde cruza la frontera la línea del presupuesto: esa es tu recomendación. Si un modelo entero queda por debajo de la frontera en todas sus escalas, está dominado y se descarta por datos, no por opinión. Con el corpus de respaldo los valores absolutos cambian; la forma de la frontera es lo que debes defender.''')
     nb.md(r'''## 12 · Autocomprobación de la rúbrica
 Esta celda evalúa R1–R8 sobre **tus** funciones y resultados. Debe imprimir `✅` en todo cuando termines (R9 es manual: escribe tu conclusión en la celda de abajo).
 ''')
@@ -1450,6 +1466,7 @@ dibuja_frontera(RESULTS, FRONT); plt.show()
 display(FRONT.round(3))
 print("Recomendación:", REC[["modelo", "dim", "precision", "ndcg10", "bytes_vec", "MB_10M"]].to_dict())
 ''')
+    nb.md("> 👀 **Qué debes observar:** compara tu frontera con esta. Si difieren, revisa primero `bytes_vec` (binario = m/8) y que el overlap se mida contra float32 **a la misma dimensión**.")
     nb.code(r'''
 _ = autograder()
 lat = RESULTS.groupby("precision")[["ms_query", "overlap10"]].mean().round(3)
