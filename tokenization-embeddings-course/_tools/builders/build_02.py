@@ -1053,7 +1053,7 @@ pb.md(r"""
 | R4 | `a_tiktoken`: `tiktoken` con **tus** merges produce los mismos ids que tu `encode` | 100 % de ≥ 40 textos |
 | R5 | HF `tokenizers` con **tus** merges produce los mismos ids | 100 % de ≥ 40 textos |
 | R6 | Compresión en **prueba** (tokenizer entrenado en la mezcla ES+EN+código, vocabulario 1 000): bytes por token | ES ≥ **%(es).1f**, EN ≥ **%(en).1f**, código ≥ **%(code).1f** (corpus sintético) |
-| R7 | **Impuesto de idioma**: bytes/token en prueba ES del tokenizer entrenado solo en ES ÷ el entrenado solo en EN | ≥ **%(tax).1f**× (corpus sintético) |
+| R7 | **Prima de tokens por idioma**: bytes/token en prueba ES del tokenizer entrenado solo en ES ÷ el entrenado solo en EN | ≥ **%(tax).1f**× (corpus sintético) |
 | R8 | Barrido de vocabulario: bytes/token **no decrece** al crecer el vocabulario (ES, EN, código) | monótono |
 | R9 | `poliglota_bpe.json` guardado (merges, vocabulario, regex y métricas) | ✅ |
 
