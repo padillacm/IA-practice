@@ -338,7 +338,7 @@ Con H-Net y tokenizer transfer ya vistos, esta tabla resume qué es sólido, eme
 | Técnica | Madurez | Quién la usa / respaldo público | Fuente |
 |---|---|---|---|
 | BLT (parches por entropía, módulo 06) | 🟡/🔴 | Meta FAIR; hasta 8B, pesos 1B/7B | arXiv:2412.09871 (ACL 2025) |
-| **H-Net / dynamic chunking** | 🔴 | CMU / Cartesia (Albert Gu); código `goombalab/hnet` y pesos en el hub de Cartesia; ICLR 2026; hasta ~1.3B de FLOPs equivalentes | arXiv:2507.07955 |
+| **H-Net / dynamic chunking** | 🔴 | CMU / Cartesia (Albert Gu); código `goombalab/hnet` y pesos en la organización `cartesia-ai` de Hugging Face (1 y 2 etapas, tamaños L y XL); ICLR 2026; hasta ~1.3B de FLOPs equivalentes | arXiv:2507.07955 |
 | Seguimiento de H-Net (SOMBRERO, H-Net++, chunking adaptativo…) | 🔴 | Grupos académicos / industriales; resultados a ~1B o menos | p. ej. arXiv:2601.22805 |
 | AU-Net (U-Net autoregresiva bytes→palabras) | 🔴 | Meta FAIR / NeurIPS 2025; «en pie de igualdad» con BPE en jerarquías poco profundas | arXiv:2506.14761 |
 | *Byte-ification* (Bolmo) | 🔴/🟡 | Ai2: Bolmo 1B/7B abiertos, convertidos desde Olmo 2/3 | arXiv:2512.15586 |
@@ -346,9 +346,9 @@ Con H-Net y tokenizer transfer ya vistos, esta tabla resume qué es sólido, eme
 | FVT (media de la descomposición) | 🟢/🟡 | Compresión de modelos (Gee et al., 2022); baseline estándar en la literatura de transfer | arXiv:2402.09977 |
 | WECHSEL | 🟡 | Transferencia de GPT-2/RoBERTa a otros idiomas; código abierto | arXiv:2112.06598 |
 | FOCUS | 🟡 | Especialización monolingüe de XLM-R; checkpoints y código publicados | arXiv:2305.14481 |
-| Trans-Tokenization | 🟡 | Familia «Tweeties» (COLM 2024), adaptada desde Mistral-7B | arXiv:2408.04303 |
-| ZeTT (hiperred) | 🟡/🔴 | NeurIPS 2024; hiperredes publicadas (XLM-R, Mistral-7B, TinyLlama) | arXiv:2405.07883 |
-| Destilación entre tokenizers (ALM) | 🔴 | Investigación (2025) | arXiv:2503.20083 |
+| Trans-Tokenization | 🟡 | Familia «Tweeties» (COLM 2024: tatar, neerlandés, armenio, italiano), derivada de Mistral-7B (p. ej. Tweety-Tatar desde Mistral-7B-Instruct-v0.2, según su model card) | arXiv:2408.04303 |
+| ZeTT (hiperred) | 🟡/🔴 | NeurIPS 2024; hiperredes publicadas (XLM-R, Mistral-7B, TinyLlama; Llama 3 8B como experimental) | arXiv:2405.07883 |
+| Destilación entre tokenizers (ALM) | 🔴 | Investigación (NeurIPS 2025) | arXiv:2503.20083 |
 
 > **Regla del curso:** «🔴» = hay un paper con resultados a pequeña/mediana escala y código, pero **no hay evidencia pública de adopción en producción a gran escala**.
 """)
@@ -409,7 +409,7 @@ nb.md(r"""
 nb.md(r"""
 ## 13. Referencias
 
-Verificadas (título/autores/fecha) en arXiv o en el repositorio oficial en la fecha de redacción.
+Verificadas (título/autores/fecha) en arXiv o en el repositorio oficial en la fecha de redacción; venues y repositorios revisados de nuevo el 26-oct-2026.
 
 * Hwang, Wang, Gu. **Dynamic Chunking for End-to-End Hierarchical Sequence Modeling** (H-Net). arXiv:2507.07955 (jul. 2025); ICLR 2026. Código: <https://github.com/goombalab/hnet>.
 * Pagnoni et al. **Byte Latent Transformer: Patches Scale Better Than Tokens.** arXiv:2412.09871; ACL 2025.
@@ -417,16 +417,16 @@ Verificadas (título/autores/fecha) en arXiv o en el repositorio oficial en la f
 * Minixhofer et al. **Bolmo: Byteifying the Next Generation of Language Models.** arXiv:2512.15586.
 * Neitemeier et al. **SOMBRERO: Measuring and Steering Boundary Placement in End-to-End Hierarchical Sequence Models.** arXiv:2601.22805.
 * Minixhofer, Ponti, Vulić. **Zero-Shot Tokenizer Transfer.** NeurIPS 2024, arXiv:2405.07883. Código: <https://github.com/bminixhofer/zett>.
-* Dobler, de Melo. **FOCUS: Effective Embedding Initialization for Monolingual Specialization of Multilingual Models.** arXiv:2305.14481.
-* Minixhofer, Paischer, Rekabsaz. **WECHSEL: Effective initialization of subword embeddings for cross-lingual transfer of monolingual language models.** arXiv:2112.06598.
+* Dobler, de Melo. **FOCUS: Effective Embedding Initialization for Monolingual Specialization of Multilingual Models.** EMNLP 2023, arXiv:2305.14481.
+* Minixhofer, Paischer, Rekabsaz. **WECHSEL: Effective initialization of subword embeddings for cross-lingual transfer of monolingual language models.** NAACL 2022, arXiv:2112.06598.
 * Remy, Delobelle, Avetisyan, Khabibullina, de Lhoneux, Demeester. **Trans-Tokenization and Cross-lingual Vocabulary Transfers: Language Adaptation of LLMs for Low-Resource NLP.** COLM 2024, arXiv:2408.04303.
-* Gee, Zugarini, Rigutini et al. **Fast Vocabulary Transfer for Language Model Compression.** arXiv:2402.09977.
-* Liu, Lin, Wang et al. **OFA: A Framework of Initializing Unseen Subword Embeddings for Efficient Large-scale Multilingual Continued Pretraining.** arXiv:2311.08849.
-* Minixhofer, Vulić, Ponti. **Universal Cross-Tokenizer Distillation via Approximate Likelihood Matching.** arXiv:2503.20083.
-* Liu, Hayase, Hofmann et al. **SuperBPE: Space Travel for Language Models.** arXiv:2503.13423.
+* Gee, Zugarini, Rigutini et al. **Fast Vocabulary Transfer for Language Model Compression.** EMNLP 2022 (industry track; subido a arXiv en 2024), arXiv:2402.09977.
+* Liu, Lin, Wang et al. **OFA: A Framework of Initializing Unseen Subword Embeddings for Efficient Large-scale Multilingual Continued Pretraining.** Findings of NAACL 2024, arXiv:2311.08849.
+* Minixhofer, Vulić, Ponti. **Universal Cross-Tokenizer Distillation via Approximate Likelihood Matching.** NeurIPS 2025, arXiv:2503.20083.
+* Liu, Hayase, Hofmann et al. **SuperBPE: Space Travel for Language Models.** COLM 2025, arXiv:2503.13423.
 * Schmidt et al. **Tokenization Is More Than Compression.** EMNLP 2024, arXiv:2402.18376.
 * Martins, Astudillo. **From Softmax to Sparsemax: A Sparse Model of Attention and Multi-Label Classification.** ICML 2016.
-* Hewitt. **Initializing New Word Embeddings for Pretrained Language Models** (blog, 2021): <https://nlp.stanford.edu/~johnhew/vocab-expansion.html> (enlace citado en la documentación de `transformers.resize_token_embeddings`).
+* Hewitt. **Initializing New Word Embeddings for Pretrained Language Models** (blog, 2021): <https://nlp.stanford.edu/~johnhew/vocab-expansion.html> (espejo: <https://www.cs.columbia.edu/~johnhew/vocab-expansion.html>) (enlace citado en la documentación de `transformers.resize_token_embeddings`).
 
 ## 14. Siguiente paso
 

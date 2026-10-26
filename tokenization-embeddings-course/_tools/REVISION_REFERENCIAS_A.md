@@ -128,3 +128,21 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Neitemeier et al., HAT, arXiv:2501.10322 | ✏️ | Título completo; sin venue confirmado → preprint |
 | `ByT5Tokenizer`, `CanineTokenizer`, `BltForCausalLM` | ✅ | Existen en `transformers` 5.20.2 (comprobado con `hasattr`) |
 | Mapa de madurez / 🏭 | ✅ | «Quién la usa» respaldado (Meta FAIR, Ai2 Bolmo 1B/7B, Cartesia/CMU); la ausencia en modelos de frontera se presenta como «sin evidencia pública» |
+
+## 07 · H-Net y tokenizer transfer
+| Referencia | Estado | Nota |
+|---|---|---|
+| Hwang, Wang & Gu, H-Net, arXiv:2507.07955 (ICLR 2026) + `goombalab/hnet` | ✏️ | «Pesos en el hub de Cartesia» precisado con el README: organización `cartesia-ai` en HF, 1/2 etapas, tamaños L y XL (y variantes chino/código) |
+| Pagnoni et al. (BLT, ACL 2025); Videau et al. (AU-Net, NeurIPS 2025); Minixhofer et al. (Bolmo); Neitemeier et al. (SOMBRERO, arXiv:2601.22805) | ✅ | |
+| Minixhofer, Ponti & Vulić, ZeTT (NeurIPS 2024) + `bminixhofer/zett` | ✏️ | Hiperredes publicadas confirmadas (XLM-R, Mistral-7B ×2, TinyLlama); se añade Llama 3 8B (experimental). «Heurísticos a nivel del azar» y «< 1B tokens» coinciden con el abstract |
+| Dobler & de Melo, FOCUS | ✏️ | Venue (EMNLP 2023) |
+| Minixhofer et al., WECHSEL | ✏️ | Venue (NAACL 2022) |
+| Remy et al., Trans-Tokenization (COLM 2024) | ✏️ | «Tweeties adaptada desde Mistral-7B»: la model card de Tweety-Tatar dice Mistral-7B-Instruct-v0.2; añadidos los idiomas de la familia |
+| Gee et al., FVT, arXiv:2402.09977 | ✏️ | Venue (EMNLP 2022, industry track; el arXiv es de 2024) |
+| Liu et al., OFA | ✏️ | Venue (Findings of NAACL 2024) |
+| Minixhofer, Vulić & Ponti, ALM | ✏️ | Venue (NeurIPS 2025) en referencia y Mapa de madurez |
+| Liu et al., SuperBPE (COLM 2025); Schmidt et al. 2024 (EMNLP 2024) | ✏️/✅ | |
+| Martins & Astudillo 2016, sparsemax, ICML 2016 | ✅ | |
+| Hewitt (2021), blog de inicialización por media | ✏️ | Existe; añadido espejo en Columbia. `mean_resizing=True` por defecto verificado por la revisión técnica |
+| AdaptiVocab (arXiv:2503.19693), retrofitting dinámico (arXiv:2411.18553) | ✅ | Títulos y autores coinciden |
+| Mapa de madurez | ✅ | Todas las filas con fuente; 🔴 para H-Net y seguimiento coherente con la regla declarada |
