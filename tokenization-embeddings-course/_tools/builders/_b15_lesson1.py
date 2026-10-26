@@ -241,5 +241,5 @@ def part1(nb):
     ''')
     nb.md("""
     > ⚠️ **Cuidado con los empates.** Con modelos cuantizados o scores enteros (BM25 con documentos idénticos, embeddings binarios con distancia de Hamming) los empates abundan.
-    > Si ordenas con `np.argsort` sin `kind="stable"`, **dos ejecuciones pueden dar métricas distintas**. Fijar el desempate (aquí: orden del corpus) es parte del protocolo.
+    > Si ordenas con `np.argsort` sin `kind="stable"`, **dos implementaciones (o el mismo código con otro orden de entrada o versión de NumPy) pueden dar métricas distintas**. Fijar el desempate (aquí: orden del corpus) es parte del protocolo.
     """)

@@ -76,3 +76,20 @@ trec_eval, bootstrap por queries, test pareado por *shift*, sign-flip y Holm cor
   favorecía al pre-filtro frente al filtro en grafo; ahora incluye `argpartition`.
 - Recomendación: en la tabla de filtrado, el post-filtro usa efSearch = 100 y el filtro en grafo 64 (presupuestos
   distintos); y el filtro en grafo se cronometra en lote, no con batch = 1 como el resto del módulo.
+
+## 15 · Evaluación de retrieval
+- `poliglota_eval.py` (generado) coincide con las métricas canónicas del 00 (ganancia lineal por defecto, dedup,
+  queries sin relevantes excluidas, query sin ranking = 0) y añade `exp_gain`, precisión/k, bootstrap percentil
+  por queries, bootstrap pareado con p por *shift*, sign-flip y Holm (todos correctos). Su BM25 usa IDF de Lucene,
+  el canónico del 00 IDF Okapi con suelo ε: es otra variante (las métricas sí coinciden).
+- Verificado: ejemplo resuelto (DCG 2.754, IDCG 4.762, nDCG@5 0.578), 9 grupos de tests de bordes, Smucker et al.
+  2007, κ de Cohen. **LIMIT contrastado con el PDF v2 (arXiv:2508.21038, ICLR 2026):** Teorema 1 por empaquetamiento
+  de esferas d ≥ log C(n,k)/log(1+1/γ), Tabla 1 con γ = 0.1 (n = 10⁶: 12 para k = 2 y 425 para k = 100), ajuste cúbico
+  −10.5322 + 4.0309d + 0.0520d² + 0.0037d³, LIMIT 50 K docs / 1000 queries, Tabla 5 (BM25 85.7/93.6, Gemini Embed
+  3072-d 1.6/10.0, GTE-ModernColBERT 23.1): todo correcto.
+- **Arreglado:** el texto de la doble anotación decía «anotadores 90 % fiables entre sí → κ ≈ 0.64»; la simulación
+  hace que cada uno acierte el 90 % frente a la verdad (acuerdo entre ellos ≈ 0.82, κ ≈ 0.64). La caja de empates
+  decía que «dos ejecuciones» de `argsort` dan métricas distintas; es determinista para la misma entrada: lo que
+  varía es entre implementaciones, órdenes de entrada o versiones.
+- Recomendación: el LIMIT en miniatura usa LSI (proyección no optimizada contra las qrels); que «la dimensión limita
+  al denso» allí mezcla el límite teórico con la pérdida de información de la SVD. El texto ya avisa de que exagera.

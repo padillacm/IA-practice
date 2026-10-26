@@ -354,7 +354,7 @@ def part2(nb):
     # Doble anotación simulada: dos anotadores con 90 % de acierto sobre pares (query, doc) reales del pool
     rng = np.random.default_rng(SEED); verdad = rng.integers(0, 2, 300)
     ann1 = np.where(rng.random(300) < .90, verdad, 1 - verdad); ann2 = np.where(rng.random(300) < .90, verdad, 1 - verdad)
-    print(f"acuerdo observado={np.mean(ann1==ann2):.2f}  κ={cohen_kappa(ann1, ann2):.2f}  (anotadores 90 % fiables entre sí → κ ≈ 0.64)")
+    print(f"acuerdo observado={np.mean(ann1==ann2):.2f}  κ={cohen_kappa(ann1, ann2):.2f}  (cada anotador acierta el 90 % frente a la verdad, de forma independiente → acuerdo ≈ 0.82, κ ≈ 0.64)")
     ''')
     nb.md("""
     ### 6.2 El sesgo de pooling: los qrels incompletos castigan a lo nuevo
