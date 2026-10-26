@@ -17,7 +17,7 @@ LESSON = f"tokenization-embeddings-course/{MOD}/11_aprendizaje_contrastivo.ipynb
 PROJECT = f"tokenization-embeddings-course/{MOD}/11_proyecto_aprendizaje_contrastivo.ipynb"
 
 SETUP11 = r'''
-!pip install -q transformers sentence-transformers peft tokenizers datasets scipy scikit-learn matplotlib
+!pip install -q transformers sentence-transformers peft accelerate tokenizers datasets scipy scikit-learn matplotlib
 import copy, json, math, os, random, re, time, warnings, zlib
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 from collections import Counter, defaultdict
