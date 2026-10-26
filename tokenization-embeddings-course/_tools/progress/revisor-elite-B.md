@@ -4,7 +4,7 @@ Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization
 - [x] 19_playbook_elite
 - [ ] 18_produccion
 - [ ] 17_interpretabilidad_geometria
-- [ ] 16_embeddings_multimodales
+- [x] 16_embeddings_multimodales
 - [ ] 15_evaluacion_retrieval
 - [ ] 14_indexacion_ann
 - [ ] 13_dense_sparse_late_interaction
@@ -16,3 +16,4 @@ Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization
 
 ## Notas para retomar
 - (decisiones tomadas)
+- 18 y 17 saltados de momento (el verificador de referencias B los estaba editando); volver al final.

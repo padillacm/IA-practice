@@ -159,6 +159,26 @@ def part1(nb):
     > Los números exactos dependen de semilla y épocas; lo robusto es la **tendencia**. Nota: en la sección siguiente se compara contra el gap del modelo *sin entrenar*.
     """)
     nb.md("""
+    ### 3b. 🧪 Lo que la precisión de retrieval no te dice: ¿entiende el orden y a quién va cada atributo?
+    Nuestra torre de texto es una bolsa de palabras: por construcción, «un círculo rojo, un cuadrado azul» y «un círculo azul, un cuadrado rojo» dan **el mismo vector**. Parece un defecto del juguete, pero Yuksekgonul et al. (ICLR 2023) mostraron con el benchmark **ARO** (más de 50 000 casos de atributos, relaciones y orden) que CLIP y otros VLM reales, con un Transformer de texto, se comportan **casi como bolsas de palabras**: fallan al ligar atributos a objetos, en relaciones y son poco sensibles al orden. Su explicación: el contraste sobre lotes de (imagen, caption) se resuelve **sin** usar el orden, porque los negativos del lote casi nunca difieren solo en él; y las evaluaciones de retrieval estándar no lo detectan. El remedio que proponen son **negativos duros composicionales** (captions con atributos u orden intercambiados, módulo 11).
+    """)
+    nb.code(r'''
+    Tx_m = MODELOS["InfoNCE τ aprendida"]["Tx"]
+    def vec_texto(frase):
+        ws = [w for w in frase.split() if w in w2i]          # palabras fuera del vocabulario del juguete se ignoran
+        ids, off = codifica_textos([ws], w2i)
+        with torch.no_grad():
+            return Tx_m(ids, off)[0]
+    pares = [("un círculo rojo un cuadrado azul", "un círculo azul un cuadrado rojo"),     # atributos intercambiados
+             ("a red circle", "circle red a"),                                             # orden destruido
+             ("a red circle", "a blue circle")]                                            # control: cambia una palabra
+    for a, b in pares:
+        print(f"cos({a!r}, {b!r}) = {float(vec_texto(a) @ vec_texto(b)):.3f}")
+    ''')
+    nb.md("""
+    > 👀 **Qué debes observar.** Los dos primeros pares dan coseno **1.000** (indistinguibles) y el control no: el modelo tiene buena precisión imagen→concepto (gráfico anterior) y aun así no puede representar «qué color va con qué forma». Para Políglota la lección es de evaluación: si tus usuarios hacen consultas donde el orden o la relación importan («convertir JSON a YAML» frente a «YAML a JSON», «diagrama donde la caché está delante de la base de datos»), métela en el golden set como slice propio; un buen nDCG medio no lo garantiza.
+    """)
+    nb.md("""
     ## 4. SigLIP 2 y el panorama de modelos reales
     **SigLIP 2** (Tschannen et al., 2025) mantiene el objetivo image-text de SigLIP y añade pretraining con *captioning*, pérdidas auto-supervisadas (auto-distilación y *masked prediction*), curación de datos online, una mezcla multilingüe menos sesgada y variantes con distintas resoluciones y relación de aspecto nativa.
     En producción conviene probar **ambos**: SigLIP/SigLIP 2 suelen ser mejores en zero-shot que CLIP del mismo tamaño en los benchmarks de sus papers, pero la ganancia en *tu* dominio se mide, no se supone (módulo 15).

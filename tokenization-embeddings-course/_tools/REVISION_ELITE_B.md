@@ -35,3 +35,15 @@ en la calculadora de costes, no se medía en ningún módulo (13 cubre *late chu
   (0.881 vs 0.863); BM25 con w = 64 supera al documento entero (0.874); el solapamiento no mejora y cuesta ×1.6.
 - 🧠 **#8 nuevo**: el tamaño de chunk es un hiperparámetro con factura (se elige en dev). Referencia añadida.
   Lección 61 → 64 celdas.
+
+## 16 · Embeddings multimodales
+Diagnóstico: 🧠 ya medido y concreto (gap e intrusos en índices mixtos, τ como geometría, falsos negativos en el
+lote, almacenamiento de ColPali, OCR como baseline duro). Faltaba la limitación que todo equipo multimodal conoce:
+**la precisión de retrieval no mide composición** (atributos, relaciones, orden).
+- **Añadido §3b** (1 celda + 👀): con la torre de texto del CLIP en miniatura, «un círculo rojo un cuadrado azul» y
+  «un círculo azul un cuadrado rojo» dan coseno 1.000, igual que un caption con el orden destruido; el control
+  (cambiar el color) da 0.482. Conexión con ARO (Yuksekgonul et al., ICLR 2023, verificado en arXiv: > 50 000 casos;
+  los VLM reales se comportan casi como bolsas de palabras porque el contraste en lote no necesita el orden; remedio:
+  negativos duros composicionales) y con Políglota (slice composicional en el golden set).
+- 🧠 #6 reescrito en ese sentido (antes solo «el vector medio es invariante al orden»). Referencia añadida.
+  Lección 64 → 67 celdas; ejecución completa 394 s en CPU.

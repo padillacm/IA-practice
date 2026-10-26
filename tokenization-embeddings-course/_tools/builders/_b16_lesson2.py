@@ -312,7 +312,7 @@ def part2(nb):
     3. **Los falsos negativos en el batch** (varias imágenes del mismo concepto) ponen un suelo a la pérdida contrastiva: con pocos conceptos y batches grandes, la pérdida no baja de $\\ln(N/\\text{conceptos})$ aunque el modelo sea perfecto.
     4. **El coste real del multi-vector es el almacenamiento**: ≈ 257.5 KB/página en ColPali (fp16) ⇒ ≈ 257 GB por millón de páginas; decide pooling/binarización/pre-filtro *antes* de indexar.
     5. **Un OCR clásico bien afinado es un baseline duro** en texto limpio (§6.2). Compara siempre contra «OCR + BM25 + embedder de texto» por tipo de consulta antes de adoptar visión.
-    6. **Un vector medio de frames/patches es invariante al orden y diluye detalles**: sirve para «qué hay», no para «dónde/cuándo/en qué orden».
+    6. **La precisión de retrieval no mide composición, y el pooling medio la destruye**: un vector medio de frames, patches o palabras es invariante al orden (sirve para «qué hay», no para «dónde/cuándo/a quién»), y los VLM contrastivos reales se comportan casi como bolsas de palabras en ARO (Yuksekgonul et al., ICLR 2023) porque sus negativos de lote casi nunca difieren solo en el orden. Remedio: negativos duros composicionales al entrenar y un slice composicional en el golden set (§3b).
     7. **Verifica límites por petición y compatibilidad de espacio al migrar a un embedder multimodal propietario**: p. ej., la prensa reporta que Gemini Embedding 2 no comparte espacio con `gemini-embedding-001` (hay que re-embeber).
     8. **Benchmarks de documentos (ViDoRe V3) muestran que los retrievers visuales ganan a los de texto, pero siguen flojos con elementos no textuales y grounding fino** (a oct-2026): no vendas «OCR-free resuelve todo».
     """)
@@ -361,6 +361,7 @@ def part2(nb):
     nb.md("""
     ## 14. 📚 Referencias
     - Radford et al. (2021). *Learning Transferable Visual Models From Natural Language Supervision* (CLIP). ICML 2021. <https://arxiv.org/abs/2103.00020>
+    - Yuksekgonul, Bianchi, Kalluri, Jurafsky, Zou (2023). *When and Why Vision-Language Models Behave like Bags-Of-Words, and What to Do About It?* ICLR 2023. <https://arxiv.org/abs/2210.01936>
     - Zhai, Mustafa, Kolesnikov, Beyer (2023). *Sigmoid Loss for Language Image Pre-Training* (SigLIP). ICCV 2023. <https://arxiv.org/abs/2303.15343>
     - Tschannen et al. (2025). *SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense Features*. Preprint. <https://arxiv.org/abs/2502.14786>
     - Liang, Zhang, Kwon, Yeung, Zou (2022). *Mind the Gap: Understanding the Modality Gap in Multi-modal Contrastive Representation Learning*. NeurIPS 2022. <https://arxiv.org/abs/2203.02053>
