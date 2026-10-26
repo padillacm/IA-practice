@@ -85,3 +85,15 @@ como punto de partida en cada módulo.
 - **Andamiaje del proyecto:** TODO 2 (interpretación) sin pistas → 🪜 1 que remite al 👀 de §3 y a los dos corpus;
   TODO 3 y TODO 5 solo tenían 🪜 1 → añadidas 🪜 2 (Counter + ahorro; congelado + máscara + copia + assert, con el
   detalle del *closure* `m_=mask`), coherentes con la solución.
+
+## 10 · Embeddings contextuales y de oraciones
+- Bien: 🔁 con 09 y 00; analogía two-tower explícita; whitening derivado paso a paso con su comprobación; elegir en
+  validación y reportar en test (también en el proyecto); Mapa de madurez ya al final; 👀 tras 6 gráficos y 4 Gemini.
+- **Ejemplos a mano añadidos:** pooling CLS/media/máximo/último con $T = 4$ y una posición de padding (media con
+  máscara $(1, 1.33)$ frente a $(3, 3.25)$ sin ella; analogía bolsa de palabras/TF), y whitening en 2D con
+  $\Sigma = \mathrm{diag}(4, 0.25)$ → $W = \mathrm{diag}(0.5, 2)$, enlazado con la anisotropía del 09.
+- **Repaso espaciado:** añadida R4 (03–04, Diagnóstico): con mean pooling, una palabra troceada en 4 piezas pesa 4
+  veces más; la fertilidad también afecta a la geometría, no solo al coste.
+- **Andamiaje del proyecto:** TODO 2/3 solo tenían 🪜 1 → 🪜 2 con la API (SVD de la covarianza, dict de medias);
+  la recomendación escrita del TODO 5 no tenía guía → 🪜 1 con estructura de cuatro frases (incluido el riesgo de
+  versión de μ/W en producción, puente con el 18).
