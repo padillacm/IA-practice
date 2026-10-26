@@ -74,8 +74,14 @@ def lesson(nb):
     nb.md(nb.badge() + r'''
 
 # Módulo 20 · Capstone: Políglota completo
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
-**Nivel:** 🔴 Experto · **Duración:** ≈ 6 h (lección ≈ 2.5 h + proyecto ≈ 3.5 h) · **GPU:** no necesaria en `FAST_DEV_RUN` (CPU, ≈ 2 min); T4/L4 para modelos reales y el corpus completo (≈ 1–3 unidades de Colab) · **Prerrequisitos:** módulos 00–19.
+| | |
+|---|---|
+| **Nivel** | 🔴 Experto |
+| **Duración estimada** | ≈ 6 h (lección ≈ 2.5 h + proyecto ≈ 3.5 h) |
+| **GPU recomendada** | No necesaria en `FAST_DEV_RUN` (CPU, ≈ 2 min); T4/L4 para modelos reales y el corpus completo (≈ 1–3 unidades de Colab) |
+| **Prerrequisitos** | Módulos 00–19 |
 
 > 🧭 **Ruta núcleo vs ampliación.** Núcleo (lo que usa el proyecto): §1 criterios de aceptación → §2–§5 decisiones por componente → §6 servicio (TODO 4 del proyecto) → §7 evaluación en test ciego → §8 informe. Ampliación: la simulación de carga de §6 (puedes ejecutarla sin estudiarla) y §9 multimodal opcional.
 
@@ -142,14 +148,14 @@ Antes de construir, sitúa cada módulo. La columna «dónde» es tu índice de 
         "imagen", "M20-IMG-01", "Arquitectura de Políglota v1.0",
         "El sistema completo que se integra en el capstone, con cada caja etiquetada con el módulo del curso que la construyó.",
         """Diagrama de arquitectura técnico, fondo blanco, paleta sobria: azul #1F6FEB (ruta de consulta), naranja #F28E2B (ruta de indexación), verde #2CA02C (evaluación e informe), gris #6B7280 (almacenamiento). Sans-serif legible, flechas claras, cajas con esquinas suaves.
-Arriba, de izquierda a derecha (naranja), título "Indexación": "Docs ES/EN + código" → "Normalización NFC (M01)" → "Chunking" → "Tokenizer BPE: coste y fertilidad (M02–M04)" → bifurcación en dos cajas: "BM25 · palabras + identificadores (M00, M13)" y "Embedder · dimensión recortada + int8 (M10–M12)" → cilindros grises "Índice invertido" y "Índice vectorial Flat/HNSW (M14)".
+Arriba, de izquierda a derecha (naranja), título "Indexación": "Docs ES/EN + código" → "Normalización NFC (M01)" → "Chunking" → "Tokenizer BPE: coste y fertilidad (M02–M04)" → bifurcación en dos cajas: "BM25 · palabras + identificadores (M00, M13)" y "Embedder · dimensión y precisión elegidas en dev (M10–M12)" → cilindros grises "Índice invertido" y "Índice vectorial Flat/HNSW (M14)".
 Abajo, de izquierda a derecha (azul), título "Consulta": "Usuario" → "API FastAPI /search (M18)" → "Caché LRU versionada (M18)" → flechas a los dos índices → "Fusión RRF (M13)" → "Top-10".
 A la derecha, una columna verde: "Evaluación: dev para decidir · test ciego una vez · IC pareado · slices (M15, M19)" → "Informe técnico + criterios de aceptación (M20)".
 Una caja punteada gris opcional junto al embedder: "Opcional: páginas/capturas → ColPali MaxSim en 2ª etapa (M16)".
 Evita: logotipos, texto pequeño, iconos decorativos, cifras de rendimiento.""",
         "Arquitectura de Políglota v1.0 con la ruta de indexación arriba, la de consulta abajo y la evaluación e informe a la derecha; cada caja indica su módulo.",
         """
-INDEXACIÓN: Docs → NFC(M01) → chunks → BPE(M02-04) → [BM25 palabras+ident (M00,M13)] [Embedder d recortada+int8 (M10-12)] → índices (M14)
+INDEXACIÓN: Docs → NFC(M01) → chunks → BPE(M02-04) → [BM25 palabras+ident (M00,M13)] [Embedder d y precisión de dev (M10-12)] → índices (M14)
 CONSULTA  : Usuario → FastAPI(M18) → Caché versionada(M18) → BM25 + denso → RRF(M13) → top-10
 EVALUACIÓN: dev decide · test ciego 1 vez · IC pareado · slices (M15,M19) → INFORME + criterios (M20)
 """)
@@ -339,23 +345,24 @@ df_ann.round(3)
 
     # ─────────────── §6 Servicio ───────────────
     nb.md(r'''## 6. El servicio integrado (módulo 18) bajo tráfico
-Montamos `ServicioPoliglota` con **exactamente** las decisiones anteriores: analizador de BM25 (mismo tokenizador al indexar y al consultar: contrato F3 del módulo 19), embedder recortado a `dim`, vectores en la precisión elegida, HNSW con el `efSearch` elegido, la fusión elegida (RRF o lineal con su α, normalizada dentro de cada lista igual que en §4) y caché versionada.''')
+Montamos `ServicioPoliglota` con **exactamente** las decisiones anteriores: analizador de BM25 (mismo tokenizer al indexar y al consultar: contrato F3 del módulo 19), embedder recortado a `dim`, vectores en la precisión elegida, HNSW con el `efSearch` elegido, la fusión elegida (RRF o lineal con su α, normalizada dentro de cada lista igual que en §4) y caché versionada.''')
     nb.gemini(
         "video", "M20-VID-01", "Recorrido de una consulta por Políglota v1.0",
         "Animación de una consulta real atravesando el sistema completo, con los números que el capstone mide en cada etapa.",
-        """Video de diagrama técnico animado, 16:9, fondo blanco, paleta: azul #1F6FEB (consulta), naranja #F28E2B (BM25), verde #2CA02C (denso), gris #6B7280 (infraestructura). Sans-serif grande, sin voz en off, ritmo calmado.
+        """Video de diagrama técnico animado, 16:9, fondo blanco, paleta: azul #1F6FEB (consulta), naranja #F28E2B (BM25), verde #2CA02C (denso), gris #6B7280 (infraestructura). Sans-serif grande, sin voz en off, sin música, ritmo calmado.
 0–4 s: aparece una tarjeta con la consulta "cómo invalidar la caché de sesiones" y el texto "Usuario → /search".
-4–9 s: la consulta entra en la caja "Normalización NFC + minúsculas"; aparece la clave "versión v2-d96-int8 + texto normalizado" y una caja "Caché LRU": primero un letrero rojo "fallo", luego la consulta sigue.
-9–15 s: la consulta se divide en dos flechas: naranja hacia "BM25 (palabras + identificadores)" y verde hacia "Embedder (d recortada) → HNSW efSearch". Cada flecha devuelve una lista de 5 documentos con su rango 1..5.
-15–21 s: las dos listas se funden en la caja "RRF: Σ 1/(60 + rango)"; los documentos se reordenan visiblemente; un documento que estaba 3.º en ambas sube al 1.º.
-21–26 s: aparece el top-3 final en una tarjeta; debajo, el texto "latencia registrada: p50 / p99" y "vector guardado en caché".
+4–9 s: la consulta entra en la caja "Normalización NFC + minúsculas"; aparece la clave "versión + texto normalizado" con el ejemplo "v2-d96-int8 · cómo invalidar la caché de sesiones" y una caja "Caché LRU": primero un letrero rojo "fallo", luego la consulta sigue.
+9–15 s: la consulta se divide en dos flechas: naranja hacia "BM25 (palabras + identificadores)" y verde hacia "Embedder (d recortada) → HNSW efSearch". Cada flecha devuelve una lista de 5 documentos con su rango: BM25 = "doc-7, doc-2, doc-5, doc-9, doc-1"; denso = "doc-4, doc-8, doc-5, doc-3, doc-2".
+15–21 s: las dos listas se funden en la caja "RRF: Σ 1/(60 + rango)"; los documentos se reordenan visiblemente: "doc-5" (3.º en ambas listas) sube al 1.º con "2/63 = 0.0317"; "doc-2" (2.º y 5.º) queda 2.º con "1/62 + 1/65 = 0.0315"; "doc-7" (1.º solo en BM25) queda 3.º con "1/61 = 0.0164".
+21–26 s: aparece el top-3 final "doc-5 · doc-2 · doc-7" en una tarjeta; debajo, el texto "latencia registrada: p50 / p99" y "vector guardado en caché".
 26–32 s: la misma consulta se repite y la caja "Caché LRU" muestra "acierto": la flecha verde salta directamente al índice. Texto final: "Cada etapa = una decisión medida en dev".
-Evita: cifras inventadas, logotipos, transiciones bruscas, texto pequeño.""",
+Evita: cifras distintas de las indicadas, logotipos, música, transiciones bruscas, texto pequeño.""",
         "Animación de una consulta que pasa por normalización, caché, BM25 y denso en paralelo, fusión RRF y top-3, y una segunda consulta que acierta en caché.",
         """
 "cómo invalidar la caché de sesiones" → NFC/minúsculas → clave(versión+texto) → caché: FALLO
    ├─ BM25 (palabras+ident) → rangos 1..k ─┐
    └─ embedder[:d] → HNSW(ef) → rangos ────┴→ RRF Σ1/(60+r) → top-3 (+latencia, +caché)
+   BM25: 7,2,5,9,1 · denso: 4,8,5,3,2 → doc-5 (2/63=.0317) · doc-2 (.0315) · doc-7 (.0164)
 2ª vez: caché ACIERTO → salta el embedder
 """, duration="30-35 s")
     nb.md("> 👀 **Qué debes observar:** la segunda consulta se salta el embedder: eso es lo que mide el *hit rate*; y la fusión puede subir al primer puesto un documento que no era el primero en ninguna lista.")
@@ -469,7 +476,7 @@ Título arriba: "Políglota v1.0 · Informe técnico de decisiones". Debajo, cin
 1 "Decisiones (tomadas en dev)": tabla de 3 columnas "Componente | Decisión | Evidencia" con filas "Tokenizer", "Analizador BM25", "Embedder", "Fusión", "Índice" (el contenido de las celdas en líneas grises, sin números).
 2 "Resultados en test ciego": una barra horizontal con tres segmentos rotulados "BM25", "denso", "Políglota" y un intervalo de confianza dibujado como bigote.
 3 "Costes y latencia": tres pastillas "re-embedding $", "RAM GB/réplica", "p50 / p99 ms".
-4 "Criterios de aceptación": tabla "Criterio | Umbral | Valor | OK" con cinco filas: cuatro con un ✓ verde y una con un ✗ naranja.
+4 "Criterios de aceptación": tabla "Criterio | Umbral | Valor | OK" con siete filas rotuladas "calidad_vs_bm25", "peor_slice", "recall_ann", "latencia_p99_ms", "ram_10M_gb", "coste_reembed_usd", "hit_rate": seis con un ✓ verde y una (la de latencia) con un ✗ naranja; las columnas Umbral y Valor en líneas grises, sin números.
 5 "Limitaciones y siguiente iteración": tres viñetas grises.
 Al margen derecho, una flecha gris vertical con el texto "generado desde las métricas, no escrito a mano".
 Evita: números concretos, logotipos, texto ilegible, sombras decorativas.""",

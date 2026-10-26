@@ -123,9 +123,9 @@ def project(nb):
 | | |
 |---|---|
 | **Nivel** | 🔴 Experto |
-| **Duración** | ≈ 3.5 h |
-| **GPU** | No necesaria en `FAST_DEV_RUN` (≈ 1 min de CPU); T4/L4 con modelos reales y `FAST_DEV_RUN=False` |
-| **Requiere** | Todo el curso; la lección 20 es la solución de referencia del procedimiento |
+| **Duración estimada** | ≈ 3.5 h |
+| **GPU recomendada** | No necesaria en `FAST_DEV_RUN` (≈ 1 min de CPU); T4/L4 con modelos reales y `FAST_DEV_RUN=False` |
+| **Prerrequisitos** | Todo el curso; la lección 20 es la solución de referencia del procedimiento |
 | **Entrega** | `poliglota_informe.md` + `poliglota_config.json` + este notebook ejecutado |
 
 ## 🏢 Contexto de negocio
