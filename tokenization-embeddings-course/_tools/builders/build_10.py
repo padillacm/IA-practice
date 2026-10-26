@@ -535,7 +535,7 @@ for n, r_ in post.items():
 ''')
 nb.md(r"""
 > 👀 **Qué debes observar.** (1) Tras el whitening completo la anisotropía cae a ≈ 0 por construcción. (2) Que eso **mejore el retrieval** no está garantizado: el whitening iguala *todas* las direcciones, también las de ruido. Con $k$ pequeño se pierde información; con $k$ grande se amplifica ruido; suele haber un óptimo intermedio, y debe elegirse con un conjunto de validación, no con el test.
-> (3) En el *fallback* el efecto **no es estable**: en tres ejecuciones el whitening ($k=64$) llevó el nDCG@10 del mini-SBERT de 0.23 a 0.35, de 0.30 a 0.28 y, en el proyecto, quedó a ±0.02 de la *default* en test; con el mini-BERT crudo nunca ayudó (0.12–0.13 → 0.11–0.13). El entrenamiento diminuto en CPU no es determinista bit a bit (p. ej. el entrenamiento del vocabulario WordPiece), y la lección es justo esa: un post-procesado no crea señal que el encoder no tiene, y su efecto hay que **validarlo**, no suponerlo. Su et al. (2021) reportan mejoras grandes sobre BERT crudo en STS; para encoders bien entrenados contrastivamente la ganancia suele ser pequeña o negativa: mídelo con tus modelos.
+> (3) En el *fallback* el efecto depende del encoder y de la semilla: en la ejecución de referencia (oct-2026, CPU) el whitening llevó el nDCG@10 del mini-SBERT de 0.37 a 0.51 ($k=64$), pero con el mini-BERT crudo **empeoró** (0.21 → 0.19), y en versiones anteriores del fallback (vocabulario WordPiece no determinista) el signo del efecto llegó a invertirse entre ejecuciones. Ahora el fallback es reproducible (vocabulario determinista + semillas fijas: mismas cifras al re-ejecutar), pero con otra semilla o con datos reales tus números cambiarán. La lección es justo esa: un post-procesado no crea señal que el encoder no tiene, y su efecto hay que **validarlo**, no suponerlo. Su et al. (2021) reportan mejoras grandes sobre BERT crudo en STS; para encoders bien entrenados contrastivamente la ganancia suele ser pequeña o negativa: mídelo con tus modelos.
 """)
 
 nb.gemini(
@@ -709,7 +709,7 @@ nb.md(r"""
 1. **Embeddings crudos de BERT ≠ embeddings de similitud.** SBERT midió que la media de BERT sin ajustar (54.81 de media en STS) y su CLS (29.19) quedaban por debajo de promediar GloVe (61.32). Antes de culpar al índice, comprueba que el modelo fue entrenado para similitud.
 2. **Audita el pooling contra la librería.** Una diferencia de pooling (CLS vs mean, o media sin máscara) puede hundir el nDCG sin dar ningún error; nuestra comprobación numérica tarda segundos.
 3. **`h[:, -1]` no es el último token** con *padding* a la derecha: usa la máscara (como `ultimo_token`). Es un bug clásico al convertir LLMs en embedders.
-4. **El whitening se ajusta con documentos, y $k$ se elige en validación.** Ajustarlo con las consultas de test es *leakage*; y su efecto depende del encoder (en nuestro fallback osciló entre ×1.5 y −10 % según la ejecución).
+4. **El whitening se ajusta con documentos, y $k$ se elige en validación.** Ajustarlo con las consultas de test es *leakage*; y su efecto depende del encoder (en nuestro fallback: +0.14 de nDCG@10 con el mini-SBERT y −0.02 con el mini-BERT crudo).
 5. **El idioma es una dirección.** En multilingüe, centrar por idioma reduce la separación por lengua (lo mediste con silhouette); útil para búsqueda cruzada, pero exige saber el idioma de la consulta.
 6. **Coseno = producto con vectores normalizados (τ = 1.00).** Si la norma varía, el producto escalar introduce un sesgo hacia documentos de norma grande, análogo al sesgo de popularidad en recsys.
 7. **Respeta los prefijos del entrenamiento.** Es la primera comprobación cuando un embedder rinde menos que en MTEB.
@@ -820,7 +820,7 @@ Umbrales calibrados con la solución de referencia en la ejecución que pudo cor
 | R2 | `ajusta_whitening(X, k)` | con $k=d/2$, la covarianza de $(X-\mu)W$ difiere de $I_k$ en < 1e-3 (máx. absoluto) |
 | R3 | `centra_por_idioma` | la media por idioma de los documentos transformados es ≈ 0 (< 1e-6) |
 | R4 | Tabla en **validación** con ≥ 2 encoders × 4 poolings × 4 post-procesados (ninguno, centrado, whitening-k, centrado por idioma) | 32+ filas |
-| R5 | Configuración elegida en validación, medida en **test** | nDCG@10 test ≥ el de «media sin post-procesado» del mismo encoder − 0.03 (referencia: la elegida, *whitening*, ganó +0.05 en validación pero en test quedó entre −0.017 y −0.003 respecto a la *default* en dos ejecuciones del fallback (el entrenamiento en CPU no es bit-a-bit determinista): con ~55 consultas por partición la selección es ruidosa, y eso es parte de lo que debes analizar) |
+| R5 | Configuración elegida en validación, medida en **test** | nDCG@10 test ≥ el de «media sin post-procesado» del mismo encoder − 0.03 (referencia, fallback reproducible: la elegida, mini-SBERT · media · *whitening*, ganó +0.12 en validación (0.499 vs 0.380) y +0.17 en test (0.523 vs 0.352). Con versiones anteriores del fallback, no deterministas, la misma elección quedó entre −0.017 y −0.003 en test: el umbral no exige que el post-procesado gane, solo que la selección en validación no te haga perder más de 0.03; con ~55 consultas por partición la selección es ruidosa, y eso es parte de lo que debes analizar) |
 | R6 | Desglose por idioma (es/en/code) de la configuración elegida y comparación con BM25 | tabla impresa |
 """)
 pj.code(SETUP10)
@@ -1098,7 +1098,7 @@ README = r"""# Módulo 10 · Embeddings contextuales y de oraciones
 Corpus Políglota canónico del módulo 00 (`carga_corpus`), métricas y BM25 canónicos.
 
 ## Estado de pruebas (entorno de autoría)
-Hugging Face bloqueado por el proxy: lección y proyecto ejecutados completos **solo con el fallback** y el corpus sintético + stdlib. Las celdas con modelos reales no pudieron ejecutarse aquí (protegidas con `try/except`). Umbrales de la rúbrica calibrados con esa ejecución.
+Hugging Face bloqueado por el proxy: lección y proyecto ejecutados completos **solo con el fallback** y el corpus sintético + stdlib. Las celdas con modelos reales no pudieron ejecutarse aquí (protegidas con `try/except`). Umbrales de la rúbrica calibrados con esa ejecución. Revisión de ejecutabilidad (oct-2026, CPU, `FAST_DEV_RUN`): lección 94 s y proyecto 83 s, sin errores; el fallback es reproducible (vocabulario WordPiece determinista vía Unigram; dos ejecuciones dieron cifras idénticas).
 
 ## Lecturas clave
 Reimers & Gurevych 2019 (SBERT) · Ethayarajh 2019 · Su et al. 2021 (whitening) · Li et al. 2020 (BERT-flow) · Wang et al. 2022 (E5) · Timkey & van Schijndel 2021.

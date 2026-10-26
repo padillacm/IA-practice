@@ -16,7 +16,7 @@
 Corpus Políglota canónico del módulo 00 (`carga_corpus`), métricas y BM25 canónicos.
 
 ## Estado de pruebas (entorno de autoría)
-Hugging Face bloqueado por el proxy: lección y proyecto ejecutados completos **solo con el fallback** y el corpus sintético + stdlib. Las celdas con modelos reales no pudieron ejecutarse aquí (protegidas con `try/except`). Umbrales de la rúbrica calibrados con esa ejecución.
+Hugging Face bloqueado por el proxy: lección y proyecto ejecutados completos **solo con el fallback** y el corpus sintético + stdlib. Las celdas con modelos reales no pudieron ejecutarse aquí (protegidas con `try/except`). Umbrales de la rúbrica calibrados con esa ejecución. Revisión de ejecutabilidad (oct-2026, CPU, `FAST_DEV_RUN`): lección 94 s y proyecto 83 s, sin errores; el fallback es reproducible (vocabulario WordPiece determinista vía Unigram; dos ejecuciones dieron cifras idénticas).
 
 ## Lecturas clave
 Reimers & Gurevych 2019 (SBERT) · Ethayarajh 2019 · Su et al. 2021 (whitening) · Li et al. 2020 (BERT-flow) · Wang et al. 2022 (E5) · Timkey & van Schijndel 2021.
