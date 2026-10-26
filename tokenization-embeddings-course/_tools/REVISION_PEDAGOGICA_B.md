@@ -122,3 +122,15 @@ como punto de partida en cada módulo.
 - **Proyecto:** el TODO 7 (frontera de Pareto + recomendación + gráfico) no tenía pistas → 🪜 1 (skyline de dos
   objetivos, analogía tasa-distorsión del 08) y 🪜 2 (API). Añadidas 👀 tras el gráfico de la frontera (plantilla y
   solución), formuladas sin presuponer el resultado con datos reales.
+
+## 13 · Dense, sparse y late interaction
+- Bien: 🔁 con 00 (BM25), 04/05, 10/12 y 11/12; BM25 desde cero verificado contra `rank_bm25`; mini golden set de
+  paráfrasis para diagnosticar dónde gana cada retriever; ejemplo RRF a mano (autoevaluación) que la rúbrica R3
+  comprueba; tuning de α sin fuga (CV); 👀 tras 10 gráficos y 5 Gemini; proyecto con 🪜 1/2 en todos los pasos.
+- **Reestructurado:** Mapa de madurez de la cabecera a justo antes de 🏭.
+- **🧭 corregida:** el núcleo decía «secciones 1–4» e incluía SPLADE (3), que también figuraba en ampliación; ahora
+  núcleo = 1, 2, 4, 7, 8 (lo que usa el proyecto) y ampliación = 3, 5–6, 9, 10.
+- **Ejemplo a mano añadido** en §4: MaxSim con una matriz 2×3 (0.9 + 0.8 = 1.7; 1.3 si falta el token), con la
+  analogía «cada término exige su evidencia» de BM25 y el contraste con el bi-encoder.
+- **Repaso espaciado:** añadida R5 (M00, Diagnóstico: +0.02 en 58 queries sin IC pareado, y α elegido sobre las
+  mismas queries), como recomendaba la revisión pedagógica A para retomar nDCG/IC antes del 15.

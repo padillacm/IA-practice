@@ -89,7 +89,7 @@ def lesson() -> None:
 **Nivel:** 🟠 Avanzado · **Duración:** ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) · **GPU recomendada:** T4 (todo corre en CPU con `FAST_DEV_RUN = True`) ·
 **Cómputo estimado:** 0 unidades en CPU; ≈ 1–2 unidades de Colab en T4 si activas BGE-M3 y el reranker real (estimación orientativa).
 
-> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h): secciones 1–4 (BM25, ColBERT/MaxSim), 7 (fusión) y 8 (rerankers). Ampliación (≈ 1 h más): SPLADE (3), MUVERA y PLAID (5–6) y late chunking (9).
+> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h, lo que usa el proyecto): secciones 1, 2 (BM25), 4 (ColBERT/MaxSim), 7 (fusión) y 8 (rerankers). Ampliación (≈ 1 h más): SPLADE (3), BGE-M3 y MUVERA (5–6), late chunking (9) y el pipeline de referencia con su coste (10).
 
 **Prerrequisitos:** módulo 00 (BM25 como baseline), 10 (similitudes, pooling), 11 (contrastivo) y 12 (embedders modernos: el retriever denso de hoy es el de allí).
 
@@ -125,23 +125,10 @@ El *analyzer* decide qué es un término: minúsculas, tildes, stemming, separac
 
 El bi-encoder codifica query y documento por separado (los documentos se precomputan): $O(1)$ forward por búsqueda sobre el índice, menor calidad. El cross-encoder procesa el par conjuntamente: más preciso, pero exige un forward **por candidato** y no puede precomputarse.
 </details>
-''')
-    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
-🟢 sólido · 🟡 emergente · 🔴 experimental.
+<details><summary><b>5 · (M00, Diagnóstico)</b> La fusión BM25 + denso sube nDCG@10 de 0.61 a 0.63 en las 58 queries de paráfrasis. ¿Qué te falta para afirmar que la fusión es mejor?</summary>
 
-| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
-|---|---|---|---|
-| BM25 / índice invertido | 🟢 | motores de búsqueda léxicos (Lucene, Elasticsearch, OpenSearch, Vespa…) | Robertson & Zaragoza 2009 |
-| Sparse aprendido (SPLADE, SPLADE-v3) | 🟢 inglés · 🟡 multilingüe | Elastic (ELSER) y OpenSearch (neural sparse) ofrecen modelos sparse aprendidos | Formal et al. 2021–2024; docs de Elastic/OpenSearch |
-| BGE-M3 (denso + sparse + multi-vector en un modelo) | 🟢 | BAAI; integrado en el ecosistema de FlagEmbedding | Chen et al. 2024 (2402.03216) |
-| Late interaction ColBERT / ColBERTv2 | 🟡 | Vespa (embedder ColBERT nativo), Qdrant (multivector `MAX_SIM`), Jina-ColBERT-v2 | Khattab & Zaharia 2020; Santhanam et al. 2021; blogs/docs |
-| PLAID / WARP (motores de late interaction) | 🟡 | implementación de referencia de ColBERT (PLAID); WARP es investigación 2025 | 2205.09707; 2501.17788 |
-| MUVERA (multi-vector → un vector de dimensión fija) | 🟡 | Weaviate documenta una opción de codificación MUVERA | Dhulipala et al. 2024 (2405.19504); docs de Weaviate |
-| Fusión RRF / combinación convexa | 🟢 | práctica estándar de búsqueda híbrida | Cormack et al. 2009; Bruch et al. 2022 |
-| Rerankers cross-encoder | 🟢 | BAAI (bge-reranker-v2-m3), muchos proveedores | Nogueira & Cho 2019 (1901.04085) |
-| Rerankers basados en LLM (Qwen3-Reranker, bge-reranker-v2-gemma) | 🟡 | Alibaba, BAAI — mayor coste | 2506.05176; tarjetas |
-| Late chunking | 🟡 | Jina AI | Günther et al. 2024 (2409.04701) |
-| Búsqueda híbrida (léxico + denso) como configuración por defecto | 🟢 | prácticamente todas las bases vectoriales/motores modernos | docs de los motores |
+El **IC bootstrap pareado** por queries de la diferencia (módulo 00; a fondo en el 15). Con 58 queries, +0.02 suele quedar dentro del ruido. Y si $\alpha$ de la combinación lineal se eligió mirando esas mismas queries, el número está inflado: por eso la sección 7 (y el TODO 4 del proyecto) eligen $\alpha$ sin fuga.
+</details>
 ''')
 
     # ───────────────────────────── Setup ─────────────────────────────
@@ -446,7 +433,11 @@ else:
 
 $$S(q,d)=\sum_{i=1}^{|q|}\;\max_{j=1}^{|d|}\;\langle \hat{q}_i,\hat{d}_j\rangle$$
 
-Cada token de la query "busca" su mejor pareja en el documento y se suman las similitudes. Sigue siendo **precomputable** para los documentos (como un bi-encoder) pero conserva información fina por token. Detalles del paper original: marcadores `[Q]`/`[D]`, *query augmentation* (se rellena la query con `[MASK]` hasta una longitud fija, que actúa como expansión suave) y filtrado de puntuación en el documento.
+Cada token de la query "busca" su mejor pareja en el documento y se suman las similitudes.
+
+✍️ **Ejemplo a mano.** Query de 2 tokens y documento de 3; matriz de similitudes $\langle\hat q_i,\hat d_j\rangle$: fila 1 $= (0.9,\ 0.2,\ 0.1)$, fila 2 $= (0.3,\ 0.4,\ 0.8)$. MaxSim toma el máximo de cada fila y suma: $0.9 + 0.8 =$ **1.7**. Si el documento perdiera su tercer token, la fila 2 caería a 0.4 y $S = 1.3$: cada token de la query exige su propia evidencia, como los términos de BM25 (módulo 00), pero con coincidencia «blanda» por similitud en vez de exacta. Un bi-encoder, en cambio, compararía dos medias y no sabría **qué** token de la query quedó sin pareja.
+
+ Sigue siendo **precomputable** para los documentos (como un bi-encoder) pero conserva información fina por token. Detalles del paper original: marcadores `[Q]`/`[D]`, *query augmentation* (se rellena la query con `[MASK]` hasta una longitud fija, que actúa como expansión suave) y filtrado de puntuación en el documento.
 
 **ColBERTv2 (Santhanam et al., 2021)** ataca el almacenamiento con **compresión residual**: guarda el id del **centroide** más cercano y el residuo $r=v-c$ cuantizado a 1–2 bits por dimensión (el paper informa reducciones del espacio de 6–10×), además de entrenar con supervisión destilada de un cross-encoder y *hard negatives*. **PLAID (2022)** acelera la búsqueda con **interacción por centroides** y poda de candidatos.
 
@@ -1063,6 +1054,25 @@ print("* estimaciones de orden de magnitud con supuestos explícitos; el tamaño
 ''')
 
     # ───────────────────────────── 11. Producción ─────────────────────────────
+    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
+Ya has construido BM25, SPLADE, MaxSim, MUVERA, la fusión y el reranker; la tabla distingue lo que es práctica estándar de lo que aún es emergente antes de ver cómo lo despliega la industria.
+
+🟢 sólido · 🟡 emergente · 🔴 experimental.
+
+| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
+|---|---|---|---|
+| BM25 / índice invertido | 🟢 | motores de búsqueda léxicos (Lucene, Elasticsearch, OpenSearch, Vespa…) | Robertson & Zaragoza 2009 |
+| Sparse aprendido (SPLADE, SPLADE-v3) | 🟢 inglés · 🟡 multilingüe | Elastic (ELSER) y OpenSearch (neural sparse) ofrecen modelos sparse aprendidos | Formal et al. 2021–2024; docs de Elastic/OpenSearch |
+| BGE-M3 (denso + sparse + multi-vector en un modelo) | 🟢 | BAAI; integrado en el ecosistema de FlagEmbedding | Chen et al. 2024 (2402.03216) |
+| Late interaction ColBERT / ColBERTv2 | 🟡 | Vespa (embedder ColBERT nativo), Qdrant (multivector `MAX_SIM`), Jina-ColBERT-v2 | Khattab & Zaharia 2020; Santhanam et al. 2021; blogs/docs |
+| PLAID / WARP (motores de late interaction) | 🟡 | implementación de referencia de ColBERT (PLAID); WARP es investigación 2025 | 2205.09707; 2501.17788 |
+| MUVERA (multi-vector → un vector de dimensión fija) | 🟡 | Weaviate documenta una opción de codificación MUVERA | Dhulipala et al. 2024 (2405.19504); docs de Weaviate |
+| Fusión RRF / combinación convexa | 🟢 | práctica estándar de búsqueda híbrida | Cormack et al. 2009; Bruch et al. 2022 |
+| Rerankers cross-encoder | 🟢 | BAAI (bge-reranker-v2-m3), muchos proveedores | Nogueira & Cho 2019 (1901.04085) |
+| Rerankers basados en LLM (Qwen3-Reranker, bge-reranker-v2-gemma) | 🟡 | Alibaba, BAAI — mayor coste | 2506.05176; tarjetas |
+| Late chunking | 🟡 | Jina AI | Günther et al. 2024 (2409.04701) |
+| Búsqueda híbrida (léxico + denso) como configuración por defecto | 🟢 | prácticamente todas las bases vectoriales/motores modernos | docs de los motores |
+''')
     nb.md(r'''## 11 · 🏭 En producción
 
 - **Vespa** ofrece un *embedder* ColBERT nativo y expresa MaxSim en su lenguaje de ranking; su blog describe una compresión asimétrica de los vectores de token de hasta 32× (binarización en los documentos) y una variante de contexto largo (Long-ColBERT).
