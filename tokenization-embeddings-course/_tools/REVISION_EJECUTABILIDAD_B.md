@@ -20,6 +20,8 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 | 12 proyecto | 27 s | OK | Ídem | 8/8 automáticas (+R9 manual); plantilla 0/8 sin romper | pip sin `-U` |
 | 13 lección | 31 s | OK | Sintético + stdlib; encoders del hub → respaldos locales (aviso) | — | pip sin `-U` |
 | 13 proyecto | 23 s | OK | Ídem | 8/8; plantilla 0/8 sin romper | pip sin `-U` |
+| 14 lección | 114 s | OK | Sintético + stdlib; embeddings de respaldo (aviso); ScaNN opcional (no instalado, mensaje) | — | pip sin `-U` (incluía `numpy`) |
+| 14 proyecto | 36 s | OK | Ídem | 6/6; plantilla 0/6 sin romper | pip sin `-U` |
 <!-- TABLA -->
 
 ## Cambios aplicados (en builders; notebooks regenerados)
