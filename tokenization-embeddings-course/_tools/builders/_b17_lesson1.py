@@ -9,12 +9,13 @@ def part1(nb):
     {nb.badge()}
 
     # Módulo 17 · Interpretabilidad y geometría de los embeddings
+    **Tokenización y Embeddings: de BPE a los modelos modernos**
 
     | | |
     |---|---|
     | **Nivel** | 🔴 Experto |
-    | **Duración** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
-    | **GPU** | No necesaria con `FAST_DEV_RUN=True` (CPU, ≈ 3–4 min). T4/L4 solo si activas el embedder real opcional |
+    | **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+    | **GPU recomendada** | No necesaria con `FAST_DEV_RUN=True` (CPU, ≈ 3–4 min). T4/L4 solo si activas el embedder real opcional |
     | **Prerrequisitos** | 09–10 (geometría, anisotropía, pooling), 11 (contrastivo), 12 (embedders), 15 (evaluación) |
     | **Hilo conductor** | ¿Qué *sabe* el vector que Políglota guarda por cada documento? ¿Qué filtra? |
 
@@ -69,7 +70,7 @@ def part1(nb):
     **Analogías con lo que ya sabes.** (a) En *recsys*, los factores latentes de una factorización de matrices rara vez son interpretables por sí solos: hay que *rotarlos* o inspeccionar sus ítems extremos; un SAE es el análogo moderno (diccionario disperso en lugar de bases densas). (b) En *compresión*, un diccionario sobrecompleto con codificación dispersa es *sparse coding*: más átomos que dimensiones, pero pocos activos por muestra.
     """)
     nb.gemini(
-        "imagen", "M17-IMG-3", "Capas de información dentro de un embedding de texto",
+        "imagen", "M17-IMG-01", "Capas de información dentro de un embedding de texto",
         "Mapa de qué codifica un embedding de documento (léxico, tema, idioma, estilo, longitud) y qué puede extraer un atacante o un probe.",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
@@ -194,16 +195,16 @@ def part1(nb):
     > 🟡 En embedders reales funciona de forma menos limpia (conceptos entrelazados, direcciones que cambian de capa a capa, normas); además *AxBench* (Wu et al., 2025) encontró que, para steering de LLMs, **líneas base simples** (prompting, diferencia de medias) **superan a los SAE**. Por eso conviene comparar siempre contra la diferencia de medias antes de afirmar que una *feature* aprendida «controla» algo.
     """)
     nb.gemini(
-        "video", "M17-VID-1", "Steering: sumar un vector de concepto desplaza la consulta y sus resultados",
+        "video", "M17-VID-01", "Steering: sumar un vector de concepto desplaza la consulta y sus resultados",
         "Animación en 2D de una consulta que se desplaza por el vector «git − cache» y pasa del clúster de documentos de caché al de git, con el top-3 cambiando.",
         """
         Animación técnica limpia, 16:9, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif, ritmo calmado, sin voz en off, sin música. Textos en español.
         Escenas:
-        0–6 s: un plano 2D sin ejes numéricos con dos nubes de puntos: una azul etiquetada «documentos de caché» (izquierda) y una naranja etiquetada «documentos de git» (derecha), y una estrella negra «consulta q» dentro de la nube azul. Un panel a la derecha lista «Top-3: cache, cache, cache» con barras azules.
+        0–6 s: un plano 2D sin ejes numéricos con dos nubes de puntos: una azul etiquetada «documentos de caché» (izquierda) y una naranja etiquetada «documentos de git» (derecha), y una estrella verde «consulta q» dentro de la nube azul. Un panel a la derecha lista «Top-3: cache, cache, cache» con barras azules.
         6–12 s: aparecen los centroides de cada nube como puntos grandes y una flecha gris gruesa del centroide azul al naranja con la etiqueta «v = media(git) − media(cache)».
         12–22 s: la estrella se desplaza gradualmente a lo largo de una flecha verde paralela a v; sobre ella un contador «α = 0 → 0.5 → 1 → 1.5». Los tres vecinos más cercanos se resaltan con líneas finas y el panel de la derecha cambia: «cache, cache, git» (α = 1), luego «git, git, git» (α = 1.5), con barras que pasan de azul a naranja.
         22–28 s: la estrella queda dentro de la nube naranja; texto final «Una dirección de concepto controla el retrieval (¡mídelo y compáralo con baselines!)».
-        Evita: voz en off, música, texto ilegible, números inventados, efectos 3D, transiciones bruscas.
+        Evita: voz en off, música, texto ilegible, números distintos de los indicados, efectos 3D, transiciones bruscas.
         """,
         "Una consulta se desplaza por la dirección que va de la nube de caché a la de git y su top-3 cambia de caché a git.",
         """
@@ -212,6 +213,9 @@ def part1(nb):
         """,
         duration="28 s",
     )
+    nb.md("""
+    > 👀 **Qué debes observar.** La consulta no cambia de *texto*, solo de *posición*: basta una suma vectorial para que el top-3 pase de caché a git, en el mismo orden (α ≈ 1 mezcla, α ≥ 1.5 todo git) que la curva medida arriba. Que una dirección mueva el retrieval no prueba que el modelo «use» ese concepto: compáralo siempre con baselines (diferencia de medias, prompt).
+    """)
     nb.code(r'''
     # Borrado lineal de un concepto (idioma) con la dirección de diferencia de medias: la versión más simple de LEACE (Belrose et al. 2023)
     u = En[lang == "en"].mean(0) - En[lang == "es"].mean(0); u /= np.linalg.norm(u)

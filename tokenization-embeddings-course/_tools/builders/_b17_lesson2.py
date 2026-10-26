@@ -30,13 +30,13 @@ def part2(nb):
     > 👀 **Qué debes observar.** Con características **densas** (S=0) el modelo solo representa bien ~2 de las 5 (normas de longitud muy desigual: las demás se sacrifican). Al aumentar la dispersión, las **cinco** flechas aparecen con norma ≈ 1 y se reparten por el plano como un **pentágono**: 5 características en 2 dimensiones. *Superposición*: más conceptos que ejes, pagando interferencia.
     """)
     nb.gemini(
-        "imagen", "M17-IMG-1", "Superposición: cinco características en dos dimensiones",
+        "imagen", "M17-IMG-02", "Superposición: cinco características en dos dimensiones",
         "Imagen conceptual de la geometría de la superposición: con características dispersas, cinco direcciones forman un pentágono en un plano de 2 dimensiones; con características densas solo caben dos.",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
         Dos paneles lado a lado, cada uno un plano 2D con un círculo gris fino de radio 1 y ejes grises sin números.
         Panel izquierdo, título «Características DENSAS (S = 0)»: solo dos flechas largas, azul «f1» y naranja «f2», perpendiculares; tres flechas muy cortas casi invisibles en gris «f3, f4, f5». Debajo: «Solo 2 características caben bien».
-        Panel derecho, título «Características DISPERSAS (S = 0.97)»: cinco flechas de igual longitud desde el origen formando un pentágono regular, con colores azul «f1», naranja «f2», verde «f3», rojo apagado «f4», gris «f5», y líneas finas punteadas uniendo las puntas. Debajo: «5 características en 2 dimensiones: superposición».
+        Panel derecho, título «Características DISPERSAS (S = 0.97)»: cinco flechas de igual longitud desde el origen formando un pentágono regular, con colores azul «f1», naranja «f2», verde «f3», gris «f4», azul con trazo discontinuo «f5», y líneas finas punteadas uniendo las puntas. Debajo: «5 características en 2 dimensiones: superposición».
         Entre los dos paneles una flecha gris con el texto «más dispersión».
         Evita: texto ilegible o inventado, ilustraciones decorativas, sombras 3D, más de cinco flechas, ejes con números.
         """,
@@ -59,15 +59,15 @@ def part2(nb):
     Medimos **NMSE** $=\\lVert X-\\hat X\\rVert^2/\\lVert X-\\bar X\\rVert^2$. (JumpReLU, Rajamanoharan et al. 2024, es otra variante que aprende un umbral por latente; no la implementamos.)
     """)
     nb.gemini(
-        "imagen", "M17-IMG-2", "Arquitectura de un sparse autoencoder TopK",
+        "imagen", "M17-IMG-03", "Arquitectura de un sparse autoencoder TopK",
         "Flujo x → encoder lineal → TopK (solo k activos) → decoder con átomos unitarios → x̂, con pérdida de reconstrucción, y la interpretación de cada átomo como una característica.",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
         De izquierda a derecha cinco bloques conectados por flechas:
         1) Caja azul «x ∈ R^64 (embedding del documento)» dibujada como una fila de 12 celdas.
-        2) Caja azul «Encoder lineal W_enc (x − b_dec) + b_enc → 256 preactivaciones» dibujada como una fila larga de 24 celdas grises.
+        2) Caja azul «Encoder lineal W_enc (x − b_dec) + b_enc → 96 preactivaciones» dibujada como una fila larga de 24 celdas grises.
         3) Caja naranja «TopK (k = 4)»: de la fila larga solo 4 celdas quedan en naranja intenso con valores «0.9, 0.6, 0.4, 0.3» y el resto tachado en gris; etiqueta «z: dispersa, L0 = k».
-        4) Caja verde «Decoder W_dec (256 átomos de norma 1) z + b_dec» con un pequeño abanico de 4 flechas verdes que se suman.
+        4) Caja verde «Decoder W_dec (96 átomos de norma 1) z + b_dec» con un pequeño abanico de 4 flechas verdes que se suman.
         5) Caja azul «x̂ ≈ x» con una flecha de retorno punteada gris hacia 1 con el texto «pérdida: ‖x − x̂‖² / varianza».
         Debajo del bloque 4, un recuadro gris: «Cada átomo = una característica: se interpreta por sus documentos más activos y por sus términos». Un recuadro más pequeño naranja: «AuxK: los latentes muertos reconstruyen el residuo».
         Título superior: «Sparse autoencoder TopK sobre embeddings».
@@ -75,7 +75,7 @@ def part2(nb):
         """,
         "Un embedding pasa por un encoder lineal, una activación TopK que deja pocos latentes activos y un decoder de átomos unitarios que reconstruye el vector.",
         """
-        x(64) -> [W_enc] -> 256 preact -> [TopK k=4] -> z dispersa -> [W_dec, átomos |a|=1] -> x_hat
+        x(64) -> [W_enc] -> 96 preact -> [TopK k=4] -> z dispersa -> [W_dec, átomos |a|=1] -> x_hat
                                                       pérdida NMSE (+ AuxK en latentes muertos)
         """,
     )
@@ -273,7 +273,7 @@ def part2(nb):
     | Inversión de embeddings (vec2text) | 🟡 emergente, amenaza **demostrada** en 32 tokens | Seguridad/privacidad | Morris et al. 2023; Zhang et al. 2025 |
     """)
     nb.md("""
-    ## 10. 🏭 En producción
+    ## 🏭 En producción
     - **Diagnóstico geométrico barato en cada migración de embedder:** varianza por dimensión, coseno medio entre textos al azar, sondas de idioma/dominio. Un cambio de modelo que introduce una dimensión dominante o anisotropía extrema es una causa frecuente de regresiones silenciosas.
     - **Filtros y routing con sondas:** una sonda lineal sobre el embedding (idioma, tema, PII) es una forma barata de enrutar o filtrar sin llamar a otro modelo; la selectividad y la deriva de la sonda se monitorizan como cualquier modelo.
     - **Interpretabilidad de resultados:** con un SAE (o con k-means) puedes explicar *por qué* dos documentos se parecen («comparten las features expiración + ttl»); es una herramienta de **depuración y auditoría**, no una garantía causal.
@@ -281,7 +281,7 @@ def part2(nb):
     - **Steering:** en producción rara vez se «gobierna» el retrieval con una feature: es más seguro usar filtros por metadatos o reranking. Considéralo experimental.
     """)
     nb.md("""
-    ## 11. 🧠 Secretos de la élite
+    ## 🧠 Secretos de la élite
     1. **Siempre reporta la tarea de control y la selectividad** (Hewitt & Liang). Una sonda MLP «lee» hasta etiquetas aleatorias por tipo (nuestro experimento: ≈ 0.95 en el control).
     2. **Probar que se puede leer no prueba que se use.** Borrar linealmente el idioma dejó la sonda en el azar y el retrieval **intacto** (§4). Lo causal exige intervenir y medir comportamiento.
     3. **Compara siempre con la diferencia de medias.** En *AxBench* los SAE no superaron a baselines simples en steering y detección; en nuestro juguete la media también igualó al átomo del SAE.
@@ -292,7 +292,7 @@ def part2(nb):
     8. **Valida los auto-etiquetados.** Etiquetar features con un LLM es útil pero debe contrastarse con pureza medida sobre etiquetas conocidas, como hicimos con las facetas.
     """)
     nb.md("""
-    ## 12. ⚠️ Errores comunes
+    ## ⚠️ Errores comunes
     - Concluir que «el embedding codifica sintaxis/tema» con una sonda sobreparametrizada y sin control task.
     - Interpretar los **ejes** del embedding como conceptos (están rotados y en superposición).
     - Medir interpretabilidad de un SAE con *ejemplos elegidos a mano* en lugar de una métrica con verdad terreno o muestreo aleatorio de features.
@@ -302,7 +302,7 @@ def part2(nb):
     - Dar por «anónimos» los embeddings de datos con PII.
     """)
     nb.md("""
-    ## 13. ✅ Autoevaluación
+    ## 📝 Autoevaluación
     <details><summary><b>1. (Cálculo)</b> Una sonda lineal saca 0.97 en la tarea real y 0.55 en la de control; una MLP 0.995 y 0.95. Calcula la selectividad de cada una e interpreta.</summary>
 
     Lineal: 0.97 − 0.55 = **0.42**. MLP: 0.995 − 0.95 = **0.045**. La MLP memoriza (tiene capacidad para aprender la tarea sin ayuda del embedding): su acierto no prueba que el embedding codifique el concepto; la lineal es más fiable.
@@ -334,7 +334,7 @@ def part2(nb):
     </details>
     """)
     nb.md("""
-    ## 14. 📚 Referencias
+    ## 📚 Referencias
     - Hewitt & Manning (2019). *A Structural Probe for Finding Syntax in Word Representations*. NAACL 2019. <https://aclanthology.org/N19-1419/>
     - Hewitt & Liang (2019). *Designing and Interpreting Probes with Control Tasks*. EMNLP-IJCNLP 2019. <https://arxiv.org/abs/1909.03368>
     - Belinkov (2022). *Probing Classifiers: Promises, Shortcomings, and Advances*. Computational Linguistics 48(1). <https://arxiv.org/abs/2102.12452>

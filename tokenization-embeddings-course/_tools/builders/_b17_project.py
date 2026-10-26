@@ -41,9 +41,9 @@ def build(nb):
     | | |
     |---|---|
     | **Nivel** | 🔴 Experto |
-    | **Duración** | ≈ 2 h |
-    | **GPU** | No necesaria (CPU, ≈ 3–4 min con `FAST_DEV_RUN=True`) |
-    | **Requiere** | Lección 17 (SAE TopK, pureza, estabilidad, steering, inversión) y módulo 15 (estadística) |
+    | **Duración estimada** | ≈ 2 h |
+    | **GPU recomendada** | No necesaria (CPU, ≈ 3–4 min con `FAST_DEV_RUN=True`) |
+    | **Prerrequisitos** | Lección 17 (SAE TopK, pureza, estabilidad, steering, inversión) y módulo 15 (estadística) |
     | **Conecta con** | 12 (embedders) · 15 (evaluación) · 18 (privacidad y producción) |
 
     ## 🏢 Contexto de negocio

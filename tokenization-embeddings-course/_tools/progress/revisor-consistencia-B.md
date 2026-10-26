@@ -3,7 +3,7 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - [x] 20_capstone
 - [x] 19_playbook_elite
 - [x] 18_produccion
-- [ ] 17_interpretabilidad_geometria
+- [x] 17_interpretabilidad_geometria
 - [x] 16_embeddings_multimodales
 - [x] 15_evaluacion_retrieval
 - [x] 14_indexacion_ann
@@ -23,3 +23,4 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - M15: etiquetas canónicas + subtítulo; secciones fijas sin número, ✅→📝; IDs a 2 dígitos y en orden (golden set = IMG-02, LIMIT = IMG-03); VID-01: remuestreos con listas cuyas medias son exactas (el de 0.61 daba 0.69) e IC ≈ [0.35, 0.77] recalculado (decía [0.37, 0.74]); producto punto → producto escalar.
 - M14: cabecera inline → tabla canónica (lección y proyecto) + subtítulo; «## N ·» → «## N.»; secciones fijas sin número, 📝/📚; «sin voz en off, sin música»; re-ranking/re-ordenar → reranking/reordenar. Gemini 3 IMG + 1 VID correctas (PQ: 1024/64 → 64 B, 64× menos que float32).
 - M18: cabecera inline → tabla canónica + subtítulo; IMG-02: lote 2 no podía cerrarse por max_batch = 32 con 2 peticiones → ejemplo con max_batch = 4 y q1–q7; IMG-01 sin «p99 ≤ 100 ms» inventado; VID-01 sin música; «Costo» → «Coste» en la salida.
+- M17: etiquetas canónicas + subtítulo; secciones fijas sin número, 📝; IDs renumerados por orden de aparición (IMG-01 capas de información, VID-01 steering, IMG-02 superposición, IMG-03 SAE); 👀 añadido tras VID-01 (faltaba); SAE de la figura con 96 latentes como §7 (decía 256); colores fuera de paleta (negro, rojo) sustituidos.
