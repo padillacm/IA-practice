@@ -97,28 +97,7 @@ for c in C.corpus_cells():
 nb.code(S.DATA)
 
 nb.md(r"""
-## 4. Mapa de madurez (a oct-2026)
-
-| Técnica | Madurez | Quién la usa / respaldo público | Fuente |
-|---|---|---|---|
-| BLT (parches por entropía, módulo 06) | 🟡/🔴 | Meta FAIR; hasta 8B, pesos 1B/7B | arXiv:2412.09871 (ACL 2025) |
-| **H-Net / dynamic chunking** | 🔴 | CMU / Cartesia (Albert Gu); código `goombalab/hnet` y pesos en el hub de Cartesia; ICLR 2026; hasta ~1.3B de FLOPs equivalentes | arXiv:2507.07955 |
-| Seguimiento de H-Net (SOMBRERO, H-Net++, chunking adaptativo…) | 🔴 | Grupos académicos / industriales; resultados a ~1B o menos | p. ej. arXiv:2601.22805 |
-| AU-Net (U-Net autoregresiva bytes→palabras) | 🔴 | Meta FAIR / NeurIPS 2025; «en pie de igualdad» con BPE en jerarquías poco profundas | arXiv:2506.14761 |
-| *Byte-ification* (Bolmo) | 🔴/🟡 | Ai2: Bolmo 1B/7B abiertos, convertidos desde Olmo 2/3 | arXiv:2512.15586 |
-| Init por media / muestreo de la distribución (Hewitt) | 🟢 | Es el **valor por defecto** de `resize_token_embeddings(mean_resizing=True)` en `transformers` | Documentación de `transformers`; blog de J. Hewitt (2021) |
-| FVT (media de la descomposición) | 🟢/🟡 | Compresión de modelos (Gee et al., 2022); baseline estándar en la literatura de transfer | arXiv:2402.09977 |
-| WECHSEL | 🟡 | Transferencia de GPT-2/RoBERTa a otros idiomas; código abierto | arXiv:2112.06598 |
-| FOCUS | 🟡 | Especialización monolingüe de XLM-R; checkpoints y código publicados | arXiv:2305.14481 |
-| Trans-Tokenization | 🟡 | Familia «Tweeties» (COLM 2024), adaptada desde Mistral-7B | arXiv:2408.04303 |
-| ZeTT (hiperred) | 🟡/🔴 | NeurIPS 2024; hiperredes publicadas (XLM-R, Mistral-7B, TinyLlama) | arXiv:2405.07883 |
-| Destilación entre tokenizers (ALM) | 🔴 | Investigación (2025) | arXiv:2503.20083 |
-
-> **Regla del curso:** «🔴» = hay un paper con resultados a pequeña/mediana escala y código, pero **no hay evidencia pública de adopción en producción a gran escala**.
-""")
-
-nb.md(r"""
-## 5. Teoría: el *dynamic chunking* de H-Net
+## 4. Teoría: el *dynamic chunking* de H-Net
 
 Una etapa de H-Net aplica $\hat x = \mathcal{E}(x)$, $(x', p) = \text{Chunk}(\hat x)$, $\hat z' = \mathcal{M}(x')$, $z = \text{Dechunk}(\hat z', p) + \text{Linear}(\hat x)$ y decodifica con $\mathcal{D}$. Los símbolos: $x\in\mathbb{R}^{L\times D}$ la entrada de la etapa, $\hat x$ la salida del encoder, $p_t\in[0,1]$ la «confianza de frontera» en $t$.
 
@@ -148,6 +127,8 @@ $$\mathcal{L}_{\text{ratio}} = \frac{N}{N-1}\Big((N-1)\,F\,G + (1-F)(1-G)\Big),\
 
 con $N$ el factor de compresión objetivo. Aunque $F$ no es diferenciable, el gradiente fluye por $G$; el mínimo $\mathcal{L}_{\text{ratio}}=1$ se alcanza en $F=G=1/N$. (Idea tomada de la pérdida de balanceo de carga de los MoE.)
 
+**Ejemplo a mano.** *Routing:* si $\cos(q_t,k_{t-1})=0.8$, $p_t=\tfrac12(1-0.8)=0.10$ → $b_t=0$ (sigue la unidad); si $\cos=-0.2$, $p_t=0.60$ → $b_t=1$ (frontera). *Ratio loss* con $N=4$ (objetivo: 1 frontera cada 4 bytes): en el óptimo $F=G=0.25$, $\mathcal{L}_{\text{ratio}}=\tfrac43(3\cdot0.0625+0.75\cdot0.75)=\tfrac43\cdot0.75=\mathbf{1}$; si el router colapsa a «todo es frontera» ($F=G=1$), $\tfrac43\cdot3=\mathbf{4}$; a «nada es frontera» ($F=G=0$), $\tfrac43\cdot1=\mathbf{1.33}$. Ambos colapsos se penalizan, como la pérdida de balanceo de un MoE penaliza mandar todo a un experto.
+
 **Mejoras de entrenamiento** (§2.3 del paper): normalización al final de cada red (*norm balance*), proyección lineal solo en el camino residual, y **tasas de aprendizaje mayores en las etapas externas** (que ven secuencias más largas y deciden las fronteras de las internas).
 
 **Inferencia.** H-Net decide *por byte* si lo pasa a la red principal; el decoder corre en cada byte y la red principal solo al cerrar chunks — parecido a la decodificación especulativa (un modelo pequeño cada paso, uno grande cada pocos).
@@ -172,7 +153,7 @@ El suavizado es lo que permite aprender fronteras «a ciegas»: una frontera dud
 """))
 
 nb.md(r"""
-### 5.1 BLT frente a H-Net (qué cambia respecto al módulo 06)
+### 4.1 BLT frente a H-Net (qué cambia respecto al módulo 06)
 
 | | **BLT (módulo 06)** | **H-Net (este módulo)** |
 |---|---|---|
@@ -185,11 +166,11 @@ nb.md(r"""
 | Escala reportada | hasta 8B / 4T bytes | FLOPs de GPT-3 Large y XL (760M / 1.3B), 100B tokens de FineWeb-Edu |
 """)
 
-nb.md("## 6. MiniHNet desde cero\n\n**Qué es y qué no es.** Una etapa de H-Net con E y D como transformers causales pequeños (el paper usa Mamba-2) y los mismos mecanismos de chunking: routing por coseno, selección, EMA, upsampler con STE, residual proyectado inicializado a 0 y ratio loss. No incluye jerarquía de dos etapas, *norm balance* completo ni *LR modulation*. Comprobamos la **causalidad** igual que en el módulo 06.")
+nb.md("## 5. MiniHNet desde cero\n\n**Qué es y qué no es.** Una etapa de H-Net con E y D como transformers causales pequeños (el paper usa Mamba-2) y los mismos mecanismos de chunking: routing por coseno, selección, EMA, upsampler con STE, residual proyectado inicializado a 0 y ratio loss. No incluye jerarquía de dos etapas, *norm balance* completo ni *LR modulation*. Comprobamos la **causalidad** igual que en el módulo 06.")
 nb.code(S.HNET_UTIL)
 nb.code(S.HNET_MODEL)
 nb.md(r"""
-### 6.1 Entrenamiento comparado: chunking aprendido vs espacios vs *pool* fijo
+### 5.1 Entrenamiento comparado: chunking aprendido vs espacios vs *pool* fijo
 
 Tres variantes **idénticas salvo la función de chunking** (como en la Tabla 1 del paper): `dc` (aprendido, con ratio loss con $N=4$), `space` (inicios de palabra, heurística de SpaceByte) y `pool` (cada 4 bytes). Mismo presupuesto de pasos y datos. Una sola semilla: **mira tendencias, no diferencias de milésimas**.
 """)
@@ -224,7 +205,7 @@ Observa dos cosas: (1) las fronteras **emergen** del objetivo de predecir el sig
 """))
 
 nb.md(r"""
-## 7. ¿Está muerta la tokenización?
+## 6. ¿Está muerta la tokenización?
 
 El argumento «los tokenizers desaparecerán» es atractivo; el argumento «es una moda» también. Pongamos la evidencia lado a lado (todas las cifras son **reportadas por los autores**, a oct-2026).
 
@@ -258,11 +239,11 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 8. Tokenizer transfer: cambiar el vocabulario de un modelo ya entrenado
+## 7. Tokenizer transfer: cambiar el vocabulario de un modelo ya entrenado
 
 **Problema (Minixhofer et al., 2024).** Un LM está *atado* a su tokenizer: su matriz de embeddings $E_a\in\mathbb{R}^{|V_a|\times d}$ (y, si no hay *weight tying*, la de salida) solo tiene sentido para $V_a$. Queremos un tokenizer nuevo $(V_b, T_b)$ —otro idioma, dominio o tamaño— **conservando el cuerpo del modelo**. Todo se reduce a: *¿cómo inicializar $E_b$?* Después, un ajuste corto.
 
-### 8.1 Taxonomía de métodos (lo que necesitan y cómo inicializan)
+### 7.1 Taxonomía de métodos (lo que necesitan y cómo inicializan)
 
 | Método | Idea | Necesita | Verificado en |
 |---|---|---|---|
@@ -274,14 +255,16 @@ nb.md(r"""
 | **Trans-Tokenization** | alinea tokens de origen y destino con un **corpus paralelo** (alineador estadístico) y promedia ponderando por recuento de alineación | corpus paralelo (o diccionario) | arXiv:2408.04303 (COLM 2024) |
 | **ZeTT** | una **hiperred** (otro LM pequeño) que, dado un tokenizer, *predice* sus embeddings componiendo los de la descomposición; se entrena sobre muchos tokenizers y generaliza a uno nuevo **sin datos del destino** | entrenar la hiperred | arXiv:2405.07883 (NeurIPS 2024) |
 
+**Ejemplo a mano (FVT).** El tokenizer nuevo tiene `▁servidor`; el antiguo lo parte en `▁serv` + `idor` con embeddings (de juguete, $d=2$) $(1,0)$ y $(0,2)$. FVT lo inicializa con la media: $e_b(\texttt{▁servidor})=(0.5,\,1)$. Un token que el antiguo ya tenía igual se copia tal cual. Es la misma intuición que el *cold start* de un ítem nuevo en recsys: lo inicializas con la media de los ítems con los que se relaciona, no al azar.
+
 **Resultados reportados por ZeTT** (no los hemos reproducido): con XLM-R, tokenizers específicos por idioma acortan las secuencias ≈ 14 % en media, aceleran la inferencia > 16 % y conservan XNLI a ≈ 1 % en promedio; con Mistral-7B, un tokenizer de código con ~10 % menos tokens preserva la corrección funcional a ≈ 3 %; y el hueco restante se cierra con **< 1B tokens** de entrenamiento continuado, frente a cientos de miles de millones en trabajos previos. En decodificadores el problema es más difícil: FOCUS «es aproximadamente aleatorio en el peor caso» (−23.2 % en BoolQ) y da 0 % pass@1 en HumanEval Python.
 
 **Otros caminos:** OFA (parametrización factorizada de embeddings, arXiv:2311.08849), AdaptiVocab (adaptar el vocabulario a un dominio, arXiv:2503.19693), *retrofitting* con tokenización dinámica (arXiv:2411.18553) y destilación entre tokenizers (ALM, arXiv:2503.20083).
 
-### 8.2 La métrica correcta
+### 7.2 La métrica correcta
 Tras el cambio, la pérdida *por token* **no es comparable** (los tokens nuevos cubren más bytes). Evaluamos **bits por byte** sobre el mismo texto con cada tokenizer.
 """)
-nb.md("### 8.3 Montaje del experimento\n\nModelo base: **GPT-2 en miniatura** (`GPT2LMHeadModel`, 3 capas, ancho 128) preentrenado solo con **inglés + código** y un BPE de 512 tokens (tokenizer A). Destino: **español** con un BPE propio de 768 tokens (tokenizer B). En el modo completo se usa el **GPT-2 small real** (124M) y su tokenizer de 50 257 tokens si tienes acceso al hub.")
+nb.md("### 7.3 Montaje del experimento\n\nModelo base: **GPT-2 en miniatura** (`GPT2LMHeadModel`, 3 capas, ancho 128) preentrenado solo con **inglés + código** y un BPE de 512 tokens (tokenizer A). Destino: **español** con un BPE propio de 768 tokens (tokenizer B). En el modo completo se usa el **GPT-2 small real** (124M) y su tokenizer de 50 257 tokens si tienes acceso al hub.")
 nb.code(S.BPE_FN)
 nb.code(S.TT_DATA)
 nb.code(S.TT_FERT)
@@ -290,7 +273,7 @@ El tokenizer B (entrenado en español) produce tokens más largos sobre el espa�
 """))
 nb.code(S.TT_MODEL)
 nb.md(r"""
-### 8.4 Inicializaciones desde cero
+### 7.4 Inicializaciones desde cero
 
 Seis maneras de rellenar $E_b$. Todas **copian** los tokens cuya cadena aparece en ambos vocabularios (los «compartidos») y difieren en cómo tratan al resto.
 
@@ -337,7 +320,7 @@ Lee el diagrama de menos a más información: **media** (ninguna) → **FVT** (e
 nb.code(S.TT_MEAN_RESIZE)
 
 nb.md(r"""
-### 8.5 Checklist para un cambio de tokenizer en un proyecto real
+### 7.5 Checklist para un cambio de tokenizer en un proyecto real
 
 1. **Tokens especiales:** `pad`, `eos`, `bos`, plantillas de chat; si no se mapean, el modelo "no sabe parar".
 2. **Cabeza de salida:** con *weight tying* se comparte; si no, hay que inicializar **también** la matriz de salida (ZeTT predice las dos).
@@ -345,6 +328,29 @@ nb.md(r"""
 4. **Medir en bpb** (o en una métrica de tarea), con el mismo texto, antes y después; cuidado con filtrar el *test* en los datos de ajuste.
 5. **Regresión en lo que no se adaptó:** el inglés y el código no deben degradarse (mide el bpb sobre ellos).
 6. **Presupuesto de ajuste:** primero solo embeddings (barato y estable), luego descongelar. Registra cuántos tokens hacen falta para cerrar el hueco.
+""")
+
+nb.md(r"""
+## 8. Mapa de madurez (a oct-2026)
+
+Con H-Net y tokenizer transfer ya vistos, esta tabla resume qué es sólido, emergente o experimental.
+
+| Técnica | Madurez | Quién la usa / respaldo público | Fuente |
+|---|---|---|---|
+| BLT (parches por entropía, módulo 06) | 🟡/🔴 | Meta FAIR; hasta 8B, pesos 1B/7B | arXiv:2412.09871 (ACL 2025) |
+| **H-Net / dynamic chunking** | 🔴 | CMU / Cartesia (Albert Gu); código `goombalab/hnet` y pesos en el hub de Cartesia; ICLR 2026; hasta ~1.3B de FLOPs equivalentes | arXiv:2507.07955 |
+| Seguimiento de H-Net (SOMBRERO, H-Net++, chunking adaptativo…) | 🔴 | Grupos académicos / industriales; resultados a ~1B o menos | p. ej. arXiv:2601.22805 |
+| AU-Net (U-Net autoregresiva bytes→palabras) | 🔴 | Meta FAIR / NeurIPS 2025; «en pie de igualdad» con BPE en jerarquías poco profundas | arXiv:2506.14761 |
+| *Byte-ification* (Bolmo) | 🔴/🟡 | Ai2: Bolmo 1B/7B abiertos, convertidos desde Olmo 2/3 | arXiv:2512.15586 |
+| Init por media / muestreo de la distribución (Hewitt) | 🟢 | Es el **valor por defecto** de `resize_token_embeddings(mean_resizing=True)` en `transformers` | Documentación de `transformers`; blog de J. Hewitt (2021) |
+| FVT (media de la descomposición) | 🟢/🟡 | Compresión de modelos (Gee et al., 2022); baseline estándar en la literatura de transfer | arXiv:2402.09977 |
+| WECHSEL | 🟡 | Transferencia de GPT-2/RoBERTa a otros idiomas; código abierto | arXiv:2112.06598 |
+| FOCUS | 🟡 | Especialización monolingüe de XLM-R; checkpoints y código publicados | arXiv:2305.14481 |
+| Trans-Tokenization | 🟡 | Familia «Tweeties» (COLM 2024), adaptada desde Mistral-7B | arXiv:2408.04303 |
+| ZeTT (hiperred) | 🟡/🔴 | NeurIPS 2024; hiperredes publicadas (XLM-R, Mistral-7B, TinyLlama) | arXiv:2405.07883 |
+| Destilación entre tokenizers (ALM) | 🔴 | Investigación (2025) | arXiv:2503.20083 |
+
+> **Regla del curso:** «🔴» = hay un paper con resultados a pequeña/mediana escala y código, pero **no hay evidencia pública de adopción en producción a gran escala**.
 """)
 
 nb.md(r"""
