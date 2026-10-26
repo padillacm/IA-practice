@@ -87,3 +87,13 @@ y algún ejemplo a mano ausente.
   subsecciones en `nb.md("### …")` y la referencia interna «sección 8» → 7.
 - **👀 añadidas:** tras la figura «La misma frase agrupada de cuatro maneras» (lección) y tras la figura de resumen
   del proyecto (incremental / estabilidad / inflación con erratas), con qué hacer si contradice la lección.
+
+## 07 · H-Net y tokenizer transfer
+- Bien: 🔁 con repaso espaciado de 06, 02/04 y 05 (tokens sub-entrenados ↔ inicializar tokens nuevos); intuición
+  antes de la teoría; cifras reportadas separadas de las medidas; checklist de cambio de tokenizer; 57 celdas.
+- **Ejemplos a mano:** §4 (dynamic chunking) era solo fórmulas; añadido cálculo de $p_t$ para dos cosenos y de la
+  ratio loss con $N=4$ en el óptimo (1) y en los dos colapsos (4 y 1.33), con la analogía del balanceo de carga MoE.
+  En tokenizer transfer, ejemplo FVT con vectores de juguete y analogía con el *cold start* de ítems en recsys.
+- **Reestructurado:** Mapa de madurez de §4 a §8 (antes de 🏭); secciones 5–8 renumeradas (4–7).
+- **👀 añadida** tras las curvas de adaptación del proyecto, coherente con lo medido por la revisión de
+  ejecutabilidad (en cero-shot las inits apenas difieren; tras la fase 1, FVT ≈ 0.70 vs aleatoria ≈ 0.78 bpb).

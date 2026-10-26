@@ -267,6 +267,7 @@ Corpus Políglota vía `carga_corpus()` (módulo 00). *Origen:* inglés + códig
     nb.code(FLOW)
     nb.code(REGRESION)
     nb.code(PLOT)
+    nb.md(obs("En el paso 0 las inits apenas difieren en este banco diminuto, pero al llegar a la línea vertical (fin de la fase 1, solo embeddings) FVT debe quedar claramente por debajo de la aleatoria (la referencia mide ≈ 0.70 frente a ≈ 0.78 bpb): esa distancia es lo que ahorra una buena inicialización. Después de la línea (fase 2, todo el modelo) las curvas convergen: con más pasos la init importa menos. La línea roja es el modelo original con su tokenizer A; si alguna curva la cruza hacia abajo, el tokenizer nuevo ya **modela mejor** el español por byte."))
 
     nb.md("## Paso 5 · Conclusión y rúbrica\n\nEscribe tu recomendación para el CTO: ¿cambiar el tokenizer compensa? ¿qué init usarías? ¿qué **no** puedes concluir con este banco (una semilla, modelo diminuto, datos sintéticos, ~300 pasos)?")
     nb.code('CONCLUSION = ""   # TODO 5: tu nota técnica (>= 300 caracteres)\n')
