@@ -9,7 +9,7 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 00–08 · Informe:
 - [x] 06_tokenizer_free_bytes_blt
 - [x] 07_hnet_tokenizer_transfer
 - [x] 08_tokens_multimodales_audio
-- [ ] Glosario unificado (bloque A) en GUIA_DE_ESTUDIO.md + check_course.py OK + informe
+- [x] Glosario unificado (bloque A) en GUIA_DE_ESTUDIO.md + check_course.py OK + informe
 
 ## Notas para retomar
 - Terminología canónica decidida y aplicada en 00–08 (ver tabla en REVISION_CONSISTENCIA.md). Cabeceras unificadas. Auditoría Gemini: script en scratchpad (audit.py) — revisa Evita, paleta, fondo, escenas, 👀 detrás.

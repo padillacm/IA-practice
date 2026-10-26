@@ -103,6 +103,7 @@ Ideas que atraviesan el curso (vuelve a ellas en cada módulo):
 | Español (como se usa en el curso) | Inglés | Definición breve | Módulo |
 |---|---|---|---|
 | token | token | unidad discreta de un vocabulario, con un id entero | 00 |
+| tokenizer (m.) | tokenizer | componente que convierte texto en ids y de vuelta; no se usa «tokenizador» | 00 |
 | embedding | embedding | vector denso aprendido asociado a una unidad o a un texto | 00 |
 | índice invertido | inverted index | término → lista de (documento, frecuencia) | 00 |
 | BM25 | BM25 (Okapi BM25) | puntuación léxica con IDF, saturación ($k_1$) y normalización por longitud ($b$) | 00 |
@@ -117,24 +118,25 @@ Ideas que atraviesan el curso (vuelve a ellas en cada módulo):
 | homoglifo | homoglyph / confusable | carácter visualmente igual a otro de otra escritura | 01 |
 | mojibake | mojibake | texto corrompido por decodificar con la codificación equivocada | 01 |
 | codificación por pares de bytes | Byte Pair Encoding (BPE) | fusiona iterativamente el par adyacente más frecuente | 02 |
-| fusión | merge | regla aprendida (a, b) → ab; su orden forma parte del tokenizer | 02 |
-| pre-tokenización | pre-tokenization | partición previa (regex) dentro de la cual se aplican los merges | 02 |
+| merge (sust. m., pl. *merges*); verbo «fusionar» | merge | regla aprendida (a, b) → ab; su orden forma parte del tokenizer. «Fusión» = el acto de aplicar un merge | 02 |
+| pre-tokenización; el componente es el **pre-tokenizer** (m.) | pre-tokenization / pre-tokenizer | partición previa (regex) dentro de la cual se aplican los merges | 02 |
 | BPE a nivel de byte | byte-level BPE | BPE con alfabeto inicial de 256 bytes: sin `[UNK]` | 02 |
 | tokens especiales | special tokens | tokens de control (`<|endoftext|>`, roles de chat) | 02, 04 |
 | WordPiece | WordPiece | fusiona por ganancia de verosimilitud; inferencia *longest-match-first* (`##`) | 03 |
 | modelo de lenguaje unigrama | Unigram LM | vocabulario grande que se poda con EM; segmentación por Viterbi | 03 |
 | regularización de subpalabras | subword regularization / BPE-dropout | muestrear segmentaciones distintas al entrenar | 03 |
-| tubería del tokenizer | tokenizer pipeline | normalizer → pre-tokenizer → model → post-processor → decoder | 03 |
+| pipeline del tokenizer (m.) | tokenizer pipeline | normalizer → pre-tokenizer → model → post-processor → decoder | 03 |
 | fertilidad | fertility | tokens por palabra | 03, 04 |
 | bytes por token | bytes per token | bytes UTF-8 cubiertos por cada token (compresión) | 02–04 |
-| paridad / prima por idioma | tokenization parity / premium, «token tax» | tokens de un idioma ÷ tokens del inglés para el mismo contenido | 04 |
+| **prima de tokens** (por idioma); paridad = prima ≈ 1 | tokenization premium / parity (coloquial: «token tax») | tokens de un idioma ÷ tokens del inglés para el mismo contenido. Forma canónica del curso: no se usa «impuesto» | 00, 02, 04 |
+| prima de bytes | — | bytes UTF-8 extra que paga una escritura frente al ASCII por la misma información | 01, 06 |
 | plantilla de chat | chat template | formato con roles y tokens especiales que se tokeniza | 04 |
 | tokens que cruzan palabras | superword tokens (SuperBPE) | merges que atraviesan espacios | 04 |
 | token sub-entrenado / glitch | under-trained / glitch token | token del vocabulario que el modelo casi no vio al entrenar | 05 |
 | curación de la frontera del prompt | token healing | retroceder un token y restringir la generación al prefijo | 05 |
 | inyección de tokens | token injection / smuggling | colar tokens de control o texto invisible en la entrada | 05 |
 | fuzzing por propiedades | property-based fuzzing | generar entradas y comprobar invariantes | 05 |
-| bits por byte | bits per byte (bpb) | entropía cruzada normalizada por bytes: compara tokenizaciones distintas | 06, 07 |
+| bits por byte (abrev. **bpb**, en minúscula) | bits per byte (bpb) | entropía cruzada normalizada por bytes: compara tokenizaciones distintas | 06, 07 |
 | parche | patch | grupo de bytes que procesa un paso del transformer global | 06 |
 | parcheo por entropía | entropy-based patching | abrir parche cuando $H(x_i)$ supera un umbral | 06 |
 | parcheo incremental | incremental patching | la segmentación del prefijo no depende del futuro | 06 |
@@ -149,6 +151,8 @@ Ideas que atraviesan el curso (vuelve a ellas en cada módulo):
 | cuantización vectorial residual | residual VQ (RVQ) | cuantizadores en cascada sobre el residuo | 08 |
 | códec neuronal | neural audio codec | SoundStream, EnCodec, Mimi: audio → tokens discretos | 08 |
 | tasa-distorsión | rate-distortion | compromiso entre bits (bpp, kbps) y calidad (PSNR, SNR) | 08 |
+
+**Convenciones de escritura del bloque A** (pasada de consistencia): *coste/costes* (no «costo»), *video* (no «vídeo»), tuteo singular; grafías oficiales: GPT-2, Llama 3, SentencePiece, `tiktoken`, Hugging Face, ByT5, MegaByte (MEGABYTE en el título del paper), H-Net, EnCodec, SoundStream, FLORES-200/FLORES+. Detalle en `_tools/REVISION_CONSISTENCIA.md`.
 
 ## 5. Bloque B (09–20) · para ampliar por el revisor pedagógico B
 
