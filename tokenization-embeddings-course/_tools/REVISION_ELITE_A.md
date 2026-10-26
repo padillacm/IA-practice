@@ -26,3 +26,14 @@ pérdida por token, slots reservados / $V$ físico y que las leyes de escala est
 - 🧠: sustituidos los puntos 3 (token tax, duplicado con §7 y 🏭) y 4 (tablas de embeddings, duplicado con §4) por
   «el tokenizer es la unidad de tus leyes de escala» y «reservado no es entrenado + Rényi y su trampa». 🏭: bullet de
   auditoría como práctica habitual. Tabla de decisiones y referencias actualizadas. Lección: 63 → 72 celdas.
+
+## 02 · BPE desde cero
+Diagnóstico: 🧠 sólido (desempates y orden de merges, regex de dígitos, sub-entrenados, bpb), con fuentes. Faltaba la
+interacción **tokenizer ↔ mezcla de datos** y su lado de seguridad/privacidad.
+- **Añadido §9.7 (ampliación, en la 🧭) «Lo que los merges delatan»**: formulación de Hayase et al. (NeurIPS 2024;
+  cifras de su abstract: GPT-4o ≈ 39 % no inglés, Mistral NeMo ≈ 47 %, GPT-3.5 y Claude ≈ 60 % código, presentadas
+  como estimaciones de los autores) e implementación mínima: BPE sobre mezclas con pesos conocidos por byte →
+  inferencia por rejilla en el símplex con muestras de *test* por categoría. Error absoluto medio medido: 0.00 / 0.03 /
+  0.10 (peor con mezcla dominada por código). ≈ 20 s en CPU.
+- 🧠 #5 (token a medio carácter UTF-8, ya cubierto en 01 #8 y en §7) sustituido por «los merges filtran tu mezcla de
+  datos» (privacidad + auditoría del tokenizer heredado). Referencia añadida. Lección: 81 → 84 celdas.

@@ -244,7 +244,7 @@ nb.md(r"""
 ]))
 
 nb.md(caja("🧭 Ruta núcleo vs ampliación", r"""
-La lección tiene ≈ 80 celdas. **Ruta núcleo (≈ 2 h 15 min):** secciones 1–6, 8 (verificación con tiktoken), 9.1 (tamaño de vocabulario) y 9.3 (impuesto por idioma). **Ampliación:** 7 (decodificación incremental y especiales), 9.2, 9.4–9.6 (regex, compresión, orden de merges) y 10 (complejidad). El proyecto asume la ruta núcleo.
+La lección tiene ≈ 80 celdas. **Ruta núcleo (≈ 2 h 15 min):** secciones 1–6, 8 (verificación con tiktoken), 9.1 (tamaño de vocabulario) y 9.3 (impuesto por idioma). **Ampliación:** 7 (decodificación incremental y especiales), 9.2, 9.4–9.6 (regex, compresión, orden de merges), 9.7 (inferir la mezcla de datos desde los merges) y 10 (complejidad). El proyecto asume la ruta núcleo.
 """))
 
 nb.code(r'''
@@ -851,6 +851,60 @@ plt.tight_layout(); plt.show()
 nb.md(obs(r"""Con **el mismo conjunto de merges**, aplicarlos en otro orden (o con otra estrategia, como el prefijo más largo de WordPiece, módulo 03) cambia la segmentación de una fracción de los trozos y la compresión. Un modelo preentrenado con la segmentación por rango **no sabe leer** la otra: el *algoritmo de codificación* es parte del contrato del tokenizer, igual que el vocabulario."""))
 
 nb.md(r"""
+### 9.7 🧠 Ampliación: lo que los merges delatan sobre los datos (inferencia de la mezcla)
+
+La lista **ordenada** de merges es un resumen de las frecuencias del corpus del tokenizer: en el paso $t$ BPE eligió el par $m_t$ porque, con la mezcla real de pesos $w_\ell$ por categoría (idioma, código…), su frecuencia ponderada era la mayor:
+$$\sum_\ell w_\ell\, c_{\ell,t}(m_t)\;\ge\;\sum_\ell w_\ell\, c_{\ell,t}(q)\quad\forall q,$$
+donde $c_{\ell,t}(q)$ es la frecuencia (por byte) del par $q$ en una **muestra de ejemplo** de la categoría $\ell$ tras aplicar los $t-1$ merges anteriores. Hayase et al. (2024) resuelven esas desigualdades con un programa lineal y recuperan las proporciones con alta precisión en mezclas controladas; aplicado a tokenizers publicados infieren, por ejemplo, ≈ 39 % de datos no ingleses para GPT-4o, ≈ 47 % para Mistral NeMo y ≈ 60 % de código para los de GPT-3.5 y Claude (estimaciones de los autores, no datos oficiales).
+
+**Por qué le importa a un equipo de preentrenamiento:** (1) **privacidad/competencia**: publicar un tokenizer (o exponerlo vía API de conteo de tokens) filtra información sobre la mezcla de datos; (2) **auditoría**: puedes comprobar si el tokenizer que heredas se entrenó con una mezcla parecida a la de tu modelo (si no, prepárate para tokens sub-entrenados, módulo 05). Abajo, una versión mínima: búsqueda en rejilla sobre el símplex en lugar del programa lineal, y solo los 30 pares más frecuentes por categoría como competidores.
+""")
+nb.code(r'''
+def wc_bytes(textos):                      # {palabra(bytes): frecuencia} y total de bytes
+    wc = contar_palabras(textos); return wc, sum(len(w) * f for w, f in wc.items())
+
+def entrena_mezcla(pesos: dict, n_merges: int, escala: int = 10**6):
+    """BPE sobre una mezcla con pesos CONOCIDOS por byte (lo que queremos recuperar después)."""
+    mix = Counter()
+    for l, p in pesos.items():
+        wc, B = wc_bytes(train[l])
+        for w, f in wc.items(): mix[w] += round(escala * p * f / B)
+    return entrena_incremental(+mix, n_merges)
+
+def recuentos_por_paso(textos, merges, top=30):
+    """Frecuencia por byte de los pares candidatos de una muestra de ejemplo, paso a paso (tras aplicar cada merge)."""
+    wc, B = wc_bytes(textos); palabras, frec, pasos = [list(w) for w in wc], list(wc.values()), []
+    for k, par in enumerate(merges):
+        st = Counter()
+        for w, f in zip(palabras, frec):
+            for p in zip(w, w[1:]): st[p] += f
+        d = {p: c / B for p, c in st.most_common(top)}; d[par] = st.get(par, 0) / B; pasos.append(d)
+        palabras = [fusiona_palabra(w, par, 256 + k) if len(w) > 1 else w for w in palabras]
+    return pasos
+
+def infiere_mezcla(merges, muestras: dict, paso_rejilla: float = 0.05):
+    langs = list(muestras); pasos = {l: recuentos_por_paso(muestras[l], merges) for l in langs}
+    n = round(1 / paso_rejilla)
+    W = np.array([(i / n, j / n, (n - i - j) / n) for i in range(n + 1) for j in range(n + 1 - i)])   # símplex (3 categorías)
+    viol = np.zeros(len(W))
+    for t, m in enumerate(merges):
+        cand = sorted(set().union(*(pasos[l][t] for l in langs)) - {m})
+        C = np.array([[pasos[l][t].get(q, 0.0) for l in langs] for q in cand]); cm = np.array([pasos[l][t][m] for l in langs])
+        viol += np.maximum(0, W @ C.T - (W @ cm)[:, None]).sum(1)      # cuánto "debería haber ganado" otro par
+    return dict(zip(langs, W[viol.argmin()]))
+
+N_M = 200 if FAST_DEV_RUN else 600
+muestras = {l: test[l] for l in ("es", "en", "code")}           # datos de EJEMPLO por categoría (no los de entrenamiento)
+filas = []
+for real in [{"es": 0.6, "en": 0.3, "code": 0.1}, {"es": 0.2, "en": 0.5, "code": 0.3}, {"es": 0.1, "en": 0.2, "code": 0.7}]:
+    inf = infiere_mezcla(entrena_mezcla(real, N_M), muestras)
+    filas.append({**{f"real {l}": v for l, v in real.items()}, **{f"inferido {l}": round(float(v), 2) for l, v in inf.items()},
+                  "error abs. medio": round(float(np.mean([abs(real[l] - inf[l]) for l in real])), 3)})
+display(pd.DataFrame(filas))
+''')
+nb.md(obs(r"""Con solo la **lista ordenada de merges** y unas muestras públicas de cada categoría, la rejilla recupera la mezcla con la que se entrenó el tokenizer: en la corrida de referencia (`FAST_DEV_RUN`, 200 merges) el error absoluto medio es 0.00, 0.03 y 0.10 en las tres mezclas, peor cuando domina el código (sus pares frecuentes son más parecidos entre categorías en nuestro corpus pequeño). Nuestra versión es tosca (rejilla de 0.05, 30 competidores por paso) y aun así funciona: el orden de los merges es una huella de los datos. Consecuencia práctica: trata el tokenizer como un artefacto que revela información de tu mezcla, y úsalo a la inversa para auditar los tokenizers que heredas."""))
+
+nb.md(r"""
 ## 10. Complejidad
 | Operación | Ingenuo | Eficiente | Notas |
 |---|---|---|---|
@@ -889,7 +943,7 @@ nb.md(r"""
 2. **Los dígitos de cl100k/o200k se parten de izquierda a derecha en grupos de 3**: `1234567` → `123|456|7`. Singh & Strouse (2024) muestran que forzar la partición de derecha a izquierda (separando con comas) **mejora la aritmética** de GPT-3.5/4. Un detalle de regex que condiciona una capacidad.
 3. **El regex es más importante de lo que parece**: Schmidt et al. (2024) concluyen que la pre-tokenización pesa mucho en la calidad del tokenizer y que inicializar el vocabulario con BPE ayuda; comprimir más no implica un modelo mejor.
 4. **Se entrena sobre palabras únicas ponderadas, no sobre el texto bruto** (Sennrich 2016): por eso el coste depende de la *diversidad* del corpus y no de su tamaño. En esta lección: ≈ 3 000 palabras únicas para ≈ 300 KB.
-5. **Un token puede ser medio carácter UTF-8**: en *streaming* hay que decodificar bytes acumulados (sección 7). El `�` en salidas parciales de un LLM suele ser esto.
+5. **Los merges filtran tu mezcla de datos.** El orden de los merges permite inferir las proporciones del corpus del tokenizer (Hayase et al., 2024; versión mínima en la sección 9.7). Publicar un tokenizer es publicar una huella de los datos; y al revés, sirve para auditar si el tokenizer que heredas se entrenó con datos parecidos a los de tu modelo.
 6. **Un tokenizer entrenado sobre datos distintos a los del modelo crea tokens que el modelo nunca vio** (tokens sub-entrenados): Land & Bartolo (2024) los detectan automáticamente; lo desarrollas en el módulo 05.
 7. **La compresión del tokenizer no es comparable entre vocabularios** salvo normalizando por bytes: usa *bytes por token* o *bits por byte*, no «perplejidad por token».
 8. **Verifica siempre contra una implementación de referencia** con *tus* merges cargados en ella (sección 8): es la forma barata de encontrar errores sutiles de regex, de orden o de bytes.
@@ -940,6 +994,7 @@ Referencias de arXiv comprobadas (título y autores) el 25-oct-2026 y, con venue
 * Zouhar, V. et al. (2023). *A Formal Perspective on Byte-Pair Encoding.* Findings of ACL 2023. arXiv:2306.16837. https://arxiv.org/abs/2306.16837
 * Kozma, L., Voderholzer, J. (2024). *Theoretical Analysis of Byte-Pair Encoding.* arXiv:2411.08671. https://arxiv.org/abs/2411.08671
 * Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* EMNLP 2024. arXiv:2402.18376. https://arxiv.org/abs/2402.18376
+* Hayase, J., Liu, A., Choi, Y., Oh, S., Smith, N. A. (2024). *Data Mixture Inference: What do BPE Tokenizers Reveal about their Training Data?* NeurIPS 2024. arXiv:2407.16607. https://arxiv.org/abs/2407.16607
 * Bostrom, K., Durrett, G. (2020). *Byte Pair Encoding is Suboptimal for Language Model Pretraining.* Findings of EMNLP 2020. arXiv:2004.03720. https://arxiv.org/abs/2004.03720
 * Singh, A. K., Strouse, D. J. (2024). *Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs.* arXiv:2402.14903. https://arxiv.org/abs/2402.14903
 * Petrov, A. et al. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages.* NeurIPS 2023. arXiv:2305.15425. https://arxiv.org/abs/2305.15425
