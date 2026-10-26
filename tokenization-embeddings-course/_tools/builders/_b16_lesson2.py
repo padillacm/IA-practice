@@ -23,7 +23,7 @@ def part2(nb):
     Cada palabra de la query **elige el patch que mejor la «ve»**; sumamos esas coincidencias. Un vector medio de la página tendría que contener *todo* a la vez.
     """)
     nb.gemini(
-        "video", "M16-VID-1", "ColPali: de la página a los patches y MaxSim",
+        "video", "M16-VID-01", "ColPali: de la página a los patches y MaxSim",
         "Animación del recorrido: página → rejilla de patches → un vector por patch; query → un vector por token; cada token toma el máximo sobre los patches; se suman los máximos.",
         """
         Animación técnica limpia, 16:9, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif, ritmo calmado, sin voz en off, sin música. Textos en español, términos técnicos en inglés.
@@ -44,7 +44,7 @@ def part2(nb):
         duration="30 s",
     )
     nb.md("""
-    > 👀 **Qué debes observar.** Cada token de la query «apunta» a un **patch distinto** (el gráfico, la tabla, el párrafo): por eso MaxSim distingue páginas que contienen *todos* los conceptos de las que solo tienen la media de ellos. El mapa de calor que construiremos en 6.3 es esta misma operación.
+    > 👀 **Qué debes observar.** Cada token de la query «apunta» a un **patch distinto** (el gráfico, la tabla, el párrafo): por eso MaxSim distingue páginas que contienen *todos* los conceptos de las que solo tienen la media de ellos. El mapa de calor que construiremos en 6.2 es esta misma operación.
     """)
     nb.md("""
     ### 6.2 ColPali en miniatura (entrenable en CPU)
@@ -258,14 +258,14 @@ def part2(nb):
     ## 9. ¿OCR + texto o embedding visual? Árbol de decisión
     """)
     nb.gemini(
-        "imagen", "M16-IMG-3", "Árbol de decisión: OCR + texto vs embedding visual",
+        "imagen", "M16-IMG-03", "Árbol de decisión: OCR + texto vs embedding visual",
         "Guía de decisión para elegir el pipeline de documentos de Políglota según el tipo de contenido, la calidad del OCR y las restricciones de coste.",
         """
         Diagrama de flujo técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
         Árbol de decisión de arriba abajo con rombos (preguntas) y rectángulos redondeados (resultados). Textos literales:
         Rombo 1: «¿El contenido relevante es texto limpio y seleccionable?» → Sí: rectángulo verde «Parseo + texto + embedder de texto (+ BM25 híbrido)». → No: siguiente.
         Rombo 2: «¿Hay tablas, gráficos, capturas o diagramas que responden preguntas?» → No: rectángulo azul «OCR de calidad + texto». → Sí: siguiente.
-        Rombo 3: «¿Presupuesto de almacenamiento multi-vector (≈ 250 KB/página)?» → Sí: rectángulo naranja «ColPali / ColQwen (multi-vector) + MaxSim». → No: rectángulo naranja «Un vector por página (DSE) o pooling/binarización + reranking».
+        Rombo 3: «¿Presupuesto de almacenamiento multi-vector (≈ 258 KiB/página)?» → Sí: rectángulo naranja «ColPali / ColQwen (multi-vector) + MaxSim». → No: rectángulo naranja «Un vector por página (DSE) o pooling/binarización + reranking».
         A la derecha, un recuadro gris: «Siempre: evaluar con IC por tipo de consulta (módulo 15). Considerar híbrido: texto + visual con fusión RRF».
         Título superior: «¿OCR + texto o embedding visual?».
         Evita: texto ilegible o inventado, ilustraciones decorativas, más de tres rombos, flechas que se crucen.
@@ -298,7 +298,7 @@ def part2(nb):
     | Embeddings de video con orden temporal fino | 🔴 experimental | — | (§8) |
     """)
     nb.md("""
-    ## 10. 🏭 En producción
+    ## 🏭 En producción
     - **Un índice por modalidad, fusión por rangos.** Mezclar vectores de texto e imagen en un solo ANN sin calibrar sufre el *modality gap* (§5). Lo habitual es consultar índices separados y fusionar con RRF (módulo 13), o usar un modelo unificado entrenado para ello.
     - **Documentos visuales:** los proveedores de embeddings (Google con Gemini Embedding 2, Jina con v4, Cohere, Voyage…) ofrecen API multimodal; los equipos que quieren control usan ColPali/ColQwen con *late interaction* y aceleran con pre-filtro + reordenado. Los costes dominantes son **almacenamiento** y **latencia de MaxSim**, no la calidad.
     - **Re-embedding:** cambiar de modelo multimodal exige re-procesar **imágenes/PDFs** (más caro que texto). Guarda las páginas renderizadas y versiona el modelo (módulo 18).
@@ -306,7 +306,7 @@ def part2(nb):
     - **Evaluación:** construye un golden set de *queries visuales* (preguntas sobre tablas/figuras) con anotación humana y mide por tipo de consulta con IC (módulo 15).
     """)
     nb.md("""
-    ## 11. 🧠 Secretos de la élite
+    ## 🧠 Secretos de la élite
     1. **El gap casi nunca importa para ranking dentro de una modalidad, y siempre importa al mezclar.** Medido aquí: con τ=0.01 (gap ≈ 1) el 100 % de las queries tiene un texto equivocado por delante de la imagen correcta en un índice mixto, y restar el centroide por modalidad **no** lo arregla (§5); con gap ≤ 0.35 no hubo intrusos.
     2. **La temperatura es un hiperparámetro de geometría, no solo de optimización**: $\\tau$ baja ⇒ gap alto (Liang et al.; nuestro barrido). Al comparar dos modelos, compara también su $\\tau$ aprendida.
     3. **Los falsos negativos en el batch** (varias imágenes del mismo concepto) ponen un suelo a la pérdida contrastiva: con pocos conceptos y batches grandes, la pérdida no baja de $\\ln(N/\\text{conceptos})$ aunque el modelo sea perfecto.
@@ -317,7 +317,7 @@ def part2(nb):
     8. **Benchmarks de documentos (ViDoRe V3) muestran que los retrievers visuales ganan a los de texto, pero siguen flojos con elementos no textuales y grounding fino** (a oct-2026): no vendas «OCR-free resuelve todo».
     """)
     nb.md("""
-    ## 12. ⚠️ Errores comunes
+    ## ⚠️ Errores comunes
     - Comparar similitudes **entre modalidades** (texto↔texto vs texto↔imagen) como si estuvieran en la misma escala.
     - Olvidar **normalizar** al truncar dimensiones (Matryoshka) en APIs multimodales.
     - Evaluar retrieval visual solo con queries *léxicas* (que un OCR resuelve) y concluir que «la visión no aporta» — o con queries visuales y concluir que «OCR no sirve».
@@ -327,7 +327,7 @@ def part2(nb):
     - Promediar frames y esperar sensibilidad temporal.
     """)
     nb.md("""
-    ## 13. ✅ Autoevaluación
+    ## 📝 Autoevaluación
     <details><summary><b>1. (Cálculo)</b> Una colección de 2 millones de páginas con ColPali (1 030 vectores × 128 d, fp16). ¿Cuánto ocupa? ¿Y binarizada a 1 bit por dimensión?</summary>
 
     $1030\\times128\\times2=263\\,680$ B/página ⇒ $2\\times10^6\\times263\\,680\\approx527$ GB. Binarizada: $1030\\times128/8=16\\,480$ B ⇒ ≈ 33 GB (16× menos), a costa de calidad que debes medir.
@@ -359,7 +359,7 @@ def part2(nb):
     </details>
     """)
     nb.md("""
-    ## 14. 📚 Referencias
+    ## 📚 Referencias
     - Radford et al. (2021). *Learning Transferable Visual Models From Natural Language Supervision* (CLIP). ICML 2021. <https://arxiv.org/abs/2103.00020>
     - Yuksekgonul, Bianchi, Kalluri, Jurafsky, Zou (2023). *When and Why Vision-Language Models Behave like Bags-Of-Words, and What to Do About It?* ICLR 2023. <https://arxiv.org/abs/2210.01936>
     - Zhai, Mustafa, Kolesnikov, Beyer (2023). *Sigmoid Loss for Language Image Pre-Training* (SigLIP). ICCV 2023. <https://arxiv.org/abs/2303.15343>

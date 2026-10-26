@@ -63,9 +63,9 @@ def build(nb):
     | | |
     |---|---|
     | **Nivel** | 🟠 Avanzado |
-    | **Duración** | ≈ 2 h |
-    | **GPU** | No necesaria en `FAST_DEV_RUN=True` (CPU, ≈ 3–5 min). L4 recomendada para el reto con ColPali real |
-    | **Requiere** | Lección 16 (MaxSim, patches, OCR vs visual) y módulo 15 (métricas e IC) |
+    | **Duración estimada** | ≈ 2 h |
+    | **GPU recomendada** | No necesaria en `FAST_DEV_RUN=True` (CPU, ≈ 3–5 min). L4 recomendada para el reto con ColPali real |
+    | **Prerrequisitos** | Lección 16 (MaxSim, patches, OCR vs visual) y módulo 15 (métricas e IC) |
     | **Conecta con** | Módulo 08 (patches) · 13 (MaxSim en ColBERT) · 15 (`poliglota_eval`) · 18 (servicio y coste) |
 
     ## 🏢 Contexto de negocio

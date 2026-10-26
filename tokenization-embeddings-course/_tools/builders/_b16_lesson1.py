@@ -7,12 +7,13 @@ def part1(nb):
     {nb.badge()}
 
     # Módulo 16 · Embeddings multimodales
+    **Tokenización y Embeddings: de BPE a los modelos modernos**
 
     | | |
     |---|---|
     | **Nivel** | 🟠 Avanzado |
-    | **Duración** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
-    | **GPU** | L4 recomendada **solo** para las celdas opcionales con modelos reales (ColPali, CLIP/SigLIP); T4 vale con modelos pequeños. Todo lo demás corre en CPU con `FAST_DEV_RUN=True` (≈ 0 unidades de Colab; ≈ 5–8 min de CPU) |
+    | **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+    | **GPU recomendada** | L4 recomendada **solo** para las celdas opcionales con modelos reales (ColPali, CLIP/SigLIP); T4 vale con modelos pequeños. Todo lo demás corre en CPU con `FAST_DEV_RUN=True` (≈ 0 unidades de Colab; ≈ 5–8 min de CPU) |
     | **Prerrequisitos** | 08 (tokens multimodales: patches ViT), 11 (InfoNCE), 13 (late interaction / MaxSim), 15 (evaluación) |
     | **Hilo conductor** | Políglota Labs quiere que el buscador encuentre también **PDFs, capturas y diagramas** de la documentación |
 
@@ -70,7 +71,7 @@ def part1(nb):
     Para poder **medir** todo en CPU y en minutos construiremos un CLIP en miniatura con figuras de colores y captions en **español e inglés** (la imagen hace de «pivote» entre los dos idiomas). Después subiremos de escala con modelos reales (celdas opcionales).
     """)
     nb.gemini(
-        "imagen", "M16-IMG-1", "CLIP y SigLIP: dos torres y la matriz de similitudes",
+        "imagen", "M16-IMG-01", "CLIP y SigLIP: dos torres y la matriz de similitudes",
         "Arquitectura de dos torres (imagen y texto), la matriz N×N de similitudes y la diferencia entre InfoNCE (softmax por fila y columna) y SigLIP (sigmoide por celda).",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
@@ -241,12 +242,12 @@ def part1(nb):
     > 👀 **Qué debes observar.** En el primer panel hay **dos nubes totalmente separadas** (los dos conos). Con $\\tau=0.01$ siguen separadas (gap grande); con $\\tau=0.2$ se solapan. Es la figura clásica de Liang et al. reproducida con tu propio modelo.
     """)
     nb.gemini(
-        "imagen", "M16-IMG-2", "El modality gap y el efecto cono",
+        "imagen", "M16-IMG-02", "El modality gap y el efecto cono",
         "Dos conos estrechos en la hiperesfera (imágenes y textos) separados por el vector del gap; consecuencia: en un índice mixto un texto tiene más cerca otros textos que su imagen correcta.",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
         Composición con dos paneles.
-        Panel izquierdo, título «Efecto cono: dos redes, dos conos»: una esfera dibujada como círculo gris con dos zonas en forma de cono estrecho: una azul etiquetada «imágenes» (arriba a la izquierda) y una naranja etiquetada «textos» (abajo a la derecha). Entre los centroides (puntos grandes) una flecha negra etiquetada «vector del gap  Δ = z̄_img − z̄_txt» y la medida «gap = ‖Δ‖».
+        Panel izquierdo, título «Efecto cono: dos redes, dos conos»: una esfera dibujada como círculo gris con dos zonas en forma de cono estrecho: una azul etiquetada «imágenes» (arriba a la izquierda) y una naranja etiquetada «textos» (abajo a la derecha). Entre los centroides (puntos grandes) una flecha gris oscuro (#6B7280) etiquetada «vector del gap  Δ = z̄_img − z̄_txt» y la medida «gap = ‖Δ‖».
         Panel derecho, título «Consecuencia en un índice mixto»: la misma disposición, con una consulta de texto «un círculo rojo» (estrella naranja) dentro del cono naranja; tres puntos naranjas vecinos (otros textos) a distancia corta etiquetados «textos más cercanos», y un punto azul (la imagen correcta) a distancia mayor etiquetado «su imagen (más lejos)». Debajo, el texto: «Con gap grande, el top-k mezcla poco las modalidades».
         Abajo un recuadro verde: «Mitigación simple: restar el centroide de cada modalidad y renormalizar».
         Evita: texto ilegible o inventado, ilustraciones decorativas, sombras 3D, más de dos conos, flechas ambiguas.

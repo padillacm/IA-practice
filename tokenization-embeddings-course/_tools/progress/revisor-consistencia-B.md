@@ -4,7 +4,7 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - [x] 19_playbook_elite
 - [ ] 18_produccion
 - [ ] 17_interpretabilidad_geometria
-- [ ] 16_embeddings_multimodales
+- [x] 16_embeddings_multimodales
 - [ ] 15_evaluacion_retrieval
 - [ ] 14_indexacion_ann
 - [ ] 13_dense_sparse_late_interaction
@@ -19,3 +19,4 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - Convención B: cabecera en tabla (Nivel · Duración estimada · GPU recomendada · Prerrequisitos) + subtítulo del curso; proyectos con las mismas etiquetas. Encabezados: «## N. Título»; secciones fijas sin número y con emoji (🎯 Objetivos · 🔁 · 🗺️ Mapa de madurez · 🏭 · 🧠 · ⚠️ · 📝 Autoevaluación · 📚 Referencias). IDs Gemini con 2 dígitos (M15-IMG-01).
 - M20: cabecera en tabla; VID-01 con listas y puntuaciones RRF exactas + sin música; IMG-01 sin «int8» fijo; IMG-02 con los 7 criterios reales.
 - M19: cabecera en tabla; IDs IMG-02/03 renumerados por orden de aparición; árbol M19-IMG-01 alineado con elige_indice (70 % de RAM, grafo + vectores en SSD); T2 sin rojo.
+- M16 (adelantado: élite B saltó 18/17 y los dejó para el final): etiquetas canónicas + subtítulo; secciones fijas sin número, ✅→📝; IDs a 2 dígitos; «mapa de calor en 6.2» (decía 6.3); IMG-03 ≈ 258 KiB/página (1030×128×2 B); flecha negra → gris.
