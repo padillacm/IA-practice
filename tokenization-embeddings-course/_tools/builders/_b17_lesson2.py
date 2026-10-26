@@ -46,6 +46,9 @@ def part2(nb):
         """,
     )
     nb.md("""
+    > 👀 **Qué debes observar:** a la izquierda (densas) solo dos flechas largas, ortogonales: el modelo sacrifica tres características. A la derecha (dispersas) cinco flechas en pentágono: caben más conceptos que dimensiones a cambio de **interferencia** (coseno 0.31 entre flechas vecinas y −0.81 entre no vecinas; la ReLU y el sesgo absorben la interferencia negativa). Conclusión para embeddings: un eje del vector no tiene por qué ser un concepto; buscar «la neurona del español» puede no tener sentido, y por eso se entrena un diccionario (6.2). Compáralo con la figura de código de arriba.
+    """)
+    nb.md("""
     ### 6.2 Sparse autoencoders: deshacer la superposición
     Si los conceptos están en superposición, buscamos un **diccionario sobrecompleto** $\\{a_j\\}_{j=1}^{m}$ ($m>d$) tal que cada vector se reconstruya con **pocos átomos**:
     $$\\hat x = W_{dec}\\,z + b_{dec},\\qquad z=\\text{codificación dispersa}(x)$$
@@ -76,6 +79,9 @@ def part2(nb):
                                                       pérdida NMSE (+ AuxK en latentes muertos)
         """,
     )
+    nb.md("""
+    > 👀 **Qué debes observar:** el cuello no es estrecho sino **ancho** ($m > d$, sobrecompleto) y lo que obliga a separar conceptos es el TopK: solo $k$ átomos activos por vector. Cada columna del decoder (unitaria) es una característica candidata; la pérdida es solo de reconstrucción, así que la interpretabilidad **no** está garantizada: se mide (sección 7 y proyecto). Es un *dictionary learning* clásico, pariente del codebook VQ del módulo 08 (allí 1 átomo por vector; aquí $k$).
+    """)
     nb.md("### 6.3 Implementación desde cero (PyTorch)\nTopK SAE con inicialización *tied*, `b_dec` = media de los datos, decoder normalizado en cada paso y AuxK; más el SAE ReLU+L1 para comparar.")
     nb.code(SAE_SRC)
     nb.md("""
@@ -249,6 +255,23 @@ def part2(nb):
         print("RUN_VEC2TEXT=False: celda omitida (opcional).")
     ''')
 
+    nb.md("""
+    ## 🗺️ Mapa de madurez (estado a oct-2026)
+    Ya has hecho probing, steering, un SAE TopK y una auditoría de inversión; la tabla separa lo que sirve como diagnóstico fiable de lo que todavía es investigación antes de ver su uso en producción.
+
+
+    | Técnica | Madurez | Quién / dónde | Fuente |
+    |---|---|---|---|
+    | Probing con control tasks / selectividad | 🟢 sólido (como diagnóstico); 🟡 como *prueba causal* | NLP; probing crítico | Hewitt & Liang 2019; Belinkov 2022 |
+    | Structural probe (sintaxis en la geometría) | 🟢 sólido como resultado de 2019 en BERT/ELMo | Investigación | Hewitt & Manning 2019 |
+    | Hipótesis de representación lineal / direcciones de concepto | 🟡 emergente (evidencia fuerte, formalización reciente) | Representation engineering, steering | Park et al. 2023; Zou et al. 2023 |
+    | Steering por activaciones (suma de vectores) | 🟡 emergente | Investigación | Turner et al. 2023; Arditi et al. 2024 |
+    | Dimensiones dominantes / outliers en encoders | 🟢 sólido | BERT, GPT-2 | Timkey & van Schijndel 2021; Kovaleva et al. 2021 |
+    | **Sparse autoencoders** en LLMs (monosemanticidad, TopK, JumpReLU) | 🟡 emergente | Anthropic, OpenAI, Google DeepMind (Gemma Scope) | Bricken 2023; Gao et al. 2024; Rajamanoharan 2024; Lieberum 2024 |
+    | SAE sobre **embeddings de retrieval** | 🔴 experimental | Trabajos recientes (workshop/EMNLP) | Kang et al. 2024; Park et al. 2025 |
+    | SAE como método de steering/detección frente a baselines simples | 🔴 resultados negativos reportados | AxBench | Wu et al. 2025 |
+    | Inversión de embeddings (vec2text) | 🟡 emergente, amenaza **demostrada** en 32 tokens | Seguridad/privacidad | Morris et al. 2023; Zhang et al. 2025 |
+    """)
     nb.md("""
     ## 10. 🏭 En producción
     - **Diagnóstico geométrico barato en cada migración de embedder:** varianza por dimensión, coseno medio entre textos al azar, sondas de idioma/dominio. Un cambio de modelo que introduce una dimensión dominante o anisotropía extrema es una causa frecuente de regresiones silenciosas.

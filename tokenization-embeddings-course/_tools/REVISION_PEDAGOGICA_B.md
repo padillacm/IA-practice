@@ -177,3 +177,17 @@ como punto de partida en cada módulo.
 - **👀 añadida** tras la figura de capturas del proyecto, formulada como **predicción** a contrastar (en la ejecución de
   referencia el OCR por plantillas resiste el ruido mejor que el retriever visual, así que no se anticipa el resultado).
 - Terminología: «vídeo» → **video** (forma canónica) en lección, proyecto y README del 16.
+
+## 17 · Interpretabilidad y geometría
+- Bien: probing con *control tasks* y selectividad (Hewitt & Liang); superposición reproducida con el juguete de
+  Elhage et al.; TopK SAE desde cero con AuxK; estabilidad entre semillas; puente explícito a privacidad (vec2text →
+  18); proyecto con 🪜 1/2 en los 5 TODO.
+- **Reestructurado:** Mapa de madurez de la cabecera a justo antes de 🏭 (de `_b17_lesson1.py` a `_b17_lesson2.py`).
+- **🧭 corregida:** nombraba «SAE con steering» en ampliación y dejaba fuera §9, pero el TODO 5 del proyecto (auditoría
+  de inversión) se apoya en §9; ahora núcleo = 1–4, 6–7 y 9; ampliación = 5 y 8.
+- **👀 añadidas** tras las dos Gemini que no la tenían (M17-IMG-1 superposición: coseno 0.31 / −0.81 del pentágono;
+  M17-IMG-2 SAE TopK: sobrecompleto + TopK, interpretabilidad que se mide, pariente del codebook VQ del 08).
+- **Ejemplo a mano añadido** en §4: diferencia de medias y steering en 2D (la query de «cache» pasa a tener de vecino
+  un documento de «git» con α = 1), con analogías word2vec y *boost* por categoría de recsys.
+- **Repaso espaciado:** añadida R5 (01 + 04, Diagnóstico): un probe de idioma al 99 % no prueba comprensión porque el
+  idioma se lee en la superficie (bytes, tokens, fertilidad) → selectividad.

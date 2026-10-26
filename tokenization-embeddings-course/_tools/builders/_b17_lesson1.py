@@ -19,7 +19,7 @@ def part1(nb):
     | **Hilo conductor** | ¿Qué *sabe* el vector que Políglota guarda por cada documento? ¿Qué filtra? |
 
     > 🔴 **Honestidad de madurez.** Este módulo mezcla técnicas **sólidas** (probing, direcciones lineales, anisotropía), **emergentes** (sparse autoencoders sobre embeddings) y **experimentales** (interpretación causal fiable, steering en producción). Marcamos cada una; lo que medimos con nuestros experimentos de juguete **no** es evidencia sobre modelos reales.
-    > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h): secciones 1–4 y 6–7 (probing, dirección lineal, SAE TopK). Ampliación (≈ 2 h): 5, 8–9 (dimensiones dominantes, SAE con steering, vec2text y privacidad).
+    > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h, lo que usa el proyecto): secciones 1–4 (probing, dirección lineal y steering), 6–7 (superposición y SAE TopK) y 9 (vec2text: el TODO 5 audita la inversión). Ampliación (≈ 2 h): 5 (dimensiones dominantes) y 8 (qué codifica un embedding: longitud y orden).
     """)
     nb.md("""
     ## 🎯 Objetivos de aprendizaje
@@ -52,21 +52,11 @@ def part1(nb):
 
     Misma métrica por query/feature, IC bootstrap, varias semillas y un test pareado; aquí veremos que **la semilla cambia qué features aparecen**.
     </details>
-    """)
-    nb.md("""
-    ## 🗺️ Mapa de madurez (estado a oct-2026)
 
-    | Técnica | Madurez | Quién / dónde | Fuente |
-    |---|---|---|---|
-    | Probing con control tasks / selectividad | 🟢 sólido (como diagnóstico); 🟡 como *prueba causal* | NLP; probing crítico | Hewitt & Liang 2019; Belinkov 2022 |
-    | Structural probe (sintaxis en la geometría) | 🟢 sólido como resultado de 2019 en BERT/ELMo | Investigación | Hewitt & Manning 2019 |
-    | Hipótesis de representación lineal / direcciones de concepto | 🟡 emergente (evidencia fuerte, formalización reciente) | Representation engineering, steering | Park et al. 2023; Zou et al. 2023 |
-    | Steering por activaciones (suma de vectores) | 🟡 emergente | Investigación | Turner et al. 2023; Arditi et al. 2024 |
-    | Dimensiones dominantes / outliers en encoders | 🟢 sólido | BERT, GPT-2 | Timkey & van Schijndel 2021; Kovaleva et al. 2021 |
-    | **Sparse autoencoders** en LLMs (monosemanticidad, TopK, JumpReLU) | 🟡 emergente | Anthropic, OpenAI, Google DeepMind (Gemma Scope) | Bricken 2023; Gao et al. 2024; Rajamanoharan 2024; Lieberum 2024 |
-    | SAE sobre **embeddings de retrieval** | 🔴 experimental | Trabajos recientes (workshop/EMNLP) | Kang et al. 2024; Park et al. 2025 |
-    | SAE como método de steering/detección frente a baselines simples | 🔴 resultados negativos reportados | AxBench | Wu et al. 2025 |
-    | Inversión de embeddings (vec2text) | 🟡 emergente, amenaza **demostrada** en 32 tokens | Seguridad/privacidad | Morris et al. 2023; Zhang et al. 2025 |
+    <details><summary><b>5.</b> (Módulos 01 y 04, Diagnóstico) Un probe lineal predice el idioma (ES/EN/código) desde el embedding con un 99 % de acierto. ¿Demuestra que el modelo «entiende» el idioma?</summary>
+
+    No necesariamente: el idioma es casi trivial de leer en la **forma superficial** (acentos y «ñ» con bytes UTF-8 de 2 bytes, módulo 01; tokens distintos y fertilidad distinta, módulo 04; símbolos del código). Un probe alto solo dice que la información es linealmente accesible. Por eso la sección 3 mide la **selectividad** frente a una *control task* (Hewitt & Liang) antes de interpretar.
+    </details>
     """)
 
     nb.md("""
@@ -183,6 +173,8 @@ def part1(nb):
     ## 4. La hipótesis de representación lineal: direcciones, steering y borrado
     **Hipótesis (Park, Choe, Veitch; ICML 2024):** los conceptos se codifican como **direcciones** del espacio de representación. Formalizan «concepto lineal» mediante pares contrafactuales y relacionan la hipótesis con (i) *probing lineal* y (ii) *steering* (mover la representación en esa dirección); argumentan que la geometría correcta para medir similitud entre direcciones requiere un **producto interno causal**, no el coseno ingenuo.
     **Receta mínima:** dirección de un concepto por **diferencia de medias**: $v_{A\\to B}=\\bar z_B-\\bar z_A$. **Steering:** $q'=\\mathrm{norm}(q+\\alpha v_{A\\to B})$.
+
+    ✍️ **Ejemplo a mano (2D).** Documentos de «cache»: $(1, 0.2)$ y $(0.8, 0.6)$, media $(0.9, 0.4)$; de «git»: $(0.2, 1)$ y $(0.6, 0.8)$, media $(0.4, 0.9)$. Dirección $v_{\\text{cache}\\to\\text{git}} = (-0.5, 0.5)$. La query $q = (1, 0.2)$ con $\\alpha = 1$ pasa a $(0.5, 0.7)$ → normalizada $(0.58, 0.81)$: su vecino más cercano ya es un documento de «git» (coseno ≈ 1.00 con $(0.6, 0.8)$ frente a 0.95 con $(0.8, 0.6)$, el «cache» más cercano). Es la aritmética de vectores de word2vec (rey − hombre + mujer) aplicada a una consulta, y el «*boost* por categoría» de un recomendador hecho en el espacio de embeddings.
     """)
     nb.code(r'''
     topics = sorted(set(topic)); mu = {t: En[(topic == t) & (lang == "es")].mean(0) for t in topics}
