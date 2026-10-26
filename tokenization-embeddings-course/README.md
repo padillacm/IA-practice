@@ -8,7 +8,8 @@ Cada módulo tiene una **lección** (teoría + implementación desde cero + libr
 de la élite + autoevaluación) y un **proyecto** (plantilla con TODOs, pistas graduadas, rúbrica y solución oculta) que
 hace crecer **Políglota**, un buscador semántico multilingüe (ES/EN/código).
 
-> **Estado:** en construcción. Los badges de Colab apuntan a la rama `master` y funcionarán tras el merge de la rama
+> **Estado:** completo (21 módulos con lección y proyecto, revisados técnica, pedagógica, ejecutable y editorialmente).
+> Los badges de Colab apuntan a la rama `master` y funcionarán tras el merge de la rama
 > `claude/tokenization-embeddings-course`.
 
 ## Mapa del curso
@@ -53,7 +54,12 @@ flowchart LR
 | 19 | Playbook de élite | 🔴 | 4 | CPU | System design |
 | 20 | Capstone: Políglota completo | 🔴 | 6 | T4/L4 | Integración |
 
-Guía de estudio (ruta, tiempos, mapa de conceptos y glosario): `GUIA_DE_ESTUDIO.md`. Extras: `extras/GUIA_ENTREVISTAS.md`, `extras/LECTURA_PAPERS.md`, `extras/GEMINI_ASSETS.md`.
+## Material de apoyo
+- [Guía de estudio](GUIA_DE_ESTUDIO.md): ruta, tiempos, rutas abreviadas, mapa de conceptos y glosario ES/EN de ambos bloques.
+- [Guía de entrevistas](extras/GUIA_ENTREVISTAS.md): preguntas de tokenización, embeddings y *system design* con respuesta modelo y rúbrica.
+- [Lectura de papers](extras/LECTURA_PAPERS.md): lecturas por módulo, priorizadas, con preguntas guía.
+- [Índice de recursos Gemini](extras/GEMINI_ASSETS.md): todas las celdas 🎨/🎬 del curso con su prompt.
+- Curso hermano: [`recsys-course/`](../recsys-course/) (los módulos 09–16 enlazan con sus lecciones de evaluación, two-tower y ANN).
 
 ## Stack
 PyTorch · Hugging Face (`transformers`, `tokenizers`, `datasets`) · `tiktoken` · `sentencepiece` · `sentence-transformers` ·
@@ -70,7 +76,7 @@ unidades estimadas, y tiene `FAST_DEV_RUN` para iterar rápido.
 ## Imágenes y videos con Gemini
 Las lecciones tienen celdas **🎨 GEMINI-IMAGEN** / **🎬 GEMINI-VIDEO** con ID (`M04-IMG-02`), prompt listo para copiar,
 formato esperado, texto alternativo e instrucciones exactas de inserción; mientras no las reemplaces muestran un
-placeholder. Todas están indexadas en `extras/GEMINI_ASSETS.md` (se regenera con
+placeholder. Todas están indexadas en [`extras/GEMINI_ASSETS.md`](extras/GEMINI_ASSETS.md) (se regenera con
 `python tokenization-embeddings-course/_tools/gen_gemini_index.py`).
 
 ## Cómo estudiar

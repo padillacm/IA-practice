@@ -101,7 +101,7 @@ Ideas que atraviesan el curso (vuelve a ellas en cada módulo):
   cómputo según la entropía; VQ (08) es compresión con pérdida; PQ (14) comprime vectores.
 - **IR/recsys:** índice invertido y BM25 (00) → sparse aprendido (13); *cold start* de ítems ↔ inicializar tokens
   nuevos (07, 09); two-tower ↔ bi-encoder (10–11); k-means ↔ VQ (08) ↔ IVF/PQ (14).
-- **Lingüística:** grafemas y escrituras (01), morfología y fronteras (03), fertilidad y «token tax» por idioma (04).
+- **Lingüística:** grafemas y escrituras (01), morfología y fronteras (03), fertilidad y prima de tokens por idioma (04).
 - **Medir bien:** nDCG con convenciones fijas e IC bootstrap (00) → evaluación a fondo (15).
 
 ## 4. Glosario ES/EN · Bloque A (00–08)

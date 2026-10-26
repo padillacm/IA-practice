@@ -46,7 +46,7 @@
 ## 04 · Diseño de tokenizers modernos
 * ⭐⭐⭐ Petrov et al. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages*. NeurIPS 2023. arXiv:2305.15425. 🟢
   - ¿Cómo miden la paridad y por qué necesitan texto paralelo?
-  - ¿Qué consecuencias de costo y de contexto describen para los idiomas con peor paridad?
+  - ¿Qué consecuencias de coste y de contexto describen para los idiomas con peor paridad?
 * ⭐⭐ Ahia et al. (2023). *Do All Languages Cost the Same? Tokenization in the Era of Commercial Language Models*. EMNLP 2023. arXiv:2305.13707. 🟢
 * ⭐⭐ Tao et al. (2024). *Scaling Laws with Vocabulary: Larger Models Deserve Larger Vocabularies*. NeurIPS 2024. arXiv:2407.13623. 🟡
 * ⭐⭐ Liu et al. (2025). *SuperBPE: Space Travel for Language Models*. COLM 2025. arXiv:2503.13423. 🟡

@@ -54,7 +54,7 @@ trec_eval, bootstrap por queries, test pareado por *shift*, sign-flip y Holm cor
   Añadida la referencia del anuncio de GA.
 - **Arreglado:** se atribuía a la documentación de `sentence-transformers` una advertencia explícita contra calibrar
   int8 con queries; lo que dice es que `calibration_embeddings` sea representativo. Matizado (sección 5 y secreto 4).
-- Pendiente: el contexto de jina-v5-nano (8k en Elastic/tabla, 32k en el texto de la tarjeta) sigue marcado «verificar».
+- ~~Pendiente: el contexto de jina-v5-nano sigue marcado «verificar».~~ **Resuelto** por el verificador de referencias B: 8k (8192) según el anuncio de Jina, Elastic y la página de v5-omni-nano; solo la página de modelo de nano dice 32K (errata probable). Ver `REVISION_REFERENCIAS_B.md`.
 
 ## 13 · Dense, sparse y late interaction
 - Verificado: BM25 con IDF de Lucene (declarado; el BM25 canónico del 00 usa IDF Okapi con suelo ε, como
@@ -140,5 +140,5 @@ trec_eval, bootstrap por queries, test pareado por *shift*, sign-flip y Holm cor
   conviene recalibrarlos con modelos reales cuando HF sea accesible (revisor de ejecutabilidad). Las conclusiones
   que solo valen para el fallback están avisadas; el único caso que habría fallado con el modelo real (R2 del 09)
   se arregló.
-- Contexto de jina-embeddings-v5-text-nano (8k vs 32k según la fuente) sin resolver.
+- ~~Contexto de jina-embeddings-v5-text-nano sin resolver.~~ Resuelto: **8k (8192)** (`REVISION_REFERENCIAS_B.md`).
 - `extras/GEMINI_ASSETS.md` debe regenerarse con `gen_gemini_index.py` en la pasada final (ya lo señaló el bloque A).

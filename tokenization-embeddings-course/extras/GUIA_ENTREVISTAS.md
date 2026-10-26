@@ -15,7 +15,7 @@
 | 1 | No apto | Define términos de memoria sin mecanismo; no puede hacer un cálculo de servilleta; confunde métricas o espacios (p. ej. compara vectores de modelos distintos). |
 | 2 | Junior | Explica el mecanismo correctamente; aplica la fórmula si se le guía; no menciona trade-offs ni cómo medir. |
 | 3 | Senior | Mecanismo + cálculo correcto sin ayuda + trade-offs + **cómo lo mediría** (métrica, baseline, IC). Reconoce cuándo **no** usar la técnica. |
-| 4 | Staff / élite | Lo anterior + fallos silenciosos y su detección, costo a escala, plan de migración/rollback, distingue lo 🟢 sólido de lo 🔴 experimental y cita evidencia concreta. |
+| 4 | Staff / élite | Lo anterior + fallos silenciosos y su detección, coste a escala, plan de migración/rollback, distingue lo 🟢 sólido de lo 🔴 experimental y cita evidencia concreta. |
 
 Señales transversales de nivel alto: empieza por **requisitos y números** (N, QPS, SLA, memoria, idiomas), propone un **baseline fuerte** (BM25), habla de **evaluación pareada con IC**, y nombra **qué podría salir mal** sin que se lo pidan.
 
@@ -28,7 +28,7 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 **Senior:** distingue bytes / code points / grafemas y sabe que Python cuenta code points, JavaScript unidades UTF-16. **Bandera roja:** «un carácter es un byte».
 
 ### 2. 🟢 ¿Por qué un BPE a nivel de byte no tiene tokens desconocidos? (M02)
-**Respuesta modelo.** El vocabulario inicial son los 256 bytes; cualquier texto en UTF-8 es una secuencia de bytes, así que en el peor caso se codifica byte a byte. Los merges solo agrupan. El precio: textos raros (scripts poco representados) se fragmentan mucho → más tokens, más costo y más contexto consumido.
+**Respuesta modelo.** El vocabulario inicial son los 256 bytes; cualquier texto en UTF-8 es una secuencia de bytes, así que en el peor caso se codifica byte a byte. Los merges solo agrupan. El precio: textos raros (scripts poco representados) se fragmentan mucho → más tokens, más coste y más contexto consumido.
 **Senior:** menciona `byte_fallback` en SentencePiece como la solución análoga para Unigram/BPE de caracteres. **Bandera roja:** confundir «sin OOV» con «representa bien todos los idiomas».
 
 ### 3. 🟢 Describe el entrenamiento y la codificación de BPE. ¿Qué complejidad tienen? (M02)
@@ -43,8 +43,8 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 **Respuesta modelo.** Corta el texto en trozos (palabras con su espacio inicial, números, puntuación, espacios) **antes** de BPE, para que los merges no crucen esas fronteras: evita tokens como «perro.» o «. El», estabiliza la tokenización de contracciones y controla cómo se agrupan los dígitos (cl100k/o200k limitan los números a grupos de hasta 3 dígitos). Cambiar el regex cambia la compresión y el comportamiento aritmético.
 **Senior:** conecta con SuperBPE (tokens que cruzan palabras, un relajamiento deliberado de esta regla). **Bandera roja:** no saber que existe un paso previo a BPE.
 
-### 6. 🟡 ¿Qué es la fertilidad y cómo medirías el «impuesto de idioma»? (M04)
-**Respuesta modelo.** Fertilidad = tokens por palabra (o por carácter/byte). El impuesto se mide con **texto paralelo** (mismo contenido en varios idiomas, p. ej. FLORES): ratio de tokens del idioma X frente al inglés. Petrov et al. (2023) y Ahia et al. (2023) muestran diferencias de varias veces entre idiomas: se paga más por el mismo contenido y cabe menos en el contexto.
+### 6. 🟡 ¿Qué es la fertilidad y cómo medirías la «prima de tokens» de un idioma? (M04)
+**Respuesta modelo.** Fertilidad = tokens por palabra (o por carácter/byte). La prima de tokens (*tokenization premium*) se mide con **texto paralelo** (mismo contenido en varios idiomas, p. ej. FLORES): ratio de tokens del idioma X frente al inglés. Petrov et al. (2023) y Ahia et al. (2023) muestran diferencias de varias veces entre idiomas: se paga más por el mismo contenido y cabe menos en el contexto.
 **Senior:** usa texto paralelo, no corpus distintos; reporta también bytes/token. **Bandera roja:** comparar fertilidad con textos no paralelos.
 
 ### 7. 🟡 Cálculo: vocabulario de 128 k y $d=4096$. ¿Cuántos parámetros tiene la matriz de embedding? ¿Y con unembedding sin atar? (M04, M09)
@@ -83,9 +83,9 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 
 ## B · Embeddings (preguntas 15–30)
 
-### 15. 🟢 Con vectores normalizados, ¿coseno, producto punto y L2 dan el mismo ranking? (M10, M14)
-**Respuesta modelo.** Sí: si $\lVert q\rVert=\lVert d\rVert=1$, $\cos = q\cdot d$ y $\lVert q-d\rVert^2 = 2 - 2\,q\cdot d$, monótona decreciente. Sin normalizar, el producto punto favorece vectores de norma grande (en algunos modelos, la norma correlaciona con la longitud o la frecuencia).
-**Senior:** comprueba la norma en un test de contrato. **Bandera roja:** usar producto punto con vectores sin normalizar «porque es más rápido».
+### 15. 🟢 Con vectores normalizados, ¿coseno, producto escalar y L2 dan el mismo ranking? (M10, M14)
+**Respuesta modelo.** Sí: si $\lVert q\rVert=\lVert d\rVert=1$, $\cos = q\cdot d$ y $\lVert q-d\rVert^2 = 2 - 2\,q\cdot d$, monótona decreciente. Sin normalizar, el producto escalar favorece vectores de norma grande (en algunos modelos, la norma correlaciona con la longitud o la frecuencia).
+**Senior:** comprueba la norma en un test de contrato. **Bandera roja:** usar producto escalar con vectores sin normalizar «porque es más rápido».
 
 ### 16. 🟢 ¿Qué es el *weight tying* y cuándo conviene? (M09)
 **Respuesta modelo.** Compartir la matriz de embedding de entrada con la de salida (unembedding) (Press & Wolf 2017; Inan et al. 2016): ahorra $V\cdot d$ parámetros y regulariza. Conviene sobre todo en modelos pequeños, donde esas matrices son una fracción grande del total; muchos modelos grandes las desatan para dar más capacidad a la cabeza.
@@ -100,7 +100,7 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 **Senior:** sabe que whitening se ajusta en un corpus y puede no transferir. **Bandera roja:** creer que coseno alto implica similitud semántica alta.
 
 ### 19. 🟡 Escribe InfoNCE y explica la temperatura y los negativos en el lote. (M11)
-**Respuesta modelo.** $\mathcal{L} = -\frac1B\sum_i \log \frac{\exp(s(q_i,d_i)/\tau)}{\sum_j \exp(s(q_i,d_j)/\tau)}$: cada query debe identificar su documento entre los $B$ del lote; los otros $B-1$ son negativos gratis. $\tau$ pequeña afila el softmax (concentra el gradiente en los negativos difíciles), grande lo suaviza; valores típicos en retrieval ≈ 0.01–0.05. Lotes más grandes ⇒ más negativos ⇒ mejor (Gradient Cache permite lotes grandes con poca memoria).
+**Respuesta modelo.** $\mathcal{L} = -\frac1B\sum_i \log \frac{\exp(s(q_i,d_i)/\tau)}{\sum_j \exp(s(q_i,d_j)/\tau)}$: cada query debe identificar su documento entre los $B$ del lote; los otros $B-1$ son negativos gratis. $\tau$ pequeña afila el softmax (concentra el gradiente en los negativos duros), grande lo suaviza; valores típicos en retrieval ≈ 0.01–0.05. Lotes más grandes ⇒ más negativos ⇒ mejor (Gradient Cache permite lotes grandes con poca memoria).
 **Senior:** deriva el gradiente respecto a un negativo (proporcional a su probabilidad softmax). **Bandera roja:** no saber qué papel tiene $\tau$.
 
 ### 20. 🟠 Negativos duros: ¿cómo los minas y qué es un falso negativo? (M11)
@@ -119,7 +119,7 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 **Respuesta modelo.** float32: $5\cdot10^7 \cdot 4096$ B = **204.8 GB**; int8: **51.2 GB**; binario: **6.4 GB**. Binario + *rescoring*: buscar candidatos (top-$K$, p. ej. 100) con Hamming en RAM y reordenarlos con la query en float contra vectores int8/float leídos de disco (Shakir et al. 2024). int8 necesita **calibrar** rangos por dimensión.
 **Senior:** combina con Matryoshka (512 d → la mitad) y discute qué vive en RAM vs SSD. **Bandera roja:** no saber hacer la cuenta.
 
-### 24. 🟠 Bi-encoder vs cross-encoder vs late interaction: costo y calidad. (M10, M13)
+### 24. 🟠 Bi-encoder vs cross-encoder vs late interaction: coste y calidad. (M10, M13)
 **Respuesta modelo.** Bi-encoder: un vector por texto, documentos precalculados, búsqueda ANN: barato, menos preciso. Cross-encoder: lee query y documento juntos (atención cruzada completa): el más preciso, pero $O(\text{candidatos})$ pasadas por query ⇒ solo para reordenar un top-K. Late interaction (ColBERT): un vector por token y MaxSim $\sum_i \max_j q_i\cdot d_j$: precisión cercana al cross-encoder con documentos precalculados, a costa de **almacenamiento** (un vector por token; ColBERTv2 lo comprime con residuos, PLAID acelera, MUVERA lo reduce a un vector fijo para usar ANN estándar).
 **Bandera roja:** proponer un cross-encoder sobre todo el corpus.
 
@@ -129,7 +129,7 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 
 ### 26. 🔴 ¿Cómo se convierte un LLM decoder en embedder? (M12)
 **Respuesta modelo.** Opciones: pooling del **último token** con una instrucción en el prompt (e5-mistral, Qwen3-Embedding); habilitar **atención bidireccional** y adaptar con MNTP + contrastivo (LLM2Vec, BehnamGhader et al. 2024); **latent attention pooling** (NV-Embed, Lee et al. 2024). Todos terminan con ajuste contrastivo. Trade-off: mejor calidad en benchmarks, pero 10–100× más cómputo por embedding que un encoder pequeño.
-**Senior:** cuantifica el costo de embedding del corpus con cada opción. **Bandera roja:** «usar los hidden states medios de cualquier LLM sin ajuste».
+**Senior:** cuantifica el coste de embedding del corpus con cada opción. **Bandera roja:** «usar los hidden states medios de cualquier LLM sin ajuste».
 
 ### 27. 🔴 ¿Qué dice LIMIT sobre los límites de los embeddings de un solo vector? (M15)
 **Respuesta modelo.** Weller et al. (2025) muestran, con un argumento de empaquetamiento de esferas con margen γ ($d \ge \log\binom{n}{k}/\log(1+1/\gamma)$; la primera versión usaba el rango de signo de la matriz de qrels), que con dimensión $d$ fija hay combinaciones de documentos relevantes (top-k) que **no pueden** representarse para todas las queries; construyen un dataset sencillo (LIMIT) donde embedders punteros fallan y modelos multi-vector o sparse lo hacen mejor. Implicación de diseño: para consultas combinatorias («documentos que mencionan A y B»), un solo vector tiene un techo; el híbrido y el reranking no son opcionales.
@@ -144,7 +144,7 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 **Bandera roja:** «los embeddings son anónimos».
 
 ### 30. 🟡 ¿Cómo eliges un embedder para un producto? ¿Qué te dice y qué no MTEB? (M12, M15)
-**Respuesta modelo.** MTEB/MMTEB dan una primera criba por tarea e idioma, pero: la media mezcla tareas irrelevantes, hay riesgo de contaminación/overfitting al leaderboard y no mide tu dominio, latencia ni costo. Proceso: 3–6 candidatos por restricciones (licencia, idiomas, tamaño, on-prem) → golden set propio estratificado → nDCG con **IC pareado** → frontera calidad/latencia/memoria (Matryoshka, cuantización) → decisión.
+**Respuesta modelo.** MTEB/MMTEB dan una primera criba por tarea e idioma, pero: la media mezcla tareas irrelevantes, hay riesgo de contaminación/overfitting al leaderboard y no mide tu dominio, latencia ni coste. Proceso: 3–6 candidatos por restricciones (licencia, idiomas, tamaño, on-prem) → golden set propio estratificado → nDCG con **IC pareado** → frontera calidad/latencia/memoria (Matryoshka, cuantización) → decisión.
 **Bandera roja:** elegir el primero del leaderboard.
 
 ---
@@ -196,7 +196,7 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 ## D · Producción (preguntas 41–44)
 
 ### 41. 🟠 Cálculo: re-embeber 10 M de chunks de 400 tokens. API a 0.02 $/1M vs GPU a 0.80 $/h con 20 000 tokens/s al 60 %. (M18)
-**Respuesta modelo.** $T = 4\cdot10^9$ tokens. API: **80 $**. GPU: $4\cdot10^9/(20\,000\cdot3600\cdot0.6) = 92.6$ h ⇒ **≈ 74 $** (≈ 4 días con 1 GPU). El costo es parecido; deciden tiempo de calendario, cuotas, residencia de datos y control de versión del modelo. (Precio de API: tarifa estándar publicada de `text-embedding-3-small` a oct-2026; GPU: supuestos.)
+**Respuesta modelo.** $T = 4\cdot10^9$ tokens. API: **80 $**. GPU: $4\cdot10^9/(20\,000\cdot3600\cdot0.6) = 92.6$ h ⇒ **≈ 74 $** (≈ 4 días con 1 GPU). El coste es parecido; deciden tiempo de calendario, cuotas, residencia de datos y control de versión del modelo. (Precio de API: tarifa estándar publicada de `text-embedding-3-small` a oct-2026; GPU: supuestos.)
 **Bandera roja:** olvidar la utilización o la doble memoria durante la migración.
 
 ### 42. 🟠 Plan para migrar de embedder v1 a v2 en un índice de 100 M de vectores. (M18)
