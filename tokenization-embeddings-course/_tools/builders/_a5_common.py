@@ -62,7 +62,7 @@ PARAFRASIS = [
   "how a language model splits text into subword pieces by merging common pairs", "cómo un modelo de lenguaje trocea el texto en piezas fusionando pares comunes"),
  ("cosine",
   "Cosine similarity measures the angle between two vectors: the dot product divided by the product of their norms. It ignores magnitude and ranges from -1 to 1.",
-  "La similitud del coseno mide el ángulo entre dos vectores: el producto punto dividido por el producto de sus normas. Ignora la magnitud y va de -1 a 1.",
+  "La similitud del coseno mide el ángulo entre dos vectores: el producto escalar dividido por el producto de sus normas. Ignora la magnitud y va de -1 a 1.",
   "def cosine(a, b):\n    return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))",
   "compare two vectors by direction rather than length", "comparar dos vectores por su dirección y no por su longitud"),
  ("kmeans",

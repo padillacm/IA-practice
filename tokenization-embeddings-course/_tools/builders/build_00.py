@@ -265,7 +265,7 @@ Hay **dos usos** que no debes confundir:
 
 **Similitud.** Para comparar vectores se usa casi siempre el **coseno**:
 $$\cos(\mathbf{u},\mathbf{v})=\frac{\mathbf{u}^\top\mathbf{v}}{\lVert\mathbf{u}\rVert\,\lVert\mathbf{v}\rVert}\in[-1,1]$$
-donde $\mathbf{u}^\top\mathbf{v}=\sum_k u_kv_k$ es el producto punto y $\lVert\cdot\rVert$ la norma euclídea. Si los vectores están normalizados ($\lVert\mathbf{u}\rVert=1$), coseno = producto punto.
+donde $\mathbf{u}^\top\mathbf{v}=\sum_k u_kv_k$ es el producto escalar y $\lVert\cdot\rVert$ la norma euclídea. Si los vectores están normalizados ($\lVert\mathbf{u}\rVert=1$), coseno = producto escalar.
 
 A continuación, un **juguete hecho a mano** (los vectores NO están aprendidos; los escribimos para fijar la idea): 6 palabras en un espacio de 2 dimensiones con un eje «animal» y otro «vehículo», incluyendo traducciones ES/EN.
 """)
@@ -707,8 +707,8 @@ nb.md(r"""
      "No es un bug: BM25 compara cadenas y la consulta no comparte ningún término con los documentos (IDF·TF = 0). Soluciones: un embedder multilingüe (módulos 10–12), traducir la consulta, o expandirla; y en tu evaluación, reportar el rendimiento *por idioma* para no promediar el problema."),
     ("(Transferencia)", "Tu golden set tiene consultas con 3 documentos relevantes con grados 3, 2 y 1. ¿Qué cambia en tu implementación y por qué la ganancia lineal puede ser discutible?",
      "El IDCG se calcula con los 3 grados ordenados descendentemente (3, 2, 1) y el nDCG pasa a premiar el orden entre relevantes. La ganancia lineal ($\\text{rel}$) es la de `trec_eval`; la exponencial ($2^{\\text{rel}}-1$) enfatiza más los muy relevantes. Elegir una u otra cambia los números: fija la convención y no compares con trabajos que usan la otra."),
-    ("", "¿Por qué se usa el coseno (o el producto punto con vectores normalizados) y no la distancia euclídea sin normalizar para comparar embeddings de texto?",
-     "El coseno ignora la norma, que en muchos modelos refleja la frecuencia del token o la longitud del texto más que su significado. Con vectores normalizados, coseno, producto punto y distancia euclídea son equivalentes en ranking ($\\lVert u-v\\rVert^2 = 2-2\\cos$)."),
+    ("", "¿Por qué se usa el coseno (o el producto escalar con vectores normalizados) y no la distancia euclídea sin normalizar para comparar embeddings de texto?",
+     "El coseno ignora la norma, que en muchos modelos refleja la frecuencia del token o la longitud del texto más que su significado. Con vectores normalizados, coseno, producto escalar y distancia euclídea son equivalentes en ranking ($\\lVert u-v\\rVert^2 = 2-2\\cos$)."),
     ("", "¿Qué dos hiperparámetros de BM25 controlan la saturación y la normalización por longitud, y qué valores toman con `b = 0`?",
      "$k_1$ controla la saturación de la frecuencia y $b$ la normalización por longitud. Con $b=0$ no se normaliza: un documento largo no se penaliza por serlo."),
     ("", "Menciona dos razones por las que el español puede costar más tokens que el inglés con el tokenizer de GPT-2.",

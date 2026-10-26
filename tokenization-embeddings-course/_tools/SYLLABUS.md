@@ -96,7 +96,7 @@ fallback sintético, avisando claramente.
 - Proyecto: análisis de la capa de embedding de un LLM pequeño (normas, vecinos, tokens raros) y extender el vocabulario con tokens de dominio.
 
 ### 10 · Embeddings contextuales y de oraciones 🟡 · ≈ 5 h · CPU/T4
-- Entra: BERT y representaciones contextuales, pooling (CLS, mean, max, last-token), SBERT y bi-encoders, anisotropía y soluciones (whitening, BERT-flow, normalización), similitud (coseno, producto punto, L2), baselines de oraciones; prompts e instrucciones.
+- Entra: BERT y representaciones contextuales, pooling (CLS, mean, max, last-token), SBERT y bi-encoders, anisotropía y soluciones (whitening, BERT-flow, normalización), similitud (coseno, producto escalar, L2), baselines de oraciones; prompts e instrucciones.
 - No entra: entrenamiento contrastivo (11).
 - Proyecto: comparar estrategias de pooling/whitening en retrieval Políglota.
 
