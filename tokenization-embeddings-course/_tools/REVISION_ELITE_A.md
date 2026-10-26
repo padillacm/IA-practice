@@ -37,3 +37,16 @@ interacción **tokenizer ↔ mezcla de datos** y su lado de seguridad/privacidad
   0.10 (peor con mezcla dominada por código). ≈ 20 s en CPU.
 - 🧠 #5 (token a medio carácter UTF-8, ya cubierto en 01 #8 y en §7) sustituido por «los merges filtran tu mezcla de
   datos» (privacidad + auditoría del tokenizer heredado). Referencia añadida. Lección: 81 → 84 celdas.
+
+## 05 · Patologías y robustez
+Diagnóstico: el módulo ya cubre muy bien sub-entrenados (Magikarp), inyección de tokens de control con `tiktoken` y con
+HF `split_special_tokens` (verificado en `tokenization_utils_base.py`: por defecto `False`), Unicode invisible y
+fuzzing. Faltaba un riesgo de seguridad específico del tokenizer en producción: el **canal lateral de longitudes de
+token** en *streaming*.
+- **Añadido §10.1 (ampliación, en la 🧭)**: Weiss et al. (USENIX Security 2024; ≈ 29 % de respuestas reconstruidas,
+  ≈ 55 % de temas, cifras del abstract de arXiv; mitigaciones de su §«Mitigation»: relleno aleatorio, agrupar,
+  respuesta completa). Implementación: huella = secuencia de longitudes de token por frase; % de frases con huella
+  única por mitigación. Medido (428 frases, `FAST_DEV_RUN`): 100 % sin mitigación, ≈ 69 % con relleno a 8,
+  **100 % agrupando 4 tokens** (no mitiga), ≈ 7 % solo con la longitud total.
+- 🧠: añadido «el tokenizer también filtra por canal lateral»; retirado el punto de CUTE (sigue en §6 y en 06 #6)
+  para mantener 8 puntos. Referencia añadida. Lección: 74 → 77 celdas.
