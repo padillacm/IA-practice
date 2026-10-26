@@ -127,3 +127,16 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | `colpali-engine` (PyPI), `vidore/colpali-v1.3` | ✅ | |
 | Cifras de ColPali (257.5 KB/página, ViDoRe 81.3 vs 67.0) | ✅ | Ya contrastadas por la revisión técnica |
 | Mapa de madurez / 🏭 | ✅ | «Quién la usa»: Google (SigLIP/PaliGemma, Gemini Embedding 2), ILLUIN (ColPali), Jina v4, Waterloo (DSE), Meta (ImageBind) |
+
+## 17 · Interpretabilidad y geometría
+| Referencia | Estado | Nota |
+|---|---|---|
+| 27 IDs arXiv (Hewitt & Liang, Belinkov, Park, Turner, Zou, Arditi, LEACE, Timkey, Kovaleva, Ethayarajh, Mu, Elhage, Cunningham, Makhzani, Gao, JumpReLU, Gemma Scope, Paulo & Belrose, AxBench, SAEBench, Kang, Park 2025, Morris, Li, Zhang…) + Hewitt & Manning (ACL Anthology N19-1419) | ✅ | Autor y año coinciden |
+| Rajamanoharan et al. «*Jumping Ahead: JumpReLU Sparse Autoencoders*» | ✏️ | Título real: *Jumping Ahead: Improving Reconstruction Fidelity with JumpReLU Sparse Autoencoders* |
+| Títulos abreviados (*Representation Engineering*, *Gemma Scope*, *SAEBench*, *All-but-the-Top*, Li et al. *Sentence Embedding Leaks…*) | ✏️ | Completados |
+| Mu, Bhat, Viswanath (2017) | ✏️ | ICLR 2018 (año de publicación, coherente con el módulo 10), también en la lección 1 |
+| Venues | ✏️ | NAACL 2019, EMNLP-IJCNLP 2019 ×2, CL 48(1), ICML 2024 (Park), NeurIPS 2024 (Arditi), NeurIPS 2023 (LEACE), EMNLP 2021, Findings ACL 2021, ICLR 2024 (Cunningham), ICLR 2014 (k-sparse), ICLR 2025 (Gao), ICML 2025 (AxBench, SAEBench), EMNLP 2025 (Park et al.), EMNLP 2023 (vec2text), Findings ACL 2023 (Li); preprints marcados |
+| Paulo & Belrose «≈ 30 % compartidas en un SAE de 131 K latentes sobre Llama 3 8B» (🧠 4) | ✅ | Abstract de arXiv:2501.16615 |
+| vec2text «92 % de textos de 32 tokens» | ✅ | Abstract de Morris et al. 2023 |
+| Bricken et al. 2023 y Templeton et al. 2024 (transformer-circuits.pub) | ✅ | Publicaciones de Anthropic existentes |
+| Mapa de madurez / 🏭 | ✅ | «Quién la usa»: Anthropic, OpenAI, Google DeepMind (Gemma Scope), AxBench |

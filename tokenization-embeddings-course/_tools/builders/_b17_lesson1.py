@@ -35,7 +35,7 @@ def part1(nb):
     ## 🔁 Conexión con módulos anteriores
     <details><summary><b>1.</b> (Módulo 10) ¿Qué es la anisotropía de los embeddings contextuales y cómo se corrige?</summary>
 
-    Los vectores ocupan un cono estrecho (coseno medio alto entre textos no relacionados). Se corrige centrando, **whitening**, quitando componentes principales dominantes (*all-but-the-top*, Mu et al. 2017) o estandarizando dimensiones. En §5 medimos el efecto de una sola dimensión dominante.
+    Los vectores ocupan un cono estrecho (coseno medio alto entre textos no relacionados). Se corrige centrando, **whitening**, quitando componentes principales dominantes (*all-but-the-top*, Mu et al. 2018) o estandarizando dimensiones. En §5 medimos el efecto de una sola dimensión dominante.
     </details>
 
     <details><summary><b>2.</b> (Módulo 11) ¿Qué miden alineación y uniformidad?</summary>
