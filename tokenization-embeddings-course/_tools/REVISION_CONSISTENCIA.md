@@ -29,3 +29,14 @@ notebooks; ningún `.ipynb` se editó a mano. `extras/GEMINI_ASSETS.md` se regen
 - Badges de Colab: los 18 apuntan a `padillacm/IA-practice/blob/master/<ruta real del notebook>`; enlaces internos relativos sin roturas.
 
 ### Celdas Gemini (revisión una por una)
+Criterios comprobados en cada celda (script de auditoría + lectura): generada con `nb.gemini` (marca «⚠️ REEMPLAZAR
+ESTA CELDA», ID único con prefijo del módulo), prompt autocontenido con el bloque de estilo común (fondo blanco,
+paleta #1F6FEB/#F28E2B/#2CA02C/#6B7280, sans-serif), textos literales entre «», composición explícita, datos exactos,
+línea «Evita: …», guion por escenas con tiempos en los videos, formato/alt/instrucción de inserción, placeholder
+útil, «👀 Qué debes observar» justo después, sentido pedagógico y sin duplicar un gráfico de código.
+
+| Módulo | Celdas (IMG/VID) | Veredicto y cambios |
+|---|---|---|
+| 00 | 3 / 0 | Las tres correctas (mapa del curso, pipeline con ids GPT-2 verificados, arquitectura de Políglota). Añadida en la sección 2 la instrucción para videos largos: generar por escenas y concatenar si el generador produce clips cortos. |
+| 01 | 4 / 0 | Correctas y con datos exactos (bytes del emoji de familia, € = E2 82 AC, code points de NFC/NFD/NFKC/NFKD, homoglifo). M01-IMG-01: «Evita» prohíbe dibujar personas o cambiar los miembros de la familia; M01-IMG-04: «Evita» prohíbe logotipos/colores de marca (la palabra va en texto plano). |
+| 02 | 3 / 1 | Correctas; recuentos de pares del video M02-VID-01 recalculados a mano (desempate lexicográfico e s / s t / t </w>, l o / o w). Arreglado «con música ausente» → «sin música». |

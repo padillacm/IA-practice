@@ -1,8 +1,8 @@
 # Progreso: revisor-consistencia-A
 Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 00–08 · Informe: tokenization-embeddings-course/_tools/REVISION_CONSISTENCIA.md
 - [x] 00_intro
-- [ ] 01_unicode_bytes
-- [ ] 02_bpe_desde_cero
+- [x] 01_unicode_bytes
+- [x] 02_bpe_desde_cero
 - [ ] 03_wordpiece_unigram_sentencepiece
 - [ ] 04_diseno_tokenizers_modernos
 - [ ] 05_patologias_robustez

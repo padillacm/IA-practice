@@ -398,7 +398,7 @@ assert [f["par fusionado"] for f in filas[:5]] == ["e + s", "es + t", "est + </w
 nb.gemini(
     "video", "M02-VID-01", "Animación: BPE fusiona el par más frecuente",
     "El proceso de merges del ejemplo clásico (low, lower, newest, widest), paso a paso, con la barra de conteos de pares y el vocabulario que crece. Es el proceso dinámico central del módulo.",
-    """Video explicativo de 16:9, ritmo calmado, sin voz en off, con música ausente. Fondo blanco, estilo de diagrama técnico limpio, paleta: azul #1F6FEB para símbolos, naranja #F28E2B para el par que se fusiona, verde #2CA02C para el token nuevo, gris #6B7280 para anotaciones. Tipografía monoespaciada para los símbolos y sans-serif para los textos. Sin ilustraciones decorativas.
+    """Video explicativo de 16:9, ritmo calmado, sin voz en off y sin música. Fondo blanco, estilo de diagrama técnico limpio, paleta: azul #1F6FEB para símbolos, naranja #F28E2B para el par que se fusiona, verde #2CA02C para el token nuevo, gris #6B7280 para anotaciones. Tipografía monoespaciada para los símbolos y sans-serif para los textos. Sin ilustraciones decorativas.
 Guion por escenas (textos en pantalla EXACTOS):
 0–4 s: Título «Byte Pair Encoding: fusionar el par más frecuente». Aparece una tabla de cuatro filas con la palabra, su frecuencia y su secuencia de símbolos: «low ×5 → l o w </w>», «lower ×2 → l o w e r </w>», «newest ×6 → n e w e s t </w>», «widest ×3 → w i d e s t </w>».
 4–9 s: A la derecha aparece un gráfico de barras horizontales «Conteo de pares» con: «e s: 9», «s t: 9», «t </w>: 9», «w e: 8», «l o: 7», «o w: 7». Las tres barras de 9 parpadean en naranja con la nota «empate: se elige el menor lexicográficamente».

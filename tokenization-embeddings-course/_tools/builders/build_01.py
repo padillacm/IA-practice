@@ -93,7 +93,7 @@ Franja 1 (borde azul), título «Grafema (lo que ves): 1». Contenido: el emoji 
 Franja 2 (borde naranja), título «Code points (Unicode): 7». Contenido: siete cajas en fila con estos textos EXACTOS, de izquierda a derecha: «U+1F468 👨», «U+200D ZWJ», «U+1F469 👩», «U+200D ZWJ», «U+1F467 👧», «U+200D ZWJ», «U+1F466 👦». Las tres cajas ZWJ en gris con la nota «unión de ancho cero».
 Franja 3 (borde verde), título «Bytes UTF-8: 25». Contenido: siete grupos de bytes en hexadecimal bajo cada code point, EXACTOS y en este orden: «F0 9F 91 A8», «E2 80 8D», «F0 9F 91 A9», «E2 80 8D», «F0 9F 91 A7», «E2 80 8D», «F0 9F 91 A6». Bajo cada grupo, el número de bytes: «4», «3», «4», «3», «4», «3», «4».
 Título superior: «Un símbolo, tres capas». Nota inferior en gris: «len() de Python cuenta la capa 2; el disco guarda la capa 3».
-Evita: cambiar los números o los códigos, texto ilegible, iconos decorativos, flechas ambiguas, más de tres franjas.""",
+Evita: cambiar los números o los códigos, dibujar personas en lugar del emoji, añadir o quitar miembros de la familia, texto ilegible, iconos decorativos, flechas ambiguas, más de tres franjas.""",
     "Emoji de familia descompuesto: 1 grafema, 7 code points y 25 bytes UTF-8",
     """Grafema (1):        👨‍👩‍👧‍👦
                       │ se descompone en
@@ -560,7 +560,7 @@ Fila inferior (borde naranja), título «Con una «а» cirílica en la 2ª posi
 Entre las filas, un signo «≠» grande con la etiqueta «Se ven igual, son cadenas distintas».
 A la derecha, un cuadro gris con el texto «Defensa: detectar palabras con escrituras mezcladas (LATIN + CYRILLIC) y normalizar a un esqueleto».
 Título superior: «Homoglifos».
-Evita: cambiar los códigos o bytes, texto ilegible, elementos decorativos o alarmistas, flechas ambiguas.""",
+Evita: cambiar los códigos o bytes, logotipos o colores de marca (es solo la palabra en texto plano), texto ilegible, elementos decorativos o alarmistas, flechas ambiguas.""",
     "Dos filas comparando paypal en latino y con una a cirílica: code points y bytes distintos",
     """Todo latino          paypal     U+0070 U+0061 U+0079 U+0070 U+0061 U+006C    70 61 79 70 61 6C        (6 bytes)
                        ≠   se ven igual, son cadenas distintas
