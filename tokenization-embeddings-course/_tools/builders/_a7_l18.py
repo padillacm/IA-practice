@@ -8,9 +8,14 @@ def lesson(nb):
 
 # Módulo 18 · Embeddings y retrieval en producción
 
-**Nivel:** 🟠 Avanzado · **Duración:** ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) · **GPU:** no necesaria (CPU en `FAST_DEV_RUN`; T4 opcional para medir throughput real de un embedder) · **Cómputo estimado:** 0 unidades de Colab en CPU; ≈ 1–2 unidades si usas T4 con `FAST_DEV_RUN=False`.
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
-**Prerrequisitos:** 12 (embedders, Matryoshka, int8/binaria), 13 (híbrido y RRF), 14 (ANN y medición p50/p99), 15 (bootstrap pareado, drift), 17 (vec2text).
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+| **GPU recomendada** | Ninguna en `FAST_DEV_RUN` (CPU, 0 unidades de Colab); T4 opcional para medir throughput real de un embedder (≈ 1–2 unidades con `FAST_DEV_RUN=False`) |
+| **Prerrequisitos** | 12 (embedders, Matryoshka, int8/binaria), 13 (híbrido y RRF), 14 (ANN y medición p50/p99), 15 (bootstrap pareado, drift), 17 (vec2text) |
 
 > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 2 h, lo que usa el proyecto): §1 costes · §2 batching · §4 caché · §5 versionado y migración · §7 vector DB y filtros. Ampliación (≈ 1 h): §3 colas y *tail latency* (y 3b, servidores) · §6 cuantización · §8 privacidad · §9 drift · §10 A/B e interleaving. Si vas justo de tiempo, ejecuta la ampliación sin estudiarla y vuelve a ella la semana siguiente (repaso espaciado).
 
@@ -69,7 +74,7 @@ Analogía con recsys: es el mismo patrón que un *two-tower* (torre de ítems pr
         """Diagrama técnico limpio, fondo blanco, paleta sobria: azul #1F6FEB (ruta online), naranja #F28E2B (ruta offline), verde #2CA02C (monitorización), gris #6B7280 (almacenamiento). Tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas.
 Composición en dos bandas horizontales.
 Banda superior (naranja), de izquierda a derecha, con el título "Ruta offline (indexación)": cajas "Documentos ES/EN/código" → "Chunking" → "Caché por contenido (hash + versión)" → "Embedder v1/v2 (lotes grandes, GPU)" → "Índice vectorial versionado (colección v1 · colección v2)". Debajo de la flecha del embedder, texto pequeño "throughput: tokens/s/$".
-Banda inferior (azul), con el título "Ruta online (consulta)": "Usuario" → "API /search" → "Caché de queries (LRU, clave = versión + texto normalizado)" → "Embedder (micro-batching)" → "Búsqueda: denso + BM25 + filtro idioma" → "Fusión RRF" → "Top-10". Texto pequeño bajo la API: "SLA: p99 ≤ 100 ms".
+Banda inferior (azul), con el título "Ruta online (consulta)": "Usuario" → "API /search" → "Caché de queries (LRU, clave = versión + texto normalizado)" → "Embedder (micro-batching)" → "Búsqueda: denso + BM25 + filtro idioma" → "Fusión RRF" → "Top-10". Texto pequeño bajo la API: "SLA: p99 acotado".
 Una caja gris a la derecha "Alias prod → v1" conectada con línea discontinua a la colección v1, y otra línea discontinua gris hacia v2 con la etiqueta "migración (blue/green)".
 Abajo, una franja verde que recorre todo el ancho: "Monitorización: p50/p99 · hit rate · drift (PSI) · A/B · privacidad".
 Evita: logotipos de empresas, texto ilegible, flechas cruzadas, iconos decorativos, cifras inventadas.""",
@@ -232,17 +237,17 @@ Trade-off: esperar **suma latencia** a las primeras peticiones del lote pero **s
         "Cómo un servidor agrupa peticiones que llegan una a una en lotes limitados por max_batch y max_wait, y por qué eso cambia p50 y p99.",
         """Diagrama técnico limpio, fondo blanco, paleta: azul #1F6FEB (peticiones), naranja #F28E2B (lote), verde #2CA02C (GPU), gris #6B7280 (eje de tiempo). Sans-serif legible.
 Eje horizontal de tiempo en la parte inferior con la etiqueta "tiempo (ms)".
-Arriba, a la izquierda, pequeñas flechas azules verticales que llegan a distintos instantes, etiquetadas "q1", "q2", "q3", "q4", "q5".
-En el centro, un rectángulo naranja llamado "Cola del servidor" que agrupa q1, q2 y q3 con una llave y el texto "lote 1: se cierra por max_wait = 5 ms"; luego q4 y q5 agrupadas como "lote 2: se cierra por max_batch".
+Arriba, a la izquierda, pequeñas flechas azules verticales que llegan a distintos instantes, etiquetadas "q1" a "q7": q1, q2 y q3 separadas entre sí; q4, q5, q6 y q7 muy juntas.
+En el centro, un rectángulo naranja llamado "Cola del servidor" que agrupa q1, q2 y q3 con una llave y el texto "lote 1: se cierra por max_wait = 5 ms"; luego q4, q5, q6 y q7 agrupadas como "lote 2: se cierra por max_batch = 4".
 A la derecha, una caja verde "GPU: t(B) = a + b·B" que recibe cada lote.
 Debajo de q1, una barra horizontal azul que muestra su latencia total dividida en dos tramos con texto: "espera en cola" (gris claro) y "cómputo del lote" (verde).
-Esquina superior derecha: dos casillas de texto "max_batch = 32" y "max_wait = 5 ms".
+Esquina superior derecha: dos casillas de texto "max_batch = 4 (ejemplo)" y "max_wait = 5 ms".
 Evita: números de rendimiento inventados, logotipos, iconos decorativos, flechas ambiguas.""",
         "Peticiones que llegan una a una se agrupan en lotes que se cierran por tiempo máximo de espera o por tamaño máximo, y se procesan en la GPU.",
         """
-q1   q2 q3          q4 q5 ... →  tiempo
- |----lote 1 (cierra por max_wait=5ms)----|→ GPU t(B)=a+bB
-                    |--lote 2 (cierra por max_batch)--|→ GPU
+q1   q2   q3        q4q5q6q7 ... →  tiempo
+ |--lote 1 (3 peticiones: cierra por max_wait=5ms)--|→ GPU t(B)=a+bB
+                    |--lote 2 (4 peticiones: cierra por max_batch=4)--|→ GPU
 latencia(q1) = espera en cola + cómputo del lote
 """)
     nb.md("> 👀 **Qué debes observar:** la primera petición de cada lote es la que más espera; `max_wait` acota esa espera. Ese tramo gris es el precio que pagas por la capacidad extra del lote.")
@@ -421,14 +426,14 @@ Cambiar de embedder es la operación más cara y arriesgada de un sistema de ret
     nb.gemini(
         "video", "M18-VID-01", "Migración blue/green de un índice de embeddings",
         "La secuencia completa de una migración segura de v1 a v2: doble escritura, backfill, evaluación sombra, cambio de alias y rollback.",
-        """Video de diagrama técnico animado, 16:9, fondo blanco, paleta sobria: azul #1F6FEB (v1), naranja #F28E2B (v2), verde #2CA02C (OK/evaluación), gris #6B7280 (infraestructura). Tipografía sans-serif grande y legible, sin voz en off, ritmo calmado, transiciones suaves.
+        """Video de diagrama técnico animado, 16:9, fondo blanco, paleta sobria: azul #1F6FEB (v1), naranja #F28E2B (v2), verde #2CA02C (OK/evaluación), gris #6B7280 (infraestructura). Tipografía sans-serif grande y legible, sin voz en off, sin música, ritmo calmado, transiciones suaves.
 0–5 s: aparece una caja gris "API /search" con una flecha hacia un cilindro azul "Colección v1 (prod)". Texto en pantalla: "Situación inicial: alias prod → v1".
 5–11 s: aparece a la derecha un cilindro naranja vacío "Colección v2". Texto: "1. Crear colección nueva (sin tocar v1)".
 11–18 s: una barra de progreso naranja se llena bajo v2 con el texto "2. Backfill: re-embeber todos los documentos con v2"; a la vez, flechas desde "Documentos nuevos" van a v1 y a v2. Texto: "Doble escritura durante el backfill".
 18–25 s: desde "API /search" sale una flecha punteada hacia v2 con la etiqueta "tráfico sombra (no se muestra al usuario)"; aparece una caja verde "Evaluación: nDCG pareado + IC + interleaving". Texto: "3. Evaluar en sombra".
 25–31 s: la flecha "alias prod" se desplaza de v1 a v2 con una animación suave. Texto: "4. Cambio atómico del alias prod → v2".
 31–37 s: v1 queda en gris claro con el texto "conservada N días para rollback"; un botón "rollback = mover el alias" parpadea una vez. Texto final: "5. Retirar v1 cuando las métricas online lo confirmen".
-Evita: logotipos de productos, texto pequeño, cifras inventadas, movimientos de cámara bruscos, música estridente.""",
+Evita: logotipos de productos, texto pequeño, cifras inventadas, movimientos de cámara bruscos, música.""",
         "Animación de una migración blue/green: crear colección v2, backfill con doble escritura, evaluación en sombra, cambio atómico del alias y rollback.",
         """
 [API] ──alias prod──▶ [v1 ✔]          [v2 vacío]
@@ -476,7 +481,7 @@ for nombre, a, b in (("v2 completo − v1", pq_v2, pq_v1), ("adaptador 50 % − 
     r = paired_bootstrap(a, b)
     print(f"{nombre:30s} Δ={r['diff']:+.3f}  IC95=[{r['ci_low']:+.3f}, {r['ci_high']:+.3f}]  p={r['p_value']:.3f}")
 coste_reembed = {k: coste_api(T_PROD, p) for k, p in PRECIOS_API.items()}
-print(f"\nCosto de re-embeber 10 M chunks: API {min(coste_reembed.values()):.0f}–{max(coste_reembed.values()):.0f} $ · GPU propia ≈ {coste_gpu(T_PROD):.0f} $ ({horas_gpu(T_PROD):.0f} h, supuestos de §1)")
+print(f"\nCoste de re-embeber 10 M chunks: API {min(coste_reembed.values()):.0f}–{max(coste_reembed.values()):.0f} $ · GPU propia ≈ {coste_gpu(T_PROD):.0f} $ ({horas_gpu(T_PROD):.0f} h, supuestos de §1)")
 ''')
     nb.md(r'''> 👀 **Qué debes observar:** si el IC de «v2 completo − adaptador» excluye el 0, el adaptador **deja calidad sobre la mesa** y solo se justifica como puente temporal. Compara esa pérdida con el coste del re-embedding (decenas–cientos de $ con estos supuestos): en la mayoría de casos **re-embeber es barato; lo caro es operar dos índices y validar**. El adaptador gana cuando el texto original ya no está disponible (solo guardaste vectores) o cuando el corpus es enorme y necesitas servir v2 *ya*.''')
 
@@ -495,7 +500,7 @@ def int8_decodifica(Z, lo, esc):
     return (Z.astype(np.float32) + 128) * esc + lo
 
 def busca_binaria(Q, D, rescore_con=None, K=40):
-    """Hamming sobre signos (±1); con rescore_con=matriz float, reordena los K mejores con producto punto exacto."""
+    """Hamming sobre signos (±1); con rescore_con=matriz float, reordena los K mejores con producto escalar exacto."""
     Qb, Db = np.where(Q > 0, 1.0, -1.0), np.where(D > 0, 1.0, -1.0)
     S = Qb @ Db.T
     if rescore_con is None:

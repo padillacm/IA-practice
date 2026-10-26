@@ -106,9 +106,9 @@ def project(nb):
 | | |
 |---|---|
 | **Nivel** | 🟠 Avanzado |
-| **Duración** | ≈ 2 h |
-| **GPU** | No necesaria (CPU, `FAST_DEV_RUN = True`, ≈ 1–2 min de ejecución) |
-| **Requiere** | Lección 18 (caché, migración, filtros, costes) · módulos 13 (RRF), 14 (FAISS), 15 (bootstrap pareado) |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | No necesaria (CPU, `FAST_DEV_RUN = True`, ≈ 1–2 min de ejecución) |
+| **Prerrequisitos** | Lección 18 (caché, migración, filtros, costes) · módulos 13 (RRF), 14 (FAISS), 15 (bootstrap pareado) |
 | **Conecta con** | Módulo 17 (privacidad de los vectores que sirves) · Módulo 19 (decisiones de diseño) · **Módulo 20** (este servicio es la capa de servicio del capstone) |
 
 ## 🏢 Contexto de negocio

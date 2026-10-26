@@ -2,7 +2,7 @@
 Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras · Informe: tokenization-embeddings-course/_tools/REVISION_CONSISTENCIA.md (sección Bloque B)
 - [x] 20_capstone
 - [x] 19_playbook_elite
-- [ ] 18_produccion
+- [x] 18_produccion
 - [ ] 17_interpretabilidad_geometria
 - [x] 16_embeddings_multimodales
 - [x] 15_evaluacion_retrieval
@@ -22,3 +22,4 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - M16 (adelantado: élite B saltó 18/17 y los dejó para el final): etiquetas canónicas + subtítulo; secciones fijas sin número, ✅→📝; IDs a 2 dígitos; «mapa de calor en 6.2» (decía 6.3); IMG-03 ≈ 258 KiB/página (1030×128×2 B); flecha negra → gris.
 - M15: etiquetas canónicas + subtítulo; secciones fijas sin número, ✅→📝; IDs a 2 dígitos y en orden (golden set = IMG-02, LIMIT = IMG-03); VID-01: remuestreos con listas cuyas medias son exactas (el de 0.61 daba 0.69) e IC ≈ [0.35, 0.77] recalculado (decía [0.37, 0.74]); producto punto → producto escalar.
 - M14: cabecera inline → tabla canónica (lección y proyecto) + subtítulo; «## N ·» → «## N.»; secciones fijas sin número, 📝/📚; «sin voz en off, sin música»; re-ranking/re-ordenar → reranking/reordenar. Gemini 3 IMG + 1 VID correctas (PQ: 1024/64 → 64 B, 64× menos que float32).
+- M18: cabecera inline → tabla canónica + subtítulo; IMG-02: lote 2 no podía cerrarse por max_batch = 32 con 2 peticiones → ejemplo con max_batch = 4 y q1–q7; IMG-01 sin «p99 ≤ 100 ms» inventado; VID-01 sin música; «Costo» → «Coste» en la salida.
