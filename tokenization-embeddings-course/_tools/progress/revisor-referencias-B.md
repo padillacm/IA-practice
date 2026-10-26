@@ -10,7 +10,7 @@ Agente: Verificador de referencias · Módulos: 09–20 + extras · Informe: tok
 - [x] 15_evaluacion_retrieval
 - [x] 16_embeddings_multimodales
 - [x] 17_interpretabilidad_geometria
-- [ ] 18_produccion
+- [x] 18_produccion
 - [ ] 19_playbook_elite
 - [ ] 20_capstone
 - [ ] check_course.py OK + informe final

@@ -140,3 +140,14 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | vec2text «92 % de textos de 32 tokens» | ✅ | Abstract de Morris et al. 2023 |
 | Bricken et al. 2023 y Templeton et al. 2024 (transformer-circuits.pub) | ✅ | Publicaciones de Anthropic existentes |
 | Mapa de madurez / 🏭 | ✅ | «Quién la usa»: Anthropic, OpenAI, Google DeepMind (Gemma Scope), AxBench |
+
+## 18 · Producción
+| Referencia | Estado | Nota |
+|---|---|---|
+| Dean & Barroso 2013 (CACM 56(2), DOI 10.1145/2408776.2408794), Chapelle et al. 2012 (TOIS 30(1)), Radlinski et al. 2008, Kohavi et al. 2020, Sculley et al. 2015 | ✅ | Años de CIKM 2008 y NeurIPS 2015 añadidos |
+| Shen et al. 2020 (BCT), Song & Raghunathan 2020, Morris et al. 2023, Faiss, MRL | ✏️ | Años de venue añadidos (CVPR 2020, CCS 2020, EMNLP 2023, NeurIPS 2022); Faiss preprint |
+| «TEI 1.9 cambió valores por defecto» (🧠 1) | ✏️ | Confirmado en las notas de la v1.9.0 (vía agregador de releases): GeLU con aproximación tanh por defecto y `--auto-truncate=true`; ahora se dice cuáles |
+| vLLM `--runner pooling`, documentación *Pooling Models* | ✏️ | Flag confirmado; URL actualizada a `docs.vllm.ai/en/latest/models/pooling_models/` |
+| Precios (3-small 0.02 $, 3-large 0.13 $, `gemini-embedding-001` 0.15 $ con GA 14-jul-2025) | ✅ | Ya contrastados por la revisión técnica |
+| TEI, pgvector (GitHub), Qdrant (documentación), blog de cuantización de HF | ✅ | |
+| Mapa de madurez / 🏭 | ✅ | Interleaving en Bing/Yahoo según Chapelle et al. 2012; hedged requests en Google según Dean & Barroso; aliases de Qdrant documentados |

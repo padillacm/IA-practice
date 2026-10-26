@@ -801,7 +801,7 @@ Ya has medido cada pieza (costes, colas, caché, migración, cuantización, filt
 * **Evaluación online:** interleaving (Chapelle et al. 2012; Radlinski et al. 2008) y A/B con la metodología de Kohavi et al. (2020).
 ''')
     nb.md(r'''## 🧠 Secretos de la élite
-1. **La versión del vector es un contrato, no un número**: incluye modelo + revisión del checkpoint + servidor (TEI 1.9 cambió valores por defecto) + preprocesado (normalización Unicode, truncado, prefijo). Guárdala en el payload de cada punto y en la clave de caché; un cambio en cualquiera es una migración.
+1. **La versión del vector es un contrato, no un número**: incluye modelo + revisión del checkpoint + servidor (TEI 1.9 cambió valores por defecto: GeLU con aproximación tanh y `--auto-truncate` activado, según sus notas de versión) + preprocesado (normalización Unicode, truncado, prefijo). Guárdala en el payload de cada punto y en la clave de caché; un cambio en cualquiera es una migración.
 2. **Mide $\theta$ (tokens/s) con tus longitudes reales**: los benchmarks de throughput con textos de longitud fija sobreestiman el rendimiento con documentación real (longitudes de cola larga → padding).
 3. **El p99 se diseña, no se optimiza al final**: evita el *fan-out* si el índice cabe en una réplica, usa hedged requests si no, y fija `max_wait` del micro-batching con tráfico realista (§3).
 4. **Re-embeber suele ser barato; lo caro es la incertidumbre**: presupuesta el doble índice, la evaluación pareada y el interleaving, no solo los tokens.
@@ -848,19 +848,19 @@ Interleaving para decidir rápido qué candidato prefieren los usuarios (mucha m
     nb.md(r'''## 📚 Referencias
 **Papers y artículos**
 * Dean, J. & Barroso, L. A. (2013). *The Tail at Scale*. Communications of the ACM 56(2). https://doi.org/10.1145/2408776.2408794
-* Shen, Y., Xiong, Y., Xia, W., Soatto, S. (2020). *Towards Backward-Compatible Representation Learning*. CVPR. https://arxiv.org/abs/2003.11942
-* Song, C. & Raghunathan, A. (2020). *Information Leakage in Embedding Models*. ACM CCS. https://arxiv.org/abs/2004.00053
-* Morris, J. X. et al. (2023). *Text Embeddings Reveal (Almost) As Much As Text* (vec2text). EMNLP. https://arxiv.org/abs/2310.06816
+* Shen, Y., Xiong, Y., Xia, W., Soatto, S. (2020). *Towards Backward-Compatible Representation Learning*. CVPR 2020. https://arxiv.org/abs/2003.11942
+* Song, C. & Raghunathan, A. (2020). *Information Leakage in Embedding Models*. ACM CCS 2020. https://arxiv.org/abs/2004.00053
+* Morris, J. X. et al. (2023). *Text Embeddings Reveal (Almost) As Much As Text* (vec2text). EMNLP 2023. https://arxiv.org/abs/2310.06816
 * Chapelle, O., Joachims, T., Radlinski, F., Yue, Y. (2012). *Large-scale validation and analysis of interleaved search evaluation*. ACM TOIS 30(1).
-* Radlinski, F., Kurup, M., Joachims, T. (2008). *How does clickthrough data reflect retrieval quality?* CIKM.
+* Radlinski, F., Kurup, M., Joachims, T. (2008). *How does clickthrough data reflect retrieval quality?* CIKM 2008.
 * Kohavi, R., Tang, D., Xu, Y. (2020). *Trustworthy Online Controlled Experiments*. Cambridge University Press.
-* Douze, M. et al. (2024). *The Faiss library*. https://arxiv.org/abs/2401.08281
-* Kusupati, A. et al. (2022). *Matryoshka Representation Learning*. https://arxiv.org/abs/2205.13147
-* Sculley, D. et al. (2015). *Hidden Technical Debt in Machine Learning Systems*. NeurIPS.
+* Douze, M. et al. (2024). *The Faiss library*. Preprint. https://arxiv.org/abs/2401.08281
+* Kusupati, A. et al. (2022). *Matryoshka Representation Learning*. NeurIPS 2022. https://arxiv.org/abs/2205.13147
+* Sculley, D. et al. (2015). *Hidden Technical Debt in Machine Learning Systems*. NeurIPS 2015.
 
 **Documentación y blogs (consultados oct-2026)**
 * Hugging Face Text Embeddings Inference: https://github.com/huggingface/text-embeddings-inference
-* vLLM, *Pooling Models*: https://docs.vllm.ai/en/latest/models/pooling_models.html
+* vLLM, *Pooling Models*: https://docs.vllm.ai/en/latest/models/pooling_models/
 * Qdrant (modo local, named vectors, filtros, aliases): https://qdrant.tech/documentation/
 * pgvector: https://github.com/pgvector/pgvector
 * OpenAI, modelo `text-embedding-3-small` (precio): https://developers.openai.com/api/docs/models/text-embedding-3-small
