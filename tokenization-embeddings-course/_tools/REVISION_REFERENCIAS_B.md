@@ -65,3 +65,16 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Cifras (CCPairs ≈ 270M, TopK-PercPos 95 %, τ 0.05/0.01, `scale=20`) | ✅ | Ya contrastadas por la revisión técnica |
 | `sentence-transformers` (`MultipleNegativesRankingLoss`, `CachedMultipleNegativesRankingLoss`, `BatchSamplers.NO_DUPLICATES`, `mine_hard_negatives`, `add_adapter`) | ✅ | API pública de la librería (v3+) |
 | Mapa de madurez / 🏭 | ✅ | Cada «quién la usa» con su informe técnico (E5, GTE, BGE, Nomic, Qwen3, DPR, ANCE, RocketQA, NV-Retriever) |
+
+## 12 · Embedders modernos
+| Referencia | Estado | Nota |
+|---|---|---|
+| 20 IDs arXiv (Kusupati, mE5, e5-mistral, BGE-M3, mGTE, Nomic ×2, NV-Embed, LLM2Vec, Qwen3, Gemini Embedding, EmbeddingGemma, jina v3/v4, MTEB, MMTEB, LIMIT, ModernBERT) | ✅ | Autor y año coinciden |
+| Venues | ✏️ | NeurIPS 2022 (MRL), ACL 2024 (e5-mistral), Findings ACL 2024 (BGE-M3), EMNLP 2024 Industry (mGTE), TMLR (Nomic), ICLR 2025 (NV-Embed, MMTEB), COLM 2024 (LLM2Vec), EACL 2023 (MTEB), ICLR 2026 (LIMIT) |
+| ModernBERT «*A Modern Bidirectional Encoder…*» | ✏️ | Título completo |
+| **jina-embeddings-v5-text-nano: contexto** | ✏️ | **Resuelto: 8k (8192).** Lo dan el anuncio de Jina (tabla: small 32 768, nano 8192), el blog y la documentación de Elastic y la página de v5-omni-nano; solo la página de modelo de nano dice 32K (errata probable). Fecha precisada (18-feb-2026); licencia CC-BY-NC-4.0 y 677 M confirmados por la página de Jina. Añadida la referencia del anuncio |
+| «Omitir la instrucción cuesta 1–5 %» (🧠 2), atribuido a «la tarjeta de Qwen3-Embedding, citada en un export ONNX de Qdrant» | ✏️ | Fuente primaria encontrada: README de `QwenLM/Qwen3-Embedding` («typically yields an improvement of 1% to 5%»); también confirma 32K, MRL y 1024/2560/4096. Añadido a referencias |
+| *Introducing MTEB v2* (blog de HF) | ✏️ | Título completo y autores (Solomatin, Enevoldsen, Chung; 20-oct-2025) |
+| Cohere *Announcing Embed Multimodal v4* (256/512/1024/1536, 128k, imagen+texto) | ✅ | URL del changelog confirmada por buscador |
+| Shakir, Aarsen, Lee 2024 (HF), docs de `sentence-transformers`, OpenAI (25-ene-2024), Gemini Embedding 2 (preview/GA), EmbeddingGemma (< 200 MB), MongoDB/Voyage-4 | ✅ | Confirmados por la revisión técnica o por buscador (los dominios no abren desde el proxy) |
+| Mapa de madurez / 🏭 | ✅ | Cada «quién la usa» con paper, tarjeta o documentación del proveedor |

@@ -4,7 +4,7 @@ Agente: Verificador de referencias · Módulos: 09–20 + extras · Informe: tok
 - [x] 09_capa_embedding_llm
 - [x] 10_embeddings_contextuales_oraciones
 - [x] 11_aprendizaje_contrastivo
-- [ ] 12_embedders_modernos
+- [x] 12_embedders_modernos
 - [ ] 13_dense_sparse_late_interaction
 - [ ] 14_indexacion_ann
 - [ ] 15_evaluacion_retrieval
