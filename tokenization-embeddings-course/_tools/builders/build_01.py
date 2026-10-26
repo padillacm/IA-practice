@@ -31,8 +31,8 @@ nb.md(nb.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟢 Básico |
-| **Duración** | ≈ 4 h (lección ≈ 2.5 h + proyecto ≈ 1.5 h) |
-| **GPU / coste** | Ninguna: CPU (0 unidades de Colab Pro) |
+| **Duración estimada** | ≈ 4 h (lección ≈ 2.5 h + proyecto ≈ 1.5 h) |
+| **GPU recomendada** | Ninguna: CPU (0 unidades de Colab Pro) |
 | **Prerrequisitos** | Módulo 00 (corpus Políglota, métricas, BM25). Python sólido |
 
 > **Estado del arte de referencia: octubre de 2026.** Las cifras sujetas a cambio llevan fecha; las técnicas se etiquetan 🟢 / 🟡 / 🔴.
@@ -47,7 +47,7 @@ Al terminar este módulo podrás:
 3. **Explicar** UTF-16/UTF-32, pares sustitutos y el almacenamiento de `str` en CPython.
 4. **Aplicar** NFC/NFD/NFKC/NFKD, **implementar** NFD a mano y **medir** cómo la forma de normalización cambia bytes, tokens y resultados de búsqueda.
 5. **Detectar** homoglifos, caracteres invisibles y controles bidireccionales, y **explicar** el riesgo de seguridad.
-6. **Cuantificar** los bytes por carácter en 12 idiomas y **relacionarlo** con el costo posterior de tokenizar (analogías con compresión y con tipología lingüística).
+6. **Cuantificar** los bytes por carácter en 12 idiomas y **relacionarlo** con el coste posterior de tokenizar (analogías con compresión y con tipología lingüística).
 7. **Diagnosticar** y **reparar** *mojibake*, y elegir el manejador de errores de codificación correcto.
 """)
 
@@ -244,7 +244,7 @@ for rect, (_, n, bits) in zip(b, rangos):
 ax.set_ylim(50, 4e6); plt.tight_layout(); plt.show()
 ''')
 
-nb.md(obs(r"""Con la escala logarítmica ves lo asimétrico del diseño: **128** valores en 1 byte (ASCII), pero más de **un millón** en 4 bytes. Un texto en inglés casi no usa los rangos largos; un texto en chino vive en los 3 bytes. Esa asimetría es, literalmente, el «impuesto de bytes» de muchos idiomas."""))
+nb.md(obs(r"""Con la escala logarítmica ves lo asimétrico del diseño: **128** valores en 1 byte (ASCII), pero más de **un millón** en 4 bytes. Un texto en inglés casi no usa los rangos largos; un texto en chino vive en los 3 bytes. Esa asimetría es, literalmente, la «prima de bytes» de muchos idiomas."""))
 
 nb.gemini(
     "imagen", "M01-IMG-02", "Estructura de bits de UTF-8 con un ejemplo resuelto",
@@ -349,7 +349,7 @@ ax = df_g.plot.bar(figsize=(10, 4), color=[VERDE, AZUL, NARANJA, GRIS], width=0.
 ax.set_ylabel("unidades"); ax.set_title("Una misma cadena, cuatro formas de contarla"); ax.legend(loc="upper left", fontsize=8)
 plt.tight_layout(); plt.show()
 ''')
-nb.md(obs(r"""La columna de **grafemas** es 1 en casi todo (y 1 también para `é` en las dos formas); las demás divergen hasta **25 bytes** en la familia. Consecuencias prácticas: contar «caracteres» para un límite de UI debe hacerse en grafemas; contar *costo* de un LLM se hace en tokens, que dependen de los **bytes** (módulo 02). Y `é (NFD)` demuestra que *el mismo grafema* puede tener 2 representaciones distintas: es el problema que resuelve la normalización."""))
+nb.md(obs(r"""La columna de **grafemas** es 1 en casi todo (y 1 también para `é` en las dos formas); las demás divergen hasta **25 bytes** en la familia. Consecuencias prácticas: contar «caracteres» para un límite de UI debe hacerse en grafemas; contar *coste* de un LLM se hace en tokens, que dependen de los **bytes** (módulo 02). Y `é (NFD)` demuestra que *el mismo grafema* puede tener 2 representaciones distintas: es el problema que resuelve la normalización."""))
 
 nb.md(r"""
 ## 6. Normalización Unicode: NFC, NFD, NFKC, NFKD
@@ -488,7 +488,7 @@ df_n = pd.DataFrame(filas).set_index("palabra")
 display(df_n)
 if enc:
     ax = df_n[["tokens NFC", "tokens NFD"]].plot.bar(figsize=(9, 3.8), color=[AZUL, NARANJA], rot=30, width=0.8)
-    ax.set_ylabel("tokens GPT-2"); ax.set_title("La misma palabra visible, dos normalizaciones, dos costos")
+    ax.set_ylabel("tokens GPT-2"); ax.set_title("La misma palabra visible, dos normalizaciones, dos costes")
     plt.tight_layout(); plt.show()
     print("media de tokens NFC → NFD:", df_n["tokens NFC"].mean(), "→", df_n["tokens NFD"].mean())
     print("tiktoken NO normaliza: encode('é') =", enc.encode("é"), "| encode('e' + U+0301) =", enc.encode("e\u0301"))
@@ -498,7 +498,7 @@ nb.md(obs(r"""Para **cada** palabra, la forma NFD cuesta más bytes (+1 por marc
 
 nb.md(r"""
 ### Impacto 2: búsqueda
-Volvamos a Políglota. Indexamos los documentos en español con un tokenizador léxico *ingenuo* (`\w+` en minúsculas, **sin** normalizar) y lanzamos las consultas en NFC y en NFD. Después probamos con la normalización NFC dentro del tokenizador. Reutilizamos `carga_corpus`, las métricas y BM25 del módulo 00.
+Volvamos a Políglota. Indexamos los documentos en español con un tokenizer léxico *ingenuo* (`\w+` en minúsculas, **sin** normalizar) y lanzamos las consultas en NFC y en NFD. Después probamos con la normalización NFC dentro del tokenizer. Reutilizamos `carga_corpus`, las métricas y BM25 del módulo 00.
 """)
 _c = src_corpus_cells()
 nb.code("# ── Utilidades canónicas del módulo 00 (1/3): datos del corpus sintético ──\n" + _c[0])
@@ -523,14 +523,14 @@ def ndcg_es(tok, f_doc=lambda t: t, f_q=lambda t: t):
 
 res = {"docs NFC · consulta NFC": ndcg_es(ingenuo), "docs NFC · consulta NFD": ndcg_es(ingenuo, f_q=nfd),
        "docs NFD · consulta NFC": ndcg_es(ingenuo, f_doc=nfd), "docs NFD · consulta NFD": ndcg_es(ingenuo, nfd, nfd),
-       "docs NFC · consulta NFD\n(+ NFC en el tokenizador)": ndcg_es(lambda t: ingenuo(nfc(t)), f_q=nfd)}
+       "docs NFC · consulta NFD\n(+ NFC en el tokenizer)": ndcg_es(lambda t: ingenuo(nfc(t)), f_q=nfd)}
 fig, ax = plt.subplots(figsize=(9, 3.8))
 ax.bar(list(res), list(res.values()), color=[VERDE, ROJO, ROJO, VERDE, AZUL]); ax.set_ylim(0, 1.05)
 for i, v in enumerate(res.values()): ax.text(i, v + 0.01, f"{v:.3f}", ha="center")
 ax.set_ylabel("nDCG@10 (consultas ES)"); ax.set_title(f"Efecto de la forma de normalización en la búsqueda (corpus {source})")
 plt.xticks(fontsize=8); plt.tight_layout(); plt.show()
 ''')
-nb.md(obs(r"""Cuando la forma de la consulta **no coincide** con la del índice (barras rojas) el nDCG cae, porque las palabras acentuadas dejan de coincidir como cadenas. Cuando ambas coinciden (verdes) o el tokenizador normaliza (azul), se recupera. La caída depende de la fracción de consultas con tildes en tu corpus (sintético: pequeña; Wikipedia real: mayor). **Regla:** normaliza *al ingerir* y *al consultar* con la misma función."""))
+nb.md(obs(r"""Cuando la forma de la consulta **no coincide** con la del índice (barras rojas) el nDCG cae, porque las palabras acentuadas dejan de coincidir como cadenas. Cuando ambas coinciden (verdes) o el tokenizer normaliza (azul), se recupera. La caída depende de la fracción de consultas con tildes en tu corpus (sintético: pequeña; Wikipedia real: mayor). **Regla:** normaliza *al ingerir* y *al consultar* con la misma función."""))
 
 nb.md(caja("🧪 Experimento", r"""
 **Python normaliza tus identificadores con NFKC** (PEP 3131). Puedes verificarlo: `ａ = 1` (con «ａ» de ancho completo) define la variable `a`.
@@ -587,9 +587,9 @@ print("texto oculto en tag characters:", repr(ocultos), "| decodificado:", "".jo
 nb.md(obs(r"""Un único `U+200B` entre dos letras **cambia el número de tokens**: el tokenizer lo ve (no es «nada»). Por eso la normalización de Políglota (proyecto) elimina los invisibles de ancho cero y los controles bidireccionales, y marca las palabras con escrituras mezcladas. Los *tag characters* ocultan texto que no se ve pero que sí está en la secuencia."""))
 
 nb.md(r"""
-## 8. Bytes por carácter según el idioma (y su costo posterior)
+## 8. Bytes por carácter según el idioma (y su coste posterior)
 
-La razón por la que el español pagó más tokens que el inglés en el módulo 00 empieza aquí. Medimos la **misma frase** («Hola, ¿cómo estás hoy?») en 12 idiomas: code points, grafemas, bytes UTF-8 y tokens GPT-2. *(Son frases cortas escritas a mano, para ilustrar, no para medir: la comparación rigurosa con Flores-200 es el módulo 04.)*
+La razón por la que el español pagó más tokens que el inglés en el módulo 00 empieza aquí. Medimos la **misma frase** («Hola, ¿cómo estás hoy?») en 12 idiomas: code points, grafemas, bytes UTF-8 y tokens GPT-2. *(Son frases cortas escritas a mano, para ilustrar, no para medir: la comparación rigurosa con FLORES+ (sucesor de FLORES-200) es el módulo 04.)*
 """)
 nb.code(r'''
 frases = {
@@ -618,7 +618,7 @@ nb.md(obs(r"""1. **Bytes por code point** (columna izquierda): inglés, francés
 
 nb.md(r"""
 ### Analogía lingüística: ¿qué unidad representa un carácter?
-El costo en bytes no es arbitrario: depende de **qué cubre un code point** en cada sistema de escritura.
+El coste en bytes no es arbitrario: depende de **qué cubre un code point** en cada sistema de escritura.
 
 | Tipo de escritura | Ejemplo | Un code point ≈ | Bytes UTF-8 típicos |
 |---|---|---|---|
@@ -651,7 +651,7 @@ ax.axhline(8, color=ROJO, ls="--", lw=1); ax.text(2.55, 7.7, "8 bits (sin compri
 ax.set_ylabel("bits por byte de texto"); ax.set_title(f"Entropía y compresión del corpus Políglota ({source})")
 plt.tight_layout(); plt.show()
 ''')
-nb.md(obs(r"""1. $H_0$ ≈ **4.5 bits/byte** en los tres corpus de esta ejecución: mirando solo la frecuencia de cada byte, un byte «vale» bastante menos de los 8 bits que ocupa.
+nb.md(obs(r"""1. $H_0$ ≈ **4.5 bits por byte** en los tres corpus de esta ejecución: mirando solo la frecuencia de cada byte, un byte «vale» bastante menos de los 8 bits que ocupa.
 2. Los compresores con contexto bajan **mucho** más. Con el corpus **sintético** el resultado es exagerado porque es muy repetitivo (plantillas): con Wikipedia real verás cifras más altas. Lo importante: *comprimir = capturar regularidades de más largo alcance que el byte*, exactamente lo que hará BPE al fusionar pares frecuentes."""))
 
 nb.md(r"""
@@ -945,7 +945,7 @@ DETECTORES = {"nfd": lambda a: a["no_nfc"], "zero_width": lambda a: a["zero_widt
               "bidi": lambda a: a["bidi"] > 0}
 '''
 SOL_NDCG = r'''
-naive = lambda t: re.findall(r"\w+", t.lower())          # tokenizador léxico SIN normalizar: expone el efecto
+naive = lambda t: re.findall(r"\w+", t.lower())          # tokenizer léxico SIN normalizar: expone el efecto
 
 def ndcg_variante(docs_v):
     dd = [d for d in docs_v if d["lang"] != "code"]; qs = [q for q in queries if q["lang"] != "code"]
@@ -956,14 +956,14 @@ def ndcg_variante(docs_v):
 
 pb.md(pb.badge() + r"""
 
-# Proyecto · Auditoría Unicode del corpus Políglota + normalizador
+# Proyecto 01 · Auditoría Unicode del corpus Políglota + normalizador
 **Módulo 01 · Texto como bytes: Unicode, UTF-8, normalización**
 
 | | |
 |---|---|
 | **Nivel** | 🟢 Básico |
-| **Duración** | ≈ 1.5 h |
-| **GPU** | Ninguna (CPU) |
+| **Duración estimada** | ≈ 1.5 h |
+| **GPU recomendada** | Ninguna (CPU) |
 | **Entregable** | funciones `audit_doc`, `normalizar` y el informe `poliglota_unicode.json` |
 """)
 
@@ -992,8 +992,8 @@ pb.md(r"""
 | R4 | `normalizar` pasa sus tests (idempotente; conserva el ZWJ de los emojis; quita invisibles/bidi dentro de palabras; arregla homoglifos y ancho completo) | tests ✅ |
 | R5 | **Detección** por tipo de ruido sobre el corpus contaminado | recall ≥ **0.95** y precisión ≥ **0.90** en cada tipo; documentos limpios marcados ≤ **2 %** |
 | R6 | **Reparación**: `normalizar(sucio) == normalizar(original)` en los documentos contaminados; idempotencia en todo el corpus; documentos limpios que cambian más que NFC | recuperación ≥ **0.95**; idempotencia = 100 %; limpios sin cambios ≥ **0.99** |
-| R7 | **Efecto en búsqueda** (BM25 con tokenizador léxico sin normalizar, consultas ES/EN): nDCG@10 limpio vs sucio vs normalizado | la contaminación baja el nDCG ≥ **0.03** y el corpus normalizado queda a ≤ **0.01** del limpio |
-| R8 | **Efecto en costo de tokens** (GPT-2, 150 docs): tokens(sucio) / tokens(normalizado) | ≥ **1.02** (si `tiktoken` no está disponible, se omite) |
+| R7 | **Efecto en búsqueda** (BM25 con tokenizer léxico sin normalizar, consultas ES/EN): nDCG@10 limpio vs sucio vs normalizado | la contaminación baja el nDCG ≥ **0.03** y el corpus normalizado queda a ≤ **0.01** del limpio |
+| R8 | **Efecto en coste de tokens** (GPT-2, 150 docs): tokens(sucio) / tokens(normalizado) | ≥ **1.02** (si `tiktoken` no está disponible, se omite) |
 | R9 | `poliglota_unicode.json` guardado con las claves requeridas | ✅ |
 
 Umbrales calibrados con **lo que mide la solución de referencia** (corpus **sintético**, `FAST_DEV_RUN=True`, semilla 42, `tasa=0.3`): 93 documentos contaminados; recall = precisión = **1.00** en los 7 tipos; recuperación **93/93**; limpios sin cambios **400/400**; nDCG@10 limpio **0.955**, sucio **0.894**, normalizado **0.955**; tokens sucio/normalizado **1.049**. Los umbrales llevan margen. Con Wikipedia **real** no pudimos medir la solución en el entorno de autoría (Hugging Face bloqueado): es esperable que la precisión baje, porque Wikipedia contiene de forma natural *ZWNJ*, NBSP, mezclas de escrituras legítimas, etc.; en ese caso **inspecciona los «falsos positivos»**: suelen ser anomalías reales, no errores tuyos.
@@ -1190,13 +1190,13 @@ except NotImplementedError as e:
 ''')
 
 pb.md(r"""
-## TODO 7 · Impacto en búsqueda y en costo de tokens
-**(a) Búsqueda.** Con el BM25 del módulo 00 y un tokenizador léxico **sin** normalizar (`naive`), calcula el nDCG@10 (consultas ES/EN) sobre tres versiones del corpus: `docs` (limpio), `sucios` y `sucios` normalizados. Rellena `NDCG = {"limpio":…, "sucio":…, "normalizado":…}`.
+## TODO 7 · Impacto en búsqueda y en coste de tokens
+**(a) Búsqueda.** Con el BM25 del módulo 00 y un tokenizer léxico **sin** normalizar (`naive`), calcula el nDCG@10 (consultas ES/EN) sobre tres versiones del corpus: `docs` (limpio), `sucios` y `sucios` normalizados. Rellena `NDCG = {"limpio":…, "sucio":…, "normalizado":…}`.
 **(b) Tokens.** Con GPT-2 (`get_gpt2_encoding()`), cuenta los tokens de los primeros 150 documentos no-código de `sucios` **antes y después** de `normalizar`, y guarda `TOKENS = {"sucio": …, "normalizado": …, "ratio": …}`.
 
-""" + pista(1, "Reutiliza `BM25`, `evaluate` y `qrels`. Indexa solo documentos y consultas que no sean `code`. El tokenizador léxico es `re.findall(r'\\w+', t.lower())`.") + "\n\n" + pista(2, "`variante = [dict(d, text=normalizar(d['text'])) for d in sucios]`; después una función `ndcg_variante(docs_v)` que construya el índice, busque las consultas y llame a `evaluate(...)['ndcg']`."))
+""" + pista(1, "Reutiliza `BM25`, `evaluate` y `qrels`. Indexa solo documentos y consultas que no sean `code`. El tokenizer léxico es `re.findall(r'\\w+', t.lower())`.") + "\n\n" + pista(2, "`variante = [dict(d, text=normalizar(d['text'])) for d in sucios]`; después una función `ndcg_variante(docs_v)` que construya el índice, busque las consultas y llame a `evaluate(...)['ndcg']`."))
 pb.code(r'''
-naive = lambda t: re.findall(r"\w+", t.lower())          # tokenizador léxico SIN normalizar: expone el efecto
+naive = lambda t: re.findall(r"\w+", t.lower())          # tokenizer léxico SIN normalizar: expone el efecto
 
 def ndcg_variante(docs_v):
     # TODO: BM25 sobre docs_v (sin código) + consultas ES/EN -> nDCG@10

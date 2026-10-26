@@ -37,6 +37,7 @@ nb = Notebook("Módulo 04 · Diseño de tokenizers modernos", colab_path=LESSON_
 nb.md(nb.badge() + r"""
 
 # Módulo 04 · Diseño de tokenizers modernos: vocabulario, multilingüe y costes
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
@@ -56,7 +57,7 @@ nb.md(r"""
 1. **Formular** el diseño de un vocabulario como un problema de presupuesto (parámetros de embedding, coste del softmax, longitud de secuencia) y **calcular** sus trade-offs.
 2. **Resumir** qué dicen las leyes de escala con el vocabulario (Tao et al., 2024) y por qué los vocabularios de los modelos recientes crecieron.
 3. **Comparar** vocabularios reales (GPT-2/GPT-4/GPT-4o, Llama, Gemma, Qwen, Mistral/Tekken) con cifras **verificadas y fechadas** y reconocer qué cifras no están verificadas.
-4. **Medir** fertilidad, bytes por token y **paridad entre idiomas** («token tax», prima de tokenización) sobre texto paralelo, y **traducirla a dinero y a contexto útil**.
+4. **Medir** fertilidad, bytes por token y **paridad entre idiomas** (prima de tokens, *tokenization premium*; coloquialmente «token tax») sobre texto paralelo, y **traducirla a dinero y a contexto útil**.
 5. **Analizar** cómo se tokenizan números, indentación y código, y qué diseño (dígitos sueltos, grupos, R2L, espacios) cambia el rendimiento.
 6. **Diseñar** tokens especiales y *chat templates* correctamente (y evitar los errores clásicos: doble BOS, máscaras de pérdida, plantillas distintas entre entrenamiento y servicio).
 7. **Implementar** una versión mínima de **SuperBPE** (tokens que cruzan palabras) y evaluar su ganancia y sus límites.
@@ -76,7 +77,7 @@ Fertilidad = tokens/palabra; bytes por token = bytes UTF-8 de texto cubiertos po
 Cualquier texto se descompone en bytes, así que siempre es representable. Pero un carácter no latino ocupa 2–4 bytes en UTF-8 y, si el vocabulario no tiene merges para esa escritura, cada byte es un token: tokens por carácter ≈ bytes por carácter.
 </details>
 
-<details><summary><b>R3 · (Módulo 03)</b> ¿Qué decide el pre-tokenizador y por qué ningún token puede cruzar sus fronteras?</summary>
+<details><summary><b>R3 · (Módulo 03)</b> ¿Qué decide el pre-tokenizer y por qué ningún token puede cruzar sus fronteras?</summary>
 
 Define las unidades dentro de las que se aplican los merges; si dos símbolos están en pre-tokens distintos nunca se fusionan. Hoy veremos qué pasa si se **relaja** esa restricción (SuperBPE).
 </details>
@@ -266,12 +267,12 @@ print(list(REG))
 
 # ------------------------------- 7. Paridad -------------------------------
 nb.md(r"""
-## 6. Multilingüe y «token tax»: medir la paridad
+## 6. Multilingüe y prima de tokens: medir la paridad
 
 Un tokenizer entrenado mayoritariamente con inglés necesita **más tokens para decir lo mismo** en otros idiomas. Petrov et al. (2023) lo cuantifican sobre texto **paralelo** (la misma frase traducida) y encuentran diferencias de hasta **15×** entre idiomas
 con los tokenizers de LLM que analizaron, que persisten incluso en los pensados para ser multilingües; Ahia et al. (2023) lo traducen en **precio**: los hablantes de muchos idiomas pagan más por la misma información en APIs comerciales y reciben peor resultado.
 
-**Prima de tokenización** (*premium*) de un idioma $\ell$ frente al inglés, sobre $n$ frases paralelas:
+**Prima de tokens** (*tokenization premium*, a veces «token tax») de un idioma $\ell$ frente al inglés, sobre $n$ frases paralelas:
 
 $$
 \text{premium}(\ell)=\frac{\sum_{i=1}^{n}|\text{tok}(s_i^{\ell})|}{\sum_{i=1}^{n}|\text{tok}(s_i^{\text{en}})|}\qquad(\text{1.0 = paridad con el inglés}).
@@ -305,7 +306,7 @@ im = ax[0].imshow(prem.values, cmap="YlOrRd", vmin=1, vmax=max(3, prem.values.ma
 ax[0].set_xticks(range(prem.shape[1])); ax[0].set_xticklabels(prem.columns); ax[0].set_yticks(range(prem.shape[0])); ax[0].set_yticklabels(prem.index, fontsize=8); ax[0].grid(False)
 for i in range(prem.shape[0]):
     for j in range(prem.shape[1]): ax[0].text(j, i, f"{prem.values[i, j]:.1f}", ha="center", va="center", fontsize=8, color="white" if prem.values[i, j] > 2.4 else "black")
-ax[0].set_title("Prima de tokenización frente al inglés (1.0 = paridad)"); plt.colorbar(im, ax=ax[0], fraction=0.03)
+ax[0].set_title("Prima de tokens frente al inglés (1.0 = paridad)"); plt.colorbar(im, ax=ax[0], fraction=0.03)
 sel = [n for n in prem.index if "o200k" in n or "cl100k" in n or "propio" in n]
 for n, c_ in zip(sel, [COL["azul"], COL["verde"], COL["naranja"]]): ax[1].plot(bpt.columns, bpt.loc[n].values, "o-", label=n, color=c_, lw=2)
 ax[1].set_ylabel("Bytes de texto por token"); ax[1].set_title("Cuánto texto cubre cada token, por idioma"); ax[1].legend(fontsize=7)
@@ -320,7 +321,7 @@ nb.md(r"""
 
 nb.gemini(
     "imagen", "M04-IMG-02",
-    "El impuesto por idioma: la misma frase, distinto número de tokens",
+    "La prima de tokens por idioma: la misma frase, distinto número de tokens",
     "Ilustra de forma cualitativa que una misma frase traducida se parte en más o menos tokens según el idioma y que eso se traduce en coste y contexto.",
     """Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, sin ilustraciones decorativas. Formato 16:9.
 
@@ -350,7 +351,7 @@ nb.md(r"""
 
 # ------------------------------- 8. Costes -------------------------------
 nb.md(r"""
-## 7. Del token tax al dinero y al contexto útil
+## 7. De la prima de tokens al dinero y al contexto útil
 
 Si una API factura a $p$ dólares por millón de tokens (**valor que debes leer en la tarifa vigente de tu proveedor: aquí es un parámetro ilustrativo**), el coste de procesar la **misma información** en el idioma $\ell$ es
 
@@ -534,7 +535,7 @@ nb.md(r"""
 nb.md(r"""
 ## 10. Tokens que cruzan palabras: SuperBPE
 
-Toda la tubería de módulos 02–03 asume que **un token no cruza una palabra**. Pero «a lot of», «de la», «search engine» funcionan como unidades semánticas. **SuperBPE** (Liu et al., 2025; COLM 2025) añade un **currículo de dos etapas** al BPE:
+Todo el pipeline de los módulos 02–03 asume que **un token no cruza una palabra**. Pero «a lot of», «de la», «search engine» funcionan como unidades semánticas. **SuperBPE** (Liu et al., 2025; COLM 2025) añade un **currículo de dos etapas** al BPE:
 
 1. **Etapa 1** (hasta un punto de transición $t$): BPE normal con pre-tokenización por espacios → aprende **subpalabras**.
 2. **Etapa 2** (de $t$ a $T$): se **desactiva** la pre-tokenización por espacios y se sigue fusionando → aparecen **superpalabras** (tokens que cruzan espacios).
@@ -824,7 +825,7 @@ nb.md(r"""
 | Decisión | Pregunta que debes poder responder con datos | Herramienta de esta lección |
 |---|---|---|
 | Tamaño $V$ | ¿dónde está la rodilla *tokens/KB vs V* y cuánto pesan los embeddings? | secciones 4 y 11 |
-| Mezcla de idiomas | ¿qué idioma paga más y es aceptable? | prima de paridad (sección 6) y experimento de mezcla |
+| Mezcla de idiomas | ¿qué idioma paga más y es aceptable? | prima de tokens (sección 6) y experimento de mezcla |
 | Números | ¿dígitos sueltos, grupos de 3 o R2L? | sección 8 |
 | Código | ¿se colapsan los runs de espacios? ¿tabs? | sección 8 |
 | Especiales y plantilla | ¿una única fuente de verdad para entrenar y servir? | sección 9 |
@@ -907,7 +908,7 @@ $N_{\text{no-emb}}\approx12\cdot32\cdot4096^2\approx6.44\times10^9$; $N_{\text{e
 
 <details><summary><b>3 · (Diagnóstico)</b> Tu clasificador multilingüe rinde peor en hindi que en español aunque tiene el mismo nº de ejemplos. El tokenizer es cl100k. ¿Qué miras primero?</summary>
 
-La **prima de tokenización** (hindi ≈ 4.9× en nuestra medición con cl100k): las secuencias hindi son mucho más largas (truncan antes en `max_length`, diluyen la atención) y los tokens por byte son casi bytes sueltos. Mide longitudes de secuencia y tasa de truncamiento por idioma; considera un tokenizer con mejor paridad (o200k, Tekken…) o ampliar `max_length` para hindi.
+La **prima de tokens** (hindi ≈ 4.9× en nuestra medición con cl100k): las secuencias hindi son mucho más largas (truncan antes en `max_length`, diluyen la atención) y los tokens por byte son casi bytes sueltos. Mide longitudes de secuencia y tasa de truncamiento por idioma; considera un tokenizer con mejor paridad (o200k, Tekken…) o ampliar `max_length` para hindi.
 </details>
 
 <details><summary><b>4 · (Diagnóstico)</b> Tras cambiar la plantilla de chat de tu servicio, la calidad cae 3 puntos sin errores en logs. ¿Causa probable?</summary>
@@ -970,21 +971,21 @@ pj.md(pj.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟠 Avanzado |
-| **Duración** | ≈ 2 h |
-| **GPU** | Ninguna (CPU, `FAST_DEV_RUN = True`) |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | Ninguna (CPU, `FAST_DEV_RUN = True`) |
 | **Prerrequisitos** | Lección del módulo 04 y proyecto 03 |
 
 ## Contexto de negocio
 Políglota Labs va a **entrenar su propio embedder** y necesita congelar el vocabulario. Tu CTO pide dos entregables: **(A)** un benchmark honesto de los tokenizers candidatos (los públicos y el tuyo) en **ES / EN / código** y en otros idiomas con texto paralelo,
 y **(B)** una **receta de vocabulario** (mezcla de corpus + tamaño $V$) justificada con una función de coste con el tráfico esperado (50 % ES, 30 % EN, 20 % código).
 
-> **Conexión.** Viene del proyecto 03 (entrenaste y comparaste algoritmos con tubería idéntica). Va hacia el módulo 05 (cómo falla un vocabulario) y, más adelante, hacia el embedder de Políglota (módulos 09–11), que **hereda** este vocabulario.
+> **Conexión.** Viene del proyecto 03 (entrenaste y comparaste algoritmos con un pipeline idéntico). Va hacia el módulo 05 (cómo falla un vocabulario) y, más adelante, hacia el embedder de Políglota (módulos 09–11), que **hereda** este vocabulario.
 
 ## Dataset
 Corpus Políglota (`carga_corpus`: HF → espejo Europarl + stdlib → sintético) y texto paralelo (`carga_paralelo`: FLORES+ → opus-100 → 16 frases × 12 idiomas escritas a mano; avisa en pantalla).
 
 ## Entregables y rúbrica
-1. `benchmark(registro, par)`: tabla de **prima de paridad** y **bytes/token** por tokenizer e idioma (+ `tokens_por_kb` en ES/EN/código).
+1. `benchmark(registro, par)`: tabla de **prima de tokens** y **bytes/token** por tokenizer e idioma (+ `tokens_por_kb` en ES/EN/código).
 2. `entrena_candidato(prop, V)` y `evalua_candidato(tok)` → tokens por KB por idioma.
 3. `selecciona(...)`: barrido de mezclas × V y elección por la función de coste $J$.
 4. Un archivo `poliglota_vocab.json` con la receta y las métricas, y una decisión escrita.

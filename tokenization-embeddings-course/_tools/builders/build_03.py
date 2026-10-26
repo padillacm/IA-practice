@@ -25,6 +25,7 @@ nb = Notebook("Módulo 03 · WordPiece, Unigram, SentencePiece, tiktoken y HF to
 nb.md(nb.badge() + r"""
 
 # Módulo 03 · WordPiece, Unigram LM, SentencePiece, tiktoken y HF `tokenizers`
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
@@ -49,7 +50,7 @@ Al terminar serás capaz de:
 2. **Derivar** el criterio de WordPiece como ganancia de log-verosimilitud de un modelo unigrama y **calcular a mano** un paso de entrenamiento (BPE vs WordPiece) sobre un corpus de 5 palabras.
 3. **Implementar desde cero** el entrenamiento de Unigram LM (semilla de subcadenas → EM con *forward-backward* → poda por pérdida) y la segmentación por Viterbi y por muestreo.
 4. **Explicar** qué aporta SentencePiece (tokenización *lossless*, sin pre-tokenización dependiente del idioma, `▁`, `byte_fallback`) y entrenar modelos `unigram` y `bpe` con su API.
-5. **Construir** un pipeline completo de HF `tokenizers` (normalizer → pre-tokenizer → model → post-processor → decoder) y entrenar BPE/WordPiece/Unigram con la *misma* tubería para comparar solo el algoritmo.
+5. **Construir** un pipeline completo de HF `tokenizers` (normalizer → pre-tokenizer → model → post-processor → decoder) y entrenar BPE/WordPiece/Unigram con el *mismo* pipeline para comparar solo el algoritmo.
 6. **Aplicar** subword regularization (BPE-dropout, muestreo Unigram) y medir su efecto.
 7. **Usar `tiktoken`**, reproducir su BPE en ~15 líneas y **exportar** un tokenizer BPE entrenado con HF a un `tiktoken.Encoding` verificando igualdad exacta.
 8. **Evaluar** tokenizers con fertilidad, bytes por token, tasa de `[UNK]`, y alineación morfológica (F1 de fronteras), y **justificar** una elección con datos.
@@ -77,7 +78,7 @@ En NFD la `ñ` es `n` + U+0303 (2 code points); en NFC es 1 code point. Si entre
 
 <details><summary><b>R4 · (Módulo 01)</b> ¿Cuántos bytes ocupa <code>"é"</code> en UTF-8 y qué implica para un tokenizer a nivel de byte?</summary>
 
-2 bytes (`0xC3 0xA9`). Un tokenizer byte-level puede representar cualquier texto sin `[UNK]`, pero un carácter no latino puede costar 3–4 tokens si el vocabulario no tiene merges para él (la raíz del «impuesto por idioma» que veremos en el módulo 04).
+2 bytes (`0xC3 0xA9`). Un tokenizer byte-level puede representar cualquier texto sin `[UNK]`, pero un carácter no latino puede costar 3–4 tokens si el vocabulario no tiene merges para él (la raíz de la «prima de tokens» por idioma que veremos en el módulo 04).
 </details>
 """)
 
@@ -706,7 +707,7 @@ Defaults que debes conocer (los comprobamos en el código de la versión instala
 nb.gemini(
     "imagen", "M03-IMG-02",
     "Tokenización reversible con ▁ frente a pre-tokenizar por espacios",
-    "Muestra que con espacios como símbolo visible (▁) la tokenización es reversible, y que un pre-tokenizador que descarta los espacios pierde información (dos espacios, indentación, saltos de línea).",
+    "Muestra que con espacios como símbolo visible (▁) la tokenización es reversible, y que un pre-tokenizer que descarta los espacios pierde información (dos espacios, indentación, saltos de línea).",
     """Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280, rojo #D62728 solo para el error), tipografía sans-serif y monoespaciada para los tokens, flechas claras, sin ilustraciones decorativas. Formato 16:9.
 
 Título arriba: "Reversibilidad: ¿se puede reconstruir el texto original?".
@@ -788,9 +789,9 @@ nb.md(r"""
 
 # ------------------------------- 8. HF tokenizers -------------------------------
 nb.md(r"""
-## 7. HF `tokenizers`: la tubería de 5 etapas
+## 7. HF `tokenizers`: el pipeline de 5 etapas
 
-Casi todo tokenizer moderno de Hugging Face (BERT, GPT-2, Llama 3, T5, Qwen…) se describe como una **tubería** de 5 etapas, implementada en Rust (`tokenizers`) y serializable en **un solo `tokenizer.json`**:
+Casi todo tokenizer moderno de Hugging Face (BERT, GPT-2, Llama 3, T5, Qwen…) se describe como un **pipeline** de 5 etapas, implementada en Rust (`tokenizers`) y serializable en **un solo `tokenizer.json`**:
 
 | # | Etapa | Entrada → salida | Ejemplos |
 |---|---|---|---|
@@ -805,7 +806,7 @@ Casi todo tokenizer moderno de Hugging Face (BERT, GPT-2, Llama 3, T5, Qwen…) 
 
 nb.gemini(
     "imagen", "M03-IMG-03",
-    "La tubería de 5 etapas de HF tokenizers con un ejemplo real",
+    "El pipeline de 5 etapas de HF tokenizers con un ejemplo real",
     "Sigue una sola frase por las 5 etapas (normalizer, pre-tokenizer, model, post-processor, decoder), mostrando la representación intermedia en cada paso.",
     """Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible y monoespaciada para los textos de ejemplo, flechas claras de izquierda a derecha, sin ilustraciones decorativas. Formato 16:9.
 
@@ -860,7 +861,7 @@ print("   serializable en un solo archivo:", len(demo.to_str()), "caracteres de 
 ''')
 
 nb.md(r"""
-### 7.1 Entrenar las tres familias con **la misma tubería**
+### 7.1 Entrenar las tres familias con **el mismo pipeline**
 
 Para que la comparación sea justa (¡solo cambia el algoritmo!) usamos el mismo normalizer (NFKC) y el mismo pre-tokenizer (`Metaspace` + puntuación aislada, a la SentencePiece) y variamos el `Model` + `Trainer`.
 Medimos en el **test** por idioma: **fertilidad** (tokens por palabra), **bytes por token** (cuánto texto cubre cada token) y **tasa de `[UNK]`**.
@@ -1297,7 +1298,7 @@ nb.md(r"""
 ## 12. 🧠 Secretos de la élite
 
 1. **«WordPiece» en HF no es WordPiece-por-verosimilitud.** Medimos Jaccard ≈ 0.9 entre el vocabulario de `WordPieceTrainer` y el de `BpeTrainer`: la diferencia práctica está en la **inferencia** (*longest-match-first*) y en que un carácter desconocido manda **toda la palabra** a `[UNK]`. El vocabulario original de BERT lo entrenó código interno de Google no publicado.
-2. **El pre-tokenizador pesa más que el algoritmo.** Schmidt et al. (2024) concluyen que la pre-tokenización y la inicialización del vocabulario con BPE importan más que minimizar el nº de tokens; Dagan et al. (2024) muestran que tamaño, regex y datos del tokenizer cambian velocidad, contexto efectivo y rendimiento en código. Compara algoritmos **con la misma tubería** (como hicimos).
+2. **El pre-tokenizer pesa más que el algoritmo.** Schmidt et al. (2024) concluyen que la pre-tokenización y la inicialización del vocabulario con BPE importan más que minimizar el nº de tokens; Dagan et al. (2024) muestran que tamaño, regex y datos del tokenizer cambian velocidad, contexto efectivo y rendimiento en código. Compara algoritmos **con el mismo pipeline** (como hicimos).
 3. **Menos tokens ≠ mejor modelo, pero tampoco es irrelevante.** Goldman et al. (2024) encuentran correlación entre compresión y rendimiento (más fuerte en generación y modelos pequeños); Schmidt et al. (2024) muestran que PathPiece, que minimiza tokens, no gana. Usa la compresión como *restricción de coste*, no como objetivo.
 4. **La inferencia voraz suele bastar.** Uzan et al. (2024) comparan siete métodos de inferencia sobre cuatro tokenizers: la decodificación simple (voraz) funciona sorprendentemente bien, así que no pierdas semanas optimizando el segmentador antes que el vocabulario.
 5. **SentencePiece descarta en silencio las líneas de más de `max_sentence_length` (4192 bytes por defecto)** y su normalización por defecto (`nmt_nfkc` + colapso de espacios) **no es lossless**: en nuestra medición, 29/40 vs 40/40 textos recuperados exactamente con `identity`. Para código, desactiva el colapso de espacios.
@@ -1311,7 +1312,7 @@ nb.md(r"""
 
 1. **Medir un tokenizer con texto de entrenamiento.** Siempre partición por documento y, para decisiones serias, un corpus de evaluación independiente (FLORES, módulo 04).
 2. **Cambiar el normalizer entre entrenamiento e inferencia** (o guardar solo el vocabulario sin el `tokenizer.json` completo): produce tokenizaciones distintas y `[UNK]` inesperados.
-3. **Atribuir al algoritmo lo que es del pre-tokenizador** (comparar BPE con regex GPT-2 vs Unigram con `Metaspace` y concluir «Unigram es peor»).
+3. **Atribuir al algoritmo lo que es del pre-tokenizer** (comparar BPE con regex GPT-2 vs Unigram con `Metaspace` y concluir «Unigram es peor»).
 4. **Usar `BertNormalizer` con `strip_accents=True` en español** (`sé/se`, `él/el`, `qué/que`).
 5. **Esperar que `decode(encode(x)) == x`** con WordPiece/BERT o con SentencePiece por defecto.
 6. **Dejar `allowed_special="all"` en texto no confiable** (inyección de tokens de control; módulo 05).
@@ -1412,13 +1413,13 @@ pj.md(pj.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟡 Intermedio |
-| **Duración** | ≈ 2 h |
-| **GPU** | Ninguna (CPU; `FAST_DEV_RUN = True` en minutos) |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | Ninguna (CPU; `FAST_DEV_RUN = True` en minutos) |
 | **Prerrequisitos** | Lección del módulo 03 (y módulos 01–02) |
 
 ## Contexto de negocio
 Eres ML engineer en **Políglota Labs**. El buscador semántico necesitará su propio tokenizer (para el índice sparse hoy y para el embedder propio después). Tu CTO quiere una **recomendación con datos**: ¿BPE, WordPiece o Unigram?
-Entrenarás los tres con la **misma tubería** sobre el corpus Políglota (ES/EN/código), los compararás con 4 métricas más un test de recuperación BM25, exportarás un BPE byte-level a `tiktoken` y escribirás la decisión.
+Entrenarás los tres con el **mismo pipeline** sobre el corpus Políglota (ES/EN/código), los compararás con 4 métricas más un test de recuperación BM25, exportarás un BPE byte-level a `tiktoken` y escribirás la decisión.
 
 > **Conexión.** Viene de: módulo 02 (tu BPE) y módulo 00 (corpus + BM25). Va hacia: módulo 04 (diseño de vocabulario y paridad multilingüe) y módulo 05 (qué falla cuando el vocabulario no coincide con los datos del modelo).
 
@@ -1497,13 +1498,13 @@ print(len(train_texts), "docs de entrenamiento;", {l: len(v) for l, v in test_by
 ''')
 
 pj.md(r"""
-## Paso 1 · Entrenar los tres tokenizers con la misma tubería
+## Paso 1 · Entrenar los tres tokenizers con el mismo pipeline
 
 **TODO.** Implementa `entrena_tokenizer` (es la función `construye_hf` de la lección, §7.1, generalizada). Requisitos: normalizer `NFKC`; pre-tokenizer = `Metaspace(replacement="▁", prepend_scheme="always")` seguido de `Punctuation(behavior="isolated")`; modelo y *trainer* según `tipo`; `[UNK]` como único token especial; entrena con `train_from_iterator(textos, trainer)`.
 
 <details><summary>🪜 Pista 1 (idea)</summary>
 
-Solo cambian dos cosas entre los tres tipos: el objeto `models.*` y el `trainers.*`. El resto de la tubería es idéntico (por eso la comparación es justa).
+Solo cambian dos cosas entre los tres tipos: el objeto `models.*` y el `trainers.*`. El resto del pipeline es idéntico (por eso la comparación es justa).
 </details>
 <details><summary>🪜 Pista 2 (casi la API)</summary>
 

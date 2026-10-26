@@ -31,8 +31,8 @@ nb.md(nb.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟢 Básico |
-| **Duración** | ≈ 2 h en total (lección ≈ 1 h + proyecto ≈ 1 h) |
-| **GPU / coste** | Ninguna: todo corre en CPU (0 unidades de cómputo de Colab Pro) |
+| **Duración estimada** | ≈ 2 h en total (lección ≈ 1 h + proyecto ≈ 1 h) |
+| **GPU recomendada** | Ninguna: todo corre en CPU (0 unidades de cómputo de Colab Pro) |
 | **Prerrequisitos** | Ninguno dentro del curso. Se asume Python sólido, PyTorch, Transformers y álgebra lineal/probabilidad |
 
 > **Estado del arte de referencia: octubre de 2026.** Toda cifra sujeta a cambio lleva fecha; las técnicas se etiquetan 🟢 sólido / 🟡 emergente / 🔴 experimental.
@@ -83,7 +83,7 @@ ax.legend(handles=[Patch(color=AZUL, label="A · Tokenización"), Patch(color=NA
 plt.tight_layout(); plt.show()
 ''')
 
-nb.md(obs(r"""Los módulos de tokenización (00–08) pesan ≈ 43 h, los de embeddings (09–17) ≈ 46 h y producción/cierre (18–20) ≈ 15 h: **tokenizar bien es cerca de la mitad del trabajo técnico**, y no es un detalle menor porque todo lo que viene después (costos, calidad multilingüe, robustez) depende de ello.
+nb.md(obs(r"""Los módulos de tokenización (00–08) pesan ≈ 43 h, los de embeddings (09–17) ≈ 46 h y producción/cierre (18–20) ≈ 15 h: **tokenizar bien es cerca de la mitad del trabajo técnico**, y no es un detalle menor porque todo lo que viene después (costes, calidad multilingüe, robustez) depende de ello.
 Los módulos 02, 06, 07, 11 y 13 son los más densos: reserva sesiones largas."""))
 
 nb.gemini(
@@ -166,7 +166,7 @@ texto ──► bytes ──► tokens ──► ids ──► embeddings ──
          c3 a9
 ```
 
-* **Bytes (módulo 01).** El ordenador no ve letras: ve bytes. «é» ocupa 2 bytes en UTF-8; un ideograma chino, 3; un emoji, 4. Esto condiciona el costo de todo lo demás.
+* **Bytes (módulo 01).** El ordenador no ve letras: ve bytes. «é» ocupa 2 bytes en UTF-8; un ideograma chino, 3; un emoji, 4. Esto condiciona el coste de todo lo demás.
 * **Tokens (módulos 02–08).** Un *tokenizer* parte el texto en unidades de un vocabulario fijo (≈ 32 000–262 000 entradas en modelos actuales; p. ej. Gemma 3 usa 262 144). Es **discreto y determinista**: no aprende con gradientes.
 * **Embeddings (módulos 09–12).** Cada token (y cada texto completo) se asocia a un **vector denso** que *sí* se aprende. Textos parecidos → vectores cercanos.
 * **Índice y ranking (módulos 13–15).** Buscar es encontrar los vectores más cercanos a la consulta (o combinar con señales léxicas como BM25).
@@ -195,7 +195,7 @@ Evita: números distintos de los indicados, tokens inventados, texto ilegible, f
  turn text ..."   6E 69 7A …
  (Bloque A: tokenización ────────────────────────────)   (Bloque B: embeddings ─────────────────────────────────────)""",
 )
-nb.md(obs(r"""Con el recurso insertado, sigue los **siete** IDs de izquierda a derecha: son exactamente los que obtendrás con `tiktoken` y el vocabulario GPT-2 en la celda siguiente. Fíjate en que la frase en inglés tarda **7 tokens**; veremos que la misma idea en español cuesta bastante más (el «impuesto de tokens»)."""))
+nb.md(obs(r"""Con el recurso insertado, sigue los **siete** IDs de izquierda a derecha: son exactamente los que obtendrás con `tiktoken` y el vocabulario GPT-2 en la celda siguiente. Fíjate en que la frase en inglés tarda **7 tokens**; veremos que la misma idea en español cuesta bastante más (la «prima de tokens»)."""))
 
 nb.md(r"""
 ## 4. Qué es un token (visión global)
@@ -238,7 +238,7 @@ plt.tight_layout(); plt.show()
 
 nb.md(obs(r"""1. **Palabras < tokens < caracteres ≈ bytes** en inglés, pero en español el número de tokens se acerca más al de caracteres: el vocabulario de GPT-2 se construyó mayoritariamente con inglés.
 2. «ñ» y «ú» ocupan **2 bytes** cada una: bytes ≠ caracteres (módulo 01).
-3. El código también se fragmenta: `_`, `(`, `)` y los espacios consumen tokens. Más tokens = más costo y menos contexto útil."""))
+3. El código también se fragmenta: `_`, `(`, `)` y los espacios consumen tokens. Más tokens = más coste y menos contexto útil."""))
 
 nb.md(r"""
 > ### 🧪 Mini-experimento: ¿cuánto cuesta un idioma?
@@ -407,7 +407,7 @@ plt.tight_layout(); plt.show()
 display(df.groupby("lang")[["chars", "bytes", "palabras"]].mean().round(1))
 ''')
 
-nb.md(obs(r"""1. **Bytes extra**: el inglés y el código rondan 0 (ASCII puro: 1 byte por carácter); el español queda por encima por las vocales acentuadas y la «ñ» (2 bytes cada una). Con el corpus sintético el efecto es pequeño; con Wikipedia real mide tú el valor. Es una pista del costo oculto de los idiomas con diacríticos (módulo 01 lo cuantifica con 12 idiomas).
+nb.md(obs(r"""1. **Bytes extra**: el inglés y el código rondan 0 (ASCII puro: 1 byte por carácter); el español queda por encima por las vocales acentuadas y la «ñ» (2 bytes cada una). Con el corpus sintético el efecto es pequeño; con Wikipedia real mide tú el valor. Es una pista del coste oculto de los idiomas con diacríticos (módulo 01 lo cuantifica con 12 idiomas).
 2. Los documentos de código y los de Wikipedia tienen distribuciones de longitud distintas: cualquier hiperparámetro que dependa de la longitud (como $b$ en BM25) se comportará distinto por tipo de corpus."""))
 
 nb.md(r"""
@@ -654,7 +654,7 @@ Estado a **octubre de 2026**. 🟢 sólido (estándar de industria) · 🟡 emer
 nb.md(r"""
 ## 12. 🏭 En producción
 * **BM25 sigue vivo.** En sistemas reales casi nunca se sustituye el retrieval léxico: se **combina** con embeddings (*hybrid search*). Anthropic describe en su post «Introducing Contextual Retrieval» (sep-2024) que combinar embeddings con BM25 reduce los fallos de recuperación frente a usar solo embeddings (sus cifras son de su propio benchmark; no las generalices).
-* **Tokenización = costo.** Las APIs de LLM cobran por token; el impuesto de tokens entre idiomas (Ahia et al., 2023; Petrov et al., 2023) es un factor de costo y de equidad que se decide *antes* del modelo.
+* **Tokenización = coste.** Las APIs de LLM cobran por token; la prima de tokens entre idiomas (Ahia et al., 2023; Petrov et al., 2023) es un factor de coste y de equidad que se decide *antes* del modelo.
 * **El pipeline se versiona entero.** Cambiar el tokenizer o la normalización invalida los índices (hay que re-indexar): es una decisión de ingeniería, no un hiperparámetro.
 * **Coste de este módulo:** CPU, segundos. Un BM25 sobre millones de documentos se hace con Lucene/Elasticsearch/OpenSearch; aquí lo implementamos para entender qué hacen.
 """)
@@ -672,7 +672,7 @@ for n_base in (1_000, 32_000):
         coste = flops_forward(int(r * n_base)) / flops_forward(n_base)
         print(f"texto que en inglés ocupa {n_base:>6,} tokens | prima r={r}: x{r:.1f} en factura por token, x{coste:.2f} en FLOPs, {1/r:.0%} del texto en la misma ventana")
 ''')
-nb.md(obs(r"""Con textos cortos el sobrecoste en cómputo ≈ $r$ (domina $2N$); con contextos largos supera claramente a $r$ (tiende a $r^2$ cuanto más domina la atención; con 32 k tokens y $r=3$ ya es ≈ 5×). Por eso el «impuesto de tokens» de un idioma es un problema de **latencia y de capacidad de servicio**, no solo de factura, y por eso los laboratorios lo miden antes de fijar el tokenizer (módulo 04)."""))
+nb.md(obs(r"""Con textos cortos el sobrecoste en cómputo ≈ $r$ (domina $2N$); con contextos largos supera claramente a $r$ (tiende a $r^2$ cuanto más domina la atención; con 32 k tokens y $r=3$ ya es ≈ 5×). Por eso la prima de tokens de un idioma es un problema de **latencia y de capacidad de servicio**, no solo de factura, y por eso los laboratorios lo miden antes de fijar el tokenizer (módulo 04)."""))
 
 nb.md(r"""
 ## 13. 🧠 Secretos de la élite
@@ -833,14 +833,14 @@ UMB = dict(all=0.82, es=0.92, en=0.87, code=0.60, mejora=0.02)  # = medido − m
 
 pb.md(pb.badge() + r"""
 
-# Proyecto · Políglota v0: corpus, métricas y baseline BM25
+# Proyecto 00 · Políglota v0: corpus, métricas y baseline BM25
 **Módulo 00 · Intro, entorno e hilo conductor**
 
 | | |
 |---|---|
 | **Nivel** | 🟢 Básico |
-| **Duración** | ≈ 1 h |
-| **GPU** | Ninguna (CPU) |
+| **Duración estimada** | ≈ 1 h |
+| **GPU recomendada** | Ninguna (CPU) |
 | **Entregable** | `poliglota_v0.json` con el baseline medido (lo reutilizarás como punto de comparación en módulos posteriores) |
 """)
 

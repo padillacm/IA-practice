@@ -30,6 +30,7 @@ nb = Notebook("Módulo 06 · Tokenizer-free I: bytes y patches", colab_path=LESS
 nb.md(nb.badge() + r"""
 
 # Módulo 06 · Tokenizer-free I: bytes y *patches* (de CANINE y ByT5 a BLT)
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
@@ -39,7 +40,7 @@ nb.md(nb.badge() + r"""
 | **Prerrequisitos** | 01 (bytes/UTF-8), 02 (BPE, bytes por token), 04 (fertilidad, coste por idioma), 05 (patologías que nacen del vocabulario) |
 | **Madurez del tema** | 🟡/🔴: hay un resultado a escala (BLT, 8B) y pesos abiertos, pero ningún LLM de frontera conocido lo usa en producción (ver «Mapa de madurez») |
 
-> **Contexto Políglota Labs.** Tras el módulo 05 tienes un informe de patologías del tokenizer: tokens sub-entrenados, cuentas de letras erróneas, «impuesto» en español. Tu CTO pregunta:
+> **Contexto Políglota Labs.** Tras el módulo 05 tienes un informe de patologías del tokenizer: tokens sub-entrenados, cuentas de letras erróneas, prima de tokens del español. Tu CTO pregunta:
 > *«¿y si el modelo leyera bytes y nos olvidáramos del vocabulario?»* Esta lección te da el mecanismo (parches por entropía), el coste real de tal decisión y un banco de pruebas diminuto para
 > **comprobarlo tú mismo**, sin vender humo: lo que aquí reproduces es **didáctico y a escala diminuta**, no el resultado del paper.
 """)
@@ -73,7 +74,7 @@ nb.md(r"""
 
 Un tokenizer BPE es un **compresor sin pérdida con un diccionario fijo**: agrupa los pares de bytes más frecuentes (módulo 02). El transformer gasta **el mismo cómputo en cada token**, aunque
 unos sean triviales («ción» tras «ac») y otros decisivos (la primera letra de un nombre propio). Y el modelo **nunca ve los bytes**: ve ids opacos. De ahí salen los problemas que ya medimos
-en los módulos 04-05 (impuesto multilingüe, glitch tokens, «strawberry»).
+en los módulos 04-05 (prima de tokens multilingüe, glitch tokens, «strawberry»).
 
 **La alternativa obvia es leer bytes.** Pero la secuencia se alarga ~4-5x (módulo 02) y la atención es cuadrática… aunque el paper de BLT recuerda que *a escala* el coste dominante son las capas
 feed-forward que corren **en cada posición**, no la atención. La solución de la familia moderna es **agrupar bytes en parches** (*patches*) y correr el transformer grande **solo una vez por parche**:
@@ -146,7 +147,7 @@ Entrenamos BPE de varios tamaños con `tokenizers` (módulo 02-03) sobre el corp
 nb.code(S.BPE_LEN)
 nb.md(obs("""
 * El tamaño medio de «parche» de BPE **crece con el vocabulario** (y con lo repetitivo que sea el idioma/dominio: el código suele comprimirse más que la prosa). Para pasar de ~4.4 a ~8 bytes/token tendrías que agrandar mucho el vocabulario y su tabla de embeddings.
-* Un vocabulario entrenado con poca cantidad de ES penaliza al ES frente al EN (módulo 04): en bytes no hay «impuesto de vocabulario», solo el impuesto de UTF-8.
+* Un vocabulario entrenado con poca cantidad de ES penaliza al ES frente al EN (módulo 04): en bytes no hay prima de tokens del vocabulario, solo la prima de bytes de UTF-8.
 * (Si el corpus es sintético, las magnitudes absolutas no son las de Wikipedia/CodeSearchNet reales: mira las *tendencias*.)
 """))
 
@@ -193,7 +194,7 @@ $H=-0.9\log_2 0.9-10\cdot0.01\log_2 0.01=0.137+0.664=\mathbf{0.80}$ bits. Tras �
 
 **Bits por byte (bpb).** Para comparar modelos con distinta segmentación no sirve la perplejidad por token:
 
-$$\mathrm{BPB}(\boldsymbol{x}) \;=\; \frac{\mathcal{L}_{CE}(\boldsymbol{x})}{\ln 2\cdot n_{\text{bytes}}}$$
+$$\mathrm{bpb}(\boldsymbol{x}) \;=\; \frac{\mathcal{L}_{CE}(\boldsymbol{x})}{\ln 2\cdot n_{\text{bytes}}}$$
 
 con $\mathcal{L}_{CE}$ la entropía cruzada total (en nats) de la secuencia y $n_{\text{bytes}}$ su longitud en bytes. (Detalle fino: para modelos tokenizados es una *aproximación*, porque asume que la probabilidad de la cadena es la de su tokenización canónica — el paper de H-Net lo advierte.)
 """)

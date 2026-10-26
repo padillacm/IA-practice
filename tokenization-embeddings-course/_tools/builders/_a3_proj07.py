@@ -205,7 +205,7 @@ def build(lesson_rel, proj_rel, mod_dir, slug):
 
 ## Contexto de negocio
 
-Eres ML engineer en **Políglota Labs**. Tenéis un modelo pequeño preentrenado con **inglés y código** y un tokenizer BPE entrenado en eso: en español produce ~2x más tokens por byte
+Eres ML engineer en **Políglota Labs**. El equipo tiene un modelo pequeño preentrenado con **inglés y código** y un tokenizer BPE entrenado en eso: en español produce ~2x más tokens por byte
 (más latencia y coste por consulta). El CTO pregunta: *«¿podemos cambiarle el tokenizer por uno entrenado en español sin reentrenar de cero, y cuánto calidad perdemos?»*
 Tu trabajo: implementar **tres inicializaciones** del vocabulario nuevo (media, FVT, FOCUS-lite), hacer un **ajuste corto** y **medir bits por byte antes y después**, con un **control de regresión**
 en inglés/código.

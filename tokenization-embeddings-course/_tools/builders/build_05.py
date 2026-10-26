@@ -37,6 +37,7 @@ nb = Notebook("Módulo 05 · Patologías y robustez de la tokenización", colab_
 nb.md(nb.badge() + r"""
 
 # Módulo 05 · Patologías y robustez: glitch tokens, letras, números, espacios y Unicode
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
@@ -927,8 +928,8 @@ pj.md(pj.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟠 Avanzado |
-| **Duración** | ≈ 2 h |
-| **GPU** | Ninguna (CPU, `FAST_DEV_RUN = True`: banco MiniGPT ≈ 1 min). Con GPT-2 real y red: CPU basta |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | Ninguna (CPU, `FAST_DEV_RUN = True`: banco MiniGPT ≈ 1 min). Con GPT-2 real y red: CPU basta |
 | **Prerrequisitos** | Lección del módulo 05 y proyecto 04 |
 
 ## Contexto de negocio

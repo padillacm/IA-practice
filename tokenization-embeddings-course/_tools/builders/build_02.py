@@ -212,8 +212,8 @@ nb.md(nb.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟡 Intermedio |
-| **Duración** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
-| **GPU / coste** | Ninguna: CPU (0 unidades de Colab Pro) |
+| **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+| **GPU recomendada** | Ninguna: CPU (0 unidades de Colab Pro) |
 | **Prerrequisitos** | Módulo 00 (corpus Políglota) y módulo 01 (bytes, UTF-8, normalización) |
 
 > **Estado del arte de referencia: octubre de 2026.** Las cifras sujetas a cambio llevan fecha; las técnicas se etiquetan 🟢 / 🟡 / 🔴.
@@ -226,7 +226,7 @@ nb.md(r"""
 3. **Implementar** byte-level BPE completo: pre-tokenización con regex, entrenamiento con conteo incremental, `encode` por orden de merges y `decode`.
 4. **Comparar** los patrones de pre-tokenización de GPT-2, cl100k y o200k y **predecir** cómo trocean texto, números y código.
 5. **Verificar** tu implementación contra `tiktoken` y Hugging Face `tokenizers` (y contra el vocabulario real de GPT-2), y **explicar** las diferencias de entrenamiento (desempates).
-6. **Medir** compresión (bytes/token, bits/byte), efecto del tamaño de vocabulario, «impuesto» por idioma y complejidad temporal.
+6. **Medir** compresión (bytes/token, bits por byte), efecto del tamaño de vocabulario, prima de tokens por idioma y complejidad temporal.
 7. **Analizar** BPE como compresor (analogía con Huffman/LZ) y sus límites teóricos.
 """)
 
@@ -244,7 +244,7 @@ nb.md(r"""
 ]))
 
 nb.md(caja("🧭 Ruta núcleo vs ampliación", r"""
-La lección tiene ≈ 80 celdas. **Ruta núcleo (≈ 2 h 15 min):** secciones 1–6, 8 (verificación con tiktoken), 9.1 (tamaño de vocabulario) y 9.3 (impuesto por idioma). **Ampliación:** 7 (decodificación incremental y especiales), 9.2, 9.4–9.6 (regex, compresión, orden de merges), 9.7 (inferir la mezcla de datos desde los merges) y 10 (complejidad). El proyecto asume la ruta núcleo.
+La lección tiene ≈ 80 celdas. **Ruta núcleo (≈ 2 h 15 min):** secciones 1–6, 8 (verificación con tiktoken), 9.1 (tamaño de vocabulario) y 9.3 (prima de tokens por idioma). **Ampliación:** 7 (decodificación incremental y especiales), 9.2, 9.4–9.6 (regex, compresión, orden de merges), 9.7 (inferir la mezcla de datos desde los merges) y 10 (complejidad). El proyecto asume la ruta núcleo.
 """))
 
 nb.code(r'''
@@ -441,7 +441,7 @@ nb.md(r"""
 ## 5. De caracteres a **bytes** y la pre-tokenización con regex
 
 ### 5.1 Byte-level
-Si el alfabeto inicial son los **256 bytes**, no hay desconocidos: cualquier texto (cualquier idioma, emoji, bytes inválidos) es una secuencia de bytes. El módulo 01 mostró lo que cuesta cada idioma en bytes; BPE reduce ese costo para lo frecuente.
+Si el alfabeto inicial son los **256 bytes**, no hay desconocidos: cualquier texto (cualquier idioma, emoji, bytes inválidos) es una secuencia de bytes. El módulo 01 mostró lo que cuesta cada idioma en bytes; BPE reduce ese coste para lo frecuente.
 
 **El truco de GPT-2 (`bytes_to_unicode`).** El código original de GPT-2 trabaja con *cadenas*, así que mapea cada byte a un carácter Unicode «imprimible» (los bytes imprimibles se mapean a sí mismos y el resto a `U+0100…`). Por eso verás `Ġ` (espacio) y `Ċ` (salto de línea) en los vocabularios de Hugging Face; es solo una *representación* de los bytes. Lo necesitaremos para HF `tokenizers`.
 """)
@@ -504,7 +504,7 @@ Frase B (título del bloque): «¡Hola, MundoGrande! Año 2026».
 Fila «GPT-2»: «¡» | «Hola» | «,» | «␣MundoGrande» | «!» | «␣Año» | «␣2026».
 Fila «cl100k»: «¡Hola» | «,» | «␣MundoGrande» | «!» | «␣Año» | «␣» | «202» | «6».
 Fila «o200k»: «¡Hola» | «,» | «␣Mundo» | «Grande» | «!» | «␣Año» | «␣» | «202» | «6».
-Resalta en naranja las cajitas que difieren entre filas de un mismo bloque. Título superior: «Mismo texto, tres pre-tokenizadores». Nota inferior en gris: «cl100k y o200k parten los números en grupos de hasta 3 dígitos; o200k parte camelCase».
+Resalta en naranja las cajitas que difieren entre filas de un mismo bloque. Título superior: «Mismo texto, tres pre-tokenizers». Nota inferior en gris: «cl100k y o200k parten los números en grupos de hasta 3 dígitos; o200k parte camelCase».
 Evita: cambiar los trozos, texto ilegible, más o menos cajitas de las indicadas, decoración.""",
     "Tabla de trozos de tres regex de pre-tokenización sobre dos frases con las diferencias resaltadas",
     """Don't pay $1234567 for camelCase_var
@@ -736,7 +736,7 @@ df_v = pd.DataFrame({l: [bytes_por_token(tok, tp[l], max_id=v) for v in Vs] for 
 ax = df_v.plot(marker="o", color=[AZUL, NARANJA, VERDE], figsize=(7, 3.8)); ax.set_xlabel("tamaño del vocabulario"); ax.set_ylabel("bytes por token (prueba)")
 ax.set_title(f"Compresión vs vocabulario (un solo entrenamiento, corpus {source})"); plt.tight_layout(); plt.show(); display(df_v.round(2))
 ''')
-nb.md(obs(r"""La curva **sube rápido y se aplana**: las primeras fusiones (pares muy frecuentes) comprimen mucho; las últimas apenas. Con $V=256$ (solo bytes) el ratio es exactamente 1.0 bytes/token. Elegir el tamaño de vocabulario es leer dónde la curva deja de compensar el costo de más filas en la matriz de embeddings (módulo 04)."""))
+nb.md(obs(r"""La curva **sube rápido y se aplana**: las primeras fusiones (pares muy frecuentes) comprimen mucho; las últimas apenas. Con $V=256$ (solo bytes) el ratio es exactamente 1.0 bytes/token. Elegir el tamaño de vocabulario es leer dónde la curva deja de compensar el coste de más filas en la matriz de embeddings (módulo 04)."""))
 
 nb.md("### 9.2 Distribución de los tokens (ley de Zipf)")
 nb.code(r'''
@@ -755,7 +755,7 @@ print(f"tokens del vocabulario que NUNCA aparecen en la prueba ES+EN: {n_vocab -
 nb.md(obs(r"""La frecuencia sigue (aproximadamente) una **ley de potencias**: unos pocos tokens cubren casi todo el texto y una **cola larga** casi no se usa. Los tokens con muy pocas apariciones tienen embeddings mal entrenados; con vocabularios enormes y datos distintos del entrenamiento del tokenizer aparecen los *tokens sub-entrenados* que verás en el módulo 05."""))
 
 nb.md(r"""
-### 9.3 El «impuesto» de idioma: entrenar con un idioma y evaluar en otro
+### 9.3 La prima de tokens por idioma: entrenar con un idioma y evaluar en otro
 Entrenamos cuatro tokenizers con el **mismo** tamaño de vocabulario —solo inglés, solo español, solo código y la mezcla— y medimos los bytes por token en cada conjunto de prueba.
 """)
 nb.code(r'''
@@ -769,7 +769,7 @@ ax.set_title(f"Tokenizer entrenado en… (filas) y evaluado en… (columnas)"); 
 plt.tight_layout(); plt.show()
 print("coste relativo de usar el tokenizer solo-EN en español:", round(M.loc["solo ES", "prueba ES"] / M.loc["solo EN", "prueba ES"], 2), "× más tokens")
 ''')
-nb.md(obs(r"""La **diagonal** es lo mejor de cada columna: cada tokenizer comprime bien *su* idioma. Fuera de la diagonal, el mismo texto cuesta **mucho más tokens** (la última línea lo cuantifica): ese es el «impuesto de tokens» que documentan Petrov et al. (2023) y Ahia et al. (2023) en tokenizers comerciales, y la razón de que Llama 3 añadiera 28 K tokens de idiomas no ingleses a los 100 K de `tiktoken`. La **mezcla** pierde algo en cada idioma respecto al especialista pero es el compromiso razonable. (Con el corpus sintético la diferencia se exagera porque cada idioma tiene un vocabulario muy limitado.)"""))
+nb.md(obs(r"""La **diagonal** es lo mejor de cada columna: cada tokenizer comprime bien *su* idioma. Fuera de la diagonal, el mismo texto cuesta **mucho más tokens** (la última línea lo cuantifica): esa es la «prima de tokens» que documentan Petrov et al. (2023) y Ahia et al. (2023) en tokenizers comerciales, y la razón de que Llama 3 añadiera 28 K tokens de idiomas no ingleses a los 100 K de `tiktoken`. La **mezcla** pierde algo en cada idioma respecto al especialista pero es el compromiso razonable. (Con el corpus sintético la diferencia se exagera porque cada idioma tiene un vocabulario muy limitado.)"""))
 
 nb.md("### 9.4 El regex importa: ablación de la pre-tokenización")
 nb.code(r'''
@@ -780,11 +780,11 @@ def mezcla(b):                       # ¿el token mezcla letras, números y/o s�
 todo = train["es"] + train["en"] + train["code"]; filas = []
 for nombre, pat in PATRONES.items():
     tk_ = BPETokenizer.train(todo, VOCAB, pat_str=pat); tpp = {l: trozos_prueba(test[l], pat) for l in test}
-    filas.append({"pre-tokenizador": nombre, "bytes/token (ES)": bytes_por_token(tk_, tpp["es"]), "bytes/token (EN)": bytes_por_token(tk_, tpp["en"]),
+    filas.append({"pre-tokenizer": nombre, "bytes/token (ES)": bytes_por_token(tk_, tpp["es"]), "bytes/token (EN)": bytes_por_token(tk_, tpp["en"]),
                   "bytes/token (código)": bytes_por_token(tk_, tpp["code"]), "% tokens que mezclan letra/número/símbolo": 100 * np.mean([mezcla(b) for i, b in tk_.vocab.items() if i >= 256])})
-df_r = pd.DataFrame(filas).set_index("pre-tokenizador"); display(df_r.round(2))
+df_r = pd.DataFrame(filas).set_index("pre-tokenizer"); display(df_r.round(2))
 fig, axs = plt.subplots(1, 2, figsize=(11, 3.6))
-df_r[["bytes/token (ES)", "bytes/token (EN)", "bytes/token (código)"]].plot.bar(ax=axs[0], color=[AZUL, NARANJA, VERDE], rot=0); axs[0].set_title("Compresión según el pre-tokenizador"); axs[0].set_ylabel("bytes por token")
+df_r[["bytes/token (ES)", "bytes/token (EN)", "bytes/token (código)"]].plot.bar(ax=axs[0], color=[AZUL, NARANJA, VERDE], rot=0); axs[0].set_title("Compresión según el pre-tokenizer"); axs[0].set_ylabel("bytes por token")
 df_r["% tokens que mezclan letra/número/símbolo"].plot.bar(ax=axs[1], color=GRIS, rot=0); axs[1].set_title("Tokens que cruzan categorías"); axs[1].set_ylabel("% del vocabulario aprendido")
 plt.tight_layout(); plt.show()
 ''')
@@ -793,7 +793,7 @@ nb.md(obs(r"""1. La línea base «**solo espacios**» deja la puntuación pegada
 
 nb.md(r"""
 ### 9.5 BPE como compresor: bits por byte
-Si cada token se almacena con un código de **longitud fija** de $\lceil\log_2 |V|\rceil$ bits, el texto ocupa $n_{\text{tokens}}\cdot\log_2|V|$ bits. Un código de **Huffman** sobre la frecuencia de los tokens baja hacia la **entropía** $H_{\text{tok}}$ (cota inferior para un código de prefijo por símbolo): $n_{\text{tokens}}\cdot H_{\text{tok}}$ bits. Comparamos con compresores generales (`zlib` = LZ77 + Huffman, `bz2`, `lzma`) sobre los mismos bytes. *No incluimos el costo de almacenar el vocabulario/diccionario* (tampoco el de `zlib`, que no lo necesita).
+Si cada token se almacena con un código de **longitud fija** de $\lceil\log_2 |V|\rceil$ bits, el texto ocupa $n_{\text{tokens}}\cdot\log_2|V|$ bits. Un código de **Huffman** sobre la frecuencia de los tokens baja hacia la **entropía** $H_{\text{tok}}$ (cota inferior para un código de prefijo por símbolo): $n_{\text{tokens}}\cdot H_{\text{tok}}$ bits. Comparamos con compresores generales (`zlib` = LZ77 + Huffman, `bz2`, `lzma`) sobre los mismos bytes. *No incluimos el coste de almacenar el vocabulario/diccionario* (tampoco el de `zlib`, que no lo necesita).
 """)
 nb.code(r'''
 def bits_por_byte(texto_lista, tk, max_id=None):
@@ -811,7 +811,7 @@ df_b = pd.DataFrame(filas).set_index("corpus"); display(df_b.round(2))
 ax = df_b.plot.bar(figsize=(9, 3.8), color=[ROJO, AZUL, NARANJA, GRIS, "#8c564b", VERDE], rot=0, width=0.85); ax.set_ylabel("bits por byte de texto"); ax.set_title(f"BPE como compresor (vocab {VOCAB}) vs compresores generales")
 ax.legend(fontsize=7, ncol=3); plt.tight_layout(); plt.show()
 ''')
-nb.md(obs(r"""1. Un BPE con código de longitud fija **ya baja de 8 bits/byte**, y con codificación entrópica (Huffman) baja más: es compresión *orden 0 sobre tokens* (Shannon, 1948: no se puede bajar de la entropía por símbolo con un código de prefijo por símbolo).
+nb.md(obs(r"""1. Un BPE con código de longitud fija **ya baja de 8 bits por byte**, y con codificación entrópica (Huffman) baja más: es compresión *orden 0 sobre tokens* (Shannon, 1948: no se puede bajar de la entropía por símbolo con un código de prefijo por símbolo).
 2. Los compresores con **contexto** (LZ77 en `zlib`, BWT en `bz2`, `lzma`) ganan con claridad: BPE solo captura dependencias *locales* dentro de cada trozo. Esa dependencia a larga distancia es justo la que aprende el modelo de lenguaje: la métrica independiente del tokenizer con la que se comparan LLMs con vocabularios distintos es **bits por byte** del modelo (menos es mejor).
 3. En el corpus sintético los compresores se disparan por la repetitividad del generador; con texto real su ventaja es menor, pero el orden relativo se mantiene."""))
 
@@ -971,7 +971,7 @@ nb.md(r"""
      "(1) El regex difiere (posesivos `++` o clases Unicode entre motores); (2) falta el mapeo `bytes_to_unicode` o el pre-tokenizer `ByteLevel(use_regex=False)`; (3) hay tokens duplicados con los mismos bytes o un orden de merges distinto; (4) especiales. Se detecta comparando sobre una muestra con ids de ambos lados."),
     ("(Diagnóstico)", "Tu tokenizer comprime 4.2 bytes/token en español de Wikipedia pero 2.1 en tickets de soporte (jerga, números, mayúsculas). ¿Qué haces?",
      "El vocabulario se entrenó con datos distintos del dominio: mide con una muestra del dominio, considera reentrenar o **ampliar** el vocabulario (como Llama 3 con 28 K tokens) y revisa el regex (números, mayúsculas). Ojo: cambiar el tokenizer de un modelo ya entrenado requiere adaptación (módulo 07)."),
-    ("(Transferencia)", "Quieres que un LLM sume números de 7 dígitos con fiabilidad. ¿Qué propiedades del pre-tokenizador y del vocabulario te importan?",
+    ("(Transferencia)", "Quieres que un LLM sume números de 7 dígitos con fiabilidad. ¿Qué propiedades del pre-tokenizer y del vocabulario te importan?",
      "Que los dígitos se partan de forma consistente (p. ej. un dígito por token o grupos alineados a la derecha), no en grupos de 3 desde la izquierda dependientes de la longitud; Singh & Strouse (2024) muestran que el sentido de la partición cambia la exactitud."),
     ("", "¿Por qué el vocabulario de $V'$ tokens de un BPE es un prefijo del de $V>V'$?",
      "Porque cada merge se elige con el corpus resultante de aplicar los anteriores: el entrenamiento a $V'$ es exactamente las primeras $V'-256$ iteraciones del entrenamiento a $V$."),
@@ -1022,19 +1022,19 @@ UMB = dict(es=3.0, en=3.0, code=1.9, tax=1.5)
 
 pb.md(pb.badge() + r"""
 
-# Proyecto · Tu BPE para Políglota
+# Proyecto 02 · Tu BPE para Políglota
 **Módulo 02 · BPE desde cero**
 
 | | |
 |---|---|
 | **Nivel** | 🟡 Intermedio |
-| **Duración** | ≈ 2 h |
-| **GPU** | Ninguna (CPU) |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | Ninguna (CPU) |
 | **Entregable** | tu `BPETokenizer` verificado contra `tiktoken` y HF `tokenizers`, y `poliglota_bpe.json` (merges) |
 """)
 pb.md(r"""
 ## Contexto de negocio
-Políglota Labs va a indexar documentación en español, inglés y código. El CTO quiere **un tokenizer propio** (para controlar costos y para poder inspeccionarlo) y exige **evidencia de que está bien hecho**: que reproduce exactamente a `tiktoken` y a Hugging Face cuando se cargan sus merges, que comprime razonablemente cada idioma y que se sabe cuánto cuesta entrenar con un idioma y usarlo en otro.
+Políglota Labs va a indexar documentación en español, inglés y código. El CTO quiere **un tokenizer propio** (para controlar costes y para poder inspeccionarlo) y exige **evidencia de que está bien hecho**: que reproduce exactamente a `tiktoken` y a Hugging Face cuando se cargan sus merges, que comprime razonablemente cada idioma y que se sabe cuánto cuesta entrenar con un idioma y usarlo en otro.
 
 **Conexión.** *Anterior (módulo 01):* tu texto llega normalizado a NFC (usa `unicodedata.normalize('NFC', t)`, o tu `normalizar` del módulo 01). *Siguiente (módulo 03):* compararás este BPE con WordPiece y Unigram sobre el mismo corpus, y el módulo 04 lo evaluará en fertilidad y paridad.
 """)
@@ -1057,7 +1057,7 @@ pb.md(r"""
 | R8 | Barrido de vocabulario: bytes/token **no decrece** al crecer el vocabulario (ES, EN, código) | monótono |
 | R9 | `poliglota_bpe.json` guardado (merges, vocabulario, regex y métricas) | ✅ |
 
-Umbrales calibrados con **lo que mide la solución de referencia** (corpus **sintético**, `FAST_DEV_RUN=True`, vocabulario 1 000, semilla 42): ES = %(mes).2f, EN = %(men).2f, código = %(mcode).2f bytes/token; impuesto ES = %(mtax).2f×. Los umbrales tienen un margen de ≈ 0.3 (0.6 en el impuesto). **No pudimos medir la solución con Wikipedia real** en el entorno de autoría (Hugging Face bloqueado): con datos reales R6 y R7 **no están calibrados**; las comprobaciones estructurales (R1–R5, R8, R9) valen igual y la solución imprime sus valores para que compares.
+Umbrales calibrados con **lo que mide la solución de referencia** (corpus **sintético**, `FAST_DEV_RUN=True`, vocabulario 1 000, semilla 42): ES = %(mes).2f, EN = %(men).2f, código = %(mcode).2f bytes/token; prima ES = %(mtax).2f×. Los umbrales tienen un margen de ≈ 0.3 (0.6 en la prima). **No pudimos medir la solución con Wikipedia real** en el entorno de autoría (Hugging Face bloqueado): con datos reales R6 y R7 **no están calibrados**; las comprobaciones estructurales (R1–R5, R8, R9) valen igual y la solución imprime sus valores para que compares.
 """.replace("%(es).1f", f"{UMB['es']:.1f}").replace("%(en).1f", f"{UMB['en']:.1f}").replace("%(code).1f", f"{UMB['code']:.1f}").replace("%(tax).1f", f"{UMB['tax']:.1f}")
    .replace("%(mes).2f", f"{MED['es']:.2f}").replace("%(men).2f", f"{MED['en']:.2f}").replace("%(mcode).2f", f"{MED['code']:.2f}").replace("%(mtax).2f", f"{MED['tax']:.2f}"))
 
@@ -1255,7 +1255,7 @@ pb.md(r"""
 """)
 
 pb.md(r"""
-## TODO 6 · Evalúa: compresión, impuesto de idioma y barrido de vocabulario
+## TODO 6 · Evalúa: compresión, prima de tokens por idioma y barrido de vocabulario
 Implementa `bytes_por_token(tk, textos, max_id=None)` (bytes UTF-8 totales ÷ tokens totales sobre `textos`). Después rellena `RES` con:
 * `comp`: bytes/token de `tok` en prueba por idioma (`es`, `en`, `code`);
 * `tax`: bytes/token en prueba ES del tokenizer entrenado **solo en ES** ÷ el entrenado **solo en EN** (mismo `VOCAB`);
@@ -1281,7 +1281,7 @@ try:
 except NotImplementedError as e:
     print("⏳ pendiente:", e)
 ''')
-pb.md("> 👀 **Qué debes observar.** En $V=256$ (solo bytes) las tres curvas valen exactamente 1 byte/token; después suben rápido y se aplanan (rendimientos decrecientes, como en la lección §9.1). El **código** queda por debajo de ES/EN (más símbolos y combinaciones raras). Y el impuesto `tax` > 1 significa que, para el mismo texto en español, el tokenizer entrenado solo en español comprime más que el entrenado en inglés: la referencia mide ≈ 2.1× con corpus sintético.")
+pb.md("> 👀 **Qué debes observar.** En $V=256$ (solo bytes) las tres curvas valen exactamente 1 byte/token; después suben rápido y se aplanan (rendimientos decrecientes, como en la lección §9.1). El **código** queda por debajo de ES/EN (más símbolos y combinaciones raras). Y la prima `tax` > 1 significa que, para el mismo texto en español, el tokenizer entrenado solo en español comprime más que el entrenado en inglés: la referencia mide ≈ 2.1× con corpus sintético.")
 
 pb.md(r"""
 ## TODO 7 · Guardar tu tokenizer
@@ -1315,10 +1315,10 @@ def rubrica():
         print("✅" if mono else "❌", "R8 barrido monótono:", {l: [round(x, 2) for x in v] for l, v in RES["barrido"].items()})
         if source == "synthetic":
             u = UMBRALES
-            for nombre, v, t in (("R6 ES", RES["comp"]["es"], u["es"]), ("R6 EN", RES["comp"]["en"], u["en"]), ("R6 código", RES["comp"]["code"], u["code"]), ("R7 impuesto", RES["tax"], u["tax"])):
+            for nombre, v, t in (("R6 ES", RES["comp"]["es"], u["es"]), ("R6 EN", RES["comp"]["en"], u["en"]), ("R6 código", RES["comp"]["code"], u["code"]), ("R7 prima de tokens", RES["tax"], u["tax"])):
                 print("✅" if v >= t else "❌", f"{nombre} = {v:.2f} (≥ {t})")
         else:
-            print("ℹ️ corpus REAL: R6 y R7 no están calibrados; reporta tus valores:", {k: round(v, 2) for k, v in RES["comp"].items()}, "impuesto", round(RES["tax"], 2))
+            print("ℹ️ corpus REAL: R6 y R7 no están calibrados; reporta tus valores:", {k: round(v, 2) for k, v in RES["comp"].items()}, "prima ES", round(RES["tax"], 2))
 rubrica()
 ''')
 
@@ -1332,7 +1332,7 @@ pb.md(r"""
 """)
 pb.md(r"""
 ## Reflexión
-* Tu tokenizer, entrenado en la mezcla, rinde peor en cada idioma que el especialista. ¿Qué proporción de datos por idioma elegirías para Políglota y cómo lo decidirías (costo en tokens vs calidad del retrieval)?
+* Tu tokenizer, entrenado en la mezcla, rinde peor en cada idioma que el especialista. ¿Qué proporción de datos por idioma elegirías para Políglota y cómo lo decidirías (coste en tokens vs calidad del retrieval)?
 * ¿Qué ocurre si en producción el indexador usa tu tokenizer con NFC y el cliente envía texto NFD? ¿Dónde lo arreglas?
 * El módulo 03 compara BPE con Unigram y WordPiece: ¿qué métricas, además de bytes/token, usarías para decidir?
 """)
@@ -1366,7 +1366,7 @@ Vs = [256, 400, 600, 800, VOCAB]
 tk_es, tk_en = BPETokenizer.train(train["es"], VOCAB), BPETokenizer.train(train["en"], VOCAB)
 RES = {"comp": {l: bytes_por_token(tok, test[l]) for l in test}, "tax": bytes_por_token(tk_es, test["es"]) / bytes_por_token(tk_en, test["es"]),
        "barrido": {l: [bytes_por_token(tok, test[l], max_id=v) for v in Vs] for l in test}, "Vs": Vs}
-print({l: round(v, 2) for l, v in RES["comp"].items()}, "| impuesto ES:", round(RES["tax"], 2))
+print({l: round(v, 2) for l, v in RES["comp"].items()}, "| prima ES:", round(RES["tax"], 2))
 
 def guardar_bpe(tok, path="poliglota_bpe.json"):
     merges = [list(p) for p, _ in sorted(tok.merges.items(), key=lambda kv: kv[1])]
@@ -1386,6 +1386,6 @@ for nombre, fn in [("R1 contar_palabras", test_contar), ("R2 entrena_ingenuo", t
 rubrica()
 ''')
 pb.md(caja("📌 Valores de referencia de la solución", r"""
-Corpus **sintético**, `FAST_DEV_RUN=True`, vocabulario 1 000, semilla 42: bytes/token en prueba ES 3.29, EN 3.33, código 2.19; impuesto de idioma (ES-ES ÷ EN-ES) 2.10×; `tiktoken` y HF con tus merges: 100 % de coincidencia. Con datos **reales** tus números serán distintos (no pudimos medirlos en el entorno de autoría). Guarda `poliglota_bpe.json`: los módulos 03 y 04 lo usan como punto de comparación.
+Corpus **sintético**, `FAST_DEV_RUN=True`, vocabulario 1 000, semilla 42: bytes/token en prueba ES 3.29, EN 3.33, código 2.19; prima de tokens (ES-ES ÷ EN-ES) 2.10×; `tiktoken` y HF con tus merges: 100 % de coincidencia. Con datos **reales** tus números serán distintos (no pudimos medirlos en el entorno de autoría). Guarda `poliglota_bpe.json`: los módulos 03 y 04 lo usan como punto de comparación.
 """))
 pb.save(str(ROOT.parent / PPATH))

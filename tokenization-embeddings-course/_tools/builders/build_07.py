@@ -26,6 +26,7 @@ nb = Notebook("Módulo 07 · H-Net y tokenizer transfer", colab_path=LESSON_REL)
 nb.md(nb.badge() + r"""
 
 # Módulo 07 · Tokenizer-free II (H-Net) y *tokenizer transfer*
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|

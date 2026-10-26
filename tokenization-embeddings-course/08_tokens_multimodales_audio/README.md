@@ -4,7 +4,7 @@
 
 | Archivo | Contenido |
 |---|---|
-| `08_tokens_multimodales_audio.ipynb` | Lección: presupuesto de tokens por modalidad, parches ViT (continuo), VQ-VAE/FSQ/RVQ desde cero en MNIST, colapso del codebook, un LM sobre tokens de imagen (mini-Chameleon), códec de audio de juguete con RVQ y *quantizer dropout* (SNR/LSD vs μ-law), EnCodec en `transformers`, tokenizers de vídeo, tokens discretos vs continuos |
+| `08_tokens_multimodales_audio.ipynb` | Lección: presupuesto de tokens por modalidad, parches ViT (continuo), VQ-VAE/FSQ/RVQ desde cero en MNIST, colapso del codebook, un LM sobre tokens de imagen (mini-Chameleon), códec de audio de juguete con RVQ y *quantizer dropout* (SNR/LSD vs μ-law), EnCodec en `transformers`, tokenizers de video, tokens discretos vs continuos |
 | `08_proyecto_tokens_multimodales_audio.ipynb` | Proyecto: **tokenizar una foto real (VQ) y un clip de audio (RVQ)** y medir reconstrucción y compresión vs JPEG y μ-law (plantilla con TODOs, pistas, rúbrica calibrada, solución tras SPOILER) |
 | `assets/` | Imágenes/video de Gemini: `M08-IMG-01.png`, `M08-IMG-02.png`, `M08-IMG-03.png`, `M08-VID-01.mp4` |
 

@@ -29,7 +29,7 @@ FILAS = [
     ("Audio 1 min EnCodec 24 kHz @1.5 kbps (2 codebooks)",         tokens_audio(60, 75, 2),            "75 Hz x 2"),
     ("Audio 1 min EnCodec 24 kHz @6 kbps (8 codebooks)",           tokens_audio(60, 75, 8),            "75 Hz x 8"),
     ("Audio 1 min Mimi (12.5 Hz x 8 codebooks, aplanado)",         tokens_audio(60, 12.5, 8),          "Mimi: 12.5 Hz, 8 x 2048, 1.1 kbps"),
-    ("Vídeo 5 s, 24 fps, 720p, Cosmos DV8x16x16 (~)",              tokens_video(120, 720, 1280, 8, 16), "~ (T/8)·(H/16)·(W/16)"),
+    ("Video 5 s, 24 fps, 720p, Cosmos DV8x16x16 (~)",              tokens_video(120, 720, 1280, 8, 16), "~ (T/8)·(H/16)·(W/16)"),
 ]
 df_tok = [(n, int(t), f) for n, t, f in FILAS]
 for n, t, f in df_tok:
@@ -468,7 +468,7 @@ plt.tight_layout(); plt.show()
 '''
 
 VIDEO_CALC = r'''
-# Costo de contexto de vídeo con un tokenizer 3D (compresión temporal ct x espacial cs x cs)
+# Costo de contexto de video con un tokenizer 3D (compresión temporal ct x espacial cs x cs)
 def tokens_clip(seg, fps, h, w, ct, cs): return -(-int(seg * fps) // ct) * (h // cs) * (w // cs)
 configs = {"4x8x8": (4, 8), "8x8x8": (8, 8), "8x16x16": (8, 16)}
 dur = np.array([1, 2, 5, 10, 30])
@@ -476,6 +476,6 @@ fig, ax = plt.subplots(figsize=(8, 3.8))
 for (nom, (ct, cs)), col in zip(configs.items(), [AZUL, NARANJA, VERDE]):
     ax.plot(dur, [tokens_clip(d, 24, 720, 1280, ct, cs) for d in dur], "o-", color=col, label=f"Cosmos DV{nom}")
 ax.axhline(128_000, color="crimson", ls="--", lw=1, label="128K tokens"); ax.set_xscale("log"); ax.set_yscale("log")
-ax.set_xlabel("duración del clip (s), 24 fps, 720p"); ax.set_ylabel("tokens (aprox.)"); ax.set_title("Vídeo: la compresión espacio-temporal decide el contexto"); ax.legend(fontsize=8); plt.show()
+ax.set_xlabel("duración del clip (s), 24 fps, 720p"); ax.set_ylabel("tokens (aprox.)"); ax.set_title("Video: la compresión espacio-temporal decide el contexto"); ax.legend(fontsize=8); plt.show()
 for nom, (ct, cs) in configs.items(): print(f"DV{nom}: clip de 5 s -> {tokens_clip(5, 24, 720, 1280, ct, cs):,} tokens")
 '''

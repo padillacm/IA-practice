@@ -26,6 +26,7 @@ nb = Notebook("Módulo 08 · Tokens multimodales y de audio", colab_path=LESSON_
 nb.md(nb.badge() + r"""
 
 # Módulo 08 · Tokens multimodales y de audio: parches ViT, VQ-VAE, FSQ, RVQ y códecs neuronales
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
@@ -33,7 +34,7 @@ nb.md(nb.badge() + r"""
 | **Duración estimada** | ≈ 6 h (lección ≈ 3.5 h + proyecto ≈ 2.5 h) |
 | **GPU recomendada** | `FAST_DEV_RUN=True`: **CPU** (≈ 6-10 min en total; MNIST y voz real FSDD, modelos de < 1M parámetros). Modo completo: **T4** (≈ 3-5 unidades de Colab, estimación) |
 | **Prerrequisitos** | 02 (BPE como compresión), 04 (coste de contexto por idioma), 06 (bits por byte, parches); álgebra lineal y PyTorch (convoluciones) |
-| **Madurez del tema** | 🟢 parches ViT y códecs de audio tipo EnCodec · 🟡 VQ/FSQ como interfaz con LLM, Mimi, tokenizers de vídeo · 🔴 tokenizers 1D y modelos «continuos» unificados |
+| **Madurez del tema** | 🟢 parches ViT y códecs de audio tipo EnCodec · 🟡 VQ/FSQ como interfaz con LLM, Mimi, tokenizers de video · 🔴 tokenizers 1D y modelos «continuos» unificados |
 
 > **Contexto Políglota Labs.** El producto va a indexar pronto **PDFs con diagramas** y **grabaciones de soporte** (módulo 16 construye el retrieval multimodal). Antes de que alguien proponga «meterlo todo en el
 > LLM», tu CTO quiere saber **qué es un token de imagen o de audio, cuántos hacen falta y cuánto cuesta en contexto**. En esta lección los construyes: un VQ-VAE/FSQ/RVQ desde cero sobre imágenes pequeñas, un
@@ -49,7 +50,7 @@ nb.md(r"""
 4. **Implementar** FSQ (cuantización escalar finita) y RVQ (cuantización residual con *quantizer dropout*) y compararlos con VQ.
 5. **Entrenar** un LM sobre tokens de imagen y generar dígitos (la idea de Chameleon/VQGAN-transformer a escala de juguete).
 6. **Construir** un códec de audio neuronal de juguete (encoder conv → RVQ → decoder conv) y **medir** tasa (kbps), SNR y distancia log-espectral frente a μ-law.
-7. **Calcular** tasas de tokens por segundo/imagen/vídeo y su **coste en contexto** (EnCodec, Mimi, Chameleon, Cosmos…).
+7. **Calcular** tasas de tokens por segundo/imagen/video y su **coste en contexto** (EnCodec, Mimi, Chameleon, Cosmos…).
 8. **Etiquetar** la madurez de cada técnica (🟢/🟡/🔴) y **conectar** con embeddings multimodales (módulo 16) sin adelantarlo.
 """)
 
@@ -64,7 +65,7 @@ nb.md("## 2. 🔁 Conexión con módulos anteriores\n\n" +
 nb.md(r"""
 ## 3. Intuición primero: tokenizar = cuantizar
 
-Un LLM consume **secuencias**. Imágenes, audio y vídeo son señales continuas y enormes (una foto de 512x512 tiene 262 144 píxeles; un minuto de audio a 24 kHz tiene 1.44 millones de muestras). *Tokenizar* una modalidad significa **comprimirla en una secuencia corta de unidades** que el modelo sepa manejar. Hay dos grandes familias:
+Un LLM consume **secuencias**. Imágenes, audio y video son señales continuas y enormes (una foto de 512x512 tiene 262 144 píxeles; un minuto de audio a 24 kHz tiene 1.44 millones de muestras). *Tokenizar* una modalidad significa **comprimirla en una secuencia corta de unidades** que el modelo sepa manejar. Hay dos grandes familias:
 
 | Familia | Qué es un «token» | Ejemplos | Ventaja | Coste |
 |---|---|---|---|---|
@@ -103,7 +104,7 @@ nb.md("## 4. Presupuesto de tokens: ¿cuánto contexto cuesta cada modalidad?\n\
 nb.code(S.TOKEN_BUDGET)
 nb.md(obs("""
 * **El audio es caro:** a 6 kbps EnCodec produce 600 tokens/s; **1 hora = 2.16 M de tokens**, y una ventana de 128K tokens cabe solo ~3.6 minutos. Por eso Mimi baja a **12.5 Hz** (100 tokens/s aplanado) y Moshi modela los niveles con un transformer «de profundidad» pequeño en lugar de aplanarlos.
-* Una imagen discreta de Chameleon (1 024 tokens) cuesta **~5 veces** un parche ViT-B/16 de 224² (196). Y el **vídeo** (decenas de miles de tokens para 5 s) obliga a compresión espacio-temporal agresiva.
+* Una imagen discreta de Chameleon (1 024 tokens) cuesta **~5 veces** un parche ViT-B/16 de 224² (196). Y el **video** (decenas de miles de tokens para 5 s) obliga a compresión espacio-temporal agresiva.
 * TiTok (32 tokens por imagen) muestra que 1 024 no es ley natural: depende del tokenizer.
 """))
 
@@ -199,7 +200,7 @@ nb.md(obs("""
 nb.md(r"""
 ## 8. Tokens de imagen dentro de un LLM (estilo Chameleon) y modelos «continuos»
 
-**Chameleon** (Meta, 2024) entrena un transformer *early-fusion* sobre **secuencias mixtas** texto+imagen en un único vocabulario: un tokenizer de imagen convierte una imagen de 512x512 en **1 024 tokens** de un codebook de **8 192**, y el vocabulario total (BPE de texto + tokens de imagen) es de **65 536** entradas. **Emu3** (BAAI, 2024) lleva la idea a «solo predecir el siguiente token» para texto, imagen y vídeo.
+**Chameleon** (Meta, 2024) entrena un transformer *early-fusion* sobre **secuencias mixtas** texto+imagen en un único vocabulario: un tokenizer de imagen convierte una imagen de 512x512 en **1 024 tokens** de un codebook de **8 192**, y el vocabulario total (BPE de texto + tokens de imagen) es de **65 536** entradas. **Emu3** (BAAI, 2024) lleva la idea a «solo predecir el siguiente token» para texto, imagen y video.
 
 **¿Por qué discretizar?** Porque permite usar la **misma pérdida** (cross-entropy del siguiente token) y la misma arquitectura para todo, y mezclar modalidades en una secuencia. **¿Por qué no?** La cuantización **pierde información** y limita la calidad; Transfusion (Meta, hasta 7B) combina cross-entropy para texto con **difusión** sobre parches *continuos* y reporta que escala **mejor** que cuantizar las imágenes; MAR (Li et al. 2024) modela cada token continuo con una **pérdida de difusión** y «elimina la necesidad de tokenizers discretos».
 
@@ -291,13 +292,13 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 10. Tokenizers de vídeo
+## 10. Tokenizers de video
 
-El vídeo añade el eje temporal: un **tokenizer 3D** comprime con factores $c_t\times c_s\times c_s$ (tiempo x alto x ancho), de modo que $N\approx \tfrac{T}{c_t}\cdot\tfrac{H}{c_s}\cdot\tfrac{W}{c_s}$. **Cosmos** (NVIDIA, 2025) publica tokenizers *continuos* y *discretos* (FSQ, 64 000 códigos) con compresiones espacio-temporales de **4x8x8, 8x8x8 y 8x16x16** (y 8x8 / 16x16 para imágenes); **MAGVIT-v2** (Google/CMU) usa *lookup-free quantization* para un vocabulario común de imagen y vídeo. La compresión más agresiva ahorra contexto pero **degrada la calidad** (el paper de Cosmos muestra el compromiso PSNR-compresión).
+El video añade el eje temporal: un **tokenizer 3D** comprime con factores $c_t\times c_s\times c_s$ (tiempo x alto x ancho), de modo que $N\approx \tfrac{T}{c_t}\cdot\tfrac{H}{c_s}\cdot\tfrac{W}{c_s}$. **Cosmos** (NVIDIA, 2025) publica tokenizers *continuos* y *discretos* (FSQ, 64 000 códigos) con compresiones espacio-temporales de **4x8x8, 8x8x8 y 8x16x16** (y 8x8 / 16x16 para imágenes); **MAGVIT-v2** (Google/CMU) usa *lookup-free quantization* para un vocabulario común de imagen y video. La compresión más agresiva ahorra contexto pero **degrada la calidad** (el paper de Cosmos muestra el compromiso PSNR-compresión).
 """)
 nb.code(S.VIDEO_CALC)
 nb.md(obs("""
-En escala log-log, las tres rectas son **paralelas** (el factor de compresión es constante) y separadas **órdenes de magnitud**: un clip de 30 s a 720p con 4x8x8 supera de lejos una ventana de 128K tokens, y solo las compresiones más agresivas caben. Es el análogo del «impuesto» por idioma: **el tokenizer decide cuánto contexto consume una modalidad**.
+En escala log-log, las tres rectas son **paralelas** (el factor de compresión es constante) y separadas **órdenes de magnitud**: un clip de 30 s a 720p con 4x8x8 supera de lejos una ventana de 128K tokens, y solo las compresiones más agresivas caben. Es el análogo de la prima de tokens por idioma: **el tokenizer decide cuánto contexto consume una modalidad**.
 """))
 
 nb.md(r"""
@@ -317,13 +318,13 @@ Con las tres modalidades vistas, esta tabla resume qué tokenizers son estándar
 | VQ-VAE | 🟢 (técnica) / 🟡 (como interfaz LLM) | Base de VQGAN y de los tokenizers de imagen discretos (DALL·E 1 usó una variante, el dVAE con relajación Gumbel-softmax) | van den Oord et al. 2017 (arXiv:1711.00937) |
 | VQGAN (+ transformer *prior*) | 🟢 | CompVis; pérdida perceptual + adversarial sobre VQ | Esser et al. 2020 (arXiv:2012.09841) |
 | **FSQ** | 🟡 | Tokenizers *discretos* de Cosmos (NVIDIA) con niveles (8,8,8,5,5,5) = 64 000 | Mentzer et al. 2023 (arXiv:2309.15505); Cosmos (arXiv:2501.03575) |
-| LFQ / MAGVIT-v2 | 🟡 | Google/CMU; ICLR 2024; tokenizer de imagen+vídeo con vocabulario común | Yu et al. 2023 (arXiv:2310.05737) |
+| LFQ / MAGVIT-v2 | 🟡 | Google/CMU; ICLR 2024; tokenizer de imagen+video con vocabulario común | Yu et al. 2023 (arXiv:2310.05737) |
 | Tokens de imagen en un LLM (early fusion): Chameleon, Emu3 | 🟡 | Meta (Chameleon, 2024); BAAI (Emu3, 2024) | arXiv:2405.09818; arXiv:2409.18869 |
 | Híbridos continuos+LM: Transfusion, MAR/Fluid (sin cuantización vectorial) | 🔴/🟡 | Meta (Transfusion, hasta 7B); resultados en investigación | arXiv:2408.11039; arXiv:2406.11838; arXiv:2410.13863 |
 | Tokenizers 1D de imagen (TiTok, FlexTok) | 🔴 | ByteDance/TUM (32 tokens por imagen); EPFL/Apple | arXiv:2406.07550; arXiv:2502.13967 |
 | SoundStream, **EnCodec**, DAC (RVQ) | 🟢 | EnCodec es el tokenizer de MusicGen (50 Hz, 32 kHz); DAC: 44.1 kHz a 8 kbps (~90x) | arXiv:2107.03312; 2210.13438; 2306.06546; 2306.05284 |
 | **Mimi** (tokens semántico-acústicos, 12.5 Hz) | 🟡 | Kyutai (Moshi): conversación en tiempo real | arXiv:2410.00037 |
-| Tokenizers de vídeo 3D (Cosmos, MAGVIT-v2) | 🟡 | NVIDIA (pesos abiertos), Google | arXiv:2501.03575; arXiv:2310.05737 |
+| Tokenizers de video 3D (Cosmos, MAGVIT-v2) | 🟡 | NVIDIA (pesos abiertos), Google | arXiv:2501.03575; arXiv:2310.05737 |
 
 > Los modelos cerrados de frontera (multimodales nativos) **no documentan** sus tokenizers: lo que sabemos viene de papers abiertos.
 """)
@@ -333,7 +334,7 @@ nb.md(r"""
 
 * **Imagen.** Los VLM abiertos más usados leen la imagen con un **encoder ViT continuo** y un proyector hacia el LLM (LLaVA); los modelos de **generación** tipo Chameleon/Emu3 usan **tokenizers discretos**; las líneas de investigación Transfusion/MAR/Fluid reducen o eliminan la cuantización. Los laboratorios de frontera cerrados no documentan sus tokenizers multimodales.
 * **Audio.** **EnCodec** es el tokenizer de **MusicGen** (Meta; 50 Hz a 32 kHz según su paper) y de otros LMs de audio; **Mimi** (12.5 Hz, 1.1 kbps) es la pieza de **Moshi**, un modelo de diálogo en *streaming* (Kyutai). DAC (Descript) es un códec abierto de alta fidelidad.
-* **Vídeo.** NVIDIA publica los tokenizers Cosmos (discretos con FSQ y continuos). Los costes de contexto se gestionan con compresión agresiva, jerarquías y *streaming*.
+* **Video.** NVIDIA publica los tokenizers Cosmos (discretos con FSQ y continuos). Los costes de contexto se gestionan con compresión agresiva, jerarquías y *streaming*.
 * **Costes y trade-offs.** (1) Más compresión = menos contexto pero menos calidad; (2) más niveles RVQ = más tokens por segundo; (3) los tokens de audio **aplanados** multiplican el contexto por el nº de niveles (por eso Moshi usa un transformer de profundidad); (4) un tokenizer *no se cambia* sin reentrenar el LM (como en el módulo 07, pero sin tokenizer transfer fácil).
 * **Políglota.** En esta fase el valor está en **entender el coste**: indexar audio/imagen con tokens discretos en un LLM generativo sería caro; el camino del módulo 16 (embeddings continuos y multi-vector) encaja mejor con retrieval.
 """)
@@ -416,7 +417,7 @@ README = r"""# Módulo 08 · Tokens multimodales y de audio
 
 | Archivo | Contenido |
 |---|---|
-| `08_tokens_multimodales_audio.ipynb` | Lección: presupuesto de tokens por modalidad, parches ViT (continuo), VQ-VAE/FSQ/RVQ desde cero en MNIST, colapso del codebook, un LM sobre tokens de imagen (mini-Chameleon), códec de audio de juguete con RVQ y *quantizer dropout* (SNR/LSD vs μ-law), EnCodec en `transformers`, tokenizers de vídeo, tokens discretos vs continuos |
+| `08_tokens_multimodales_audio.ipynb` | Lección: presupuesto de tokens por modalidad, parches ViT (continuo), VQ-VAE/FSQ/RVQ desde cero en MNIST, colapso del codebook, un LM sobre tokens de imagen (mini-Chameleon), códec de audio de juguete con RVQ y *quantizer dropout* (SNR/LSD vs μ-law), EnCodec en `transformers`, tokenizers de video, tokens discretos vs continuos |
 | `08_proyecto_tokens_multimodales_audio.ipynb` | Proyecto: **tokenizar una foto real (VQ) y un clip de audio (RVQ)** y medir reconstrucción y compresión vs JPEG y μ-law (plantilla con TODOs, pistas, rúbrica calibrada, solución tras SPOILER) |
 | `assets/` | Imágenes/video de Gemini: `M08-IMG-01.png`, `M08-IMG-02.png`, `M08-IMG-03.png`, `M08-VID-01.mp4` |
 
