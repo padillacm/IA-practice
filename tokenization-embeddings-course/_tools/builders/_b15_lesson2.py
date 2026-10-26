@@ -171,24 +171,24 @@ def part2(nb):
     ✍️ **Ejemplo a mano (pareado, 4 queries).** Diferencias B − A por query: $(0.10,\\ -0.05,\\ 0.20,\\ 0.00)$, media $0.0625$. Un remuestreo con reemplazo saca las queries $(1, 1, 3, 4)$ → media $(0.10 + 0.10 + 0.20 + 0)/4 = 0.10$; otro saca $(2, 2, 4, 1)$ → $0.0$. Tras miles de remuestreos, los percentiles 2.5 y 97.5 de esas medias son el IC. Remuestreamos **diferencias por query** (pareado) porque A y B se miden sobre las mismas queries: la dificultad de cada query se cancela, como en el team-draft interleaving del módulo 18 o en el bootstrap del módulo 00. Con solo 4 queries, el IC incluirá el 0 casi seguro: el ejemplo enseña el mecanismo, no una conclusión.
     """)
     nb.gemini(
-        "video", "M15-VID-1", "Bootstrap: remuestrear queries y construir el intervalo de confianza",
+        "video", "M15-VID-01", "Bootstrap: remuestrear queries y construir el intervalo de confianza",
         "Animación del bootstrap percentil: 8 valores de nDCG por query, tres remuestreos con reemplazo, histograma de medias que se va llenando y el IC 95 % sombreado.",
         """
         Animación técnica limpia, 16:9, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif, ritmo calmado, sin voz en off, sin música. Texto en pantalla en español.
         Datos exactos: 8 queries con nDCG@10 = [0.00, 0.31, 0.45, 0.50, 0.63, 0.72, 0.89, 1.00]; media = 0.5625.
         Escenas:
         0–5 s: título «Bootstrap sobre queries». Aparecen 8 barras verticales azules etiquetadas q1…q8 con alturas iguales a los valores anteriores y la línea horizontal gris de la media «media = 0.56».
-        5–12 s: texto «Remuestreo 1 (con reemplazo)». De las 8 barras salen flechas naranjas que "caen" en 8 huecos nuevos; algunas barras se repiten (q4 dos veces) y otras no aparecen (q1). Se muestra la nueva media «0.61» y un punto naranja cae sobre un eje horizontal inferior (histograma vacío) en 0.61.
-        12–18 s: repetir rápido otros dos remuestreos (medias 0.49 y 0.58) con puntos que caen sobre el histograma; el contador muestra «B = 3».
+        5–12 s: texto «Remuestreo 1 (con reemplazo)». De las 8 barras salen flechas naranjas que "caen" en 8 huecos nuevos; la nueva muestra es «q2, q2, q4, q4, q5, q5, q8, q8»: algunas barras se repiten y otras no aparecen (q1, q3, q6, q7). Se muestra la nueva media «0.61» y un punto naranja cae sobre un eje horizontal inferior (histograma vacío) en 0.61.
+        12–18 s: repetir rápido otros dos remuestreos: «q1, q1, q1, q2, q6, q7, q8, q8» (media 0.49) y «q1, q1, q2, q6, q6, q7, q8, q8» (media 0.58), con puntos que caen sobre el histograma; el contador muestra «B = 3».
         18–25 s: el contador acelera «B = 100 … 1000 … 2000» y los puntos forman un histograma en forma de campana azul alrededor de 0.56.
-        25–30 s: se sombrean los percentiles 2.5 % y 97.5 % en verde y aparece la etiqueta «IC 95 % = [0.37, 0.74]» sobre el histograma; texto final «la incertidumbre depende del número de queries».
+        25–30 s: se sombrean los percentiles 2.5 % y 97.5 % en verde y aparece la etiqueta «IC 95 % ≈ [0.35, 0.77]» sobre el histograma; texto final «la incertidumbre depende del número de queries».
         Evita: voz en off, música, texto ilegible, números distintos a los dados, efectos 3D, transiciones bruscas.
         """,
         "Animación en la que ocho valores de nDCG se remuestrean con reemplazo, las medias forman un histograma y se marca el intervalo de confianza al 95 %.",
         """
         q1..q8 = [0.00 0.31 0.45 0.50 0.63 0.72 0.89 1.00]  media 0.56
-        remuestreo 1: [q4 q4 q6 q8 q2 q7 q8 q5] -> media 0.61  (punto en el histograma)
-        ... B=2000 medias -> campana -> percentiles 2.5% y 97.5% = IC 95%
+        remuestreo 1: [q2 q2 q4 q4 q5 q5 q8 q8] -> media 0.61  (punto en el histograma)
+        ... B=2000 medias -> campana -> percentiles 2.5% y 97.5% = IC 95% ≈ [0.35, 0.77]
         """,
         duration="30 s",
     )
@@ -308,7 +308,7 @@ def part2(nb):
     6. **Versionar y congelar** (dataset card: fuente, fecha, criterios, κ); recalibrar cuando cambie el corpus o el tráfico.
     """)
     nb.gemini(
-        "imagen", "M15-IMG-3", "Ciclo de vida de un golden set",
+        "imagen", "M15-IMG-02", "Ciclo de vida de un golden set",
         "Ciclo en seis pasos: muestrear queries, hacer pooling de candidatos, anotar con guía, medir acuerdo κ, congelar versión y vigilar drift; con el test ciego aparte.",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.

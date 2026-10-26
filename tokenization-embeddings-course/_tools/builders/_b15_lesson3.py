@@ -87,7 +87,7 @@ def part3(nb):
     nb.md("""
     ## 8. Límites teóricos de los embeddings de dimensión fija (LIMIT)
 
-    Un buscador *denso* representa cada documento con un vector de dimensión $d$ y cada query con otro; el top-$k$ de una query es el conjunto de los $k$ documentos con mayor producto punto.
+    Un buscador *denso* representa cada documento con un vector de dimensión $d$ y cada query con otro; el top-$k$ de una query es el conjunto de los $k$ documentos con mayor producto escalar.
     **Pregunta:** ¿cuántos *subconjuntos distintos* de $k$ documentos puede devolver un conjunto de $n$ documentos al variar la query? Si el producto necesita devolver **cualquier** par posible (k = 2) y hay $\\binom{n}{2}$ pares, la dimensión no puede ser arbitrariamente pequeña.
 
     **Resultado (Weller, Boratko, Naim, Lee; arXiv ago-2025, ICLR 2026).** Con documentos como vectores unitarios y una query que realiza un subconjunto $S$ con margen $\\ge 2\\gamma$ sobre el resto, un argumento de empaquetamiento de esferas da:
@@ -155,7 +155,7 @@ def part3(nb):
     > (3) Esto es el **mejor caso** (vectores libres con acceso a las qrels). Un embedder real, que genera los vectores desde texto, lo tiene peor.
     """)
     nb.gemini(
-        "imagen", "M15-IMG-2", "Por qué dimensión pequeña no puede devolver todos los pares",
+        "imagen", "M15-IMG-03", "Por qué dimensión pequeña no puede devolver todos los pares",
         "Intuición geométrica del límite: 5 documentos como puntos en una circunferencia (d=2); cada query es una dirección y solo devuelve pares adyacentes; 5 de 10 pares son alcanzables.",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
@@ -361,7 +361,7 @@ def part3(nb):
     """)
     # ───────────────────────── Cierre ─────────────────────────
     nb.md("""
-    ## 12. 🏭 En producción
+    ## 🏭 En producción
     - **Evaluación continua, no puntual.** Equipos de búsqueda en producción mantienen (i) un golden set versionado, (ii) un set **canario** pequeño que corre en cada cambio de modelo/índice/tokenizer, y (iii) métricas online (clics, reformulaciones, abandono) que se contrastan periódicamente con las offline. Si offline y online se desacoplan, tu golden set está obsoleto.
     - **MTEB/MMTEB como filtro, tu golden set como decisión.** Los leaderboards sirven para preseleccionar 3–5 modelos; la decisión se toma en datos propios. Los proveedores de embeddings (OpenAI, Google, Cohere, Voyage, Jina…) publican resultados en benchmarks públicos; trátalos como *marketing técnico* hasta reproducirlos en tu dominio.
     - **Anotación asistida por LLM** (triaje, sugerencias) con humanos en el bucle para el set de decisión, medido con κ y re-calibrado al cambiar de modelo-juez.
@@ -369,7 +369,7 @@ def part3(nb):
     - **Informe estándar:** métrica principal con IC, diferencia pareada vs baseline con IC y p corregido, tabla por slices, brecha público–privado y la versión exacta de dataset, modelo, tokenizer y semilla.
     """)
     nb.md("""
-    ## 13. 🧠 Secretos de la élite
+    ## 🧠 Secretos de la élite
     1. **Siempre diferencia pareada con IC, nunca dos IC separados.** Las queries comparten dificultad; el test pareado detecta mejoras que los IC por sistema esconden (experimento 5.3).
     2. **Un golden set de 100 queries solo distingue diferencias grandes.** La semi-anchura del IC cae como $1/\\sqrt n$; calcula el $n$ necesario con *tu* $\\sigma$ (sección 5.3) antes de prometer «+1 punto».
     3. **Los empates y duplicados son una fuente silenciosa de varianza.** Fija el desempate (orden del corpus) y deduplica el ranking; es el primer sitio donde busco diferencias entre dos implementaciones de la «misma» métrica.
@@ -380,18 +380,18 @@ def part3(nb):
     8. **El análisis de errores por slices decide la hoja de ruta.** En nuestro corpus la «mejora de embedder» que parecía necesaria era un arreglo de tokenización de código (sección 11).
     """)
     nb.md("""
-    ## 14. ⚠️ Errores comunes
+    ## ⚠️ Errores comunes
     - **Evaluar sobre queries que usaste para elegir hiperparámetros** (no reservar test ciego).
     - **Promediar sin mirar la varianza**: 0.52 vs 0.50 con σ=0.35 y 70 queries es ruido.
     - **Comparar sistemas con k, métrica o corpus distintos** (p. ej. comparar tu nDCG@10 con el de un paper que usó otro split o qrels).
-    - **Dividir por el número de relevantes devueltos en vez de por el total** (Recall inflado) o **no normalizar embeddings** al comparar coseno vs producto punto.
+    - **Dividir por el número de relevantes devueltos en vez de por el total** (Recall inflado) o **no normalizar embeddings** al comparar coseno vs producto escalar.
     - **Descartar silenciosamente las queries sin resultados** (el sistema que no responde sale ganando).
     - **Usar el mismo LLM como generador de queries, juez y sistema** (circularidad).
     - **Citar cifras de leaderboards sin fecha ni versión** del benchmark.
     - **Confiar en nDCG@10 si el producto muestra 3 resultados** (usa la métrica que corresponde a la UI, p. ej. nDCG@3 / MRR).
     """)
     nb.md("""
-    ## 15. ✅ Autoevaluación
+    ## 📝 Autoevaluación
     Intenta responder antes de abrir cada respuesta.
 
     <details><summary><b>1. (Cálculo)</b> Ranking <code>[a, b, c, d]</code>, relevancias <code>{b: 2, d: 1, e: 3}</code>. Calcula nDCG@4 (ganancia lineal).</summary>
@@ -430,7 +430,7 @@ def part3(nb):
     </details>
     """)
     nb.md("""
-    ## 16. 📚 Referencias
+    ## 📚 Referencias
     **Evaluación y benchmarks**
     - Thakur, Reimers, Rücklé, Srivastava, Gurevych (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS 2021 Datasets & Benchmarks. <https://arxiv.org/abs/2104.08663>
     - Zhang et al. (2022). *Making a MIRACL: Multilingual Information Retrieval Across a Continuum of Languages*. TACL 11 (2023). <https://arxiv.org/abs/2210.09984>

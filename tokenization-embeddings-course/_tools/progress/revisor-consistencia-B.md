@@ -5,7 +5,7 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - [ ] 18_produccion
 - [ ] 17_interpretabilidad_geometria
 - [x] 16_embeddings_multimodales
-- [ ] 15_evaluacion_retrieval
+- [x] 15_evaluacion_retrieval
 - [ ] 14_indexacion_ann
 - [ ] 13_dense_sparse_late_interaction
 - [ ] 12_embedders_modernos
@@ -20,3 +20,4 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - M20: cabecera en tabla; VID-01 con listas y puntuaciones RRF exactas + sin música; IMG-01 sin «int8» fijo; IMG-02 con los 7 criterios reales.
 - M19: cabecera en tabla; IDs IMG-02/03 renumerados por orden de aparición; árbol M19-IMG-01 alineado con elige_indice (70 % de RAM, grafo + vectores en SSD); T2 sin rojo.
 - M16 (adelantado: élite B saltó 18/17 y los dejó para el final): etiquetas canónicas + subtítulo; secciones fijas sin número, ✅→📝; IDs a 2 dígitos; «mapa de calor en 6.2» (decía 6.3); IMG-03 ≈ 258 KiB/página (1030×128×2 B); flecha negra → gris.
+- M15: etiquetas canónicas + subtítulo; secciones fijas sin número, ✅→📝; IDs a 2 dígitos y en orden (golden set = IMG-02, LIMIT = IMG-03); VID-01: remuestreos con listas cuyas medias son exactas (el de 0.61 daba 0.69) e IC ≈ [0.35, 0.77] recalculado (decía [0.37, 0.74]); producto punto → producto escalar.

@@ -59,9 +59,9 @@ def build(nb):
     | | |
     |---|---|
     | **Nivel** | 🟠 Avanzado |
-    | **Duración** | ≈ 2 h |
-    | **GPU** | No necesaria (CPU, `FAST_DEV_RUN = True`) |
-    | **Requiere** | Lección 15 (métricas, bootstrap, tests pareados, análisis de errores) |
+    | **Duración estimada** | ≈ 2 h |
+    | **GPU recomendada** | No necesaria (CPU, `FAST_DEV_RUN = True`) |
+    | **Prerrequisitos** | Lección 15 (métricas, bootstrap, tests pareados, análisis de errores) |
     | **Conecta con** | Módulo 13 (híbrido: el RRF que evaluarás) · Módulo 14 (el índice que evaluarás después) · Módulo 18 (monitorización y A/B) |
 
     ## 🏢 Contexto de negocio

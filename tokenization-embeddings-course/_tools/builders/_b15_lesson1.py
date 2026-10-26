@@ -8,12 +8,13 @@ def part1(nb):
     {nb.badge()}
 
     # Módulo 15 · Evaluación de embeddings y retrieval
+    **Tokenización y Embeddings: de BPE a los modelos modernos**
 
     | | |
     |---|---|
     | **Nivel** | 🟠 Avanzado |
-    | **Duración** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
-    | **GPU** | No necesaria (CPU; ≈ 0 unidades de Colab). Una celda opcional usa un embedder real si hay red |
+    | **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+    | **GPU recomendada** | No necesaria (CPU; ≈ 0 unidades de Colab). Una celda opcional usa un embedder real si hay red |
     | **Prerrequisitos** | 00 (BM25 + mini golden set), 10 (similitud y pooling), 12 (embedders y MTEB), 13 (híbrido, RRF), 14 (recall en ANN) |
     | **Hilo conductor** | Políglota Labs necesita saber **si el nuevo embedder es mejor de verdad** antes de migrar el índice |
 
@@ -44,9 +45,9 @@ def part1(nb):
     Porque la tarea es *ranking*: importa **en qué posición** aparece lo relevante, no solo si aparece. La accuracy ni siquiera está definida para una lista ordenada con varios relevantes.
     </details>
 
-    <details><summary><b>2.</b> (Módulo 10) Con vectores L2-normalizados, ¿qué relación hay entre coseno, producto punto y distancia L2? ¿Por qué importa al evaluar?</summary>
+    <details><summary><b>2.</b> (Módulo 10) Con vectores L2-normalizados, ¿qué relación hay entre coseno, producto escalar y distancia L2? ¿Por qué importa al evaluar?</summary>
 
-    Coseno = producto punto; y $\\lVert a-b\\rVert^2 = 2-2\\cos(a,b)$. Los tres **ordenan igual**, así que dan el mismo ranking y las mismas métricas. Si olvidas normalizar, el producto punto favorece a los vectores de mayor norma y el ranking cambia: una causa clásica de «el embedder nuevo es peor» que es solo un bug de evaluación.
+    Coseno = producto escalar; y $\\lVert a-b\\rVert^2 = 2-2\\cos(a,b)$. Los tres **ordenan igual**, así que dan el mismo ranking y las mismas métricas. Si olvidas normalizar, el producto escalar favorece a los vectores de mayor norma y el ranking cambia: una causa clásica de «el embedder nuevo es peor» que es solo un bug de evaluación.
     </details>
 
     <details><summary><b>3.</b> (Módulo 13) ¿Qué hace Reciprocal Rank Fusion y por qué no necesita calibrar escalas?</summary>
@@ -85,7 +86,7 @@ def part1(nb):
     """)
 
     nb.gemini(
-        "imagen", "M15-IMG-1", "Pipeline de evaluación de retrieval y dónde se rompe",
+        "imagen", "M15-IMG-01", "Pipeline de evaluación de retrieval y dónde se rompe",
         "Vista general del módulo: golden set (queries + qrels) → run del sistema → métricas por query → agregación con IC y tests; con los 5 puntos de fallo marcados.",
         """
         Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, flechas claras, sin ilustraciones decorativas. 16:9.
@@ -95,7 +96,7 @@ def part1(nb):
         2) Bloque verde «SISTEMA A EVALUAR» con una caja «Embedder + índice (BM25 / denso / híbrido)» que produce «RUN: qid → lista ordenada de doc_id».
         3) Bloque azul «MÉTRICA POR QUERY» con tres cajas pequeñas apiladas: «nDCG@10», «Recall@k», «MRR@10» y debajo un vector de números «[0.82, 0.00, 1.00, 0.45, …]».
         4) Bloque naranja «AGREGACIÓN CON INCERTIDUMBRE» con: «Media + IC 95 % (bootstrap sobre queries)» y «Test pareado A vs B + corrección de Holm».
-        Debajo de cada bloque, un pequeño círculo rojo-naranja numerado con una advertencia en texto corto:
+        Debajo de cada bloque, un pequeño círculo naranja numerado con una advertencia en texto corto:
         ① bajo el bloque 1: «Qrels incompletos (pooling sesgado)».
         ② bajo el bloque 1: «Contaminación: el modelo vio el test».
         ③ bajo el bloque 2: «Empates y duplicados en el ranking».
