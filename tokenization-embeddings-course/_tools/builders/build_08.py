@@ -263,7 +263,7 @@ Cada columna es un **frame** (8 ms) y cada fila un **nivel**. Observa que el niv
 """))
 nb.gemini("video", "M08-VID-01", "Cuantización vectorial residual: cada nivel refina el error",
           "Animación 2D de un vector que se aproxima por pasos: el nivel 1 elige el centroide más cercano, el nivel 2 cuantiza el residuo, etc., y el error baja.",
-          """Video explicativo técnico de 24 segundos, 16:9, 1080p, ritmo calmado, sin voz en off. Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas.
+          """Video explicativo técnico de 24 segundos, 16:9, 1080p, ritmo calmado, sin voz en off y sin música. Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas.
 Escena fija: un plano cartesiano 2D con un punto objetivo azul etiquetado "z (vector a codificar)" en la posición aproximada (3.2, 2.1). Nota fija abajo: "Ilustración conceptual con K = 4 centroides por nivel".
 Guion por escenas:
 0–4 s: título "RVQ: cada nivel corrige lo que dejó el anterior". Aparece el punto z y 4 puntos grises etiquetados "codebook 1" en (0,0), (4,0), (0,4), (4,4).

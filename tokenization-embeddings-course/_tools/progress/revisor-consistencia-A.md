@@ -7,8 +7,8 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 00–08 · Informe:
 - [x] 04_diseno_tokenizers_modernos
 - [x] 05_patologias_robustez
 - [x] 06_tokenizer_free_bytes_blt
-- [ ] 07_hnet_tokenizer_transfer
-- [ ] 08_tokens_multimodales_audio
+- [x] 07_hnet_tokenizer_transfer
+- [x] 08_tokens_multimodales_audio
 - [ ] Glosario unificado (bloque A) en GUIA_DE_ESTUDIO.md + check_course.py OK + informe
 
 ## Notas para retomar

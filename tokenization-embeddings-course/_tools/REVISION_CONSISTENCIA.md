@@ -44,3 +44,17 @@ línea «Evita: …», guion por escenas con tiempos en los videos, formato/alt/
 | 04 | 3 / 1 | M04-IMG-02: título del prompt «Token tax» → «Prima de tokens» (terminología canónica); placeholder con 11 fichas en español (decía 10). M04-IMG-03: placeholder de ChatML reescrito (los `\n` se convertían en saltos y descuadraban el ASCII). M04-VID-01: escena 2 sin la acción vaga «vuelven a fusionarse», escena 4 con resultado explícito «7 → 5 tokens». |
 | 05 | 3 / 1 | M05-VID-01, escena 4 reescrita: el detector mide la distancia coseno de cada fila a los **tokens de referencia** (bytes 0xF5–0xFF), no «del centro del cúmulo azul», como sugería el guion. M05-IMG-01: pie en español («distancia coseno»), id marcado como ilustrativo. M05-IMG-02/03 correctas (ids 496/675/15717 de «strawberry» en cl100k). |
 | 06 | 3 / 1 | Recuentos verificados: «El gato duerme.» = 15 bytes en las 4 segmentaciones; «El servidor procesa las peticiones.» = 35 bytes → 5 parches. M06-IMG-03: 40 casillas (decía 41) y placeholder con «␣» coherente; M06-IMG-01: picos de entropía situados en «␣g»/«␣d» (inicio real de parche); M06-VID-01: «sin música» como el resto de videos y sin términos en inglés sueltos que Gemini pudiera rotular. |
+| 07 | 3 / 1 | M07-IMG-02: los anchos de los chunks no cuadraban con las fronteras marcadas (bordes en «n», «p», «d» ⇒ chunks «n e w _» / «p r o» / «d u c t !» = 4, 3, 5; prompt y placeholder decían 4, 5, 3). M07-VID-01: «sin música». M07-IMG-01/03 correctas. |
+| 08 | 3 / 1 | Cifras verificadas: EnCodec 24 kHz, strides 2·4·5·8 = 320 → 75 frames/s × 8 niveles × 10 bits = 6 kbps; Mimi 12.5 × 8 × 11 bits = 1.1 kbps; Chameleon 1 024 tokens/512×512 con K = 8192; ViT 196 parches; en M08-VID-01 el centroide más cercano a (3.2, 2.1) es (4, 4) (2.06 frente a 2.25). Añadido «sin música». |
+
+**Conclusión del bloque A.** 32 celdas Gemini (25 imágenes, 7 videos): todas cumplen el mínimo por lección
+(≥ 3 celdas, ≥ 2 imágenes; video en 02, 06 y 07, y además en 03, 04, 05 y 08). Ninguna duplica un gráfico de
+código: las que muestran cifras cualitativas (M04-IMG-02, M06-IMG-03, M07-VID-01) las declaran ilustrativas y su
+«👀» remite a la medición real del notebook. Las 32 tienen «👀 Qué debes observar» inmediatamente después.
+
+**Pendiente para la pasada final:** regenerar `extras/GEMINI_ASSETS.md` con `_tools/gen_gemini_index.py` (los
+prompts de 01, 03–08 cambiaron en esta revisión).
+
+## Bloque B (09–20)
+
+> Pendiente: la completa el revisor de consistencia del bloque B.

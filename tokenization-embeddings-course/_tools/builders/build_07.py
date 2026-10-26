@@ -142,13 +142,13 @@ Cuatro paneles en fila de izquierda a derecha, numerados 1 a 4, todos sobre la s
 Panel 1 "Routing": debajo de cada par de casillas vecinas, una barra azul cuya altura es p_t = ½(1 − cos(q_t, k_{t−1})). Barras altas (≥ 0.5, resaltadas en naranja) bajo "n", "p" y bajo "d" (esta última algo más baja, ≈ 0.55). Línea horizontal discontinua roja en 0.5 etiquetada "umbral 0.5". La primera barra vale 1.0 (etiqueta "p₁ = 1").
 Panel 2 "Downsampler": solo las casillas con barra naranja (n, p, d) se copian a una fila nueva más corta, etiquetada "vectores seleccionados x′ (L′ < L)".
 Panel 3 "Smoothing": tres círculos de salida de la red principal con la fórmula "z̄ⱼ = Pⱼ·ẑⱼ + (1 − Pⱼ)·z̄ⱼ₋₁"; el tercer círculo, con P = 0.55, aparece mezclado (degradado entre verde y gris) y se anota "frontera dudosa → se mezcla con el chunk anterior".
-Panel 4 "Upsampler": cada círculo se repite hasta el siguiente borde sobre las 12 casillas (3 bloques de colores: azul, naranja, verde de anchos 4, 5 y 3), con la leyenda "× STE(cₜ)" y "forward vale 1; el gradiente pasa por cₜ".
+Panel 4 "Upsampler": cada círculo se repite hasta el siguiente borde sobre las 12 casillas (3 bloques de colores: azul, naranja, verde de anchos 4, 3 y 5: «n e w _», «p r o», «d u c t !»), con la leyenda "× STE(cₜ)" y "forward vale 1; el gradiente pasa por cₜ".
 Evita: ilustraciones decorativas, texto ilegible, números no indicados, flechas ambiguas, sombras 3D.""",
           "Cuatro paneles que muestran routing por similitud coseno, selección de bordes, suavizado EMA y repetición con STE",
           """1 Routing    : n e w _ p r o d u c t !   p_t: [1.0 .1 .1 .2 .9 .1 .1 .55 .1 .1 .1 .1]  borde si p>=0.5
 2 Downsample : se conservan los vectores en n, p, d   -> L' = 3
 3 Smoothing  : z̄_j = P_j ẑ_j + (1-P_j) z̄_{j-1}      (d con P=.55 se mezcla con el chunk anterior)
-4 Upsample   : [n e w _][p r o d u][c t !] x STE(c_t)   (forward: x1; backward: gradiente de c_t)""")
+4 Upsample   : [n e w _][p r o][d u c t !] x STE(c_t)   (forward: x1; backward: gradiente de c_t)""")
 nb.md(obs("""
 El suavizado es lo que permite aprender fronteras «a ciegas»: una frontera dudosa (P≈0.5) no tira la información del chunk, la **mezcla** con el anterior; y, si acierta, el factor $c_t$ la recompensa. Sin esto, el gradiente no llegaría a $W_q,W_k$.
 """))
@@ -188,7 +188,7 @@ Si el entrenamiento ha avanzado lo suficiente, las barras naranjas (bordes) empi
 """))
 nb.gemini("video", "M07-VID-01", "Cómo aprende H-Net dónde cortar",
           "Evolución (ilustrativa) de la probabilidad de frontera p_t a lo largo del entrenamiento: de ruido a picos en inicios de palabra, con la ratio loss estabilizando la densidad de bordes.",
-          """Video explicativo técnico de 28 segundos, 16:9, 1080p, ritmo calmado, sin voz en off. Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas ni datos reales (todo es ilustrativo y debe decirlo una nota fija abajo: "Ilustración conceptual").
+          """Video explicativo técnico de 28 segundos, 16:9, 1080p, ritmo calmado, sin voz en off y sin música. Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas ni datos reales (todo es ilustrativo y debe decirlo una nota fija abajo: "Ilustración conceptual").
 Escena fija: la frase "el servidor procesa las peticiones" en una fila de casillas (una por carácter, espacios como ␣) abajo; encima, una fila de barras azules que representan p_t (probabilidad de frontera) y una línea roja discontinua en 0.5. Un contador arriba a la derecha dice "paso de entrenamiento".
 Guion por escenas:
 0–5 s: título "H-Net aprende sus propias fronteras". Aparece la frase y las barras con alturas casi aleatorias (entre 0.3 y 0.7); contador "paso 0". Etiqueta: "al inicio, el router no sabe nada".
