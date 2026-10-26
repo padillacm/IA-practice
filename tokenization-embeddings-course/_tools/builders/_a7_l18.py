@@ -12,14 +12,14 @@ def lesson(nb):
 
 **Prerrequisitos:** 12 (embedders, Matryoshka, int8/binaria), 13 (híbrido y RRF), 14 (ANN y medición p50/p99), 15 (bootstrap pareado, drift), 17 (vec2text).
 
-> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 2 h): §1 costos · §2 batching · §4 caché · §6 migración · §8 vector DB. Ampliación (≈ 1 h): §3 colas y tail latency · §7 cuantización · §9 privacidad · §10 drift · §11 A/B e interleaving.
+> 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 2 h, lo que usa el proyecto): §1 costes · §2 batching · §4 caché · §5 versionado y migración · §7 vector DB y filtros. Ampliación (≈ 1 h): §3 colas y *tail latency* (y 3b, servidores) · §6 cuantización · §8 privacidad · §9 drift · §10 A/B e interleaving. Si vas justo de tiempo, ejecuta la ampliación sin estudiarla y vuelve a ella la semana siguiente (repaso espaciado).
 
-**Hilo conductor — Políglota.** El prototipo funciona en un notebook. Ahora hay 2 M de usuarios potenciales, una factura que pagar y un modelo nuevo (v2) que el equipo quiere desplegar **sin reindexar a ciegas**. Hoy conviertes Políglota en un servicio: con costos calculados, latencia medida, caché, versionado, filtros, privacidad, monitorización y un plan de migración con números.
+**Hilo conductor — Políglota.** El prototipo funciona en un notebook. Ahora hay 2 M de usuarios potenciales, una factura que pagar y un modelo nuevo (v2) que el equipo quiere desplegar **sin reindexar a ciegas**. Hoy conviertes Políglota en un servicio: con costes calculados, latencia medida, caché, versionado, filtros, privacidad, monitorización y un plan de migración con números.
 
 > **Estado del arte a octubre de 2026.** Toda cifra de precio o de producto lleva fecha y fuente; los supuestos de hardware están marcados como **supuesto** (no medidos aquí). Fuera de alcance: MLOps general (CI/CD, Kubernetes) y serving de LLMs generativos.
 ''')
     nb.md(r'''## 🎯 Objetivos de aprendizaje
-1. **Calcular** el costo de embeber un corpus y de servir consultas con API vs GPU propia, con fórmulas y supuestos explícitos, y encontrar el punto de equilibrio.
+1. **Calcular** el coste de embeber un corpus y de servir consultas con API vs GPU propia, con fórmulas y supuestos explícitos, y encontrar el punto de equilibrio.
 2. **Medir** el efecto del tamaño de lote y del *padding* en el throughput de un encoder, y **simular** micro-batching dinámico para razonar p50/p99.
 3. **Explicar** la amplificación de cola (*tail at scale*) con *fan-out* y **mitigarla** con *hedged requests*.
 4. **Implementar** una caché de embeddings con la versión del modelo en la clave y medir el hit rate en tráfico tipo Zipf.
@@ -42,26 +42,16 @@ Un test **pareado** sobre las mismas queries (bootstrap pareado o permutación d
 </details>
 <details><summary><b>4 · (M17)</b> ¿Qué demostró vec2text sobre los embeddings de texto?</summary>
 
-Que un embedding **no es un hash**: con acceso al embedder, se puede reconstruir gran parte del texto original (Morris et al. 2023). Consecuencia en producción: los vectores son **datos sensibles** y heredan la clasificación de privacidad del texto (§9).
+Que un embedding **no es un hash**: con acceso al embedder, se puede reconstruir gran parte del texto original (Morris et al. 2023). Consecuencia en producción: los vectores son **datos sensibles** y heredan la clasificación de privacidad del texto (§8).
 </details>
-''')
-    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
-🟢 sólido · 🟡 emergente · 🔴 experimental.
+<details><summary><b>5 · (M04 + M00, cálculo)</b> El corpus de Políglota es mitad español y mitad inglés. Si la prima de tokens del español frente al inglés es 1.3 con tu tokenizer, ¿cuánto sube la factura de una API que cobra por token respecto a un corpus todo en inglés del mismo contenido?</summary>
 
-| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
-|---|---|---|---|
-| APIs de embeddings de pago por token | 🟢 | OpenAI (`text-embedding-3-*`), Google (`gemini-embedding-001`), Cohere, Voyage | páginas de modelo/precios de cada proveedor (oct-2026) |
-| Servidores dedicados de embeddings (TEI) | 🟢 | Hugging Face Text Embeddings Inference (imágenes `cpu-*`/`cuda-*`) | repo `huggingface/text-embeddings-inference` |
-| vLLM como servidor de *pooling*/embeddings | 🟡 | `--runner pooling`, endpoint compatible con OpenAI | docs de vLLM («Pooling Models») |
-| Micro-batching dinámico | 🟢 | TEI, Triton, vLLM | docs de cada servidor |
-| Hedged requests contra la cola | 🟢 | descrito para servicios de Google | Dean & Barroso 2013 |
-| Caché de embeddings por contenido + versión | 🟢 | práctica estándar | — |
-| Re-embedding completo con doble índice (blue/green) | 🟢 | práctica estándar en migraciones | docs de vector DBs (aliases de colecciones en Qdrant) |
-| Adaptadores lineales entre versiones | 🟡 | puente temporal; base teórica en compatibilidad hacia atrás | Shen et al. 2020 (BCT) |
-| Vector DB ligera (Qdrant local / pgvector) | 🟢 | Qdrant, pgvector (HNSW e IVFFlat) | docs oficiales |
-| Cuantización binaria + rescoring en servicio | 🟢/🟡 | sentence-transformers, varias vector DBs | Shakir et al. 2024 (blog HF) |
-| Inversión de embeddings como riesgo | 🟡 (riesgo real, defensas inmaduras) | — | Song & Raghunathan 2020; Morris et al. 2023 |
-| Interleaving para evaluación online | 🟢 en buscadores web; 🟡 en RAG | Bing/Yahoo (estudios publicados) | Chapelle et al. 2012 |
+Factura ∝ tokens: $0.5\cdot 1 + 0.5\cdot 1.3 = 1.15$ → **+15 %**. La prima de tokens del módulo 04 no es una curiosidad lingüística: es una línea de la factura (módulo 00) y del throughput de la GPU propia (§1–§2). Por eso la §1 estima tokens con bytes/token y avisa de que el español y el código pagan más.
+</details>
+<details><summary><b>6 · (M01, diagnóstico)</b> Dos usuarios buscan «café»; uno lo teclea en NFC (`é` = U+00E9) y otro en NFD (`e` + U+0301). Si la caché hashea el texto tal cual, ¿aciertan la misma entrada?</summary>
+
+No: son secuencias de code points (y de bytes UTF-8) distintas, así que el hash difiere y la segunda es un fallo de caché aunque el embedding sea el mismo. Por eso en la §4 **se normaliza antes de hashear** (NFC del módulo 01, más minúsculas y espacios).
+</details>
 ''')
 
     # ───────────────────────────── Intuición ─────────────────────────────
@@ -69,9 +59,9 @@ Que un embedding **no es un hash**: con acceso al embedder, se puede reconstruir
 Un sistema de retrieval en producción tiene **dos rutas** con restricciones opuestas:
 
 * **Ruta offline (indexación):** embeber millones de documentos. Importa el **throughput** (tokens/s/$) y la **reproducibilidad** (qué versión generó cada vector). La latencia de un documento da igual.
-* **Ruta online (consulta):** embeber una query corta y buscar. Importa la **latencia de cola** (p99) y la **disponibilidad**. El costo por query es diminuto, pero se multiplica por millones.
+* **Ruta online (consulta):** embeber una query corta y buscar. Importa la **latencia de cola** (p99) y la **disponibilidad**. El coste por query es diminuto, pero se multiplica por millones.
 
-Analogía con recsys: es el mismo patrón que un *two-tower* (torre de ítems precalculada offline, torre de usuario online). La diferencia: aquí **cambiar de modelo invalida todo el índice**, porque query y documentos deben vivir en el mismo espacio (§6).
+Analogía con recsys: es el mismo patrón que un *two-tower* (torre de ítems precalculada offline, torre de usuario online). La diferencia: aquí **cambiar de modelo invalida todo el índice**, porque query y documentos deben vivir en el mismo espacio (§5).
 ''')
     nb.gemini(
         "imagen", "M18-IMG-01", "Arquitectura de un servicio de embeddings en producción",
@@ -107,8 +97,8 @@ MONITOR: p50/p99 · hit rate · drift (PSI) · A/B · privacidad
     nb.code(C.CODE_VERSIONES)
     nb.md(r'''> ⚠️ **Sobre las cifras.** En el entorno de autoría Hugging Face estaba bloqueado: v1 y v2 son los *fallbacks* TF-IDF+SVD (v1: n-gramas 3-4 → 48 d; v2: n-gramas 2-5 → 128 d). Son espacios **distintos e incompatibles**, que es exactamente lo que importa para la migración. Con red, la celda usa `multilingual-e5-small` (v1) y `multilingual-e5-base` (v2).''')
 
-    # ───────────────────────────── §1 Costos ─────────────────────────────
-    nb.md(r'''## 1. Costos: API vs GPU propia
+    # ───────────────────────────── §1 Costes ─────────────────────────────
+    nb.md(r'''## 1. Costes: API vs GPU propia
 📐 **Fórmulas.** Sea $T$ el número de tokens a embeber.
 
 * **API** (pago por token): $\;C_\text{API} = \dfrac{T}{10^6}\, p$, con $p$ = USD por millón de tokens de entrada.
@@ -116,6 +106,8 @@ MONITOR: p50/p99 · hit rate · drift (PSI) · A/B · privacidad
 * **Servicio online 24/7**: la GPU se paga aunque no haya tráfico. Con $G$ GPUs dedicadas al mes: $C = G \cdot 730 \cdot h$, con $G = \lceil T_\text{mes} / (\theta \cdot 3600 \cdot 730 \cdot u) \rceil$ (mínimo 1, o 2 para alta disponibilidad).
 
 **Punto de equilibrio** (una GPU dedicada vs API): $T^\* = 730\,h \cdot 10^6 / p$ tokens/mes, siempre que una GPU dé abasto con $T^\*$.
+
+✍️ **Ejemplo a mano (hazlo antes de ejecutar).** GPU a $h = 0.80$ $/h, 24/7: $730 \cdot 0.80 = 584$ $/mes, la uses o no. Frente a una API de $p = 0.02$ $/1M: $T^\* = 584 \cdot 10^6 / 0.02 = 2.92\times10^{10}$ tokens/mes. ¿Da abasto una GPU? Con $\theta = 20\,000$ tok/s y $u = 0.6$: $20\,000 \cdot 3600 \cdot 730 \cdot 0.6 = 3.15\times10^{10}$ tokens/mes, apenas por encima de $T^\*$. Frente a $p = 0.13$: $T^\* = 4.49\times10^{9}$, siete veces menos. Lectura: contra la API más barata, autohospedar solo compensa con la GPU casi llena. Es el mismo razonamiento de *build vs buy* que un coste fijo (servidor) frente a uno variable (por uso) en cualquier sistema; la celda siguiente lo dibuja con la tabla de precios.
 
 Los **precios** de abajo son tarifas estándar publicadas (consultadas en oct-2026; cambian a menudo y algunas APIs tienen descuento por lotes asíncronos: **verifícalos**). El throughput y el precio de la GPU son **supuestos ilustrativos**: mídelos con tu modelo (la §2 enseña cómo).''')
     nb.code(r'''
@@ -149,7 +141,7 @@ print(f"Corpus del notebook ≈ {tok_corpus:,.0f} tokens · escenario = {T_PROD/
 pd.DataFrame(filas).round(4)
 ''')
     nb.code(r'''
-# Costo MENSUAL de servir/embeber T_mes tokens: API (lineal) vs GPUs dedicadas (escalón, mínimo 1)
+# Coste MENSUAL de servir/embeber T_mes tokens: API (lineal) vs GPUs dedicadas (escalón, mínimo 1)
 T_mes = np.logspace(8, 12, 200)
 cap_gpu_mes = GPU_TOK_S * 3600 * 730 * UTIL
 G = np.maximum(1, np.ceil(T_mes / cap_gpu_mes))
@@ -161,27 +153,27 @@ for p, c in zip(PRECIOS_API.values(), [AZUL, NARANJA, VERDE]):
     t_eq = 730 * GPU_USD_HORA * 1e6 / p
     ax.axvline(t_eq, color=c, ls=":", lw=1)
 ax.set_xlabel("tokens embebidos al mes"); ax.set_ylabel("USD / mes")
-ax.set_title("Costo mensual: API por token vs GPU dedicada (precios oct-2026 + supuestos)")
+ax.set_title("Coste mensual: API por token vs GPU dedicada (precios oct-2026 + supuestos)")
 ax.legend(fontsize=8); plt.tight_layout(); plt.show()
 for k, p in PRECIOS_API.items():
     print(f"equilibrio con {k}: {730 * GPU_USD_HORA * 1e6 / p:.2e} tokens/mes (capacidad de 1 GPU: {cap_gpu_mes:.2e})")
 ''')
     nb.md(r'''> 👀 **Qué debes observar:** con estos supuestos, una GPU dedicada solo compensa frente a la API más barata **cerca de su capacidad máxima** (decenas de miles de millones de tokens al mes); frente a APIs de ~0.13–0.15 $/1M el equilibrio llega mucho antes. Las líneas punteadas son los puntos de equilibrio. Pero el $ no es el único eje: **latencia de red, residencia de datos, cuotas (rate limits) y control de versión del modelo** (una API puede retirar un modelo) empujan a autohospedar aunque cueste más.
 
-🧠 El costo real de una migración no es el re-embedding (≈ decenas–cientos de $ para 4 B tokens según la tabla) sino **el doble índice durante semanas, la evaluación y el riesgo**. Por eso §6 mide alternativas.''')
+🧠 El coste real de una migración no es el re-embedding (≈ decenas–cientos de $ para 4 B tokens según la tabla) sino **el doble índice durante semanas, la evaluación y el riesgo**. Por eso §5 mide alternativas.''')
 
     # ───────────────────────────── §2 Batching ─────────────────────────────
     nb.md(r'''## 2. Batching y padding: el throughput se gana en la forma del tensor
 Un encoder procesa un lote como un tensor $(B, L_\max)$: todas las secuencias se **rellenan** (*padding*) hasta la más larga del lote. El trabajo útil es $\sum_i L_i$; el pagado es $B \cdot L_\max$ (y la atención crece con $L_\max^2$). Dos palancas:
-1. **Lotes más grandes** amortizan el costo fijo por llamada (lanzamiento de kernels, Python, transferencia).
+1. **Lotes más grandes** amortizan el coste fijo por llamada (lanzamiento de kernels, Python, transferencia).
 2. **Ordenar por longitud** (*length bucketing*) antes de cortar lotes reduce el relleno. TEI y sentence-transformers lo hacen internamente.
 
-🧪 Medimos ambas con un encoder Transformer diminuto de **pesos aleatorios** (el costo depende de la forma, no de los pesos) y longitudes realistas sacadas del corpus.''')
+🧪 Medimos ambas con un encoder Transformer diminuto de **pesos aleatorios** (el coste depende de la forma, no de los pesos) y longitudes realistas sacadas del corpus.''')
     nb.code(r'''
 import torch.nn as nn
 
 class MiniEncoder(nn.Module):
-    """Encoder de 2 capas, d=128, mean pooling con máscara. Solo para medir costo (pesos aleatorios)."""
+    """Encoder de 2 capas, d=128, mean pooling con máscara. Solo para medir coste (pesos aleatorios)."""
     def __init__(self, vocab=8000, d=128, capas=2, cabezas=4):
         super().__init__()
         self.emb = nn.Embedding(vocab, d)
@@ -228,11 +220,11 @@ axs[1].set_xlabel("tamaño de lote B"); axs[1].set_ylabel("% de cómputo gastado
 axs[0].set_title("Throughput vs tamaño de lote"); axs[1].set_title("Desperdicio por padding")
 axs[0].legend(); plt.tight_layout(); plt.show()
 ''')
-    nb.md(r'''> 👀 **Qué debes observar:** (1) sin ordenar, el padding crece con $B$ (cada lote se rellena hasta su texto más largo) y se come parte de la ganancia del lote; (2) ordenando por longitud el padding queda casi en 0 y, para casi todo $B$, el throughput es mayor; (3) en CPU con **un hilo** la ganancia por lote se satura pronto (pocas unidades de cómputo que llenar; lotes grandes alargan $L_\max$ y la atención crece con $L_\max^2$) y la curva es ruidosa. En GPU el efecto del tamaño de lote es mucho mayor (miles de núcleos que llenar), hasta que se agota la memoria. **Esta celda es la forma correcta de obtener $\theta$** para la fórmula de costos: mide con tu modelo, tu hardware y tus longitudes reales, y repite varias veces.''')
+    nb.md(r'''> 👀 **Qué debes observar:** (1) sin ordenar, el padding crece con $B$ (cada lote se rellena hasta su texto más largo) y se come parte de la ganancia del lote; (2) ordenando por longitud el padding queda casi en 0 y, para casi todo $B$, el throughput es mayor; (3) en CPU con **un hilo** la ganancia por lote se satura pronto (pocas unidades de cómputo que llenar; lotes grandes alargan $L_\max$ y la atención crece con $L_\max^2$) y la curva es ruidosa. En GPU el efecto del tamaño de lote es mucho mayor (miles de núcleos que llenar), hasta que se agota la memoria. **Esta celda es la forma correcta de obtener $\theta$** para la fórmula de costes: mide con tu modelo, tu hardware y tus longitudes reales, y repite varias veces.''')
 
     # ───────────────────────────── §3 Colas y cola larga ─────────────────────────────
     nb.md(r'''## 3. Latencia p50/p99: micro-batching dinámico y *tail at scale*
-En la ruta online las queries llegan **una a una**. Un servidor con *micro-batching dinámico* (TEI, Triton, vLLM) espera hasta `max_wait` ms o hasta reunir `max_batch` peticiones y las procesa juntas. Modelo de costo de un lote: $t(B) = a + bB$ ($a$ = costo fijo, $b$ = costo marginal). Capacidad: $B/(a+bB)$ peticiones/ms, que crece con $B$.
+En la ruta online las queries llegan **una a una**. Un servidor con *micro-batching dinámico* (TEI, Triton, vLLM) espera hasta `max_wait` ms o hasta reunir `max_batch` peticiones y las procesa juntas. Modelo de coste de un lote: $t(B) = a + bB$ ($a$ = coste fijo, $b$ = coste marginal). Capacidad: $B/(a+bB)$ peticiones/ms, que crece con $B$.
 
 Trade-off: esperar **suma latencia** a las primeras peticiones del lote pero **sube la capacidad**; cuando la carga se acerca a la capacidad sin lotes, la cola explota y el p99 se dispara.''')
     nb.gemini(
@@ -416,7 +408,7 @@ print(f"queries de la CACHÉ VIEJA vs índice nuevo: nDCG@10 = {stale:.3f}   <- 
     nb.md(r'''## 5. Versionado y migración de embedders
 Cambiar de embedder es la operación más cara y arriesgada de un sistema de retrieval: los vectores de v1 y v2 **no son comparables**. Opciones:
 
-| Estrategia | Qué haces | Costo | Riesgo |
+| Estrategia | Qué haces | Coste | Riesgo |
 |---|---|---|---|
 | **Re-embedding completo + blue/green** | Embebes todo con v2 en una colección nueva, evalúas, cambias el alias `prod` y conservas v1 para *rollback* | $T$ tokens + doble memoria durante la transición | bajo (rollback = cambiar el alias) |
 | **Adaptador del lado de la query** | Aprendes $W$ con pares $(e_2(x), e_1(x))$ y consultas el índice v1 con $W e_2(q)$ | embeber una **muestra** con ambas versiones | calidad ≤ v1 + algo; deuda técnica |
@@ -486,7 +478,7 @@ for nombre, a, b in (("v2 completo − v1", pq_v2, pq_v1), ("adaptador 50 % − 
 coste_reembed = {k: coste_api(T_PROD, p) for k, p in PRECIOS_API.items()}
 print(f"\nCosto de re-embeber 10 M chunks: API {min(coste_reembed.values()):.0f}–{max(coste_reembed.values()):.0f} $ · GPU propia ≈ {coste_gpu(T_PROD):.0f} $ ({horas_gpu(T_PROD):.0f} h, supuestos de §1)")
 ''')
-    nb.md(r'''> 👀 **Qué debes observar:** si el IC de «v2 completo − adaptador» excluye el 0, el adaptador **deja calidad sobre la mesa** y solo se justifica como puente temporal. Compara esa pérdida con el costo del re-embedding (decenas–cientos de $ con estos supuestos): en la mayoría de casos **re-embeber es barato; lo caro es operar dos índices y validar**. El adaptador gana cuando el texto original ya no está disponible (solo guardaste vectores) o cuando el corpus es enorme y necesitas servir v2 *ya*.''')
+    nb.md(r'''> 👀 **Qué debes observar:** si el IC de «v2 completo − adaptador» excluye el 0, el adaptador **deja calidad sobre la mesa** y solo se justifica como puente temporal. Compara esa pérdida con el coste del re-embedding (decenas–cientos de $ con estos supuestos): en la mayoría de casos **re-embeber es barato; lo caro es operar dos índices y validar**. El adaptador gana cuando el texto original ya no está disponible (solo guardaste vectores) o cuando el corpus es enorme y necesitas servir v2 *ya*.''')
 
     # ───────────────────────────── §7 Cuantización ─────────────────────────────
     nb.md(r'''## 6. Cuantización en producción: qué vive en RAM y qué en disco
@@ -632,7 +624,7 @@ Sobre cada caja, un triángulo naranja numerado con el riesgo:
 3 sobre la caché: "vectores sin borrar tras una solicitud de olvido";
 4 sobre Logs: "queries con PII en texto plano";
 5 entre dos cilindros "Tenant A" y "Tenant B" dentro de la Vector DB: "fuga entre tenants".
-Debajo de cada riesgo, una etiqueta verde con el control: 1 "modelo propio o acuerdo de residencia"; 2 "cifrado + control de acceso; ruido (con costo de calidad)"; 3 "borrado por doc_id en índice y caché"; 4 "redacción de PII en logs"; 5 "colecciones separadas o filtro obligatorio en el servidor".
+Debajo de cada riesgo, una etiqueta verde con el control: 1 "modelo propio o acuerdo de residencia"; 2 "cifrado + control de acceso; ruido (con coste de calidad)"; 3 "borrado por doc_id en índice y caché"; 4 "redacción de PII en logs"; 5 "colecciones separadas o filtro obligatorio en el servidor".
 Título arriba: "Un embedding es un dato sensible".
 Evita: candados o calaveras decorativas, logotipos, texto ilegible, flechas cruzadas.""",
         "Flujo texto → API → vector DB → caché → logs con cinco riesgos de privacidad numerados y el control que mitiga cada uno.",
@@ -683,6 +675,8 @@ En producción casi nunca tienes qrels del tráfico real. Señales **sin etiquet
 * **Fracción de queries «huérfanas»**: top-1 por debajo del percentil 5 de referencia.
 * **PSI** (*Population Stability Index*) de la distribución del top-1 frente a una ventana de referencia: $\mathrm{PSI} = \sum_b (a_b - e_b)\ln\frac{a_b}{e_b}$, con $e_b$, $a_b$ las fracciones de referencia y actuales en el *bin* $b$ (bins por cuantiles de la referencia). Umbrales habituales (regla práctica, no ley): < 0.1 estable, 0.1–0.25 vigilar, > 0.25 actuar.
 
+✍️ **Ejemplo a mano con 2 bins.** Referencia: mitad de las queries con top-1 por encima de la mediana, mitad por debajo, $e = (0.5, 0.5)$. Hoy: $a = (0.2, 0.8)$ (muchas queries con confianza baja). $\mathrm{PSI} = (0.2-0.5)\ln\frac{0.2}{0.5} + (0.8-0.5)\ln\frac{0.8}{0.5} = (-0.3)(-0.916) + (0.3)(0.470) = 0.275 + 0.141 = 0.42$ → **actuar**. Cada término es $\ge 0$ (diferencia y logaritmo tienen el mismo signo): el PSI es una divergencia de KL simetrizada, $\mathrm{KL}(a\Vert e) + \mathrm{KL}(e\Vert a)$, la misma familia que la entropía cruzada del módulo 06. Viene del *credit scoring* (estabilidad de la población que puntúa un modelo de riesgo): lo usamos igual, solo cambia la variable vigilada.
+
 🧪 Simulamos 30 días: desde el día 15 crece la proporción de queries de un **tema nuevo** que la documentación aún no cubre.''')
     nb.code(r'''
 TEMA_NUEVO = ["kubernetes", "helm", "pod", "ingress", "autoscaling", "namespace", "configmap", "daemonset", "kubectl", "rollout"]
@@ -719,6 +713,8 @@ print("primer día con PSI > 0.25:", int(serie.loc[serie.PSI > 0.25, "día"].min
 El golden set dice si v2 es mejor **en tus queries juzgadas**; solo el tráfico real dice si es mejor **para tus usuarios** (gap offline/online, módulo 19).
 * **A/B**: la mitad de los usuarios ve A y la otra mitad B; comparas una métrica de sesión (p. ej. éxito = al menos un clic). Varianza alta: cada usuario solo ve un sistema.
 * **Interleaving (team-draft)**: cada usuario ve **una lista mezclada** de A y B (como elegir equipos: por turnos aleatorios cada sistema aporta su mejor documento aún no elegido); los clics se acreditan al «equipo» que aportó el documento. Es una comparación **pareada dentro de la misma impresión** → mucha más potencia (Chapelle et al. 2012 lo validaron a gran escala en buscadores web).
+
+✍️ **Ejemplo a mano (team-draft).** A = [a, b, c], B = [b, d, a]. Ronda 1, la moneda dice «A primero»: A aporta `a`, B aporta su mejor aún no elegido, `b`. Ronda 2, «B primero»: B aporta `d`, A aporta `c`. Lista mostrada: [a, b, d, c] con equipos A = {a, c}, B = {b, d}. El usuario hace clic en `b` y `d` → B gana esta impresión 2–0. Como en un test pareado del módulo 15, cada impresión es su propio control (mismo usuario, misma query, mismo momento): por eso se necesita mucho menos tráfico que en un A/B.
 
 🧪 Simulamos usuarios con un modelo de clic con **sesgo de posición** (examinan la posición $r$ con probabilidad decreciente; clic en relevante 0.8, en no relevante 0.05) usando los qrels como verdad, con A = v1 y B = v2. Medimos la **potencia** (fracción de 100 experimentos que detectan B > A con p < 0.05) frente al número de impresiones.''')
     nb.code(r'''
@@ -776,9 +772,29 @@ print(f"nDCG@10 offline: v1={nd(Q1 @ D1.T):.3f} · v2={nd(Q2 @ D2.T):.3f}")
     nb.md(r'''> 👀 **Qué debes observar:** para la misma diferencia de calidad, interleaving alcanza potencia 0.8 con **varias veces menos impresiones** que el A/B: cada impresión compara A y B para el mismo usuario y la misma query. A cambio, interleaving mide **preferencia relativa**, no el efecto en métricas de negocio (retención, conversión): el flujo habitual es *interleaving para cribar candidatos → A/B para confirmar el impacto* del ganador. En RAG, donde el «usuario» del retrieval es un LLM, los clics se sustituyen por señales del generador o por jueces, con sus sesgos (módulo 15).''')
 
     # ───────────────────────────── Cierre ─────────────────────────────
+    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
+Ya has medido cada pieza (costes, colas, caché, migración, cuantización, filtros, privacidad, drift, interleaving); ahora sitúalas: ¿cuáles son práctica estándar y cuáles todavía puentes o riesgos abiertos?
+
+🟢 sólido · 🟡 emergente · 🔴 experimental.
+
+| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
+|---|---|---|---|
+| APIs de embeddings de pago por token | 🟢 | OpenAI (`text-embedding-3-*`), Google (`gemini-embedding-001`), Cohere, Voyage | páginas de modelo/precios de cada proveedor (oct-2026) |
+| Servidores dedicados de embeddings (TEI) | 🟢 | Hugging Face Text Embeddings Inference (imágenes `cpu-*`/`cuda-*`) | repo `huggingface/text-embeddings-inference` |
+| vLLM como servidor de *pooling*/embeddings | 🟡 | `--runner pooling`, endpoint compatible con OpenAI | docs de vLLM («Pooling Models») |
+| Micro-batching dinámico | 🟢 | TEI, Triton, vLLM | docs de cada servidor |
+| Hedged requests contra la cola | 🟢 | descrito para servicios de Google | Dean & Barroso 2013 |
+| Caché de embeddings por contenido + versión | 🟢 | práctica estándar | — |
+| Re-embedding completo con doble índice (blue/green) | 🟢 | práctica estándar en migraciones | docs de vector DBs (aliases de colecciones en Qdrant) |
+| Adaptadores lineales entre versiones | 🟡 | puente temporal; base teórica en compatibilidad hacia atrás | Shen et al. 2020 (BCT) |
+| Vector DB ligera (Qdrant local / pgvector) | 🟢 | Qdrant, pgvector (HNSW e IVFFlat) | docs oficiales |
+| Cuantización binaria + rescoring en servicio | 🟢/🟡 | sentence-transformers, varias vector DBs | Shakir et al. 2024 (blog HF) |
+| Inversión de embeddings como riesgo | 🟡 (riesgo real, defensas inmaduras) | — | Song & Raghunathan 2020; Morris et al. 2023 |
+| Interleaving para evaluación online | 🟢 en buscadores web; 🟡 en RAG | Bing/Yahoo (estudios publicados) | Chapelle et al. 2012 |
+''')
     nb.md(r'''## 🏭 En producción
 * **Precios publicados (oct-2026, tarifa estándar por 1M tokens de entrada):** OpenAI `text-embedding-3-small` 0.02 $ y `text-embedding-3-large` 0.13 $ (página del modelo en la documentación de OpenAI); Google `gemini-embedding-001` 0.15 $ (anunciado al pasar a disponibilidad general en julio de 2025). Verifica siempre la página oficial: los precios y los descuentos por lote cambian.
-* **Matryoshka como palanca de costo:** las APIs de OpenAI (`dimensions`) y Gemini (`output_dimensionality`) permiten pedir menos dimensiones: la memoria del índice escala lineal con $d$ (módulo 12).
+* **Matryoshka como palanca de coste:** las APIs de OpenAI (`dimensions`) y Gemini (`output_dimensionality`) permiten pedir menos dimensiones: la memoria del índice escala lineal con $d$ (módulo 12).
 * **TEI** (Hugging Face) es el servidor de referencia para encoders: micro-batching por tokens (`--max-batch-tokens`), imágenes por arquitectura y métricas Prometheus. **vLLM** cubre modelos de *pooling* y LLM-as-embedder con `--runner pooling`.
 * **Vector DBs:** Qdrant (named vectors, filtros por payload, aliases de colección para cambios atómicos), pgvector (HNSW e IVFFlat dentro de Postgres: ideal si ya tienes Postgres y < decenas de millones de vectores), FAISS como librería (módulo 14).
 * **Migraciones:** el patrón robusto es colección nueva + backfill + evaluación en sombra + cambio de alias; los adaptadores son puentes. La literatura de **compatibilidad hacia atrás** (Shen et al. 2020, BCT) nació en visión (reconocimiento facial) precisamente porque re-embeber galerías enormes era inviable.
@@ -795,7 +811,7 @@ print(f"nDCG@10 offline: v1={nd(Q1 @ D1.T):.3f} · v2={nd(Q2 @ D2.T):.3f}")
 8. **El borrado es parte del diseño**: un `DELETE` por `doc_id` debe propagarse a índice, réplicas, cachés y backups de vectores; con HNSW los borrados se marcan y degradan el grafo hasta compactar (módulo 14).
 ''')
     nb.md(r'''## ⚠️ Errores comunes
-* Calcular el costo solo con el precio por token y olvidar el **doble índice** durante la migración, las re-indexaciones por cambios de chunking y el tráfico de evaluación.
+* Calcular el coste solo con el precio por token y olvidar el **doble índice** durante la migración, las re-indexaciones por cambios de chunking y el tráfico de evaluación.
 * Medir latencia con un bucle secuencial en local y extrapolar a producción (sin red, sin cola, sin concurrencia).
 * Caché **sin versión** en la clave, o sin normalizar el texto (hit rate artificialmente bajo).
 * Mezclar en el mismo índice vectores de dos versiones «porque tienen la misma dimensión».
@@ -806,7 +822,7 @@ print(f"nDCG@10 offline: v1={nd(Q1 @ D1.T):.3f} · v2={nd(Q2 @ D2.T):.3f}")
     nb.md(r'''## 📝 Autoevaluación
 <details><summary><b>1 · (Cálculo)</b> 50 M de chunks de 300 tokens. ¿Cuánto cuesta re-embeberlos con una API de 0.02 $/1M y con una GPU propia de 0.80 $/h que da 20 000 tokens/s al 60 % de utilización?</summary>
 
-$T = 1.5\times 10^{10}$ tokens. API: $1.5\times10^{10}/10^6 \times 0.02 = $ **300 $**. GPU: $1.5\times10^{10}/(20\,000\cdot3600\cdot0.6) \approx 347$ h → **≈ 278 $** (y ≈ 14.5 días de una GPU, o 1.5 días con 10). El costo se parece; el **tiempo de calendario** y la cuota de la API suelen decidir.
+$T = 1.5\times 10^{10}$ tokens. API: $1.5\times10^{10}/10^6 \times 0.02 = $ **300 $**. GPU: $1.5\times10^{10}/(20\,000\cdot3600\cdot0.6) \approx 347$ h → **≈ 278 $** (y ≈ 14.5 días de una GPU, o 1.5 días con 10). El coste se parece; el **tiempo de calendario** y la cuota de la API suelen decidir.
 </details>
 <details><summary><b>2 · (Cálculo)</b> Fan-out a 32 shards; cada shard tiene un 1 % de probabilidad de responder lento. ¿Qué fracción de queries es lenta?</summary>
 

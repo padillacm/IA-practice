@@ -4,12 +4,12 @@
 
 | Archivo | Contenido |
 |---|---|
-| [`18_produccion.ipynb`](18_produccion.ipynb) | Lección: costos API vs GPU (fórmulas, precios fechados oct-2026, punto de equilibrio) · batching y padding medidos con un encoder Transformer · micro-batching dinámico (simulación de colas, p50/p99) · *tail at scale* con fan-out y hedged requests · TEI y vLLM (referencia + cliente) · caché LRU con versión en la clave (hit rate con tráfico Zipf, bug de caché sin versión) · **migración v1→v2 medida**: re-embedding vs adaptadores ridge/Procrustes (query-side y doc-side) con test pareado · cuantización int8/binaria + rescoring · **Qdrant en modo local** (named vectors por versión, filtros; respaldo FAISS) · híbrido + filtro por idioma · inversión de embeddings y ruido (privacidad vs utilidad) · drift sin etiquetas (top-1, PSI) · A/B vs team-draft interleaving (potencia) |
-| [`18_proyecto_produccion.ipynb`](18_proyecto_produccion.ipynb) | Proyecto **Servicio Políglota**: `ServicioPoliglota` con caché LRU versionada, FAISS por versión, BM25, RRF, filtro por idioma, alias `prod`, adaptador servido como versión, latencias frío/caliente, plan de migración con costos y tests pareados, API FastAPI opcional. TODOs, pistas 🪜, rúbrica de 100 puntos calibrada y solución tras ⛔ SPOILER |
+| [`18_produccion.ipynb`](18_produccion.ipynb) | Lección: costes API vs GPU (fórmulas, precios fechados oct-2026, punto de equilibrio) · batching y padding medidos con un encoder Transformer · micro-batching dinámico (simulación de colas, p50/p99) · *tail at scale* con fan-out y hedged requests · TEI y vLLM (referencia + cliente) · caché LRU con versión en la clave (hit rate con tráfico Zipf, bug de caché sin versión) · **migración v1→v2 medida**: re-embedding vs adaptadores ridge/Procrustes (query-side y doc-side) con test pareado · cuantización int8/binaria + rescoring · **Qdrant en modo local** (named vectors por versión, filtros; respaldo FAISS) · híbrido + filtro por idioma · inversión de embeddings y ruido (privacidad vs utilidad) · drift sin etiquetas (top-1, PSI) · A/B vs team-draft interleaving (potencia) |
+| [`18_proyecto_produccion.ipynb`](18_proyecto_produccion.ipynb) | Proyecto **Servicio Políglota**: `ServicioPoliglota` con caché LRU versionada, FAISS por versión, BM25, RRF, filtro por idioma, alias `prod`, adaptador servido como versión, latencias frío/caliente, plan de migración con costes y tests pareados, API FastAPI opcional. TODOs, pistas 🪜, rúbrica de 100 puntos calibrada y solución tras ⛔ SPOILER |
 | `assets/` | Recursos de Gemini: `M18-IMG-01.png`, `M18-IMG-02.png`, `M18-IMG-03.png`, `M18-VID-01.mp4` |
 
 ## Objetivos
-1. Calcular costos de embeber y servir (API vs GPU) con supuestos explícitos y fechados.
+1. Calcular costes de embeber y servir (API vs GPU) con supuestos explícitos y fechados.
 2. Medir batching/padding y razonar p50/p99 con colas y fan-out.
 3. Implementar caché versionada y medir su hit rate.
 4. Implementar y medir la migración de embedder (re-embedding vs adaptador lineal).

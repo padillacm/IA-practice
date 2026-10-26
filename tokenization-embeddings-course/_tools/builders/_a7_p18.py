@@ -108,13 +108,13 @@ def project(nb):
 | **Nivel** | 🟠 Avanzado |
 | **Duración** | ≈ 2 h |
 | **GPU** | No necesaria (CPU, `FAST_DEV_RUN = True`, ≈ 1–2 min de ejecución) |
-| **Requiere** | Lección 18 (caché, migración, filtros, costos) · módulos 13 (RRF), 14 (FAISS), 15 (bootstrap pareado) |
+| **Requiere** | Lección 18 (caché, migración, filtros, costes) · módulos 13 (RRF), 14 (FAISS), 15 (bootstrap pareado) |
 | **Conecta con** | Módulo 17 (privacidad de los vectores que sirves) · Módulo 19 (decisiones de diseño) · **Módulo 20** (este servicio es la capa de servicio del capstone) |
 
 ## 🏢 Contexto de negocio
 Eres ML engineer en **Políglota Labs**. Mañana se abre la beta: el buscador debe funcionar como **servicio** y no como notebook.
 La CTO pide tres cosas: *«(1) una API con caché y filtro por idioma que no se rompa cuando cambiemos de modelo; (2) números de latencia;
-(3) un plan para migrar de v1 a v2 con costos y calidad medidos: ¿re-embebemos todo, usamos un adaptador o esperamos?»*
+(3) un plan para migrar de v1 a v2 con costes y calidad medidos: ¿re-embebemos todo, usamos un adaptador o esperamos?»*
 
 ## 📦 Dataset
 Corpus Políglota canónico (`carga_corpus` del módulo 00: Wikipedia ES/EN + CodeSearchNet; sin red, **corpus sintético** + funciones reales de la stdlib, con aviso).
@@ -128,7 +128,7 @@ Los umbrales numéricos están **calibrados con la solución de referencia** en 
 | 2 | `ServicioPoliglota.buscar` (denso + BM25 + RRF + filtro) | filtro respetado; nDCG@10 híbrido ≥ {REF['hib'] - 0.02:.3f} (ref. {REF['hib']:.3f}) | 25 |
 | 3 | Latencia y caché | p50 en caliente ≤ p50 en frío; hit rate con tráfico Zipf ≥ {REF['hit_zipf'] - 0.05:.3f} (ref. {REF['hit_zipf']:.3f}) | 15 |
 | 4 | Adaptador v2→v1 servido como versión | nDCG@10 con 50 % de pares ≥ {REF['adapt50'] - 0.03:.3f} (ref. {REF['adapt50']:.3f}) y < nDCG de v2 completo | 20 |
-| 5 | Plan de migración | dict con costos (API y GPU, supuestos explícitos), 2 tests pareados y una decisión coherente con la regla | 20 |
+| 5 | Plan de migración | dict con costes (API y GPU, supuestos explícitos), 2 tests pareados y una decisión coherente con la regla | 20 |
 | 6 | Reflexión | 3 respuestas concretas al final | 5 |
 """)
     nb.md("## 0. Preparación (celdas dadas)")
@@ -228,7 +228,7 @@ Devuelve un `dict` con: `tokens_corpus_prod`, `coste_api_usd` (por proveedor), `
 
 Escenario de producción: 10 M de chunks de 400 tokens. Precios (oct-2026, verifícalos): 0.02, 0.13 y 0.15 $/1M; GPU **supuesta** 0.80 $/h, 20 000 tok/s, 60 % de utilización.""")
     nb.md(hint("Reutiliza `RES['_pq']` (nDCG por query de v1, v2 y adaptador que guardó el TODO 4) y `paired_bootstrap(a, b)` del módulo 15.",
-               "`d = paired_bootstrap(pq['v2'], pq['v1'])`; «excluye el 0» ⇔ `d['ci_low'] > 0`. Costos: `T = 10_000_000 * 400`; `T / 1e6 * precio` y `T / (20_000 * 3600 * 0.6) * 0.80`."))
+               "`d = paired_bootstrap(pq['v2'], pq['v1'])`; «excluye el 0» ⇔ `d['ci_low'] > 0`. Costes: `T = 10_000_000 * 400`; `T / 1e6 * precio` y `T / (20_000 * 3600 * 0.6) * 0.80`."))
     nb.code(r'''
 PRECIOS_API = {"OpenAI text-embedding-3-small": 0.02, "OpenAI text-embedding-3-large": 0.13, "Google gemini-embedding-001": 0.15}
 
@@ -354,12 +354,12 @@ README = r"""# Módulo 18 · Embeddings y retrieval en producción
 
 | Archivo | Contenido |
 |---|---|
-| [`18_produccion.ipynb`](18_produccion.ipynb) | Lección: costos API vs GPU (fórmulas, precios fechados oct-2026, punto de equilibrio) · batching y padding medidos con un encoder Transformer · micro-batching dinámico (simulación de colas, p50/p99) · *tail at scale* con fan-out y hedged requests · TEI y vLLM (referencia + cliente) · caché LRU con versión en la clave (hit rate con tráfico Zipf, bug de caché sin versión) · **migración v1→v2 medida**: re-embedding vs adaptadores ridge/Procrustes (query-side y doc-side) con test pareado · cuantización int8/binaria + rescoring · **Qdrant en modo local** (named vectors por versión, filtros; respaldo FAISS) · híbrido + filtro por idioma · inversión de embeddings y ruido (privacidad vs utilidad) · drift sin etiquetas (top-1, PSI) · A/B vs team-draft interleaving (potencia) |
-| [`18_proyecto_produccion.ipynb`](18_proyecto_produccion.ipynb) | Proyecto **Servicio Políglota**: `ServicioPoliglota` con caché LRU versionada, FAISS por versión, BM25, RRF, filtro por idioma, alias `prod`, adaptador servido como versión, latencias frío/caliente, plan de migración con costos y tests pareados, API FastAPI opcional. TODOs, pistas 🪜, rúbrica de 100 puntos calibrada y solución tras ⛔ SPOILER |
+| [`18_produccion.ipynb`](18_produccion.ipynb) | Lección: costes API vs GPU (fórmulas, precios fechados oct-2026, punto de equilibrio) · batching y padding medidos con un encoder Transformer · micro-batching dinámico (simulación de colas, p50/p99) · *tail at scale* con fan-out y hedged requests · TEI y vLLM (referencia + cliente) · caché LRU con versión en la clave (hit rate con tráfico Zipf, bug de caché sin versión) · **migración v1→v2 medida**: re-embedding vs adaptadores ridge/Procrustes (query-side y doc-side) con test pareado · cuantización int8/binaria + rescoring · **Qdrant en modo local** (named vectors por versión, filtros; respaldo FAISS) · híbrido + filtro por idioma · inversión de embeddings y ruido (privacidad vs utilidad) · drift sin etiquetas (top-1, PSI) · A/B vs team-draft interleaving (potencia) |
+| [`18_proyecto_produccion.ipynb`](18_proyecto_produccion.ipynb) | Proyecto **Servicio Políglota**: `ServicioPoliglota` con caché LRU versionada, FAISS por versión, BM25, RRF, filtro por idioma, alias `prod`, adaptador servido como versión, latencias frío/caliente, plan de migración con costes y tests pareados, API FastAPI opcional. TODOs, pistas 🪜, rúbrica de 100 puntos calibrada y solución tras ⛔ SPOILER |
 | `assets/` | Recursos de Gemini: `M18-IMG-01.png`, `M18-IMG-02.png`, `M18-IMG-03.png`, `M18-VID-01.mp4` |
 
 ## Objetivos
-1. Calcular costos de embeber y servir (API vs GPU) con supuestos explícitos y fechados.
+1. Calcular costes de embeber y servir (API vs GPU) con supuestos explícitos y fechados.
 2. Medir batching/padding y razonar p50/p99 con colas y fan-out.
 3. Implementar caché versionada y medir su hit rate.
 4. Implementar y medir la migración de embedder (re-embedding vs adaptador lineal).
