@@ -11,8 +11,8 @@ Agente: Revisor de ejecutabilidad · Módulos: 09–20 · Informe: tokenization-
 - [x] 17_interpretabilidad_geometria (lección + proyecto ejecutados con nbclient)
 - [x] 18_produccion (lección + proyecto ejecutados con nbclient)
 - [x] 19_playbook_elite (lección + proyecto ejecutados con nbclient)
-- [ ] 20_capstone (lección + proyecto ejecutados con nbclient)
-- [ ] check_course.py OK + informe final
+- [x] 20_capstone (lección + proyecto ejecutados con nbclient)
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (comandos lanzados y su resultado)
@@ -29,3 +29,5 @@ Agente: Revisor de ejecutabilidad · Módulos: 09–20 · Informe: tokenization-
 - 17 lección: 72 s, 0 errores. Proyecto: 19 s, 0 errores, 17/17 ✅. Sin cambios.
 - 18 lección: 36 s, 0 errores (Qdrant local OK). Proyecto: 38 s, 0 errores, 5/5 tests ✅. Sin cambios.
 - 19 lección: 80 s, 0 errores. Proyecto: 2 s, 0 errores, 3/3 casos 100/100 ✅. Sin cambios.
+- 20 lección: 28 s, 0 errores. Proyecto: 31 s, 0 errores, 95/95 pts ✅. Sin cambios.
+- check_course.py: Todo OK. Informe final escrito.

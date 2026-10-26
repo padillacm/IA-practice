@@ -32,7 +32,11 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 | 18 proyecto | 38 s | OK | Ídem | 95/95 pts automáticos (5 tests ✅); plantilla ⏳ sin romper | — |
 | 19 lección | 80 s | OK | Sintético + stdlib; TF-IDF+SVD (aviso ⚠️) | — | — |
 | 19 proyecto | 2 s | OK | Sin datos (design review con rúbrica en Python puro; no necesita `pip`) | 3/3 casos 100/100 (plantilla 24/100, esperado) | — |
-<!-- TABLA -->
+| 20 lección | 28 s | OK | Sintético + stdlib; TF-IDF+SVD (aviso ⚠️) | — | — |
+| 20 proyecto | 31 s | OK | Ídem | 95/95 pts automáticos (test nDCG@10 0.887 vs BM25 0.842); plantilla ⬜ sin romper | — |
+
+Total bloque B en FAST_DEV_RUN/CPU: ≈ 31 min (24 notebooks). Todas las celdas TODO de los proyectos están envueltas
+(`NotImplementedError`/excepción capturada, rúbrica con ⏳/❌/⬜), así que «Ejecutar todo» nunca se rompe.
 
 ## Cambios aplicados (en builders; notebooks regenerados)
 - **10 · reproducibilidad del whitening** (`build_10.py`): la causa de que el efecto del whitening cambiara de signo entre
@@ -54,4 +58,20 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
   `transformers`, `sentence-transformers` y (en el 14) **`numpy`** preinstalados; actualizar numpy en caliente rompe
   paquetes compilados contra la versión de Colab y obliga a reiniciar el entorno. Sin `-U` solo se instala lo que falta
   (`mteb`, `rank_bm25`, `faiss-cpu`); resuelven con `--dry-run`.
-<!-- CAMBIOS -->
+
+## Comprobado sin cambios
+- `pip install` de todos los notebooks resuelve con `--dry-run`; ninguno usa ya `-U`. Los paquetes que piden (`peft`,
+  `accelerate`, `mteb`, `ranx`, `rank_bm25`, `faiss-cpu`, `qdrant-client`) no fuerzan versiones de torch/numpy/transformers.
+- Avisos de datos sintéticos y de modelos de respaldo visibles en todos los notebooks que los usan (09–14 y 18–20 vía
+  `carga_corpus` con Wikipedia API + CodeSearchNet → stdlib real; 15–17 vía HF `datasets` → sintético).
+- Rúbricas de las soluciones: todas en verde con lo medido; no hubo que recalibrar umbrales (la R5 del 10 y la R5 del 11
+  ya eran tolerantes al signo; las del 15–17 solo exigen cifras exactas con corpus sintético + `FAST_DEV_RUN`).
+- Reproducibilidad: 10 y 11 re-ejecutados dos veces con salidas idénticas tras el arreglo del vocabulario.
+
+## Pendientes
+- **Ningún notebook del bloque B corrió con datos reales**: Wikipedia (API y HF) y todos los modelos del hub (GPT-2,
+  e5, MiniLM, CLIP/SigLIP, ColPali) están bloqueados aquí; el código real de 09–14/18–20 sí es real (stdlib de Python).
+  Verificar en Colab las ramas oficiales y los umbrales relativos con modelos reales.
+- 15–17 no tienen espejo automático (solo la indicación manual de `HF_ENDPOINT`); podrían reutilizar el respaldo de
+  stdlib para la parte de código como 09–14.
+- `16` lección es la más lenta (268 s, 6 entrenamientos CLIP/SigLIP de juguete de ~25 s): aceptable.
