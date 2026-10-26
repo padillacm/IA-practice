@@ -1,7 +1,7 @@
 # Progreso: revisor-elite-A
 Agente: Revisor élite / industria · Módulos: 00–08 · Informe: tokenization-embeddings-course/_tools/REVISION_ELITE_A.md
 - [x] 00_intro
-- [ ] 01_unicode_bytes
+- [x] 01_unicode_bytes
 - [x] 02_bpe_desde_cero
 - [ ] 03_wordpiece_unigram_sentencepiece
 - [x] 04_diseno_tokenizers_modernos

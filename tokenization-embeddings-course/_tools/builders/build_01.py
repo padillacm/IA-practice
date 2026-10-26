@@ -743,7 +743,7 @@ nb.md(r"""
 ## 14. 🧠 Secretos de la élite
 1. **`len()` no significa lo mismo en todos los lenguajes**: Python cuenta code points, JavaScript/Java unidades UTF-16, Go/Rust bytes. Un límite de «N caracteres» validado en el *frontend* (JS) y en el *backend* (Python) puede discrepar en cualquier texto con emojis; compruébalo con la tabla de la sección 5.
 2. **NFC y NFD producen secuencias de tokens distintas** en un tokenizer byte-level: mide la tabla de la sección 6 con tu propio tokenizer antes de entrenarlo. Un corpus de preentrenamiento sin normalizar fragmenta el vocabulario.
-3. **NFKC es un martillo**: pliega `²`→`2`, `ﬁ`→`fi`, `㎏`→`kg` y rompe código/fórmulas. Úsalo para *matching* y para identificadores (Python lo aplica a los nombres de variables, PEP 3131; lo verificaste arriba) y no para almacenar texto.
+3. **NFKC es un martillo**: pliega `²`→`2`, `ﬁ`→`fi`, `㎏`→`kg` y rompe código/fórmulas. Úsalo para *matching* y para identificadores (Python lo aplica a los nombres de variables, PEP 3131; lo verificaste arriba) y no para almacenar texto. En preentrenamiento la decisión es irreversible y tiene precedente documentado: Gopher tokenizaba con NFKC y Chinchilla lo quitó, y sus autores reportan que eso ayuda en particular a representar matemáticas y química (Hoffmann et al., 2022, §4.1; con NFKC, por ejemplo, `x²` y `x2` son el mismo texto). Los tokenizers basados en `tiktoken` (GPT-4o, Llama 3) no tienen etapa de normalización: el modelo ve los bytes tal cual.
 4. **La versión de Unicode importa**: `unicodedata.unidata_version` y la de `regex` determinan categorías, normalización y segmentación de grafemas; un emoji nuevo puede partirse en dos en un runtime antiguo. Registra la versión en tus experimentos.
 5. **Un solo carácter invisible cambia el número de tokens** (sección 7). Los ataques de *smuggling* explotan que el tokenizer ve lo que el humano no: sanea antes del tokenizer, no después.
 6. **`errors="replace"` es destructivo y silencioso**: el `�` (U+FFFD) no es reversible. Para datos de origen desconocido usa `surrogateescape` y arregla la codificación en origen (`ftfy` solo es una red de seguridad).
@@ -789,6 +789,7 @@ nb.md(r"""
 ## 17. Referencias
 Referencias de arXiv comprobadas (título y autores) el 25-oct-2026; normas, artículos y enlaces verificados de nuevo el 26-oct-2026 (verificador de referencias). Las normas Unicode se actualizan con cada versión de Unicode: la URL sin número de revisión apunta siempre a la vigente (UAX #15 va por la revisión 57, Unicode 17.0, jul-2025).
 
+* Hoffmann, J. et al. (2022). *Training Compute-Optimal Large Language Models* (Chinchilla). NeurIPS 2022. arXiv:2203.15556. https://arxiv.org/abs/2203.15556 (tokenizer sin NFKC, sección 4.1)
 * Unicode Consortium (ed. K. Whistler). *Unicode Standard Annex #15: Unicode Normalization Forms* (UAX #15). https://www.unicode.org/reports/tr15/
 * Unicode Consortium. *Unicode Standard Annex #29: Unicode Text Segmentation* (UAX #29, grafemas). https://www.unicode.org/reports/tr29/
 * Unicode Consortium. *Unicode Technical Standard #39: Unicode Security Mechanisms* (confusables; datos en `confusables.txt`). https://www.unicode.org/reports/tr39/

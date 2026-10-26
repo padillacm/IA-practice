@@ -57,3 +57,10 @@ faltaba es el **coste real** de la ineficiencia de tokenización: no es solo $r$
 - **Añadido 🧪 tras 🏭**: `flops_forward()` con la aproximación de Kaplan et al. (2020, §2.1, verificada en el PDF:
   $C_{fwd}\approx 2N+2n_{layer}n_{ctx}d_{model}$). Medido para una configuración 7 B: prima $r=3$ → ×3.12 FLOPs a 1 k
   tokens pero ×5.35 a 32 k, y 1/r del texto en la ventana. Referencia añadida. Lección: 65 → 68 celdas.
+
+## 01 · Unicode y bytes
+Diagnóstico: 🏭 y 🧠 de buen nivel (len() entre lenguajes, NFC/NFD en byte-level, NFKC, versión de Unicode, smuggling,
+`surrogateescape`, PEP 393, decodificación incremental). Hueco: el precedente de **normalización en preentrenamiento**.
+- 🧠 #3 ampliado: Gopher usaba NFKC y Chinchilla lo quitó, con mejora reportada en matemáticas y química
+  (Hoffmann et al., 2022, §4.1, verificado en el PDF); los tokenizers basados en `tiktoken` no normalizan. Referencia
+  añadida. Sin celdas nuevas (la demo de NFKC ya existe en la lección).
