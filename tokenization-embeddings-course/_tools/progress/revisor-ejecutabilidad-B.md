@@ -9,7 +9,7 @@ Agente: Revisor de ejecutabilidad · Módulos: 09–20 · Informe: tokenization-
 - [x] 15_evaluacion_retrieval (lección + proyecto ejecutados con nbclient)
 - [x] 16_embeddings_multimodales (lección + proyecto ejecutados con nbclient)
 - [x] 17_interpretabilidad_geometria (lección + proyecto ejecutados con nbclient)
-- [ ] 18_produccion (lección + proyecto ejecutados con nbclient)
+- [x] 18_produccion (lección + proyecto ejecutados con nbclient)
 - [ ] 19_playbook_elite (lección + proyecto ejecutados con nbclient)
 - [ ] 20_capstone (lección + proyecto ejecutados con nbclient)
 - [ ] check_course.py OK + informe final
@@ -27,3 +27,4 @@ Agente: Revisor de ejecutabilidad · Módulos: 09–20 · Informe: tokenization-
 - 15 lección: 76 s, 0 errores (HF 403 → sintético con aviso; ranx coincide). Proyecto: 7 s, 0 errores, 12/12 ✅. Sin cambios.
 - 16 lección: 268 s, 0 errores (mundo de juguete; USE_REAL_MODELS=False). Proyecto: 125 s, 0 errores, 11/11 ✅. Sin cambios.
 - 17 lección: 72 s, 0 errores. Proyecto: 19 s, 0 errores, 17/17 ✅. Sin cambios.
+- 18 lección: 36 s, 0 errores (Qdrant local OK). Proyecto: 38 s, 0 errores, 5/5 tests ✅. Sin cambios.

@@ -28,6 +28,8 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 | 16 proyecto | 125 s | OK | Corpus sintético (HF 403, aviso ⚠️) renderizado como páginas | 11/11 (plantilla 0/11 sin romper) | — |
 | 17 lección | 72 s | OK | Sintético (HF 403, aviso ⚠️); `RUN_VEC2TEXT=False` | — | — |
 | 17 proyecto | 19 s | OK | Ídem | 17/17 (plantilla 0/17 sin romper) | — |
+| 18 lección | 36 s | OK | Sintético + stdlib; v1/v2 = TF-IDF+SVD (aviso ⚠️); Qdrant local real (coincide con fuerza bruta 1.000) | — | — |
+| 18 proyecto | 38 s | OK | Ídem | 95/95 pts automáticos (5 tests ✅); plantilla ⏳ sin romper | — |
 <!-- TABLA -->
 
 ## Cambios aplicados (en builders; notebooks regenerados)
