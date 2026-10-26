@@ -16,6 +16,8 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 | 10 proyecto | 83 s | OK | Ídem | 6/6 (elegida 0.523 vs default 0.352 en test) | **vocabulario determinista**; referencia de R5 recalibrada |
 | 11 lección | 219 s | OK (tras añadir `accelerate`) | Sintético + stdlib + mundo de juguete; mini-BERT local (aviso) | — | `accelerate` en pip; vocabulario determinista; 👀 recalibrados |
 | 11 proyecto | 114 s | OK | Ídem | 6/6 (BM25 0.866 · sin entrenar 0.342 · lote 0.500 · duros 0.533) | nota de calibración con lo medido |
+| 12 lección | 43 s | OK | Sintético + stdlib; embedders del hub → TF-IDF+SVD (aviso «NO representa al modelo real»); `RUN_MTEB=False` (registro de mteb sí, local) | — | pip sin `-U` |
+| 12 proyecto | 27 s | OK | Ídem | 8/8 automáticas (+R9 manual); plantilla 0/8 sin romper | pip sin `-U` |
 <!-- TABLA -->
 
 ## Cambios aplicados (en builders; notebooks regenerados)
@@ -34,4 +36,8 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 - **11 lección · 👀 negativos duros**: el texto afirmaba «duros sin filtrar < solo lote < duros limpios» (prototipo de 300
   pasos: 0.84/0.88/0.92); en `FAST_DEV_RUN` (200 pasos) lo medido es 0.766 · 0.728 · 0.754 (orden distinto, dentro del
   ruido). El texto y el secreto 1 lo dicen ahora; MNRL actualizado a lo medido (0.40 → 0.58).
+- **12–14 · `!pip install -q -U …` → sin `-U`** (`build_12.py`, `build_13.py`, `build_14.py`): en Colab `-U` actualizaba
+  `transformers`, `sentence-transformers` y (en el 14) **`numpy`** preinstalados; actualizar numpy en caliente rompe
+  paquetes compilados contra la versión de Colab y obliga a reiniciar el entorno. Sin `-U` solo se instala lo que falta
+  (`mteb`, `rank_bm25`, `faiss-cpu`); resuelven con `--dry-run`.
 <!-- CAMBIOS -->
