@@ -165,3 +165,18 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | NVIDIA, Cosmos, arXiv:2501.03575 | ✅ | Niveles FSQ y compresiones verificados por la revisión técnica |
 | `transformers.EncodecModel`, `torchvision.datasets.MNIST`, `sklearn.datasets.load_sample_image` | ✅ | |
 | Mapa de madurez / 🏭 | ✅ | Cada «quién la usa» con paper; los modelos cerrados se declaran «no documentados» |
+
+## Resumen
+- **105 IDs arXiv** de 00–08 descargados de arxiv.org y cruzados con el texto: todos existen y casan con autor y año (ningún ❌).
+  Las correcciones son sobre todo de **venue** (≈ 60 referencias completadas) y de **títulos abreviados** («ColBERT.», «SPLADE.», «BPE-Dropout.», «LLaMA.»…).
+- **Correcciones de contenido:** título del artículo de The Register (*From Copilot to Copirate*); la cifra «≈ 30 %» de Tekken venía del
+  anuncio de Mistral NeMo y se limita a código y 7 idiomas (03, 04); Command R = 255 029 (R y R+); Gemma 2 sin fuente propia (añadido su
+  informe); SpaceByte «aproximadamente iguala» a los tokenizados; Tweeties desde Mistral-7B-Instruct-v0.2; DALL·E 1 usa dVAE; pesos de
+  H-Net en `cartesia-ai`; hiperredes de ZeTT; Pike & Thompson 1992 (diseño) vs 1993 (publicación).
+- **Normas Unicode/RFC** completadas con título y URL oficial (`www.unicode.org/reports/tr15|29|39`, RFC 3629 / STD 63); se quitó el aviso de
+  «no verificadas».
+- **⚠️ Fuente secundaria (2):** el parche de ChatGPT tras SolidGoldMagikarp (solo la actualización del post) y el *token healing* por defecto
+  en las versiones actuales de `guidance`.
+- **No verificable desde este entorno:** unicode.org, rfc-editor, LessWrong, HF, docs.mistral.ai no resuelven en WebFetch; se confirmaron con
+  WebSearch. Las cifras numéricas internas de los papers ya las había contrastado la revisión técnica.
+- `check_course.py`: Todo OK (26-oct-2026).
