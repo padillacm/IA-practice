@@ -147,6 +147,16 @@ Porque el tokenizer se entrenó con datos distintos de los del modelo: hay token
 
 La **matriz de embeddings** (y la de salida): sus filas están indexadas por el vocabulario viejo. Hay que construir filas nuevas (inicialización) y reajustar. Aquí estudiamos el caso más sencillo, *añadir* tokens, y medimos qué inicialización pierde menos.
 </details>
+
+<details><summary><b>4.</b> (Módulo 04, Cálculo) Pasas de un vocabulario de 32 000 a uno de 128 000 tokens con $d = 2048$. ¿Cuántos parámetros añade la matriz de entrada? ¿Y si la de salida no está atada?</summary>
+
+$(128\,000 - 32\,000)\times 2048 \approx 197$ M por matriz; **≈ 393 M** con entrada y salida desatadas. En el módulo 04 lo viste como «presupuesto del vocabulario»; en la sección 2 verás que esas filas son una fracción grande de un modelo pequeño y en la 5 por qué la de salida, además, cuesta cómputo en cada paso.
+</details>
+
+<details><summary><b>5.</b> (Módulo 02, Transferencia) BPE fusiona el par con más frecuencia. Si quisieras añadir 32 palabras de dominio a un vocabulario ya entrenado, ¿qué criterio voraz análogo usarías para elegirlas?</summary>
+
+Frecuencia × tokens ahorrados por aparición, $n_w(\text{piezas}(w) - 1)$: el mismo razonamiento de compresión que un merge, pero a nivel de palabra completa. Es exactamente el criterio del proyecto (TODO 3).
+</details>
 """)
 
 nb.code(SETUP)
@@ -678,6 +688,8 @@ Añadir tokens es barato en el tokenizer (`tokenizer.add_tokens`) y en el modelo
 | `mean` | $\bar{\mathbf e} = \frac1V\sum_j \mathbf e_j$ | Hewitt (2021): mantiene cerca la distribución de los tokens viejos; `resize_token_embeddings(mean_resizing=True)` (por defecto en transformers recientes) muestrea de $\mathcal N(\bar{\mathbf e}, 10^{-9}\Sigma)$, en la práctica $\approx\bar{\mathbf e}$ |
 | `subtoken` | $\frac{1}{|S|}\sum_{s\in S}\mathbf e_s$, con $S$ = piezas en que el tokenizer **viejo** partía la palabra | reutiliza lo que el modelo ya sabe de esa secuencia |
 
+✍️ **Ejemplo a mano ($d = 2$).** El tokenizer viejo parte « serialización» en [« serial», «ización»], con filas $(0.8, 0.2)$ y $(0.2, 0.6)$; la media de **todo** el vocabulario es $\bar{\mathbf e} = (0.1, 0.1)$. `subtoken` da $\tfrac12[(0.8,0.2)+(0.2,0.6)] = (0.5, 0.4)$: cerca de lo que el modelo ya «sabe» de la palabra troceada. `mean` da $(0.1, 0.1)$: un token genérico, inofensivo pero sin contenido. `random` da un punto cualquiera de norma ≈ $0.02\sqrt d$, lejos de todo. Es el *cold start* de un ítem nuevo en recsys: inicializarlo con la media de sus atributos (aquí, sus piezas) frente a la media del catálogo frente a ruido. Ojo: en la **salida**, una fila `mean`/`subtoken` hace que el modelo prediga el token nuevo donde predecía sus piezas: de ahí la «masa filtrada» que medimos.
+
 **Cómo medirlo bien.** Al cambiar el tokenizer cambia el número de tokens, así que la pérdida *por token* no es comparable. Usamos **bits por byte**: $\text{bpb} = \dfrac{\sum_t -\log_2 p(t)}{\#\text{bytes del texto}}$ (módulos 04 y 07). Y medimos la **masa filtrada**: probabilidad media que el modelo asigna a los tokens nuevos en posiciones donde el siguiente token **no** es nuevo.
 
 > 🔁 El módulo 07 trató el caso difícil (cambiar *todo* el tokenizer: FOCUS, WECHSEL, ZeTT). Aquí solo **añadimos** filas y medimos qué inicialización pierde menos; es la operación más común en producción (tokens especiales, términos de dominio).
@@ -1083,6 +1095,11 @@ pj.md(r"""
 ### TODO 2 · Interpreta (texto)
 Escribe en una celda markdown 3–4 frases: ¿la diferencia `cos_no_vistos − cos_frecuentes` confirma la derivación de la lección? ¿Por qué con GPT-2 real los «no vistos en Políglota» **no** son necesariamente tokens sub-entrenados?
 
+<details><summary>🪜 Pista 1</summary>
+
+Vuelve al 👀 de la sección 3 de la lección (filas de salida que nunca son objetivo): ¿hacia dónde las empuja el gradiente y por qué eso las hace parecidas entre sí? Después distingue dos corpus: el de **entrenamiento** del modelo y el de **Políglota**.
+</details>
+
 ## Parte B · Vocabulario de dominio
 
 ### TODO 3 · `selecciona_terminos(tok, textos, k)`
@@ -1091,6 +1108,10 @@ Devuelve una lista de `k` cadenas **con espacio inicial** (`" palabra"`) ordenad
 <details><summary>🪜 Pista 1</summary>
 
 `re.findall(r"[^\W\d_]{6,}", texto)` extrae palabras alfabéticas (con tildes). Piezas = `len(tok(" " + w, add_special_tokens=False)["input_ids"])`.
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+Cuenta con un `Counter` sobre todas las palabras de todos los textos; para cada `(w, n)` calcula `n * (piezas(w) - 1)` (una palabra que ya es un token no ahorra nada); ordena de mayor a menor y devuelve `" " + w` de las `k` primeras. Es el mismo criterio voraz que un merge de BPE (módulo 02): frecuencia × tokens ahorrados.
 </details>
 
 ### TODO 4 · `extiende_subtoken(model, tok, nuevos)`
@@ -1111,6 +1132,10 @@ Congela todo salvo la(s) matriz(ces) de embeddings, enmascara el gradiente de la
 <details><summary>🪜 Pista 1</summary>
 
 `hook = W.register_hook(lambda g: g * mask)` con `mask[old_V:] = 1`. ¿Por qué `wd=0.0` es imprescindible para que el `assert` pase? (Pista: lección, sección 3.)
+</details>
+<details><summary>🪜 Pista 2</summary>
+
+1) `p.requires_grad_(False)` para todos los parámetros; 2) para cada matriz distinta de `{id(W): W for W in (entrada, salida)}`: `W.requires_grad_(True)`, `mask = torch.zeros_like(W); mask[old_V:] = 1`, guarda el hook y una copia `W[:old_V].detach().clone()`; 3) `entrena_lm(model, flujo_ids(tok2, textos), steps=steps, lr=1e-2, wd=0.0)`; 4) quita los hooks y `assert torch.equal(copia, W[:old_V])`. Ojo con el *closure*: `lambda g, m_=mask: g * m_` fija la máscara de **esa** matriz.
 </details>
 """)
 pj.code(r'''

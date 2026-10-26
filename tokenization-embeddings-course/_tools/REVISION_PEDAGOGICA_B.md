@@ -71,3 +71,17 @@ como punto de partida en cada módulo.
   (solo la simulación de carga queda como ampliación).
 - **Repaso espaciado:** añadidas R5 (M00, Diagnóstico: por qué el listón es el BM25 del 00 y las métricas del 00) y
   R6 (M10 + M12, Cálculo: recortar dimensiones sin renormalizar da 0.36 en vez de coseno 0.6).
+
+## 09 · Capa de embedding en LLMs
+- Bien: ejemplo a mano (V = 5, d = 2: lookup = one-hot·E y gradiente solo en filas usadas) antes del código;
+  analogías recsys explícitas (tabla de ítems, two-tower, cola larga en la autoevaluación); word2vec/PMI como caja
+  histórica; Mapa de madurez ya al final (§8, antes de 🏭); 👀 tras los 8 gráficos y las 3 Gemini; 59 celdas
+  (no requiere 🧭).
+- **Ejemplo a mano añadido** en §6: las tres inicializaciones (`random`, `mean`, `subtoken`) con vectores de 2D para
+  « serialización», con la analogía del *cold start* de ítems y por qué `subtoken` en la salida produce masa filtrada.
+- **Repaso espaciado:** el 🔁 cubría 02, 05 y 07. Añadidas R4 (M04, Cálculo: 32k → 128k con d = 2048 → ≈ 197 M por
+  matriz, ≈ 393 M desatadas) y R5 (M02, Transferencia: criterio voraz «frecuencia × tokens ahorrados» como un merge,
+  que es el del TODO 3).
+- **Andamiaje del proyecto:** TODO 2 (interpretación) sin pistas → 🪜 1 que remite al 👀 de §3 y a los dos corpus;
+  TODO 3 y TODO 5 solo tenían 🪜 1 → añadidas 🪜 2 (Counter + ahorro; congelado + máscara + copia + assert, con el
+  detalle del *closure* `m_=mask`), coherentes con la solución.
