@@ -260,3 +260,33 @@ def part1(nb):
     > 👀 **Qué debes observar.** Con **una sola** dimensión dominante: (1) concentra ≈ 94 % de la varianza; (2) el **coseno medio entre textos al azar se dispara** (≈ 1: anisotropía extrema); (3) **casi todos los pares no relacionados superan un umbral de coseno 0.5**: cualquier regla del tipo «considerar duplicado/relevante si coseno > u», filtros de similitud, *clustering* o diversificación (MMR) **se rompe**; (4) sin embargo la **precisión@10 del ranking apenas cambia** en este juguete (ver columna `precisión@10 de faceta`): el ranking depende de diferencias *relativas*, no del nivel absoluto del coseno. **Estandarizar** cada dimensión devuelve el coseno medio a ≈ 0. Es el diagnóstico y remedio de Timkey & van Schijndel (ellos reportan efectos en medidas de similitud y en la calidad aparente de la representación).
     > Nota de honestidad: la dimensión es **simulada** (no es una medición de ningún modelo real). Ejecuta `diagnostico_dimensiones` sobre tu embedder real: si `var_top1` es grande o el coseno medio entre textos no relacionados es alto, aplica *whitening* o estandarización (con un sistema de producción, **valida el efecto en nDCG**, módulo 15).
     """)
+    nb.md("""
+    ### 5b. 🧪 Hubness: el documento que aparece en todas las búsquedas
+    Otra patología geométrica con consecuencias directas en retrieval: en alta dimensión, unos pocos puntos (**hubs**) aparecen entre los $k$ vecinos más cercanos de muchísimos otros, y muchos puntos (**anti-hubs**) no aparecen en ninguno (Radovanović, Nanopoulos & Ivanović, JMLR 2010, *Hubs in Space*: la asimetría de la distribución de la *k-ocurrencia* $N_k$ crece con la dimensión intrínseca). En un buscador, un hub es «el documento que sale para todo» y un anti-hub es un documento que nadie encuentra. Remedios clásicos: **centrar** (restar la media, que también quita la anisotropía de §5) y **CSLS** (Conneau et al., ICLR 2018), que penaliza a cada documento por su similitud media con sus vecinos: $\\mathrm{CSLS}(q,d)=2\\cos(q,d)-r(q)-r(d)$; para ordenar documentos de una query fija solo importa $-r(d)$.
+    Medimos $N_{10}$ con los documentos como queries (lo estándar en esta literatura) y la precisión@10 de faceta, con las mismas funciones de §5.
+    """)
+    nb.code(r'''
+    from scipy.stats import skew
+    def k_ocurrencia(M, k=10, csls=False):
+        M = M / np.linalg.norm(M, axis=1, keepdims=True); S = M @ M.T; np.fill_diagonal(S, -9)
+        if csls:
+            r = np.sort(S, axis=1)[:, -k:].mean(1); S = S - r[None, :]          # penaliza documentos «populares»
+        top = np.argpartition(-S, k, axis=1)[:, :k]
+        return np.bincount(top.ravel(), minlength=len(M)), top
+    variantes = {"LSI-64": E, "LSI-64 con rogue": E_rogue, "rogue + centrado": E_rogue - E_rogue.mean(0), "rogue + CSLS": E_rogue}
+    filas_h, Nk_all = [], {}
+    for nombre, M in variantes.items():
+        Nk, top = k_ocurrencia(M, csls=nombre.endswith("CSLS")); Nk_all[nombre] = Nk
+        filas_h.append({"variante": nombre, "asimetría de N10": skew(Nk), "máx N10": int(Nk.max()), "% anti-hubs (N10 = 0)": 100 * (Nk == 0).mean(),
+                        "% apariciones del 1 % top": 100 * np.sort(Nk)[::-1][: max(1, len(Nk) // 100)].sum() / Nk.sum(),
+                        "precisión@10 de faceta": float((facet[top] == facet[:, None]).mean())})
+    d_hub = pd.DataFrame(filas_h).set_index("variante"); display(d_hub.round(3))
+    fig, ax = plt.subplots(figsize=(8, 3.6))
+    for (nombre, Nk), c in zip(Nk_all.items(), [AZUL, ROJO, VERDE, NARANJA]):
+        ax.hist(Nk, bins=np.arange(0, max(v.max() for v in Nk_all.values()) + 2, 2), histtype="step", lw=2, color=c, label=nombre)
+    ax.set_yscale("log"); ax.set_xlabel("$N_{10}$: en cuántas listas top-10 aparece cada documento"); ax.set_ylabel("nº de documentos (log)")
+    ax.set_title("Distribución de la k-ocurrencia (hubness)"); ax.legend(fontsize=8); plt.tight_layout(); plt.show()
+    ''')
+    nb.md("""
+    > 👀 **Qué debes observar.** La media de $N_{10}$ es siempre 10 (cada lista tiene 10 huecos); lo que cambia es la **cola**. Con la dimensión dominante la distribución se estira: unos pocos documentos acaparan muchas apariciones y crece el porcentaje de anti-hubs, a la vez que cae la precisión de faceta. Centrar y CSLS acortan la cola (comprueba en la tabla cuánto de la precisión recuperan). En producción es una señal **sin etiquetas** barata: la concentración del top-1 sobre el tráfico (módulo 18 §9) y la lista de documentos que nunca aparecen en ningún top-k delatan hubs y anti-hubs antes de que un usuario se queje de que «siempre sale el mismo».
+    """)
