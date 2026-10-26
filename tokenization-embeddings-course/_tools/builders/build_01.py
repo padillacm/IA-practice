@@ -144,7 +144,7 @@ nb.md(r"""
 ## 3. UTF-8 desde cero
 
 ### Diseño
-UTF-8 (Pike & Thompson, 1992; RFC 3629) codifica cada code point en **1 a 4 bytes**. Es un **código de prefijo de longitud variable** (como los de Huffman, pero con una tabla fija y pensada para ASCII): el **primer byte** dice cuántos bytes tiene la secuencia, los demás son *bytes de continuación* `10xxxxxx`.
+UTF-8 (diseñado por Pike y Thompson en 1992, publicado en Pike & Thompson 1993; hoy RFC 3629) codifica cada code point en **1 a 4 bytes**. Es un **código de prefijo de longitud variable** (como los de Huffman, pero con una tabla fija y pensada para ASCII): el **primer byte** dice cuántos bytes tiene la secuencia, los demás son *bytes de continuación* `10xxxxxx`.
 
 | Rango de code points | Bytes | Patrón binario | Bits útiles |
 |---|---|---|---|
@@ -787,13 +787,13 @@ nb.md(caja("➡️ Siguiente módulo", r"""
 
 nb.md(r"""
 ## 17. Referencias
-Referencias de arXiv comprobadas (título y autores) el 25-oct-2026. Las normas (RFC, UAX, UTS) se citan por su identificador oficial; no pudieron abrirse desde el entorno de autoría (acceso bloqueado), compruébalas en su sitio oficial.
+Referencias de arXiv comprobadas (título y autores) el 25-oct-2026; normas, artículos y enlaces verificados de nuevo el 26-oct-2026 (verificador de referencias). Las normas Unicode se actualizan con cada versión de Unicode: la URL sin número de revisión apunta siempre a la vigente (UAX #15 va por la revisión 57, Unicode 17.0, jul-2025).
 
-* Unicode Consortium. *Unicode Standard Annex #15: Unicode Normalization Forms* (UAX #15). https://unicode.org/reports/tr15/
-* Unicode Consortium. *Unicode Standard Annex #29: Unicode Text Segmentation* (UAX #29, grafemas). https://unicode.org/reports/tr29/
-* Unicode Consortium. *Unicode Technical Standard #39: Unicode Security Mechanisms* (confusables). https://unicode.org/reports/tr39/
-* Yergeau, F. (2003). *RFC 3629: UTF-8, a transformation format of ISO 10646.* https://www.rfc-editor.org/rfc/rfc3629
-* Pike, R., Thompson, K. (1993). *Hello World or Καλημέρα κόσμε or こんにちは 世界.* USENIX Winter 1993 Technical Conference (historia de UTF-8).
+* Unicode Consortium (ed. K. Whistler). *Unicode Standard Annex #15: Unicode Normalization Forms* (UAX #15). https://www.unicode.org/reports/tr15/
+* Unicode Consortium. *Unicode Standard Annex #29: Unicode Text Segmentation* (UAX #29, grafemas). https://www.unicode.org/reports/tr29/
+* Unicode Consortium. *Unicode Technical Standard #39: Unicode Security Mechanisms* (confusables; datos en `confusables.txt`). https://www.unicode.org/reports/tr39/
+* Yergeau, F. (2003). *UTF-8, a transformation format of ISO 10646.* RFC 3629 / STD 63 (IETF, Internet Standard; reemplaza a RFC 2279). https://www.rfc-editor.org/rfc/rfc3629
+* Pike, R., Thompson, K. (1993). *Hello World or Καλημέρα κόσμε or こんにちは 世界.* USENIX Winter 1993 Conference, San Diego (historia de UTF-8). https://www.usenix.org/conference/usenix-winter-1993-conference/hello-world
 * Boucher, N., Anderson, R. (2021). *Trojan Source: Invisible Vulnerabilities.* arXiv:2111.00169. https://arxiv.org/abs/2111.00169
 * Wang, C., Cho, K., Gu, J. (2019). *Neural Machine Translation with Byte-Level Subwords.* arXiv:1909.03341. https://arxiv.org/abs/1909.03341
 * Petrov, A. et al. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages.* arXiv:2305.15425. https://arxiv.org/abs/2305.15425
@@ -803,7 +803,7 @@ Referencias de arXiv comprobadas (título y autores) el 25-oct-2026. Las normas 
 * Mielke, S. J. et al. (2021). *Between words and characters: A Brief History of Open-Vocabulary Modeling and Tokenization in NLP.* arXiv:2112.10508. https://arxiv.org/abs/2112.10508
 * Shannon, C. E. (1948). *A Mathematical Theory of Communication.* Bell System Technical Journal.
 * SentencePiece, documentación de normalización: https://github.com/google/sentencepiece/blob/master/doc/normalization.md
-* The Register (28-ago-2024). *Microsoft Copilot «Copirate»* (ASCII smuggling, J. Rehberger). https://www.theregister.com/2024/08/28/microsoft_copilot_copirate
+* The Register (28-ago-2024). *From Copilot to Copirate* (cadena de ataques contra Microsoft 365 Copilot con ASCII smuggling, descubierta por J. Rehberger). https://www.theregister.com/2024/08/28/microsoft_copilot_copirate
 * Python: `unicodedata`, `codecs`, PEP 393 (representación flexible de `str`) y PEP 3131 (identificadores no ASCII). · `ftfy` (https://pypi.org/project/ftfy/).
 """)
 
