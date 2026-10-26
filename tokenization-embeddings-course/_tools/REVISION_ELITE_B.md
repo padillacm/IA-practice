@@ -93,3 +93,50 @@ semillas, rogue dimensions, vec2text). Faltaba la patología geométrica con má
   centrado, clusters compactos) y que un Transformer anisótropo hay que medirlo. Enlace con el monitor sin etiquetas
   de 18 §9. Fuentes: Radovanović et al. (JMLR 2010) y CSLS de Conneau et al. (ICLR 2018).
 - 🧠 #6 ampliado (hubness como primo de las dimensiones dominantes). Referencias añadidas. Lección 66 → 69 celdas, 104 s.
+
+## 13 · Dense, sparse y late interaction
+Revisado sin cambios. 🏭 concreto por producto (Vespa, Qdrant `MAX_SIM` con `m=0`, Weaviate MUVERA, ELSER, neural
+sparse, Jina-ColBERT-v2) y 🧠 de nueve puntos con por qué (ablación antes que arquitectura, sensibilidad de RRF,
+normalización de la combinación lineal, analyzer como parte del modelo, coste de almacenamiento del multi-vector,
+MUVERA como generador de candidatos, reranker fuera de distribución, late chunking, filtros exactos en el índice
+invertido). Lo que faltaba de la lista del encargo en este terreno (tamaño de chunk y agregación) se añadió en el 19
+§4b, donde encaja con la calculadora de $N$.
+
+## 12 · Embedders modernos
+Revisado sin cambios. Cubre MTEB como filtro y la marca *zero-shot* de `mteb`, prefijos/instrucciones con cifra de
+Qwen3, last-token con padding, calibración int8 con el corpus, renormalizar tras truncar/cuantizar, binaria +
+rescoring con su cifra y su condición, LIMIT y migración. La interacción ANN ↔ cuantización/queries se completó en
+14 (OOD) y 20 (presupuesto de error).
+
+## 11 · Aprendizaje contrastivo
+Diagnóstico: 🧠 medido (negativos sin filtrar 0.88 → 0.84, filtrados 0.92; saturación en log B; τ como hiperparámetro
+de primer orden). Se aplica la recomendación (a) de la revisión técnica B, que es un punto de experto:
+- 🧠 #5 ampliado: en MNRL los negativos duros se comparten como columnas con todo el lote, así que el duro de la
+  consulta $j$ puede ser positivo de la $i$ (**falso negativo cruzado**); el filtro por par no lo evita. Remedio:
+  muestreo agrupado por concepto o filtrar los duros contra todas las consultas del lote. Solo markdown.
+
+## 10 · Embeddings contextuales y de oraciones
+Revisado sin cambios: 🧠 con cifras de SBERT, auditoría de pooling, último token con máscara, whitening sin fuga,
+idioma como dirección, coseno frente a producto, y la ablación de prefijos E5 ya implementada en §8.
+
+## 09 · Capa de embedding en LLMs
+Revisado sin cambios: 🧠 medido y verificado (colapso de filas huérfanas, decaimiento $e^{-\eta\lambda n}$, bpb frente
+a pérdida por token, `mean_resizing`, escala de Gemma, cuello de botella softmax, relleno de $V$). Es el módulo menos
+de retrieval del bloque; no se encontró hueco de embeddings/búsqueda que no esté mejor situado en 10–20.
+
+## Cobertura de la lista del encargo (09–20)
+| Tema | Dónde queda cubierto |
+|---|---|
+| Gap offline/online; MTEB no predice tu dominio | 19 §3, 15 🏭/§9, 12 🧠 #1, 20 🧠 #8 (nuevo) |
+| Falsos negativos y contaminación | 11 🧠 #1 y #5 (ampliado: cruzados), 15 🧠 #4 y §9, 16 🧠 #3 |
+| Longitud y chunking | 19 §4b (nuevo), 13 §9 (late chunking), 19 F1 (truncado) |
+| Asimetría query/doc y prefijos | 10 §8 (ablación), 12 🧠 #2, 14 §10 OOD (nuevo: efecto en el ANN) |
+| Normalización y métrica coherentes con el índice | 10 🧠 #6, 12 🧠 #5, 19 F2 |
+| Recall de ANN frente a recall de retrieval | 14 🧠 #10, 20 §6b (nuevo, medido) |
+| Coste de re-embedding y migraciones | 18 §1 y §5, 19 §4, 20 informe |
+| Tail latency | 18 §3, 14 🧠 #6 |
+| Filtrado y multi-tenancy | 14 §9, 18 §7, 13 🧠 #9 |
+| Cuantización + rescoring | 12 §5, 14 🧠 #4 y #9, 18 §6 |
+| LLM-judge y sus sesgos | 15 §7 |
+| Seguridad/privacidad de embeddings | 17 §9, 18 §8, 18 🧠 #1 (ampliado: reproducibilidad) |
+| Geometría que rompe el retrieval | 17 §5 (rogue), 17 §5b (nuevo: hubness), 16 §3b (nuevo: composición) |

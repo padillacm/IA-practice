@@ -7,11 +7,11 @@ Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization
 - [x] 16_embeddings_multimodales
 - [x] 15_evaluacion_retrieval
 - [x] 14_indexacion_ann
-- [ ] 13_dense_sparse_late_interaction
-- [ ] 12_embedders_modernos
-- [ ] 11_aprendizaje_contrastivo
-- [ ] 10_embeddings_contextuales_oraciones
-- [ ] 09_capa_embedding_llm
+- [x] 13_dense_sparse_late_interaction
+- [x] 12_embedders_modernos
+- [x] 11_aprendizaje_contrastivo
+- [x] 10_embeddings_contextuales_oraciones
+- [x] 09_capa_embedding_llm
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar
