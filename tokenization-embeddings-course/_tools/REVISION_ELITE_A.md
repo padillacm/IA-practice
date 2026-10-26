@@ -50,3 +50,10 @@ token** en *streaming*.
   **100 % agrupando 4 tokens** (no mitiga), ≈ 7 % solo con la longitud total.
 - 🧠: añadido «el tokenizer también filtra por canal lateral»; retirado el punto de CUTE (sigue en §6 y en 06 #6)
   para mantener 8 puntos. Referencia añadida. Lección: 74 → 77 celdas.
+
+## 00 · Intro
+Diagnóstico: 🏭 y 🧠 concretos y verificables (BEIR, empates, dedup, IDF de Lucene vs `rank_bm25`, bootstrap). Lo que
+faltaba es el **coste real** de la ineficiencia de tokenización: no es solo $r$× en factura.
+- **Añadido 🧪 tras 🏭**: `flops_forward()` con la aproximación de Kaplan et al. (2020, §2.1, verificada en el PDF:
+  $C_{fwd}\approx 2N+2n_{layer}n_{ctx}d_{model}$). Medido para una configuración 7 B: prima $r=3$ → ×3.12 FLOPs a 1 k
+  tokens pero ×5.35 a 32 k, y 1/r del texto en la ventana. Referencia añadida. Lección: 65 → 68 celdas.

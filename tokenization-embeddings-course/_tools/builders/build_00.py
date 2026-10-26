@@ -660,6 +660,21 @@ nb.md(r"""
 """)
 
 nb.md(r"""
+**🧪 ¿Cuánto cuesta de verdad una prima de tokens?** Si tu idioma necesita $r$ veces más tokens para el mismo texto, el coste **no** siempre es $r$. Con la aproximación de Kaplan et al. (2020) para el cómputo del *forward* por token, $C_{\text{fwd}}\approx 2N + 2\,n_{\text{layer}}\,n_{\text{ctx}}\,d_{\text{model}}$ ($N$ = parámetros sin embeddings), procesar $n$ tokens cuesta $\approx n\,(2N + 2\,n_{\text{layer}}\,n\,d_{\text{model}})$ (cota con el contexto completo): el término lineal crece como $r$ y el de atención como $r^2$. Además, en una ventana fija cabe $1/r$ del texto. La celda lo calcula para una configuración de tamaño 7 B (32 capas, $d=4096$; números ilustrativos).
+""")
+nb.code(r'''
+def flops_forward(n_tok: int, N: float = 6.5e9, L: int = 32, d: int = 4096) -> float:
+    """Kaplan et al. (2020): C_fwd por token ≈ 2N + 2·L·n_ctx·d; aquí n_ctx = n_tok (cota superior)."""
+    return n_tok * (2 * N + 2 * L * n_tok * d)
+
+for n_base in (1_000, 32_000):
+    for r in (1.5, 3.0):
+        coste = flops_forward(int(r * n_base)) / flops_forward(n_base)
+        print(f"texto que en inglés ocupa {n_base:>6,} tokens | prima r={r}: x{r:.1f} en factura por token, x{coste:.2f} en FLOPs, {1/r:.0%} del texto en la misma ventana")
+''')
+nb.md(obs(r"""Con textos cortos el sobrecoste en cómputo ≈ $r$ (domina $2N$); con contextos largos supera claramente a $r$ (tiende a $r^2$ cuanto más domina la atención; con 32 k tokens y $r=3$ ya es ≈ 5×). Por eso el «impuesto de tokens» de un idioma es un problema de **latencia y de capacidad de servicio**, no solo de factura, y por eso los laboratorios lo miden antes de fijar el tokenizer (módulo 04)."""))
+
+nb.md(r"""
 ## 13. 🧠 Secretos de la élite
 1. **Empieza SIEMPRE por un baseline léxico.** BEIR mostró que BM25 es un baseline robusto frente a modelos neuronales en evaluación *zero-shot* (Thakur et al., 2021). Si tu embedder no gana a BM25 en tu dominio, el problema no es el modelo.
 2. **Los empates cambian tus resultados.** Con scores iguales, el orden de entrada decide el ranking: `rank_from_scores` rompe los empates por orden de corpus para que el experimento sea reproducible. Es un fallo de evaluación clásico (lo verificaste en el test de arriba).
@@ -706,6 +721,7 @@ nb.md(r"""
 ## 16. Referencias
 Todas las referencias de arXiv fueron comprobadas (título y autores) el 25-oct-2026 y de nuevo, con venue y enlaces, el 26-oct-2026 (verificador de referencias).
 
+* Kaplan, J. et al. (2020). *Scaling Laws for Neural Language Models.* arXiv:2001.08361. https://arxiv.org/abs/2001.08361 (aproximación de FLOPs por token, sección 2.1)
 * Thakur, N., Reimers, N., Rücklé, A., Srivastava, A., Gurevych, I. (2021). *BEIR: A Heterogenous Benchmark for Zero-shot Evaluation of Information Retrieval Models.* NeurIPS 2021 (Datasets and Benchmarks). arXiv:2104.08663. https://arxiv.org/abs/2104.08663
 * Robertson, S., Zaragoza, H. (2009). *The Probabilistic Relevance Framework: BM25 and Beyond.* Foundations and Trends in Information Retrieval 3(4).
 * Reimers, N., Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.* EMNLP-IJCNLP 2019. arXiv:1908.10084. https://arxiv.org/abs/1908.10084
