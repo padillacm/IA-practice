@@ -931,24 +931,24 @@ nb.md(caja("➡️ Siguiente módulo", r"""
 
 nb.md(r"""
 ## 16. Referencias
-Referencias de arXiv comprobadas (título y autores) el 25-oct-2026; los datos de `tiktoken` provienen de la versión 0.14.0 instalada.
+Referencias de arXiv comprobadas (título y autores) el 25-oct-2026 y, con venue, el 26-oct-2026; los datos de `tiktoken` provienen de la versión 0.14.0 instalada.
 
 * Gage, P. (1994). *A New Algorithm for Data Compression.* The C Users Journal 12(2): 23–38.
 * Sennrich, R., Haddow, B., Birch, A. (2016). *Neural Machine Translation of Rare Words with Subword Units.* ACL 2016. arXiv:1508.07909. https://arxiv.org/abs/1508.07909
 * Wang, C., Cho, K., Gu, J. (2019). *Neural Machine Translation with Byte-Level Subwords.* arXiv:1909.03341. https://arxiv.org/abs/1909.03341
 * Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., Sutskever, I. (2019). *Language Models are Unsupervised Multitask Learners* (GPT-2). OpenAI.
-* Zouhar, V. et al. (2023). *A Formal Perspective on Byte-Pair Encoding.* arXiv:2306.16837. https://arxiv.org/abs/2306.16837
+* Zouhar, V. et al. (2023). *A Formal Perspective on Byte-Pair Encoding.* Findings of ACL 2023. arXiv:2306.16837. https://arxiv.org/abs/2306.16837
 * Kozma, L., Voderholzer, J. (2024). *Theoretical Analysis of Byte-Pair Encoding.* arXiv:2411.08671. https://arxiv.org/abs/2411.08671
-* Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* arXiv:2402.18376. https://arxiv.org/abs/2402.18376
-* Bostrom, K., Durrett, G. (2020). *Byte Pair Encoding is Suboptimal for Language Model Pretraining.* arXiv:2004.03720. https://arxiv.org/abs/2004.03720
+* Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* EMNLP 2024. arXiv:2402.18376. https://arxiv.org/abs/2402.18376
+* Bostrom, K., Durrett, G. (2020). *Byte Pair Encoding is Suboptimal for Language Model Pretraining.* Findings of EMNLP 2020. arXiv:2004.03720. https://arxiv.org/abs/2004.03720
 * Singh, A. K., Strouse, D. J. (2024). *Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs.* arXiv:2402.14903. https://arxiv.org/abs/2402.14903
-* Petrov, A. et al. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages.* arXiv:2305.15425. https://arxiv.org/abs/2305.15425
-* Ahia, O. et al. (2023). *Do All Languages Cost the Same?* arXiv:2305.13707. https://arxiv.org/abs/2305.13707
-* Land, S., Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* arXiv:2405.05417. https://arxiv.org/abs/2405.05417
+* Petrov, A. et al. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages.* NeurIPS 2023. arXiv:2305.15425. https://arxiv.org/abs/2305.15425
+* Ahia, O. et al. (2023). *Do All Languages Cost the Same? Tokenization in the Era of Commercial Language Models.* EMNLP 2023. arXiv:2305.13707. https://arxiv.org/abs/2305.13707
+* Land, S., Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* EMNLP 2024. arXiv:2405.05417. https://arxiv.org/abs/2405.05417
 * Llama Team, AI @ Meta (2024). *The Llama 3 Herd of Models.* arXiv:2407.21783. https://arxiv.org/abs/2407.21783
-* Provilkov, I., Emelianenko, D., Voita, E. (2019). *BPE-Dropout.* arXiv:1910.13267. https://arxiv.org/abs/1910.13267
-* Liu, A. et al. (2025). *SuperBPE: Space Travel for Language Models.* arXiv:2503.13423. https://arxiv.org/abs/2503.13423
-* Pagnoni, A. et al. (2024). *Byte Latent Transformer.* arXiv:2412.09871. https://arxiv.org/abs/2412.09871
+* Provilkov, I., Emelianenko, D., Voita, E. (2019). *BPE-Dropout: Simple and Effective Subword Regularization.* ACL 2020. arXiv:1910.13267. https://arxiv.org/abs/1910.13267
+* Liu, A. et al. (2025). *SuperBPE: Space Travel for Language Models.* COLM 2025. arXiv:2503.13423. https://arxiv.org/abs/2503.13423
+* Pagnoni, A. et al. (2024). *Byte Latent Transformer: Patches Scale Better Than Tokens.* arXiv:2412.09871. https://arxiv.org/abs/2412.09871
 * Shannon, C. E. (1948). *A Mathematical Theory of Communication.* Bell System Technical Journal.
 * Código: `tiktoken` (https://github.com/openai/tiktoken, incl. `tiktoken/_educational.py`); Karpathy, `minbpe` (https://github.com/karpathy/minbpe); Hugging Face `tokenizers` (https://github.com/huggingface/tokenizers); `rsennrich/subword-nmt` (https://github.com/rsennrich/subword-nmt).
 """)

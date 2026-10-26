@@ -44,3 +44,24 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Elasticsearch `asciifolding`, plugin ICU `icu_normalizer`/`icu_folding` (🏭) | ✅ | Documentación oficial de Elastic |
 | Prompts Gemini (bytes de 👨‍👩‍👧‍👦 = 25, € = E2 82 AC, «pаypal» = 70 D0 B0 …) | ✅ | Recalculados con Python |
 | Mapa de madurez | ✅ | Tag characters 🟡 respaldado por The Register; resto con norma o paper |
+
+## 02 · BPE desde cero
+| Referencia | Estado | Nota |
+|---|---|---|
+| Gage 1994, *A New Algorithm for Data Compression*, C Users Journal 12(2): 23–38 | ✅ | |
+| Sennrich, Haddow & Birch 2016, ACL 2016, arXiv:1508.07909 | ✅ | |
+| Wang, Cho & Gu 2019; Radford et al. 2019 (GPT-2) | ✅ | |
+| Zouhar et al. 2023, arXiv:2306.16837 | ✏️ | Añadido venue: Findings of ACL 2023 (2023.findings-acl.38); cifras ≈ 0.37 y O(N log M) confirmadas en el abstract |
+| Kozma & Voderholzer 2024, arXiv:2411.08671 | ✅ | Preprint |
+| Schmidt et al. 2024, *Tokenization Is More Than Compression* | ✏️ | Añadido venue (EMNLP 2024); la afirmación de 🧠 3 coincide con el abstract |
+| Bostrom & Durrett 2020 | ✏️ | Añadido venue (Findings of EMNLP 2020) |
+| Singh & Strouse 2024, arXiv:2402.14903 | ✅ | Cifras ya corregidas por la revisión técnica |
+| Petrov et al. 2023; Ahia et al. 2023 | ✏️ | Título completo de Ahia y venues (NeurIPS 2023 / EMNLP 2023) |
+| Land & Bartolo 2024 | ✏️ | Añadido venue (EMNLP 2024) |
+| Llama Team 2024, *The Llama 3 Herd of Models* | ✅ | Primer autor en arXiv: Grattafiori et al.; «Llama Team, AI @ Meta» es la autoría que da el propio informe |
+| Provilkov et al. 2019, BPE-Dropout | ✏️ | Título completo y venue (ACL 2020) |
+| Liu et al. 2025, SuperBPE | ✏️ | Añadido venue (COLM 2025) |
+| Pagnoni et al. 2024, BLT; Shannon 1948 | ✏️/✅ | Título completo de BLT |
+| `tiktoken` (incl. `_educational.py`), `minbpe`, HF `tokenizers`, `subword-nmt` | ✅ | Repositorios públicos existentes |
+| 🏭 mapeo modelo → encoding de `tiktoken` 0.14.0 | ✅ | Verificado por la revisión técnica en el código instalado |
+| Mapa de madurez | ✅ | Cada fila con fuente; SuperBPE 🟡 «8B en el artículo» confirmado |
