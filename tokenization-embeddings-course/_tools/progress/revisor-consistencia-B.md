@@ -9,7 +9,7 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - [x] 14_indexacion_ann
 - [x] 13_dense_sparse_late_interaction
 - [x] 12_embedders_modernos
-- [ ] 11_aprendizaje_contrastivo
+- [x] 11_aprendizaje_contrastivo
 - [ ] 10_embeddings_contextuales_oraciones
 - [ ] 09_capa_embedding_llm
 - [ ] extras (GUIA_ENTREVISTAS, LECTURA_PAPERS), README del curso y GUIA_DE_ESTUDIO coherentes
@@ -26,3 +26,4 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - M17: etiquetas canónicas + subtítulo; secciones fijas sin número, 📝; IDs renumerados por orden de aparición (IMG-01 capas de información, VID-01 steering, IMG-02 superposición, IMG-03 SAE); 👀 añadido tras VID-01 (faltaba); SAE de la figura con 96 latentes como §7 (decía 256); colores fuera de paleta (negro, rojo) sustituidos.
 - M13: cabecera inline → tabla (lección y proyecto) + subtítulo; «N ·» → «N.»; fijas canónicas; 👀 añadido tras M13-IMG-04 (faltaba); VID-01 MaxSim 0.82+0.91+0.78 = 2.51 verificado, «sin música»; SPLADE con alturas «ilustrativas»; re-score → rescoring; costo → coste; producto punto → producto escalar.
 - M12: cabecera inline → tabla (lección y proyecto) + subtítulo; «N ·» → «N.»; fijas canónicas; IMG-03: los enteros int8 no salían de ninguna regla → recalculados con [lo, hi] = [-0.5, 0.5] (mismo esquema que el ✍️ de §5: 0.12 → 30), con el recorte de 0.64; VID-01 rankings marcados ilustrativos, sin música; vídeo → video; producto punto → producto escalar; negativos difíciles → negativos duros.
+- M11: etiquetas canónicas (Cómputo → GPU recomendada, Requisitos → Prerrequisitos) + subtítulo; encabezados con emoji (🎯/🗺️/📝/📚); VID-01: softmax, pérdidas y medias recalculadas (0.20 y 1.08 correctas), «sin música»; IMG-03 sin rojo fuera de paleta; negativos difíciles → negativos duros; sans-serif en IMG-02/03.

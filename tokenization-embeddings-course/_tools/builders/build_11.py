@@ -293,19 +293,20 @@ print(f"módulos LoRA: {objetivo} | entrenables={entrenables:,} de {total:,} ({1
 nb = Notebook("Módulo 11 · Aprendizaje contrastivo para embeddings", colab_path=LESSON, gpu=True)
 nb.md(nb.badge() + r"""
 # Módulo 11 · Aprendizaje contrastivo para embeddings
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
 | **Nivel** | 🟠 Avanzado |
-| **Duración** | ≈ 6 h (lección ≈ 3.5 h + proyecto ≈ 2.5 h) |
-| **Cómputo** | `FAST_DEV_RUN=True`: CPU o T4, ≈ 10–12 min (modelos diminutos). Modo completo: **L4 o A100 recomendada** (ver la caja «Estimación de cómputo» para calcular unidades de Colab) |
+| **Duración estimada** | ≈ 6 h (lección ≈ 3.5 h + proyecto ≈ 2.5 h) |
+| **GPU recomendada** | `FAST_DEV_RUN=True`: CPU o T4, ≈ 10–12 min (modelos diminutos). Modo completo: **L4 o A100 recomendada** (ver la caja «Estimación de cómputo» para calcular unidades de Colab) |
 | **Prerrequisitos** | 09 (capa de embedding), 10 (pooling, bi-encoders, anisotropía); softmax y entropía cruzada |
 | **Hilo conductor** | Políglota entrena **su propio embedder** ES/EN/código: el *baseline* denso del módulo 10 era un modelo ajeno; hoy construyes el tuyo |
 
 > **Dónde estamos.** En el 10 vimos que un encoder sin entrenar para similitud da embeddings pobres y que el post-procesado no crea señal. La solución industrial es **entrenar** el bi-encoder con un objetivo **contrastivo**: acercar pares relevantes y alejar los no relevantes. Lo implementas desde cero (InfoNCE, bi-encoder, Gradient Cache) y luego con `sentence-transformers`.
 """)
 nb.md(r"""
-## Objetivos de aprendizaje
+## 🎯 Objetivos de aprendizaje
 1. **Escribir** InfoNCE con cada símbolo explicado y **derivar** el papel de la temperatura en el gradiente.
 2. **Derivar** por qué InfoNCE es una cota inferior de la información mutua, $I(X;Y)\ge\log K-\mathcal L$, y **comprobarlo numéricamente** (incluida la saturación en $\log K$).
 3. **Implementar desde cero** en PyTorch un bi-encoder y su entrenamiento con negativos en el lote, negativos duros y pérdida simétrica.
@@ -457,16 +458,16 @@ nb.gemini(
     "video", "M11-VID-01", "La matriz B×B: cómo InfoNCE empuja positivos y negativos",
     "Anima un lote de 4 pares: matriz de similitudes, softmax por filas, efecto de la temperatura y de añadir un negativo duro como columna extra.",
     """
-    Video técnico 16:9, 1080p, fondo blanco, estilo de animación de diagramas (sin personajes, sin voz en off, sin música estridente; ritmo calmado). Paleta: verde #2CA02C (positivos/diagonal), gris #6B7280 (negativos), naranja #F28E2B (negativo duro), azul #1F6FEB (texto y ejes). Tipografía sans-serif grande.
+    Video técnico 16:9, 1080p, fondo blanco, estilo de animación de diagramas (sin personajes, sin voz en off, sin música; ritmo calmado). Paleta: verde #2CA02C (positivos/diagonal), gris #6B7280 (negativos), naranja #F28E2B (negativo duro), azul #1F6FEB (texto y ejes). Tipografía sans-serif grande.
     0–5 s: aparece el título «InfoNCE con negativos en el lote» y, debajo, cuatro filas «q1 q2 q3 q4» y cuatro columnas «d1 d2 d3 d4».
-    5–12 s: se rellena una matriz 4×4 de similitudes coseno con estos valores exactos (fila por fila): q1: 0.82, 0.31, 0.12, 0.78 · q2: 0.28, 0.77, 0.40, 0.05 · q3: 0.10, 0.35, 0.69, 0.66 · q4: 0.47, 0.02, 0.18, 0.80. La diagonal se colorea en verde; las celdas (q1,d4)=0.78 y (q3,d4)=0.66 parpadean en naranja con el rótulo «negativos difíciles».
+    5–12 s: se rellena una matriz 4×4 de similitudes coseno con estos valores exactos (fila por fila): q1: 0.82, 0.31, 0.12, 0.78 · q2: 0.28, 0.77, 0.40, 0.05 · q3: 0.10, 0.35, 0.69, 0.66 · q4: 0.47, 0.02, 0.18, 0.80. La diagonal se colorea en verde; las celdas (q1,d4)=0.78 y (q3,d4)=0.66 parpadean en naranja con el rótulo «negativos duros».
     12–20 s: texto en pantalla «softmax por filas con τ = 0.05». Cada fila se transforma en probabilidades exactas: q1: 0.69, 0.00, 0.00, 0.31 · q2: 0.00, 1.00, 0.00, 0.00 · q3: 0.00, 0.00, 0.65, 0.35 · q4: 0.00, 0.00, 0.00, 1.00. Junto a cada fila aparece su pérdida −log p(diagonal): 0.37, 0.00, 0.44, 0.00; abajo «pérdida media = 0.20».
     20–27 s: texto «la misma matriz con τ = 1.0». Las filas se vuelven casi uniformes: q1: 0.33, 0.20, 0.16, 0.31 · q2: 0.22, 0.36, 0.25, 0.17 · q3: 0.17, 0.22, 0.31, 0.30 · q4: 0.26, 0.17, 0.20, 0.37; «pérdida media = 1.08». Rótulo: «τ alta: todos los negativos pesan casi igual».
-    27–35 s: flechas animadas sobre una esfera pequeña a la derecha: el punto q1 se acerca a d1 (flecha verde) y se aleja sobre todo de d4 (flecha naranja más gruesa) y poco de d2, d3 (flechas grises finas). Rótulo: «el gradiente se concentra en los negativos difíciles (τ baja)».
+    27–35 s: flechas animadas sobre una esfera pequeña a la derecha: el punto q1 se acerca a d1 (flecha verde) y se aleja sobre todo de d4 (flecha naranja más gruesa) y poco de d2, d3 (flechas grises finas). Rótulo: «el gradiente se concentra en los negativos duros (τ baja)».
     35–42 s: se añade a la derecha de la matriz una quinta columna naranja rotulada «h1 (negativo duro minado con BM25)», la matriz pasa a 4×5; rótulo final: «negativos duros = columnas extra del denominador».
     Evita: texto ilegible, números distintos de los indicados, transiciones rápidas, elementos decorativos.
     """,
-    "Animación de una matriz 4×4 de similitudes, su softmax por filas con τ=0.05 y τ=1, el empuje sobre negativos difíciles y la adición de un negativo duro.",
+    "Animación de una matriz 4×4 de similitudes, su softmax por filas con τ=0.05 y τ=1, el empuje sobre negativos duros y la adición de un negativo duro.",
     """
     S (cos)   d1   d2   d3   d4        softmax τ=0.05            τ=1.0
     q1      [0.82 0.31 0.12 0.78]  →  [0.69 0.00 0.00 0.31]   [0.33 0.20 0.16 0.31]
@@ -478,7 +479,7 @@ nb.gemini(
     duration="40-45 s",
 )
 nb.md(r"""
-> 👀 **Qué debes observar.** Con $\tau=0.05$ las filas 2 y 4 ya no aportan pérdida (sus negativos son fáciles) y todo el gradiente sale de las filas 1 y 3, por culpa de un único negativo difícil cada una. Con $\tau=1$ la pérdida es alta en todas las filas pero el gradiente apenas distingue difíciles de fáciles. Los números del video salen de aplicar la fórmula de la sección 2 a esa matriz.
+> 👀 **Qué debes observar.** Con $\tau=0.05$ las filas 2 y 4 ya no aportan pérdida (sus negativos son fáciles) y todo el gradiente sale de las filas 1 y 3, por culpa de un único negativo duro cada una. Con $\tau=1$ la pérdida es alta en todas las filas pero el gradiente apenas distingue duros de fáciles. Los números del video salen de aplicar la fórmula de la sección 2 a esa matriz.
 """)
 
 nb.md(r"""
@@ -529,7 +530,7 @@ nb.gemini(
     "imagen", "M11-IMG-02", "Alineación y uniformidad en la hiperesfera",
     "Tres esferas que ilustran colapso, alineación sin uniformidad y el caso ideal, conectando con L_align y L_uniform.",
     """
-    Diagrama técnico limpio, fondo blanco, 16:9, tres círculos grandes (esferas vistas en 2D) en fila con título encima de cada uno. Paleta: cada color es una clase de pares positivos: azul #1F6FEB, naranja #F28E2B, verde #2CA02C; gris #6B7280 para el contorno y texto.
+    Diagrama técnico limpio, fondo blanco, 16:9, tres círculos grandes (esferas vistas en 2D) en fila con título encima de cada uno. Paleta: cada color es una clase de pares positivos: azul #1F6FEB, naranja #F28E2B, verde #2CA02C; gris #6B7280 para el contorno y texto. Tipografía sans-serif legible.
     Esfera 1, título «Colapso»: todos los puntos (de los tres colores) amontonados en un único punto del borde. Debajo: «L_align ≈ 0 · L_uniform ≈ 0 → inútil».
     Esfera 2, título «Alineado pero no uniforme»: tres grupos compactos (azul, naranja, verde) todos apiñados en el mismo cuarto de la esfera, muy cerca unos de otros. Debajo: «positivos cerca, pero las clases se confunden».
     Esfera 3, título «Ideal (InfoNCE)»: tres grupos compactos repartidos alrededor de la esfera, separados ~120°. Debajo: «L_align bajo · L_uniform muy negativo».
@@ -601,10 +602,10 @@ nb.gemini(
     "imagen", "M11-IMG-03", "Minado de negativos duros con filtro de falsos negativos",
     "Pipeline de minado: candidatos BM25/denso, filtro consciente del positivo y negativos que entran en la pérdida.",
     """
-    Diagrama técnico limpio, fondo blanco, 16:9, flujo de izquierda a derecha. Paleta: azul #1F6FEB (consulta), verde #2CA02C (positivo), naranja #F28E2B (negativos duros válidos), rojo apagado #C0392B (falsos negativos descartados), gris #6B7280 (texto secundario).
+    Diagrama técnico limpio, fondo blanco, 16:9, flujo de izquierda a derecha. Paleta: azul #1F6FEB (consulta), verde #2CA02C (positivo), naranja #F28E2B (negativos duros válidos), gris #6B7280 (descartados y texto secundario). Tipografía sans-serif legible.
     1) Caja azul «consulta: configurar el balanceador de carga».
     2) Caja «Recuperador (BM25 o modelo denso)» que produce una lista vertical de 6 candidatos con scores exactos: «d+ (positivo) 12.0», «c1 11.8», «c2 10.9», «c3 9.1», «c4 7.5», «c5 6.2».
-    3) Caja «Filtro TopK-PercPos: score < 0.95 × 12.0 = 11.4». c1 (11.8) aparece en rojo tachado con la etiqueta «posible falso negativo»; c2 (10.9), c3, c4 en naranja con «negativo duro»; c5 en gris «fácil».
+    3) Caja «Filtro TopK-PercPos: score < 0.95 × 12.0 = 11.4». c1 (11.8) aparece en gris oscuro tachado con una ✗ y la etiqueta «posible falso negativo»; c2 (10.9), c3, c4 en naranja con «negativo duro»; c5 en gris claro «fácil».
     4) Caja final «InfoNCE: positivo + negativos del lote + c2, c3, c4 como columnas extra».
     Nota al pie: «Alternativas: filtrar con un cross-encoder (RocketQA) o refrescar el índice durante el entrenamiento (ANCE)».
     Evita: texto ilegible, flechas ambiguas, otros números, decoración.
@@ -747,7 +748,7 @@ print("unidades de Colab ≈ horas_reales × (unidades/hora que muestra tu sesi�
 ''')
 
 nb.md(r"""
-## Mapa de madurez (a oct-2026)
+## 🗺️ Mapa de madurez (a oct-2026)
 
 | Técnica | Madurez | Quién la usa (verificable) | Fuente |
 |---|---|---|---|
@@ -789,7 +790,7 @@ nb.md(r"""
 - Ajustar un modelo preentrenado con LR alta y destruir su multilingüismo (*catastrophic forgetting*).
 """)
 nb.md(r"""
-## Autoevaluación
+## 📝 Autoevaluación
 <details><summary><b>1. (Cálculo)</b> Con un lote de $B=64$ y sin negativos extra, ¿cuál es el máximo de información mutua (en nats) que puede certificar InfoNCE? ¿Y con $B=4096$?</summary>
 
 $\log 64\approx4.16$ nats; $\log 4096\approx8.32$ nats.
@@ -820,7 +821,7 @@ Pares: (primera frase del docstring, función sin docstring) y (nombre de la fun
 </details>
 """)
 nb.md(r"""
-## Referencias
+## 📚 Referencias
 - van den Oord, A., Li, Y., & Vinyals, O. (2018). *Representation Learning with Contrastive Predictive Coding.* Preprint. [arXiv:1807.03748](https://arxiv.org/abs/1807.03748)
 - Poole, B., Ozair, S., van den Oord, A., et al. (2019). *On Variational Bounds of Mutual Information.* ICML 2019. [arXiv:1905.06922](https://arxiv.org/abs/1905.06922)
 - McAllester, D., & Stratos, K. (2020). *Formal Limitations on the Measurement of Mutual Information.* AISTATS 2020. [arXiv:1811.04251](https://arxiv.org/abs/1811.04251)
@@ -860,9 +861,9 @@ pj.md(pj.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟠 Avanzado |
-| **Duración** | ≈ 2.5 h |
-| **Cómputo** | `FAST_DEV_RUN=True`: CPU/T4, ≈ 5 min. Modo completo (`FAST_DEV_RUN=False`, 10× pasos y corpus mayor): L4 recomendada; unidades ≈ horas reales × tarifa de tu sesión |
-| **Requisitos** | Lección 11 |
+| **Duración estimada** | ≈ 2.5 h |
+| **GPU recomendada** | `FAST_DEV_RUN=True`: CPU/T4, ≈ 5 min. Modo completo (`FAST_DEV_RUN=False`, 10× pasos y corpus mayor): L4 recomendada; unidades ≈ horas reales × tarifa de tu sesión |
+| **Prerrequisitos** | Lección 11 |
 
 ## Contexto de negocio
 Producto quiere que **Políglota Labs** deje de depender de embedders ajenos. Tu *tech lead* te pide un primer embedder propio ES/EN/código, entrenado desde cero con InfoNCE, **pares débiles** extraídos del corpus y las consultas etiquetadas de entrenamiento, y una ablación honesta: ¿ayudan los **negativos duros** minados con BM25 (con filtro de falsos negativos)? ¿Cómo queda frente a BM25 y frente a la torre sin entrenar?
