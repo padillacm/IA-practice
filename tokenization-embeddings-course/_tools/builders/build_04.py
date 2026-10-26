@@ -689,9 +689,9 @@ nb.code(r'''
 trafico = {"es": 0.5, "en": 0.3, "code": 0.2}          # supuesto de producto (parámetro)
 LAMBDA = 3.0                                           # penalización de memoria: "tokens/KB" equivalentes por cada 1 k de vocabulario (parámetro de producto)
 VS = [1000, 2000, 4000, 8000, 16000] if FAST_DEV_RUN else [4000, 8000, 16000, 32000, 64000]
-corp = corpus_mezcla(suav, TOTAL); filas = []
+corp = corpus_mezcla(suav, TOTAL); filas = []; TKS = {}          # TKS: guardamos cada candidato para auditarlo (sección 11.1)
 for V in VS:
-    tk = entrena_bpe_bytes(corp, V)
+    tk = TKS[V] = entrena_bpe_bytes(corp, V)
     tpk = {l: 1000 / bytes_por_token(tk, l) for l in ["es", "en", "code"]}               # tokens por KB de texto
     J = sum(trafico[l] * tpk[l] for l in tpk) + LAMBDA * V / 1e3
     filas.append({"V": V, **{f"tpk_{l}": v for l, v in tpk.items()}, "tokens_prom": sum(trafico[l] * tpk[l] for l in tpk), "J": J})
@@ -711,6 +711,114 @@ nb.md(r"""
 """)
 
 nb.md(r"""
+### 11.1 🧠 Auditoría del vocabulario antes de un preentrenamiento caro
+
+**Por qué se audita *antes*.** Después del preentrenamiento el tokenizer ya no se puede cambiar gratis: (1) cada fila de la matriz de embeddings (y de la cabeza de salida) está ligada a un id concreto; (2) el corpus de preentrenamiento suele guardarse **ya tokenizado** (shards de ids), así que un cambio obliga a re-tokenizar petabytes; (3) las leyes de escala y los presupuestos se expresan **en tokens de ese tokenizer**; (4) todas las evaluaciones y *checkpoints* intermedios quedan como referencia en esa unidad. Cambiarlo después es el problema de *tokenizer transfer* (módulo 07), que cuesta datos y calidad. Por eso los equipos de preentrenamiento lo tratan como una decisión de arquitectura, con su propia auditoría (práctica habitual; los informes técnicos rara vez publican el protocolo completo).
+
+**Lista de control mínima** (todas sobre un *held-out* con la mezcla real del modelo, no del tokenizer):
+1. **Round-trip exacto** `decode(encode(x)) == x` (sin pérdidas por normalización; módulos 01 y 03).
+2. **Compresión por idioma/dominio** (bytes/token) y **peor prima** (sección 6).
+3. **Más allá de la fertilidad: eficiencia de Rényi.** Zouhar et al. (2023) proponen $\;\mathrm{Eff}_\alpha=\dfrac{H_\alpha(p)}{\log |V|},\;\; H_\alpha(p)=\dfrac{1}{1-\alpha}\log\sum_{t}p(t)^{\alpha}$, con $p$ la distribución unigrama de tokens; con $\alpha=2.5$ correlaciona 0.78 con BLEU en sus experimentos de traducción, frente a −0.32 de la longitud comprimida. Penaliza vocabularios con tokens muy frecuentes *y* con muchos tokens rarísimos. ⚠️ No es un oráculo: Cognetta et al. (2024) construyen variantes de BPE que **suben** la eficiencia de Rényi mientras **empeoran** el modelo. Úsala como una señal más, nunca como objetivo a optimizar.
+4. **Uso del vocabulario**: qué fracción de $V$ aparece en el held-out. Los ids que nunca aparecen son candidatos a **tokens sub-entrenados** (módulo 05), sobre todo si el corpus del tokenizer difiere del del modelo.
+5. **Token más largo** y tokens «basura» (URLs, cadenas repetidas, *boilerplate*): suelen delatar duplicados en el corpus del tokenizer.
+6. **Slots reservados y $V$ físico**: cuántos ids dejas libres para fine-tuning (tokens de control, herramientas, idiomas) y a qué múltiplo redondeas $V$ (siguiente celda).
+""")
+nb.code(r'''
+import math
+from collections import Counter
+
+def renyi_eficiencia(conteos: Counter, V: int, alpha: float = 2.5) -> float:
+    """Eficiencia de Rényi (Zouhar et al., 2023): H_alpha(p) / log|V|, con p = unigramas de tokens."""
+    n = sum(conteos.values()); p = np.array([c / n for c in conteos.values()], dtype=float)
+    return (math.log(np.sum(p ** alpha)) / (1 - alpha)) / math.log(V)
+
+def auditoria_vocab(tk, held_out: dict) -> dict:
+    """Auditoría barata de un tokenizer HF candidato sobre un held-out {idioma: [textos]}."""
+    V = tk.get_vocab_size(); cont = Counter(); ok = tot = 0; fila = {"V": V}
+    for lang, textos in held_out.items():
+        nbytes = ntok = 0
+        for x in textos:
+            ids = tk.encode(x).ids; cont.update(ids); nbytes += len(x.encode("utf-8")); ntok += len(ids)
+            ok += int(tk.decode(ids) == x); tot += 1
+        fila[f"B/tok {lang}"] = nbytes / max(ntok, 1)
+    fila["round-trip %"] = 100 * ok / max(tot, 1)
+    fila["Rényi α=2.5"] = renyi_eficiencia(cont, V)
+    fila["% de V visto"] = 100 * len(cont) / V
+    fila["token más largo (chars)"] = max(len(tk.decode([i])) for i in range(V))
+    return fila
+
+daud = pd.DataFrame([auditoria_vocab(TKS[V], test_by_lang) for V in VS]).set_index("V")
+print(daud.round(3))
+fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+ax[0].plot(daud.index, daud["Rényi α=2.5"], "o-", c=COL["azul"], lw=2); ax[0].set_xscale("log")
+ax[0].set_xlabel("Tamaño del vocabulario V"); ax[0].set_ylabel("Eficiencia de Rényi (α = 2.5)"); ax[0].set_title("Rényi: otra señal además de bytes/token")
+ax[1].plot(daud.index, daud["% de V visto"], "o-", c=COL["rojo"], lw=2); ax[1].set_xscale("log")
+ax[1].set_xlabel("Tamaño del vocabulario V"); ax[1].set_ylabel("% de ids que aparecen en el held-out"); ax[1].set_title("Ids nunca vistos = riesgo de tokens sub-entrenados")
+plt.tight_layout(); plt.show()
+''')
+nb.md(r"""
+> 👀 **Qué debes observar.** **Columna V:** el candidato más grande puede tener **menos** tokens de los pedidos (con `FAST_DEV_RUN`, ≈ 13 k en lugar de 16 k): el entrenador se quedó sin pares que fusionar en un corpus pequeño. Audita siempre el $V$ *real*, no el del fichero de configuración.
+> **Izquierda:** mientras los bytes/token mejoran con $V$, la eficiencia de Rényi **empeora** (≈ 0.74 → 0.50 en nuestra corrida): las dos señales tiran en direcciones opuestas y la decisión necesita un criterio de producto o un modelo pequeño de prueba, no una sola métrica. **Derecha:** incluso con $V=1000$ no se ve el 100 % (muchos de los 256 bytes base nunca aparecen en ES/EN/código), y al crecer $V$ la fracción de ids vistos cae con fuerza (≈ 31 % en el mayor). Con un held-out tan pequeño la cifra absoluta exagera, pero la tendencia es la que importa: esos ids recibirán pocos gradientes si el modelo ve datos como el held-out (tokens sub-entrenados, módulo 05). El round-trip debe ser 100 % en un byte-level BPE sin normalizador: cualquier otro valor es un bug que hay que encontrar **antes** de gastar cómputo.
+""")
+
+nb.md(r"""
+### 11.2 La trampa de comparar pérdida por token (y cómo calcular bpb sin errores)
+
+Un modelo con un tokenizer de tokens largos tiene **más** pérdida por token (cada token lleva más información) aunque modele **mejor** el texto. La métrica comparable es **bits por byte**: $\mathrm{bpb}=\dfrac{\sum_i \mathcal{L}_i}{\ln 2\cdot n_{\text{bytes}}}$ (pérdida total en nats sobre el texto, dividida por sus bytes UTF-8). Para verlo sin entrenar un Transformer, usamos el LM más simple posible: un **unigrama de tokens** (con suavizado de Laplace) entrenado con cada tokenizer candidato. Trampas habituales al calcular bpb (práctica habitual de evaluación):
+* el denominador son los bytes del **texto original**, no del texto normalizado (un NFKC o un *lowercase* cambian los bytes);
+* la pérdida debe sumar **todos** los tokens del texto (incluido el primero y el EOS si se evalúa) y no promediar por lote antes de convertir;
+* ambos modelos deben evaluarse sobre **exactamente el mismo texto** (mismos documentos, mismos cortes de contexto **en bytes**, módulo 06).
+""")
+nb.code(r'''
+def unigrama_loss_y_bpb(tk, textos_train, textos_test):
+    """LM unigrama de tokens con Laplace: devuelve (nats por token, bits por byte) en test."""
+    V = tk.get_vocab_size(); c = Counter(i for x in textos_train for i in tk.encode(x).ids); n = sum(c.values())
+    nats = ntok = nbytes = 0
+    for x in textos_test:
+        ids = tk.encode(x).ids; ntok += len(ids); nbytes += len(x.encode("utf-8"))
+        nats += sum(-math.log((c[i] + 1) / (n + V)) for i in ids)
+    return nats / ntok, nats / (math.log(2) * nbytes)
+
+test_todo = [x for v in test_by_lang.values() for x in v]
+dlb = pd.DataFrame([dict(zip(["V", "nats/token", "bpb"], (V, *unigrama_loss_y_bpb(TKS[V], corp, test_todo)))) for V in VS]).set_index("V")
+print(dlb.round(3))
+fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+ax[0].plot(dlb.index, dlb["nats/token"], "o-", c=COL["naranja"], lw=2); ax[0].set_title("Pérdida por token: ¿el V pequeño 'gana'?")
+ax[1].plot(dlb.index, dlb["bpb"], "o-", c=COL["verde"], lw=2); ax[1].set_title("Bits por byte: la comparación honesta")
+for a, yl in zip(ax, ["nats por token (menor = mejor)", "bits por byte (menor = mejor)"]): a.set_xscale("log"); a.set_xlabel("Tamaño del vocabulario V"); a.set_ylabel(yl)
+plt.tight_layout(); plt.show()
+print("mejor V según pérdida/token:", int(dlb["nats/token"].idxmin()), "| mejor V según bpb:", int(dlb["bpb"].idxmin()))
+''')
+nb.md(r"""
+> 👀 **Qué debes observar.** La pérdida por token **crece** con $V$ (cada token codifica más bytes), así que «elegir el $V$ con menor pérdida» premiaría siempre el vocabulario más pequeño. En bpb la ordenación se invierte: el mismo modelo unigrama describe el texto con menos bits por byte cuando los tokens capturan más estructura (en nuestra corrida 3.30 → 2.57 bpb), con rendimientos decrecientes al final, donde la escasez de datos por token empieza a pesar. Las dos métricas eligen $V$ distintos **con el mismo modelo y el mismo texto**: si en un informe ves «loss» comparada entre tokenizers, pide el bpb.
+""")
+
+nb.md(r"""
+### 11.3 Slots reservados, $V$ físico y la unidad de las leyes de escala
+
+* **Redondear $V$.** El vocabulario «físico» (filas de la matriz de embeddings) se redondea a un múltiplo de 64 o 128 para que las multiplicaciones de la cabeza de salida usen *tiles* completos de GPU; `nanoGPT` lo documenta en su configuración: «GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency» (50 304). Las filas extra son ids que el tokenizer nunca emite.
+* **Reservar ids.** El tokenizer oficial de Llama 3 añade a sus 128 000 tokens base **256 especiales** (`num_reserved_special_tokens = 256`): unos pocos con nombre (`<|begin_of_text|>`, `<|eot_id|>`, `<|start_header_id|>`…) y el resto `<|reserved_special_token_N|>`, de forma que 128 256 ya es múltiplo de 128. Reservar sale barato al principio y evita redimensionar la matriz en el fine-tuning (nuevos roles, herramientas, modalidades).
+* **⚠️ Reservado ≠ entrenado.** Un id que nunca aparece en el preentrenamiento no recibe señal útil: sus embeddings quedan en la inicialización (o los empuja hacia abajo el softmax de salida). Antes de usar un slot reservado en fine-tuning hay que **inicializarlo** (p. ej. con la media de los embeddings, módulo 07) y entrenarlo. En el modelo base de Llama 3 se reportaron filas a cero para tokens de la plantilla de chat que podían causar gradientes NaN al afinar (⚠️ fuente secundaria: tarjeta de modelo comunitaria `imone/Llama-3-8B-fixed-special-embedding` y la charla de Unsloth en AI Engineer; no hay comunicado de Meta).
+* **Las leyes de escala están en tokens de *un* tokenizer.** Chinchilla (70 B parámetros, 1.4 T tokens; ≈ 20 tokens por parámetro) se entrenó con un SentencePiece de 32 000 sin NFKC (Hoffmann et al., 2022, sección 4 y tarjeta del modelo). Copiar «20 tokens por parámetro» con otro tokenizer cambia la **cantidad de texto**: hay que convertir a bytes con los bytes/token de cada tokenizer sobre la misma mezcla.
+""")
+nb.code(r'''
+def v_fisico(v_base: int, reservados: int = 0, multiplo: int = 128) -> int:
+    return math.ceil((v_base + reservados) / multiplo) * multiplo
+
+for nombre, vb, r, m in [("GPT-2 (nanoGPT)", 50257, 0, 64), ("Llama 3", 128000, 256, 128), (f"Políglota V*={V_opt}", V_opt, 64, 128)]:
+    vf = v_fisico(vb, r, m); print(f"{nombre:22s} base={vb:>7,} + reservados={r:>3} -> físico={vf:>7,} (múltiplo de {m}; {vf - vb - r} filas de relleno)")
+
+# La misma regla "20 tokens por parámetro" con dos tokenizers distintos = cantidades distintas de TEXTO
+N_PARAM = 100e6
+b_tok = {V: sum(len(x.encode()) for x in test_todo) / sum(len(TKS[V].encode(x).ids) for x in test_todo) for V in (VS[0], VS[-1])}
+for V, b in b_tok.items(): print(f"V={V:>6}: {b:.2f} bytes/token -> 20 tokens/parámetro x {N_PARAM:.0e} = {20 * N_PARAM * b / 1e9:.1f} GB de texto")
+print(f"Mismo 'presupuesto en tokens', {b_tok[VS[-1]] / b_tok[VS[0]]:.2f}x más texto con V={VS[-1]}: convierte siempre a bytes antes de comparar.")
+''')
+nb.md(r"""
+> 👀 **Qué debes observar.** El relleno a múltiplo de 128 cuesta muy pocas filas; los 256 reservados de Llama 3 son ≈ 0.2 % del vocabulario. Abajo, la misma regla «tokens por parámetro» con dos vocabularios da cantidades de texto distintas: un plan de datos o una comparación entre laboratorios hecha en tokens sin decir el tokenizer **no es comparable**.
+""")
+
+nb.md(r"""
 ## 12. Resumen de decisiones de diseño
 
 | Decisión | Pregunta que debes poder responder con datos | Herramienta de esta lección |
@@ -721,6 +829,7 @@ nb.md(r"""
 | Código | ¿se colapsan los runs de espacios? ¿tabs? | sección 8 |
 | Especiales y plantilla | ¿una única fuente de verdad para entrenar y servir? | sección 9 |
 | ¿Cruzar palabras? | ¿ganancia > complejidad? (🟡) | sección 10 |
+| Auditoría antes del preentrenamiento | ¿round-trip 100 %, Rényi, % de V visto, slots reservados, $V$ físico? | sección 11.1–11.3 |
 
 """)
 
@@ -753,6 +862,7 @@ Cifras de vocabulario **a oct-2026** (ver tabla de la sección 5); verifica siem
 - **Google.** Gemma usa vocabularios de ≈ 256 k con dígitos separados y bytes; la proporción de parámetros en embeddings es muy alta en los modelos pequeños (gráfico de la sección 4).
 - **Cohere.** Command R/R+ usan 255 029 tokens con embeddings atados (tabla 1 de Land & Bartolo 2024); Cohere publicó además el análisis de tokens sub-entrenados que verás en el módulo 05.
 - **Coste real.** Facturación por token + paridad = **prima de precio por idioma** (Ahia et al., 2023). Antes de comprometer un contrato de API para un producto multilingüe, **mide tus textos con el tokenizer del proveedor** y proyecta el coste por idioma.
+- **Auditoría antes de preentrenar.** Lo habitual es congelar el tokenizer tras una batería como la de la sección 11.1 (round-trip, compresión y prima por idioma, uso del vocabulario, especiales) sobre la mezcla de datos **del modelo**; los informes técnicos casi nunca publican el protocolo completo, pero sí sus consecuencias (p. ej. los 256 reservados de Llama 3 o el relleno a múltiplos de 64/128 de `nanoGPT`).
 - **Evaluación independiente.** Compara tokenizers con un corpus que **no** se usó para entrenarlos (FLORES+, por ejemplo) y siempre sobre *contenido paralelo*.
 """)
 
@@ -761,8 +871,8 @@ nb.md(r"""
 
 1. **Compara en bits por byte, no por token.** Perplexidad/pérdida por token no es comparable entre vocabularios distintos; Tao et al. (2024) usan una pérdida normalizada por carácter para sus leyes de escala.
 2. **El vocabulario óptimo crece con el cómputo, y los modelos reales están por debajo.** Tao et al. predicen ≥ 216 K para Llama2-70B frente a los 32 K reales; los vocabularios 100–260 k de 2024–2026 van en esa dirección (🟡: resultado a ≤ 3 B parámetros).
-3. **El «token tax» es un coste de producto medible.** Petrov et al. (2023) encuentran diferencias de hasta 15× entre idiomas en los tokenizers que analizaron, y Ahia et al. (2023) lo convierten en precios. Un equipo con usuarios hispanohablantes debe tener este número en su dashboard.
-4. **Los vocabularios de modelo pequeño son «tablas de embeddings».** Pasar de 32 k a 256 k puede mover de ≈ 10 % a ≈ 50 % de los parámetros (gráfico de la sección 4): por eso importa el *weight tying*.
+3. **El tokenizer es la unidad de tus leyes de escala.** «≈ 20 tokens por parámetro» (Chinchilla: 70 B, 1.4 T tokens) se midió con un SentencePiece de 32 000 sin NFKC (Hoffmann et al., 2022). Con otro tokenizer, el mismo número de tokens es otra cantidad de texto (sección 11.3): los planes de datos y las comparaciones entre laboratorios se hacen en **bytes**, o declarando el tokenizer.
+4. **Reservado no es entrenado.** Llama 3 deja 256 ids especiales (128 000 + 256 = 128 256, múltiplo de 128) para crecer sin redimensionar; pero un slot que nunca apareció en el preentrenamiento llega al fine-tuning sin entrenar. Inicialízalo (media de embeddings, módulo 07) y vigila los NaN. Y la fertilidad no basta para auditar: añade Rényi (Zouhar et al., 2023), sabiendo que se puede «trampear» (Cognetta et al., 2024).
 5. **La pre-tokenización de números cambia la aritmética.** Singh & Strouse (2024): tokenización R2L sube la suma de 75.6 % a 97.8 % en GPT-3.5 (8-shot; efecto menor pero presente en GPT-4, marzo 2023); es un cambio de *una línea de regex* con efecto medible.
 6. **El espacio en blanco se paga en tokens.** Con GPT-2 la indentación cuesta ≈ 15 tokens extra por línea a 16 espacios; la agrupación de `cl100k`/`o200k` la deja en ≈ 1 (medido arriba, sobre código Python real).
 7. **Cambiar el tokenizer de un modelo ya entrenado es caro.** Dagan et al. (2024) reportan que especializar el tokenizer de un modelo preentrenado tras afinarlo con más de 50 B de tokens da ganancias grandes de velocidad y contexto efectivo, pero ese volumen de datos ilustra el coste (módulo 07); por eso se diseña bien a la primera.
@@ -836,11 +946,14 @@ nb.md(r"""
 - Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* EMNLP 2024. <https://arxiv.org/abs/2402.18376>
 - Land, S. y Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* EMNLP 2024. <https://arxiv.org/abs/2405.05417> (tabla de vocabularios)
 - Llama Team (2024). *The Llama 3 Herd of Models.* <https://arxiv.org/abs/2407.21783> · Gemma Team (2024). *Gemma 2: Improving Open Language Models at a Practical Size.* <https://arxiv.org/abs/2408.00118> · Gemma Team (2025). *Gemma 3 Technical Report.* <https://arxiv.org/abs/2503.19786> · Yang et al. (2024). *Qwen2 Technical Report.* <https://arxiv.org/abs/2407.10671>
+- Zouhar, V., Meister, C., Gastaldi, J. L., Du, L., Sachan, M. y Cotterell, R. (2023). *Tokenization and the Noiseless Channel.* ACL 2023. <https://arxiv.org/abs/2306.16842>
+- Cognetta, M., Zouhar, V., Moon, S. y Okazaki, N. (2024). *Two Counterexamples to Tokenization and the Noiseless Channel.* LREC-COLING 2024. <https://arxiv.org/abs/2402.14614>
+- Hoffmann, J. et al. (2022). *Training Compute-Optimal Large Language Models* (Chinchilla). NeurIPS 2022. <https://arxiv.org/abs/2203.15556>
 - Conneau, A. et al. (2019). *Unsupervised Cross-lingual Representation Learning at Scale.* ACL 2020. <https://arxiv.org/abs/1911.02116>
 - Touvron, H. et al. (2023). *LLaMA: Open and Efficient Foundation Language Models.* <https://arxiv.org/abs/2302.13971>
 
 **Datos, librerías y docs**
-- FLORES+ (`openlanguagedata/flores_plus`) y `Helsinki-NLP/opus-100` en Hugging Face Datasets; `tiktoken` <https://github.com/openai/tiktoken>; Mistral, guía de tokenización <https://docs.mistral.ai/guides/tokenization/> y anuncio de Mistral NeMo <https://mistral.ai/news/mistral-nemo/>.
+- FLORES+ (`openlanguagedata/flores_plus`) y `Helsinki-NLP/opus-100` en Hugging Face Datasets; `tiktoken` <https://github.com/openai/tiktoken>; Mistral, guía de tokenización <https://docs.mistral.ai/guides/tokenization/> y anuncio de Mistral NeMo <https://mistral.ai/news/mistral-nemo/>; `nanoGPT` (`model.py`, relleno de `vocab_size` a 50 304) <https://github.com/karpathy/nanoGPT>; tokenizer de Llama 3 (`llama/tokenizer.py`, `num_reserved_special_tokens = 256`) <https://github.com/meta-llama/llama3>; tarjeta comunitaria `imone/Llama-3-8B-fixed-special-embedding` (fuente secundaria sobre filas a cero).
 
 **Siguiente:** módulo 05 (qué falla cuando el vocabulario y los datos del modelo no coinciden: glitch tokens, números, letras, Unicode).
 """)
