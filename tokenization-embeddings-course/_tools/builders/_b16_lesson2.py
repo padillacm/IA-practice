@@ -293,7 +293,7 @@ def part2(nb):
     | Modality gap: existencia y medición | 🟢 sólido (fenómeno); 🟡 cuánto importa en producto | Investigación; práctica de índices mixtos | Liang et al. 2022 |
     | Retrieval visual de documentos con multi-vector (ColPali / ColQwen) | 🟡 emergente (resultados fuertes en ViDoRe; coste de almacenamiento) | ILLUIN y comunidad; también Jina v4 (dense + multi-vector) | Faysse et al. 2024; Günther et al. 2025 |
     | Un único vector por captura de pantalla (DSE) | 🟡 emergente | Investigación (Waterloo) | Ma et al. 2024 |
-    | Embeddings unificados multimodales (texto, imagen, video, audio, PDF en un espacio) | 🟡 emergente: Gemini Embedding 2 (preview mar-2026, GA abr-2026 según prensa) | Google; también Jina v4, VLM2Vec en investigación | ver §6 |
+    | Embeddings unificados multimodales (texto, imagen, video, audio, PDF en un espacio) | 🟡 emergente: Gemini Embedding 2 (preview 10-mar-2026, GA 22-abr-2026 según el blog de Google) | Google; también Jina v4, VLM2Vec en investigación | ver §6 |
     | Espacios de audio/video (CLAP, ImageBind) | 🟡 / 🔴 | Investigación | Elizalde 2022; Girdhar 2023 |
     | Embeddings de video con orden temporal fino | 🔴 experimental | — | (§8) |
     """)
@@ -360,22 +360,22 @@ def part2(nb):
     """)
     nb.md("""
     ## 14. 📚 Referencias
-    - Radford et al. (2021). *Learning Transferable Visual Models From Natural Language Supervision* (CLIP). <https://arxiv.org/abs/2103.00020>
-    - Zhai, Mustafa, Kolesnikov, Beyer (2023). *Sigmoid Loss for Language Image Pre-Training* (SigLIP). <https://arxiv.org/abs/2303.15343>
-    - Tschannen et al. (2025). *SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense Features*. <https://arxiv.org/abs/2502.14786>
-    - Liang, Zhang, Kwon, Yeung, Zou (2022). *Mind the Gap: Understanding the Modality Gap in Multi-modal Contrastive Representation Learning*. NeurIPS. <https://arxiv.org/abs/2203.02053>
+    - Radford et al. (2021). *Learning Transferable Visual Models From Natural Language Supervision* (CLIP). ICML 2021. <https://arxiv.org/abs/2103.00020>
+    - Zhai, Mustafa, Kolesnikov, Beyer (2023). *Sigmoid Loss for Language Image Pre-Training* (SigLIP). ICCV 2023. <https://arxiv.org/abs/2303.15343>
+    - Tschannen et al. (2025). *SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localization, and Dense Features*. Preprint. <https://arxiv.org/abs/2502.14786>
+    - Liang, Zhang, Kwon, Yeung, Zou (2022). *Mind the Gap: Understanding the Modality Gap in Multi-modal Contrastive Representation Learning*. NeurIPS 2022. <https://arxiv.org/abs/2203.02053>
     - Faysse et al. (2024). *ColPali: Efficient Document Retrieval with Vision Language Models*. ICLR 2025. <https://arxiv.org/abs/2407.01449>
-    - Ma, Lin, Li, Chen, Lin (2024). *Unifying Multimodal Retrieval via Document Screenshot Embedding*. EMNLP. <https://arxiv.org/abs/2406.11251>
-    - Macé, Loison, Faysse (2025). *ViDoRe Benchmark V2: Raising the Bar for Visual Retrieval*. <https://arxiv.org/abs/2505.17166>
-    - ViDoRe V3 (2026). *ViDoRe V3: A Comprehensive Evaluation of Retrieval Augmented Generation in Complex Real-World Scenarios*. <https://arxiv.org/abs/2601.08620>
-    - Günther et al. (2025). *jina-embeddings-v4: Universal Embeddings for Multimodal Multilingual Retrieval*. <https://arxiv.org/abs/2506.18902>
-    - Jiang et al. (2024). *VLM2Vec: Training Vision-Language Models for Massive Multimodal Embedding Tasks*. <https://arxiv.org/abs/2410.05160>
-    - Girdhar et al. (2023). *ImageBind: One Embedding Space To Bind Them All*. CVPR. <https://arxiv.org/abs/2305.05665>
-    - Elizalde et al. (2022). *CLAP: Learning Audio Concepts From Natural Language Supervision*. <https://arxiv.org/abs/2206.04769>
-    - Xiao et al. (2025). *MIEB: Massive Image Embedding Benchmark*. <https://arxiv.org/abs/2504.10471>
+    - Ma, Lin, Li, Chen, Lin (2024). *Unifying Multimodal Retrieval via Document Screenshot Embedding*. EMNLP 2024. <https://arxiv.org/abs/2406.11251>
+    - Macé, Loison, Faysse (2025). *ViDoRe Benchmark V2: Raising the Bar for Visual Retrieval*. Preprint. <https://arxiv.org/abs/2505.17166>
+    - Loison, Macé, Edy et al. (2026). *ViDoRe V3: A Comprehensive Evaluation of Retrieval Augmented Generation in Complex Real-World Scenarios*. Preprint. <https://arxiv.org/abs/2601.08620>
+    - Günther et al. (2025). *jina-embeddings-v4: Universal Embeddings for Multimodal Multilingual Retrieval*. Preprint. <https://arxiv.org/abs/2506.18902>
+    - Jiang et al. (2024). *VLM2Vec: Training Vision-Language Models for Massive Multimodal Embedding Tasks*. Informe técnico. <https://arxiv.org/abs/2410.05160>
+    - Girdhar et al. (2023). *ImageBind: One Embedding Space To Bind Them All*. CVPR 2023. <https://arxiv.org/abs/2305.05665>
+    - Elizalde et al. (2022). *CLAP: Learning Audio Concepts From Natural Language Supervision*. ICASSP 2023. <https://arxiv.org/abs/2206.04769>
+    - Xiao et al. (2025). *MIEB: Massive Image Embedding Benchmark*. Preprint. <https://arxiv.org/abs/2504.10471>
     - Lee et al. (2025). *Gemini Embedding: Generalizable Embeddings from Gemini*. <https://arxiv.org/abs/2503.07891>
-    - Khattab & Zaharia (2020). *ColBERT*. SIGIR. <https://arxiv.org/abs/2004.12832> · Dhulipala et al. (2024). *MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings*. <https://arxiv.org/abs/2405.19504>
-    - Anuncio de disponibilidad general de Gemini Embedding 2 (Google, abr-2026): <https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-embedding-2-generally-available/> *(fechas y límites contrastados con cobertura de prensa; confirma en la documentación oficial)*.
+    - Khattab & Zaharia (2020). *ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT*. SIGIR 2020. <https://arxiv.org/abs/2004.12832> · Dhulipala et al. (2024). *MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings*. NeurIPS 2024. <https://arxiv.org/abs/2405.19504>
+    - Anuncio de disponibilidad general de Gemini Embedding 2 (Google, abr-2026): <https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-embedding-2-generally-available/> *(fecha de GA del propio blog; los límites por petición, contrastados con prensa: confírmalos en la documentación oficial)*.
     - Paquete `colpali-engine` (PyPI) <https://pypi.org/project/colpali-engine/>.
     - Material del curso: módulos 08 (tokens multimodales), 11, 13, 14, 15 (`poliglota_eval.py`), 18.
     """)

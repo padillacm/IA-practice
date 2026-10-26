@@ -115,3 +115,15 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Smucker et al. 2007 (DOI 10.1145/1321440.1321528), Sakai 2006 (DOI 10.1145/1148170.1148261), ranx (GitHub) | ✅ | |
 | Enlace a `recsys-course/02_evaluation` | ✅ | Existe en el repositorio |
 | Mapa de madurez | ✅ | MTEB usa nDCG@10 en retrieval; LIMIT con autores de Google DeepMind/JHU; RTEB beta oct-2025 |
+
+## 16 · Embeddings multimodales
+| Referencia | Estado | Nota |
+|---|---|---|
+| 17 IDs arXiv (CLIP, SigLIP, SigLIP 2, Mind the Gap, ColPali, DSE, ViDoRe V2/V3, jina v4, VLM2Vec, ImageBind, CLAP, MIEB, Gemini Embedding, ColBERT, MUVERA) | ✅ | Autor y año coinciden |
+| «ViDoRe V3 (2026)» sin autores; «*ColBERT*» | ✏️ | Loison, Macé, Edy et al.; título completo de ColBERT |
+| Venues | ✏️ | ICML 2021 (CLIP), ICCV 2023 (SigLIP), NeurIPS 2022, EMNLP 2024 (DSE), CVPR 2023, ICASSP 2023 (CLAP), SIGIR 2020, NeurIPS 2024; SigLIP 2, ViDoRe V2/V3, jina v4, MIEB preprint; VLM2Vec informe técnico |
+| Gemini Embedding 2 «GA abr-2026 según prensa» (Mapa de madurez) y nota de la referencia | ✏️ | La GA (22-abr-2026) la da el propio blog de Google (revisión técnica): se atribuye a él |
+| Límites por petición de Gemini Embedding 2 (8192 tokens, 6 imágenes, 120 s de vídeo, 80 s de audio, 6 páginas de PDF) y espacio incompatible con `gemini-embedding-001` (§7, 🧠 7) | ⚠️ | Solo en prensa/blogs de terceros (wwwhatsnew, DataCamp…); ya etiquetado en el texto como fuente secundaria |
+| `colpali-engine` (PyPI), `vidore/colpali-v1.3` | ✅ | |
+| Cifras de ColPali (257.5 KB/página, ViDoRe 81.3 vs 67.0) | ✅ | Ya contrastadas por la revisión técnica |
+| Mapa de madurez / 🏭 | ✅ | «Quién la usa»: Google (SigLIP/PaliGemma, Gemini Embedding 2), ILLUIN (ColPali), Jina v4, Waterloo (DSE), Meta (ImageBind) |
