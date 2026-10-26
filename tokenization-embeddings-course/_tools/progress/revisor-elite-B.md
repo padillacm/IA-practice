@@ -12,7 +12,8 @@ Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization
 - [x] 11_aprendizaje_contrastivo
 - [x] 10_embeddings_contextuales_oraciones
 - [x] 09_capa_embedding_llm
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - (decisiones tomadas)
+- check_course.py: Todo OK tras el módulo 09 (informe en _tools/REVISION_ELITE_B.md).
