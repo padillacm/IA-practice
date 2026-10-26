@@ -30,6 +30,8 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 | 17 proyecto | 19 s | OK | Ídem | 17/17 (plantilla 0/17 sin romper) | — |
 | 18 lección | 36 s | OK | Sintético + stdlib; v1/v2 = TF-IDF+SVD (aviso ⚠️); Qdrant local real (coincide con fuerza bruta 1.000) | — | — |
 | 18 proyecto | 38 s | OK | Ídem | 95/95 pts automáticos (5 tests ✅); plantilla ⏳ sin romper | — |
+| 19 lección | 80 s | OK | Sintético + stdlib; TF-IDF+SVD (aviso ⚠️) | — | — |
+| 19 proyecto | 2 s | OK | Sin datos (design review con rúbrica en Python puro; no necesita `pip`) | 3/3 casos 100/100 (plantilla 24/100, esperado) | — |
 <!-- TABLA -->
 
 ## Cambios aplicados (en builders; notebooks regenerados)
