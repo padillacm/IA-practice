@@ -325,7 +325,7 @@ nb.gemini(
     "Ilustra de forma cualitativa que una misma frase traducida se parte en más o menos tokens según el idioma y que eso se traduce en coste y contexto.",
     """Diagrama técnico limpio, fondo blanco, paleta sobria (azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280), tipografía sans-serif legible, sin ilustraciones decorativas. Formato 16:9.
 
-Título arriba: "Token tax: la misma frase, distinto coste".
+Título arriba: "Prima de tokens: la misma frase, distinto coste".
 
 Cuatro filas horizontales. Cada fila tiene a la izquierda el nombre del idioma y la frase, y a la derecha una cadena de "fichas" rectangulares (chips) que representan los tokens (los chips NO llevan texto, solo son rectángulos; su número es ilustrativo).
 Fila 1, "Inglés": "The model was trained on many languages." con 8 chips azules.
@@ -339,7 +339,7 @@ Evita: presentar los números como mediciones reales, texto ilegible, iconos dec
     "Cuatro filas con la misma frase en inglés, español, ruso e hindi y un número creciente de fichas (tokens) ilustrativas, con la etiqueta de coste relativo y tres consecuencias: dinero, contexto y latencia.",
     """
  Inglés  The model was trained on many languages.     [][][][][][][][]                     x1.0
- Español El modelo se entrenó con muchos idiomas.     [][][][][][][][][][]                 x1.4
+ Español El modelo se entrenó con muchos idiomas.     [][][][][][][][][][][]                 x1.4
  Ruso    Модель обучена на многих языках.             [][][][][][][][][][][][][][][][][]   x2.1
  Hindi   मॉडल को कई भाषाओं पर प्रशिक्षित ...          [][][]...(34 fichas)                  x4.3   (ilustrativo)
  consecuencias: $ más caro | menos contexto útil | más latencia
@@ -475,10 +475,10 @@ Nota pequeña: "La plantilla de servicio debe ser idéntica a la de entrenamient
 Evita: texto ilegible, cadenas distintas a las indicadas, flechas ambiguas, iconos decorativos, sombras, degradados.""",
     "Tres mensajes (system, user, assistant) convertidos con apply_chat_template en una cadena ChatML con tokens especiales, y la misma secuencia con los tokens del turno assistant marcados como parte de la pérdida.",
     """
- [system] Eres un asistente...   --apply_chat_template-->
- [user]   ¿Qué es un token?          <|im_start|>system\nEres un asistente...<|im_end|>\n
- [assistant] Un trozo de texto...     <|im_start|>user\n¿Qué es un token?<|im_end|>\n
-                                       <|im_start|>assistant\nUn trozo de texto...<|im_end|>
+ [system]    Eres un asistente...        ──apply_chat_template──►   <|im_start|>system⏎Eres un asistente...<|im_end|>⏎
+ [user]      ¿Qué es un token?                                      <|im_start|>user⏎¿Qué es un token?<|im_end|>⏎
+ [assistant] Un trozo de texto...                                   <|im_start|>assistant⏎Un trozo de texto...<|im_end|>
+ (⏎ = salto de línea; <|im_start|> y <|im_end|> son tokens especiales)
  pérdida:  system/user = enmascarado (-100) | assistant (+ <|im_end|>) = entra en la pérdida
 """,
 )
@@ -555,9 +555,9 @@ nb.gemini(
 Frase de ejemplo (usa exactamente esta): "en el caso de la ley". El símbolo ▁ marca el inicio de palabra.
 
 Escena 1 (0–6 s): Título "SuperBPE: dos etapas". Se muestra la frase como una fila de chips grises, un chip por palabra: [▁en] [▁el] [▁caso] [▁de] [▁la] [▁ley]. Debajo, una barrera vertical roja (#D62728) entre cada par de chips con el texto "pre-tokenización por espacios: ningún token cruza la barrera".
-Escena 2 (6–14 s): Etiqueta "Etapa 1 (BPE normal, hasta el punto de transición t)". Los chips de palabras se parten en subpalabras con una animación suave: [▁en] [▁el] [▁ca][so] [▁de] [▁la] [▁ley] y luego vuelven a fusionarse parcialmente; aparece un contador "|V| crece hasta t".
+Escena 2 (6–14 s): Etiqueta "Etapa 1 (BPE normal, hasta el punto de transición t)". Los chips de palabras se parten en subpalabras con una animación suave: [▁en] [▁el] [▁ca][so] [▁de] [▁la] [▁ley] (7 chips: «caso» se parte en «▁ca» + «so»); aparece un contador "|V| crece hasta t".
 Escena 3 (14–20 s): Etiqueta "Transición: se APAGA la pre-tokenización por espacios". Las barreras rojas se desvanecen.
-Escena 4 (20–28 s): Etiqueta "Etapa 2 (de t a T)": los pares adyacentes más frecuentes se fusionan a través de los espacios, uno por uno, con una flecha naranja por cada fusión: [▁en][▁el] → [▁en▁el]; [▁de][▁la] → [▁de▁la]. Resultado final en una fila: [▁en▁el] [▁ca][so] [▁de▁la] [▁ley] (4 chips + 1 = 5 chips de 7 iniciales, mostrados como "7 → 5 tokens").
+Escena 4 (20–28 s): Etiqueta "Etapa 2 (de t a T)": los pares adyacentes más frecuentes se fusionan a través de los espacios, uno por uno, con una flecha naranja por cada fusión: [▁en][▁el] → [▁en▁el]; [▁de][▁la] → [▁de▁la]. Resultado final en una fila de 5 chips: [▁en▁el] [▁ca] [so] [▁de▁la] [▁ley], con un contador grande "7 → 5 tokens".
 Escena 5 (28–30 s): Texto final: "Menos tokens por texto. Límites: probado a 8 B, solo en inglés".
 Evita: números distintos a los indicados, texto ilegible, flechas que se crucen, elementos decorativos, transiciones rápidas, música o voz.""",
     "Animación de 30 s: la frase «en el caso de la ley» pasa de 7 a 5 tokens al apagar la pre-tokenización por espacios y fusionar a través de las palabras en la etapa 2 de SuperBPE.",

@@ -152,6 +152,7 @@ Carril 2 (color naranja, etiqueta "WordPiece · bottom-up"): cajas: [i][##n][##t
 Carril 3 (color verde, etiqueta "Unigram LM · top-down"): a la izquierda una nube grande de cajas superpuestas con texto "vocabulario semilla ≈ 1 000 000 subcadenas" → flecha con texto "EM + poda del 20 % de piezas con menor pérdida (repetir)" → nube más pequeña "vocabulario final" → resultado [▁inter][nacional]. Debajo: caja pequeña: "criterio: pérdida al eliminar la pieza; inferencia: Viterbi".
 
 Bajo los tres carriles, una barra gris con el texto: "Misma pregunta, tres respuestas: ¿qué trozos merecen una entrada en el vocabulario?".
+Al pie, en letra pequeña gris: "Segmentaciones ilustrativas: las reales dependen del corpus de entrenamiento".
 Todas las etiquetas en español, términos técnicos en inglés tal como se han escrito arriba.
 Evita: texto ilegible o inventado, flechas ambiguas que se crucen, iconos decorativos, sombras, degradados, más de las cajas indicadas.""",
     "Tres carriles que muestran cómo BPE y WordPiece fusionan piezas de abajo arriba y Unigram poda un vocabulario grande de arriba abajo, para la palabra «internacional».",
@@ -823,6 +824,7 @@ Caja 4 · "Post-processor" (gris oscuro). Descripción: "añade tokens especiale
 Caja 5 · "Decoder" (azul). Descripción: "ids → str". Tarjeta: "¡ café con leche !" y una nota pequeña "(WordPiece pierde el espaciado original)".
 
 Debajo de las cinco cajas, una franja gris con dos flechas curvas de vuelta hacia la izquierda: "offsets: cada token recuerda su posición en el texto ORIGINAL" y "se guarda todo en un único tokenizer.json".
+Al pie, en letra pequeña gris: "ids ilustrativos: dependen del vocabulario entrenado".
 Evita: texto ilegible, ids o textos distintos a los indicados, flechas que se crucen, iconos decorativos, sombras, degradados.""",
     "Cinco etapas de un tokenizer de Hugging Face (normalizer, pre-tokenizer, model, post-processor, decoder) con el estado de la frase «¡Café CON leche!» tras cada una.",
     """

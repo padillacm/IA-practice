@@ -3,8 +3,8 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 00–08 · Informe:
 - [x] 00_intro
 - [x] 01_unicode_bytes
 - [x] 02_bpe_desde_cero
-- [ ] 03_wordpiece_unigram_sentencepiece
-- [ ] 04_diseno_tokenizers_modernos
+- [x] 03_wordpiece_unigram_sentencepiece
+- [x] 04_diseno_tokenizers_modernos
 - [ ] 05_patologias_robustez
 - [ ] 06_tokenizer_free_bytes_blt
 - [ ] 07_hnet_tokenizer_transfer
