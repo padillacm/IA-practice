@@ -47,3 +47,25 @@ lote, almacenamiento de ColPali, OCR como baseline duro). Faltaba la limitación
   negativos duros composicionales) y con Políglota (slice composicional en el golden set).
 - 🧠 #6 reescrito en ese sentido (antes solo «el vector medio es invariante al orden»). Referencia añadida.
   Lección 64 → 67 celdas; ejecución completa 394 s en CPU.
+
+## 15 · Evaluación de retrieval
+Revisado sin cambios. Es el módulo más completo del bloque en lo que pide el encargo: gap offline/online y MTEB como
+filtro (🏭), qrels incompletos y falsos negativos (🧠 #4, Arabzadeh et al.), LLM-as-judge con sus sesgos y una
+simulación del sesgo léxico (§7), contaminación y brecha público–privado (§9, RTEB), drift (§10), potencia y
+tamaño del golden set (§5). Con 93 celdas no se añadió nada. Recomendación no aplicada: una simulación de
+presupuesto de anotación fijo (muchas queries con juicios someros frente a pocas con juicios profundos); no se
+encontró en esta revisión una fuente primaria accesible para citar su conclusión clásica.
+
+## 14 · Indexación ANN
+Diagnóstico: 🧠 de alto nivel (10 puntos, protocolo de medición, refine, filtros por selectividad, tombstones,
+RaBitQ), con el matiz de que el #1 pedía medir «sobre queries reales» sin mostrar por qué. Es un hueco de experto:
+**los índices se adaptan a la distribución de los documentos y las queries de retrieval asimétrico viven en otra
+región**.
+- **Añadido en §10 «Las queries no son documentos»** (1 celda + 👀): las queries se desplazan con una dirección fija
+  $g\,u$ (el modelo más simple del *modality gap* o de un prefijo) y se recalcula el exacto para cada $g$. Medido
+  (FAST_DEV_RUN, N = 20 000, d = 64): HNSW ef = 32 0.841 → 0.624 de g = 0 a g = 2; IVF nprobe = 4 0.696 → 0.282; a
+  ef = 64 con g = 2 (0.792) queda por debajo de ef = 32 sin desplazar. Fuente: OOD-DiskANN (Jaiswal et al. 2022,
+  abstract verificado en arXiv: latencia «un orden de magnitud o más» peor a recall fijo con queries OOD; muestra de
+  queries ≈ 1 % del índice en la construcción). Consecuencias: ajustar con queries reales con su prefijo, reajustar
+  al cambiar prefijo/instrucción, más `efSearch` en búsqueda cruzada.
+- 🧠 #1 ampliado con el porqué; referencia añadida. Lección 56 → 59 celdas; ejecución completa 203 s.

@@ -5,8 +5,8 @@ Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization
 - [ ] 18_produccion
 - [ ] 17_interpretabilidad_geometria
 - [x] 16_embeddings_multimodales
-- [ ] 15_evaluacion_retrieval
-- [ ] 14_indexacion_ann
+- [x] 15_evaluacion_retrieval
+- [x] 14_indexacion_ann
 - [ ] 13_dense_sparse_late_interaction
 - [ ] 12_embedders_modernos
 - [ ] 11_aprendizaje_contrastivo
