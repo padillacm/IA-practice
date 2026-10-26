@@ -86,12 +86,16 @@ def lesson() -> None:
 
 # Módulo 13 · Dense vs sparse vs late interaction: BM25, SPLADE, ColBERT, MUVERA y retrieval híbrido
 
-**Nivel:** 🟠 Avanzado · **Duración:** ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) · **GPU recomendada:** T4 (todo corre en CPU con `FAST_DEV_RUN = True`) ·
-**Cómputo estimado:** 0 unidades en CPU; ≈ 1–2 unidades de Colab en T4 si activas BGE-M3 y el reranker real (estimación orientativa).
+**Tokenización y Embeddings: de BPE a los modelos modernos**
+
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+| **GPU recomendada** | T4 (todo corre en CPU con `FAST_DEV_RUN = True`); 0 unidades en CPU, ≈ 1–2 unidades de Colab en T4 si activas BGE-M3 y el reranker real (estimación orientativa) |
+| **Prerrequisitos** | Módulo 00 (BM25 como baseline), 10 (similitudes, pooling), 11 (contrastivo) y 12 (embedders modernos: el retriever denso de hoy es el de allí) |
 
 > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h, lo que usa el proyecto): secciones 1, 2 (BM25), 4 (ColBERT/MaxSim), 7 (fusión) y 8 (rerankers). Ampliación (≈ 1 h más): SPLADE (3), BGE-M3 y MUVERA (5–6), late chunking (9) y el pipeline de referencia con su coste (10).
-
-**Prerrequisitos:** módulo 00 (BM25 como baseline), 10 (similitudes, pooling), 11 (contrastivo) y 12 (embedders modernos: el retriever denso de hoy es el de allí).
 
 **Hilo conductor — Políglota.** El CTO te enseña tres consultas reales que fallan: una con un **identificador exacto** (`ERR_CONN_RESET`) que el embedder denso no encuentra, una **parafraseada** (ES→EN) que BM25 no encuentra y una **muy específica** donde el top-10 contiene lo correcto en la posición 7. Este módulo construye el sistema que arregla las tres: **retrieval híbrido (léxico + denso + late interaction) con fusión y reranking**.
 
@@ -132,7 +136,7 @@ El **IC bootstrap pareado** por queries de la diferencia (módulo 00; a fondo en
 ''')
 
     # ───────────────────────────── Setup ─────────────────────────────
-    nb.md(r'''## 0 · Preparación
+    nb.md(r'''## 0. Preparación
 Como en el módulo 12: celdas de utilidades autocontenidas (corpus canónico del módulo 00, métricas, embedder con fallback). Usaremos **dos bancos de pruebas** para ver *dónde gana cada retriever*:
 
 - **Canónico (Políglota):** el corpus del módulo 00 (Wikipedia ES/EN + código si hay acceso; si no, sintético con un `⚠️`). Queries con bastante solapamiento léxico.
@@ -151,7 +155,7 @@ Como en el módulo 12: celdas de utilidades autocontenidas (corpus canónico del
     nb.code(CODE_DENSE)
 
     # ───────────────────────────── 1. Intuición ─────────────────────────────
-    nb.md(r'''## 1 · Intuición: tres maneras de representar un documento
+    nb.md(r'''## 1. Intuición: tres maneras de representar un documento
 
 | | **Sparse léxico / aprendido** | **Denso (un vector)** | **Late interaction (multi-vector)** |
 |---|---|---|---|
@@ -161,7 +165,7 @@ Como en el módulo 12: celdas de utilidades autocontenidas (corpus canónico del
 | Debilidad | *vocabulary mismatch* | pierde detalle, términos raros | **almacenamiento** y complejidad de infraestructura |
 | Analogía | `grep` con pesos | resumen en un punto del espacio | comparar **palabra por palabra** y quedarse con la mejor pareja |
 
-> 💡 **Analogía con recsys.** BM25 ≈ filtrado por *features* explícitas; denso ≈ *two-tower* de un vector por ítem; late interaction ≈ modelos de *interacción de bajo nivel* (el score se calcula sobre pares de componentes) que son más ricos que el producto punto único pero caros de indexar. El patrón recomendador "retrieval barato → ranker caro" (recsys-course/06–07) es exactamente el de hoy: *recall* con sparse+denso, *precisión* con late interaction y cross-encoder.
+> 💡 **Analogía con recsys.** BM25 ≈ filtrado por *features* explícitas; denso ≈ *two-tower* de un vector por ítem; late interaction ≈ modelos de *interacción de bajo nivel* (el score se calcula sobre pares de componentes) que son más ricos que el producto escalar único pero caros de indexar. El patrón recomendador "retrieval barato → ranker caro" (recsys-course/06–07) es exactamente el de hoy: *recall* con sparse+denso, *precisión* con late interaction y cross-encoder.
 ''')
     nb.gemini(
         "imagen", "M13-IMG-01", "Tres paradigmas de representación para retrieval",
@@ -190,7 +194,7 @@ Como en el módulo 12: celdas de utilidades autocontenidas (corpus canónico del
 ''')
 
     # ───────────────────────────── 2. BM25 ─────────────────────────────
-    nb.md(r'''## 2 · BM25 desde cero (y por qué sigue ganando partidos)
+    nb.md(r'''## 2. BM25 desde cero (y por qué sigue ganando partidos)
 
 $$\text{BM25}(q,d)=\sum_{t\in q}\underbrace{\ln\!\Big(1+\frac{N-n_t+0.5}{n_t+0.5}\Big)}_{\text{IDF (variante de Lucene)}}\;\cdot\;\frac{f_{t,d}\,(k_1+1)}{f_{t,d}+k_1\big(1-b+b\,\tfrac{|d|}{\overline{|d|}}\big)}$$
 
@@ -296,7 +300,7 @@ display(pd.DataFrame(valores, index=nombres, columns=["canónico", "paráfrasis"
     nb.md(r'''> 👀 **Qué debes observar.** (1) A la izquierda, con $k_1$ alto la curva casi no satura (comportamiento tipo TF); con $k_1$ bajo, repetir un término apenas suma. (2) En el centro, $b=1$ castiga fuertemente a los documentos largos. (3) A la derecha, el *analyzer* mueve las métricas: quitar tildes y hacer stemming acercan variantes de una palabra. El efecto es distinto en cada banco: **ajusta el analyzer a tu idioma** (módulos 01–05). BM25 en el banco de paráfrasis rinde mucho peor porque casi no hay palabras en común (y cero entre idiomas).
 ''')
     # ───────────────────────────── 3. SPLADE ─────────────────────────────
-    nb.md(r'''## 3 · Sparse aprendido: SPLADE
+    nb.md(r'''## 3. Sparse aprendido: SPLADE
 
 BM25 solo puede dar peso a palabras que **están** en el texto. **SPLADE** (Formal et al., 2021) usa el cabezal de **lenguaje enmascarado (MLM)** de un transformer: para cada token del texto el modelo predice una distribución sobre **todo el vocabulario** $V$ (≈ 30 000–250 000 términos), de modo que el texto "activa" también sinónimos y términos relacionados (**expansión**) y re-pondera los términos originales.
 
@@ -304,7 +308,7 @@ Sea $z_{t,j}$ el logit MLM del token $t$ para el término $j\in V$. El peso del 
 
 $$w_j=\max_{t}\;\log\!\big(1+\operatorname{ReLU}(z_{t,j})\big)$$
 
-(SPLADE v1 sumaba sobre $t$; **v2 usa max-pooling**, más estable). El score es el producto punto de dos vectores dispersos: $s(q,d)=\sum_j w^q_j\,w^d_j$, calculable con un **índice invertido** igual que BM25.
+(SPLADE v1 sumaba sobre $t$; **v2 usa max-pooling**, más estable). El score es el producto escalar de dos vectores dispersos: $s(q,d)=\sum_j w^q_j\,w^d_j$, calculable con un **índice invertido** igual que BM25.
 
 **Esparcidad por regularización.** Sin control, el MLM activaría miles de términos. Se entrena con una pérdida de ranking (contrastiva y, en SPLADE-v3, KL-Div + MarginMSE) más el regularizador **FLOPS**:
 $$\mathcal{L}_{FLOPS}=\sum_{j\in V}\bar a_j^{\,2},\qquad \bar a_j=\frac1{B}\sum_{b=1}^{B}w^{(b)}_j,$$
@@ -352,7 +356,7 @@ plt.tight_layout(); plt.show()
         1) Bloque gris "Texto": la frase "el gato duerme" con tres tokens en cajitas: "el", "gato", "duerme".
         2) Bloque azul "Transformer + cabezal MLM": una caja con la etiqueta "logits z(t, j) para TODO el vocabulario" y debajo una matriz de 3 filas (tokens) por 8 columnas (palabras: gato, felino, mascota, animal, perro, coche, ruta, casa) con celdas más oscuras donde el valor es alto (gato-gato oscuro, gato-felino medio, gato-mascota medio).
         3) Bloque naranja "ReLU → log(1 + x) → máximo sobre los tokens": una flecha que colapsa las 3 filas en una sola fila de 8 valores.
-        4) Bloque verde "Vector disperso": una fila de 8 barras verticales con alturas aproximadas gato 1.61, felino 1.25, mascota 1.10, animal 0.79, perro 0.59, coche 0, ruta 0, casa 0.47; las barras de felino, mascota, animal y perro llevan una etiqueta "expansión" (no están en el texto original) y las de coche y ruta están vacías.
+        4) Bloque verde "Vector disperso": una fila de 8 barras verticales con alturas ilustrativas gato 1.61, felino 1.25, mascota 1.10, animal 0.79, perro 0.59, coche 0, ruta 0, casa 0.47; las barras de felino, mascota, animal y perro llevan una etiqueta "expansión" (no están en el texto original) y las de coche y ruta están vacías.
         Debajo del bloque 4, una nota gris: "se guarda en un índice invertido: término → documentos".
 
         Evita: texto ilegible, más columnas de las indicadas, flechas cruzadas, ilustraciones de gatos, logos, valores distintos de los dados.
@@ -364,7 +368,7 @@ plt.tight_layout(); plt.show()
                                            (* = términos expandidos que no estaban en el texto)
         """,
     )
-    nb.md(r'''> 👀 **Qué debes observar.** La expansión ocurre **antes** del índice: el costo en tiempo de consulta es el de un índice invertido normal, pero el documento ya "contiene" sinónimos. El precio es el tamaño del índice (más términos por documento) y la necesidad de ajustar la esparcidad.
+    nb.md(r'''> 👀 **Qué debes observar.** La expansión ocurre **antes** del índice: el coste en tiempo de consulta es el de un índice invertido normal, pero el documento ya "contiene" sinónimos. El precio es el tamaño del índice (más términos por documento) y la necesidad de ajustar la esparcidad.
 
 ### Con un modelo real
 Primero **desde cero**: aplicamos la fórmula al cabezal MLM de un modelo *sin* entrenar para ranking (BERT multilingüe destilado) para ver por qué hace falta el entrenamiento y el regularizador: el número de términos activos es enorme. Después usamos un **sparse aprendido** con `sentence-transformers` (`SparseEncoder`).
@@ -427,7 +431,7 @@ else:
 ''')
 
     # ───────────────────────────── 4. ColBERT / MaxSim ─────────────────────────────
-    nb.md(r'''## 4 · Late interaction: ColBERT y MaxSim desde cero
+    nb.md(r'''## 4. Late interaction: ColBERT y MaxSim desde cero
 
 **Idea (Khattab & Zaharia, 2020).** El bi-encoder denso comprime el texto en un punto. ColBERT guarda **un vector por token** (normalizado, $d=128$ tras una proyección lineal sobre BERT) y calcula la relevancia con una **interacción tardía** barata (sin pasar los dos textos juntos por un transformer):
 
@@ -501,7 +505,7 @@ display(pd.concat({b.nombre[:12]: b.resumen() for b in BENCHES}))
         "video", "M13-VID-01", "MaxSim token a token",
         "Animación de cómo cada token de la consulta busca su mejor pareja entre los tokens del documento y cómo se suman los máximos (ejemplo con números exactos).",
         """
-        Video explicativo 16:9, fondo blanco, estilo diagrama técnico limpio, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280, tipografía sans-serif, ritmo calmado, SIN voz en off ni música; solo texto en pantalla en español (términos técnicos en inglés).
+        Video explicativo 16:9, fondo blanco, estilo diagrama técnico limpio, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280, tipografía sans-serif, ritmo calmado, sin voz en off, sin música; solo texto en pantalla en español (términos técnicos en inglés).
 
         Datos EXACTOS (no inventar otros). Tokens de la consulta (columna izquierda, azul): "buscar", "vecinos", "red". Tokens del documento (fila superior, gris): "grafo", "capas", "vecinos", "búsqueda". Matriz de similitudes (filas = tokens de la consulta, columnas = tokens del documento):
         buscar  : grafo 0.12, capas 0.08, vecinos 0.35, búsqueda 0.82
@@ -619,7 +623,7 @@ print({n: round(float(r), 3) for n, r in zip(ncands, rec)})
     nb.md(r'''> 👀 **Qué debes observar.** Con ~12 % de los documentos pasando al MaxSim exacto ya se recupera la mayor parte del top-10 exacto: la interacción por centroides es un **filtro barato** (una multiplicación query×centroides y búsquedas en tabla). En PLAID real esto se combina con listas invertidas centroide→documentos y con poda de centroides de baja puntuación. Con vectores de juguete la curva es peor de lo que verías con ColBERT real (menos estructura de clusters).
 ''')
     # ───────────────────────────── 5. BGE-M3 ─────────────────────────────
-    nb.md(r'''## 5 · BGE-M3: denso + sparse + multi-vector en un solo modelo
+    nb.md(r'''## 5. BGE-M3: denso + sparse + multi-vector en un solo modelo
 
 **BGE-M3** (Chen et al., 2024) es un encoder multilingüe (base XLM-RoBERTa-large, contexto de 8192 tokens) entrenado con *self-knowledge distillation* para producir **tres representaciones a la vez** desde los mismos estados ocultos $H$:
 
@@ -668,7 +672,7 @@ def m3_encode(m3, textos, max_len=256, bs=16):
     return torch.cat(dens).numpy(), spars, mult
 
 def sparse_matriz(dq, dd):
-    """Scores sparse entre listas de dicts {id: peso}: producto punto de vectores dispersos (scipy)."""
+    """Scores sparse entre listas de dicts {id: peso}: producto escalar de vectores dispersos (scipy)."""
     V = 1 + max(max(d, default=0) for d in dq + dd)
     def csr(ds):
         f, c, v = [], [], []
@@ -692,7 +696,7 @@ display(pd.concat({b.nombre[:12]: b.resumen() for b in BENCHES}))
 ''')
     nb.md(r'''> 👀 **Qué debes observar.** Si BGE-M3 cargó, compara en el banco de **paráfrasis** sus tres modos con BM25: los modos neuronales deberían superar claramente a BM25 en consultas entre idiomas, mientras que el modo sparse (léxico aprendido) se parece más a BM25 y se comporta peor entre idiomas. En el banco canónico (alto solapamiento léxico) BM25 puede quedar muy cerca. Eso es exactamente por qué se **combinan**.
 
-## 6 · MUVERA: de multi-vector a un solo vector de dimensión fija
+## 6. MUVERA: de multi-vector a un solo vector de dimensión fija
 
 **Problema.** MaxSim exige indexar *tokens* y re-puntuar; no se puede usar un índice ANN de un vector por documento. **MUVERA** (Dhulipala et al., NeurIPS 2024) construye dos funciones, $F_q$ y $F_d$, tales que $\langle F_q(Q),F_d(D)\rangle$ **aproxima** la similitud Chamfer (MaxSim) y los vectores tienen **dimensión fija**. Así se usa MIPS estándar para generar candidatos y luego se re-puntúa con MaxSim exacto.
 
@@ -712,7 +716,7 @@ Intuición: dentro de cada cubeta el producto de las sumas/medias aproxima "cada
         Parte izquierda: un plano 2D con puntos de dos colores (6 puntos azules = tokens de la consulta, 8 puntos naranjas = tokens del documento) dividido por 2 líneas rectas grises que cruzan el plano y crean 4 regiones etiquetadas "00", "01", "10", "11" (cubetas). Título: "1. Particionar con hiperplanos aleatorios (k = 2 → 4 cubetas)".
         Parte central: dos filas de 4 cajas (una por cubeta). Fila superior azul: "Σ vectores de la consulta en la cubeta" (suma). Fila inferior naranja: "media de los vectores del documento en la cubeta" (media); una de las cajas del documento aparece punteada con la nota "cubeta vacía → se rellena con el vector más cercano". Título: "2. Agregar por cubeta".
         Parte derecha: las 4 cajas de cada fila se concatenan en una barra horizontal larga, y esta barra aparece repetida 3 veces en columna con la etiqueta "R = 3 repeticiones con particiones distintas". Debajo, una fórmula en caja verde: "⟨F_q(Q), F_d(D)⟩ ≈ MaxSim(Q, D)" y la nota "dimensión fija = R · 2^k · d". Título: "3. Concatenar y comparar con un producto interno".
-        Pie: "Después: búsqueda MIPS con ANN + re-score con MaxSim exacto".
+        Pie: "Después: búsqueda MIPS con ANN + rescoring con MaxSim exacto".
 
         Evita: texto ilegible, números distintos de los dados, flechas cruzadas, logos, decoración.
         """,
@@ -785,7 +789,7 @@ plt.tight_layout(); plt.show()
 ''')
     nb.md(r'''> 👀 **Qué debes observar.** Más cubetas (`k_sim`) y más repeticiones (`R`) mejoran la correlación y el recall **a costa de dimensión** (entre paréntesis): es el mismo trade-off memoria/calidad del módulo 12. La FDE no sustituye al MaxSim exacto: es un **generador de candidatos** con un índice ANN estándar (módulo 14). El paper reporta que, a igual recall, las FDE obligan a recuperar entre 2 y 5 veces menos candidatos que las heurísticas multi-vector previas, y que se pueden comprimir ~32× con PQ; nosotros solo hemos verificado la tendencia cualitativa con vectores de juguete.
 
-## 7 · Fusión de resultados: RRF y combinación lineal
+## 7. Fusión de resultados: RRF y combinación lineal
 
 Cada retriever devuelve scores en **escalas incompatibles** (BM25 ≈ 0–30, coseno ≈ 0–1, MaxSim ≈ 0–30). Dos familias de soluciones:
 
@@ -858,7 +862,7 @@ ax.set_title("Solapamiento (Jaccard) de los top-10", fontsize=10); plt.tight_lay
     nb.md(r'''> 👀 **Qué debes observar.** (1) Arriba: si un retriever es mucho mejor que el otro, la fusión **no mejora** al mejor (y puede empeorar): la fusión paga cuando los dos son **comparables y complementarios**. (2) La curva en α muestra cuánto sufre la combinación lineal con una mala elección de α o de normalización, mientras RRF no tiene ese dial pero tampoco puede aprovechar un retriever claramente superior. (3) Abajo: *Jaccard bajo entre dos retrievers = errores distintos = fusión útil*; Jaccard alto entre BM25 y el sparse aprendido es esperable (ambos son léxicos).
 ''')
     # ───────────────────────────── 8. Rerankers ─────────────────────────────
-    nb.md(r'''## 8 · Rerankers cross-encoder: la etapa cara que decide el top-10
+    nb.md(r'''## 8. Rerankers cross-encoder: la etapa cara que decide el top-10
 
 Un **cross-encoder** concatena `[CLS] query [SEP] documento [SEP]`, lo pasa **junto** por un transformer (la atención cruza ambos textos) y una capa lineal produce un único logit de relevancia. Es la forma más precisa de puntuar un par, pero:
 
@@ -928,7 +932,7 @@ plt.tight_layout(); plt.show()
 ''')
     nb.md(r'''> 👀 **Qué debes observar.** (1) La latencia crece casi **linealmente** con $K$: el presupuesto de latencia fija la profundidad máxima. (2) La calidad suele subir al principio y **se aplana** (o incluso baja) cuando $K$ es grande: más candidatos = más oportunidades de que el reranker promueva un falso positivo. (3) Si ves `respaldo`, la curva de calidad no significa nada; la de latencia sí es ilustrativa. Con un cross-encoder real y el banco de paráfrasis (donde el híbrido deja el documento correcto en posiciones 5–30) es donde el reranker marca la diferencia.
 
-## 9 · Late chunking: contexto antes de trocear
+## 9. Late chunking: contexto antes de trocear
 
 **Problema.** Para indexar documentos largos se parten en *chunks* y se embebe cada uno **por separado**; un chunk como "Su población supera los treinta mil habitantes" pierde el sujeto (¿de quién?). **Late chunking** (Günther et al., 2024) invierte el orden: pasa el **documento completo** por el transformer (de contexto largo) y **después** hace el pooling de los estados de los tokens de cada chunk. Así los vectores de cada chunk "han visto" el resto del documento durante la atención.
 
@@ -995,7 +999,7 @@ else:
 ''')
 
     # ───────────────────────────── 10. Pipeline y costes ─────────────────────────────
-    nb.md(r'''## 10 · El pipeline híbrido de referencia y su coste de almacenamiento
+    nb.md(r'''## 10. El pipeline híbrido de referencia y su coste de almacenamiento
 
 ```
               ┌──────────────► BM25 / sparse aprendido ─┐   (índice invertido, filtros exactos)
@@ -1026,6 +1030,8 @@ Cada rama aporta algo distinto; la rama de late interaction es la más cara de *
               -> [ColBERT/MUVERA] /
         """,
     )
+    nb.md(r'''> 👀 **Qué debes observar.** Cada etapa reduce los candidatos (3 × top-100 → top-50 → top-10) y es más cara por documento que la anterior: la recuperación barata maximiza el *recall* y el reranker caro decide el orden final. La celda siguiente pone números a la otra mitad del coste: cuánto almacenamiento pide cada representación.
+''')
     nb.code(r'''
 N, TOK = 10_000_000, 200
 def gb(bytes_por_doc): return N * bytes_por_doc / 1e9
@@ -1073,7 +1079,7 @@ Ya has construido BM25, SPLADE, MaxSim, MUVERA, la fusión y el reranker; la tab
 | Late chunking | 🟡 | Jina AI | Günther et al. 2024 (2409.04701) |
 | Búsqueda híbrida (léxico + denso) como configuración por defecto | 🟢 | prácticamente todas las bases vectoriales/motores modernos | docs de los motores |
 ''')
-    nb.md(r'''## 11 · 🏭 En producción
+    nb.md(r'''## 🏭 En producción
 
 - **Vespa** ofrece un *embedder* ColBERT nativo y expresa MaxSim en su lenguaje de ranking; su blog describe una compresión asimétrica de los vectores de token de hasta 32× (binarización en los documentos) y una variante de contexto largo (Long-ColBERT).
 - **Qdrant** soporta campos **multivector** con comparador `MAX_SIM`; su tutorial recomienda usarlo para *reranking* y desactivar el índice HNSW de ese campo (`m=0`) para ahorrar cómputo y memoria.
@@ -1083,7 +1089,7 @@ Ya has construido BM25, SPLADE, MaxSim, MUVERA, la fusión y el reranker; la tab
 - **BAAI**: BGE-M3 (tres modos) y `bge-reranker-v2-m3`.
 - **Patrón común**: búsqueda híbrida (léxico + denso) como configuración por defecto de los motores modernos, con fusión RRF o convexa, y un reranker sobre el top-$K$ con $K$ de decenas.
 ''')
-    nb.md(r'''## 12 · 🧠 Secretos de la élite
+    nb.md(r'''## 🧠 Secretos de la élite
 
 1. **Ablación antes que arquitectura.** Mide cada retriever solo y luego cada combinación (como hicimos): un sistema con cuatro ramas sin ablaciones es una apuesta. Si una rama no mejora el nDCG en tu golden set, quítala (menos infraestructura que operar).
 2. **RRF con $k=60$ es una convención, no una ley** (Cormack et al., 2009); con pocos retrievers el valor de $k$ cambia poco, pero Bruch et al. (2022) muestran que RRF es más sensible a sus parámetros de lo que se cree y que una combinación convexa bien normalizada es competitiva: si tienes etiquetas, **tunea α con validación cruzada** (no en las mismas queries de test).
@@ -1095,7 +1101,7 @@ Ya has construido BM25, SPLADE, MaxSim, MUVERA, la fusión y el reranker; la tab
 8. **Late chunking exige una cadena técnica coherente**: encoder de contexto largo, acceso a estados por token y pooling consistente con el entrenamiento (media). No lo actives "por moda": mídelo con consultas cuyo sujeto está en otro chunk.
 9. **Filtros y sparse**: un índice invertido aplica filtros duros (idioma, versión, permisos) de forma exacta y barata; en ANN denso los filtros son un problema abierto (módulo 14). Esto es un argumento a favor de mantener la rama léxica aunque el denso sea mejor en promedio.
 ''')
-    nb.md(r'''## 13 · ⚠️ Errores comunes
+    nb.md(r'''## ⚠️ Errores comunes
 
 | Error | Síntoma | Arreglo |
 |---|---|---|
@@ -1109,7 +1115,7 @@ Ya has construido BM25, SPLADE, MaxSim, MUVERA, la fusión y el reranker; la tab
 | Indexar vectores multi-vector sin plan de compresión | índice de TB | residual / binarización / MUVERA |
 | Duplicados en el top-K de varias ramas | RRF cuenta dos veces el mismo doc | deduplicar por id antes de fusionar |
 ''')
-    nb.md(r'''## 14 · Autoevaluación
+    nb.md(r'''## 📝 Autoevaluación
 
 <details><summary><b>1 · (Cálculo)</b> MaxSim con $q=\{q_1,q_2\}$ y un documento de 3 tokens. Las similitudes son $q_1:[0.1,0.7,0.3]$ y $q_2:[0.6,0.2,0.5]$. ¿Cuál es el score y qué pasaría si el documento tuviera un cuarto token con similitud 0.9 para $q_1$ y 0.1 para $q_2$?</summary>
 
@@ -1146,7 +1152,7 @@ Híbrido: BM25 (con analyzer que conserve identificadores completos y los parta)
 Es el patrón de **generación de candidatos (varias fuentes) → ranker caro** (recsys-course, módulos 06–08): varias fuentes baratas y complementarias aseguran recall; un modelo caro, solo sobre un subconjunto, decide el orden final.
 </details>
 ''')
-    nb.md(r'''## 15 · Referencias (verificadas; consultadas en oct-2026)
+    nb.md(r'''## 📚 Referencias (verificadas; consultadas en oct-2026)
 
 **Papers (arXiv)**
 - Khattab & Zaharia (2020). *ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT*. SIGIR 2020. <https://arxiv.org/abs/2004.12832>
@@ -1211,23 +1217,28 @@ def project() -> None:
 
 # Proyecto 13 · Retrieval híbrido de Políglota: fusión y reranking
 
-**Nivel:** 🟠 Avanzado · **Duración:** ≈ 2 h · **GPU:** T4 opcional (CPU basta con `FAST_DEV_RUN = True`) · **Cómputo:** ≈ 0–1 unidades de Colab.
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | T4 opcional (CPU basta con `FAST_DEV_RUN = True`); ≈ 0–1 unidades de Colab |
+| **Prerrequisitos** | Lección 13 · módulo 12 (embedder denso y su configuración) |
 
 **Conexión.** *Viene de:* módulo 12 (el embedder denso y su configuración) y de la lección 13. *Va hacia:* módulo 14 (indexar los vectores de este sistema con ANN) y 15 (evaluarlo con intervalos de confianza).
 
-## 1 · Contexto de negocio
+## 1. Contexto de negocio
 El CTO de **Políglota Labs** quiere pasar de «un embedder» a un **sistema de recuperación híbrido**: BM25 + denso multilingüe + late interaction, fusionados, con un **cross-encoder** que reordena el top-K bajo un **presupuesto de latencia** (≈ 200 ms por consulta para la etapa de reranking). Tu trabajo: implementar las piezas, elegir la fusión **sin hacer trampa con el tuning** y entregar el pipeline con su análisis de coste/beneficio.
 
-## 2 · Dataset
+## 2. Dataset
 Dos bancos de pruebas (ver lección): el **corpus canónico** del módulo 00 (`carga_corpus`; sintético con `⚠️` si no hay acceso) y el **mini golden set de paráfrasis ES↔EN↔código** (58 queries).
 
-## 3 · Entregables
+## 3. Entregables
 1. `BM25` propio (verificado contra `rank_bm25`), `maxsim_matriz` vectorizado (verificado contra la fórmula ingenua).
 2. `rrf`, `lineal` y `alfa_cv` (α elegido por validación cruzada de 2 pliegues).
 3. `hibrido_rerank`: pipeline fusión → cross-encoder sobre el top-K, y `elige_K` que respeta el presupuesto de latencia.
 4. Tabla final de nDCG@10 por retriever, fusión y pipeline en **ambos** bancos + una conclusión escrita.
 
-## 4 · Rúbrica (umbrales calibrados con lo que MIDE la solución de referencia)
+## 4. Rúbrica (umbrales calibrados con lo que MIDE la solución de referencia)
 Los umbrales son **invariantes relativas** a tu propia ejecución. La solución de referencia se ejecutó en un entorno **sin acceso a Hugging Face** (corpus sintético, embedder denso de respaldo TF-IDF+SVD, ColBERT de juguete y reranker de respaldo) y con modelos diminutos de pesos aleatorios para ejercitar las rutas de `sentence-transformers`; **no se verificó con modelos reales**. Valores medidos en la última columna.
 
 | # | Criterio | Umbral | Medido por la solución |
@@ -1242,7 +1253,7 @@ Los umbrales son **invariantes relativas** a tu propia ejecución. La solución 
 | R8 | `elige_K` devuelve el mayor K con latencia ≤ presupuesto | cumplido | True |
 | R9 | Conclusión escrita con ≥ 3 números de tus tablas | — | revisión manual |
 """)
-    nb.md("## 5 · Preparación (celdas dadas)")
+    nb.md("## 5. Preparación (celdas dadas)")
     nb.code(CODE_PIP)
     nb.code(C.CODE_SETUP_COMMON)
     for _src in src_corpus_cells():
@@ -1260,7 +1271,7 @@ Los umbrales son **invariantes relativas** a tu propia ejecución. La solución 
     nb.code(UTIL_RERANK)
 
     # ── TODO 1 ──
-    nb.md(r"""## 6 · Paso 1 — BM25 desde cero (TODO 1)
+    nb.md(r"""## 6. Paso 1 — BM25 desde cero (TODO 1)
 Implementa `BM25.fit` y `BM25.scores` con una **matriz dispersa de pesos precomputada** (lección, sección 2). Variante de IDF: `lucene` → $\ln(1+\frac{N-n+.5}{n+.5})$; `okapi` → $\ln\frac{N-n+.5}{n+.5}$ con suelo $0.25\cdot\overline{\text{IDF}}$ para los negativos. Fórmula del peso de cada par (doc $i$, término $j$): `idf[j] * tf * (k1+1) / (tf + k1*(1 - b + b*dl[i]/avgdl))`.
 
 <details><summary>🪜 Pista 1 (idea)</summary>
@@ -1302,7 +1313,7 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 2 ──
-    nb.md(r"""## 7 · Paso 2 — MaxSim vectorizado (TODO 2)
+    nb.md(r"""## 7. Paso 2 — MaxSim vectorizado (TODO 2)
 `maxsim(Q, D)` (ingenuo, dado) calcula un par. Implementa `maxsim_matriz(QV, DV)` que devuelve la matriz `(n_queries, n_docs)` **sin bucle por par**: concatena los tokens de todos los documentos, multiplica una vez por trozo de queries y toma máximos/sumas **por segmento**.
 
 <details><summary>🪜 Pista 1 (idea)</summary>
@@ -1334,7 +1345,7 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 3-4 ──
-    nb.md(r"""## 8 · Paso 3 — Fusión: RRF y combinación lineal (TODO 3) y α sin fuga (TODO 4)
+    nb.md(r"""## 8. Paso 3 — Fusión: RRF y combinación lineal (TODO 3) y α sin fuga (TODO 4)
 - `rrf(Ss, k=60)`: para cada matriz de scores calcula el **rango** (1 = mejor) de cada documento por query y suma `1/(k+rango)`.
 - `lineal(Ss, pesos, norm)`: suma ponderada de las matrices **normalizadas por query** (`minmax` o `zscore`, dadas).
 - `alfa_cv(b, S1, S2, norm)`: elige α en la rejilla `np.linspace(0,1,21)` maximizando el nDCG medio sobre un pliegue de queries y evalúa en el **otro** (2 pliegues, `rng = np.random.default_rng(SEED)`, `idx = rng.permutation(n)`, `np.array_split(idx, 2)`); devuelve la media de los dos nDCG de validación. Usa `b.ndcg_q(S)` (nDCG por query).
@@ -1382,7 +1393,7 @@ except (NotImplementedError, KeyError) as e:
 ''')
 
     # ── TODO 5-6 ──
-    nb.md(r"""## 9 · Paso 4 — Pipeline con reranking (TODO 5) y presupuesto de latencia (TODO 6)
+    nb.md(r"""## 9. Paso 4 — Pipeline con reranking (TODO 5) y presupuesto de latencia (TODO 6)
 - `hibrido_rerank(b, S_fusion, K, nq)`: para cada query toma el top-`K` de `S_fusion`, puntúa los pares con `ce.predict` (cross-encoder real o de respaldo, ya cargado como `ce`) y devuelve `(run, ms_por_query)` donde `run[qid]` es la lista de **al menos 10** ids: los K reordenados seguidos del resto del ranking de `S_fusion` (así el nDCG@10 es comparable aunque `K<10`).
 - `elige_K(latencias_ms, presupuesto_ms)`: dado un dict `{K: ms}` devuelve el **mayor K** cuya latencia sea ≤ presupuesto (o `None`).
 
@@ -1427,7 +1438,7 @@ try:
 except (NotImplementedError, KeyError) as e:
     TABLA_REN = LAT = RUN_ULT = K_ELEGIDO = None; print("⏳ pendiente:", repr(e))
 ''')
-    nb.md("## 10 · Autocomprobación de la rúbrica")
+    nb.md("## 10. Autocomprobación de la rúbrica")
     nb.code(r'''
 def autograder():
     ch = {}
@@ -1460,19 +1471,19 @@ def autograder():
 
 _ = autograder()
 ''')
-    nb.md(r"""## 11 · Tu conclusión (R9)
+    nb.md(r"""## 11. Tu conclusión (R9)
 En ≤ 10 líneas, con números de tus tablas: ¿qué combinación de retrievers y qué fusión recomiendas? ¿Mejoró el reranker (con el modelo que tuvieras)? ¿Qué K cabe en 200 ms? ¿Qué riesgos ves (idioma, dominio, latencia p95, almacenamiento de la rama multi-vector)?
 
 > *(Edita esta celda.)*
 
-## 12 · Retos extra (nivel experto)
+## 12. Retos extra (nivel experto)
 1. Añade la rama **sparse aprendido** o los tres modos de **BGE-M3** (lección, secciones 3 y 5) y repite las fusiones; ¿qué rama aporta más a la fusión en el banco de paráfrasis?
 2. Implementa **MUVERA** (lección, sección 6) como primera etapa del multi-vector y mide recall del top-10 exacto vs número de candidatos.
 3. Calcula **intervalos de confianza bootstrap** de la diferencia entre la mejor fusión y el mejor retriever individual.
 4. Prueba un reranker **basado en LLM** (p. ej. Qwen3-Reranker) en una GPU y compara calidad/latencia con el cross-encoder.
 5. Añade **filtros** (idioma, `lang` del documento) a la rama léxica y a la densa y mide qué pasa con el recall (anticipo del módulo 14).
 
-## 13 · Reflexión (producción e hilo conductor)
+## 13. Reflexión (producción e hilo conductor)
 - ¿Qué parte de este pipeline pondrías en el índice (offline) y cuál en la consulta (online)?
 - Si el 30 % de las consultas son identificadores exactos, ¿qué peso darías a la rama léxica y cómo lo validarías?
 - ¿Cómo monitorizarías la deriva de cada rama por separado? (módulo 18)
