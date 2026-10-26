@@ -132,7 +132,7 @@ Señales transversales de nivel alto: empieza por **requisitos y números** (N, 
 **Senior:** cuantifica el costo de embedding del corpus con cada opción. **Bandera roja:** «usar los hidden states medios de cualquier LLM sin ajuste».
 
 ### 27. 🔴 ¿Qué dice LIMIT sobre los límites de los embeddings de un solo vector? (M15)
-**Respuesta modelo.** Weller et al. (2025) muestran, por argumentos de rango de signo, que con dimensión $d$ fija hay combinaciones de documentos relevantes (top-k) que **no pueden** representarse para todas las queries; construyen un dataset sencillo (LIMIT) donde embedders punteros fallan y modelos multi-vector o sparse lo hacen mejor. Implicación de diseño: para consultas combinatorias («documentos que mencionan A y B»), un solo vector tiene un techo; el híbrido y el reranking no son opcionales.
+**Respuesta modelo.** Weller et al. (2025) muestran, con un argumento de empaquetamiento de esferas con margen γ ($d \ge \log\binom{n}{k}/\log(1+1/\gamma)$; la primera versión usaba el rango de signo de la matriz de qrels), que con dimensión $d$ fija hay combinaciones de documentos relevantes (top-k) que **no pueden** representarse para todas las queries; construyen un dataset sencillo (LIMIT) donde embedders punteros fallan y modelos multi-vector o sparse lo hacen mejor. Implicación de diseño: para consultas combinatorias («documentos que mencionan A y B»), un solo vector tiene un techo; el híbrido y el reranking no son opcionales.
 **Bandera roja:** «basta con subir la dimensión» sin matizar.
 
 ### 28. 🔴 ¿Qué es el *modality gap* en CLIP y por qué importa en un índice mixto? (M16)

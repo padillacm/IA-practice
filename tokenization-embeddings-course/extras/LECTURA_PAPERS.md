@@ -138,7 +138,7 @@
 
 ## 15 · Evaluación de retrieval
 * ⭐⭐⭐ Weller, Boratko, Naim, Lee (2025). *On the Theoretical Limitations of Embedding-Based Retrieval*. arXiv:2508.21038. 🟡
-  - ¿Qué cantidad (rango de signo) acota lo que un embedding de dimensión $d$ puede representar y cómo construyen LIMIT?
+  - ¿Qué cota (empaquetamiento de esferas con margen $\gamma$; en la v1, rango de signo) limita lo que un embedding de dimensión $d$ puede representar y cómo construyen LIMIT?
   - ¿Qué familias de modelos resisten mejor y por qué?
 * ⭐⭐⭐ Smucker, Allan, Carterette (2007). *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*. CIKM. 🟢
   - ¿Qué tests recomiendan y por qué el test de signos es peor?

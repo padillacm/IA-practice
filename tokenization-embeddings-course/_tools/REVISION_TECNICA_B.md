@@ -111,3 +111,34 @@ trec_eval, bootstrap por queries, test pareado por *shift*, sign-flip y Holm cor
   diferencia de medias y steering, autoevaluación (32 768 parámetros). Sin cambios.
 - Matiz: con ReLU sobre los k mayores, L0 ≤ k (puede ser < k si alguna preactivación del top-k es negativa); el texto
   dice «L0 = k exacto».
+
+## 18 · Producción
+- Verificado: precios publicados (OpenAI 3-small 0.02 $ y 3-large 0.13 $, `gemini-embedding-001` 0.15 $ por 1M
+  tokens), fórmulas de coste API/GPU con supuestos marcados, memoria (30.7/7.7/0.96 GB), capacidad sin lotes con
+  t(B) = 4 + 0.5·B ms (≈ 222 QPS), *tail at scale* 1 − 0.99⁶⁴ = 47 %, PSI, interleaving team-draft vs A/B por
+  potencia, vec2text y Song & Raghunathan 2020. Sin cambios.
+
+## 19 · Playbook de élite
+- Verificado: aritmética de los casos (200 M × 1024: 819/205/25.6 GB), fusión con α en validación sin fuga, sesgo de
+  pooling, tabla de fallos documentados (todas las referencias arXiv existen y corresponden). Sin cambios.
+
+## 20 · Capstone
+- Verificado: decisiones solo con `I_DEV` (la solución no toca `I_TEST`), int8 calibrado con documentos, recall de
+  HNSW contra fuerza bruta sobre los mismos vectores, RAM con grafo M = 32 (256 B), coste de re-embedding (80 $ con
+  10 M × 400 tokens a 0.02 $/1M ≤ 500 $), evaluación del servicio una sola vez en test con bootstrap pareado. Sin cambios.
+
+## Extras
+- `GUIA_ENTREVISTAS.md`: revisadas las 50 respuestas modelo; cálculos correctos (0.52 B params, 204.8/51.2/6.4 GB,
+  nDCG@4 0.578, 80 $ vs 74 $, casos 45–48). **Arreglado:** la respuesta de LIMIT atribuía el resultado a «argumentos
+  de rango de signo»; en la versión publicada (ICLR 2026) el teorema es de empaquetamiento de esferas con margen
+  (el rango de signo era la v1). Igual en la pregunta guía de `LECTURA_PAPERS.md`.
+- `LECTURA_PAPERS.md`: los 103 IDs arXiv comprobados contra arxiv.org (todos existen y el título corresponde a la
+  cita).
+
+## Pendientes y recomendaciones generales
+- Los umbrales de rúbrica de 09–20 están calibrados con fallbacks (corpus sintético, TF-IDF+SVD, mini-modelos);
+  conviene recalibrarlos con modelos reales cuando HF sea accesible (revisor de ejecutabilidad). Las conclusiones
+  que solo valen para el fallback están avisadas; el único caso que habría fallado con el modelo real (R2 del 09)
+  se arregló.
+- Contexto de jina-embeddings-v5-text-nano (8k vs 32k según la fuente) sin resolver.
+- `extras/GEMINI_ASSETS.md` debe regenerarse con `gen_gemini_index.py` en la pasada final (ya lo señaló el bloque A).

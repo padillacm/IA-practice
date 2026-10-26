@@ -9,10 +9,10 @@ Agente: Revisor técnico · Módulos: 09–20 · Informe: tokenization-embedding
 - [x] 15_evaluacion_retrieval
 - [x] 16_embeddings_multimodales
 - [x] 17_interpretabilidad_geometria
-- [ ] 18_produccion
-- [ ] 19_playbook_elite
-- [ ] 20_capstone
-- [ ] extras/GUIA_ENTREVISTAS.md y extras/LECTURA_PAPERS.md
+- [x] 18_produccion
+- [x] 19_playbook_elite
+- [x] 20_capstone
+- [x] extras/GUIA_ENTREVISTAS.md y extras/LECTURA_PAPERS.md
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar
