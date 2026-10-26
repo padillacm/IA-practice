@@ -93,3 +93,21 @@ trec_eval, bootstrap por queries, test pareado por *shift*, sign-flip y Holm cor
   varía es entre implementaciones, órdenes de entrada o versiones.
 - Recomendación: el LIMIT en miniatura usa LSI (proyección no optimizada contra las qrels); que «la dimensión limita
   al denso» allí mezcla el límite teórico con la pérdida de información de la SVD. El texto ya avisa de que exagera.
+
+## 16 · Embeddings multimodales
+- Verificado: InfoNCE simétrica (τ inicial 0.07), pérdida sigmoide de SigLIP (t′ = log 10, b = −10, suma sobre pares
+  / N), gap = ‖z̄_i − z̄_t‖ (Liang et al. 2022), MaxSim sobre patches, (448/14)² = 1024, ColPali (PaliGemma-3B =
+  SigLIP-So400m + Gemma-2B, 1024 patches, D = 128, 118 695 pares, ViDoRe 81.3 vs 67.0, 0.39 s vs 7.22 s por página),
+  Gemini Embedding 2 (preview 10-mar-2026, GA 22-abr-2026, límites por petición, Matryoshka 3072), jina-v4
+  denso + multi-vector. Sin cambios.
+- Recomendación: en el CLIP de juguete hay muchas parejas del mismo concepto en cada lote y la etiqueta es la
+  identidad (falsos negativos en el lote, igual que en el 11 sin `grupo`); mencionarlo o muestrear un par por
+  concepto.
+
+## 17 · Interpretabilidad y geometría
+- Verificado: TopK SAE (z = TopK(W_enc(x − b_dec) + b_enc), decoder de norma 1, init *tied*, b_dec = media), AuxK con
+  α = 1/32 sobre el residuo (Gao et al. 2024), ReLU+L1, NMSE, control tasks y selectividad (Hewitt & Liang 2019),
+  sonda estructural (Hewitt & Manning 2019), rogue dimensions (Timkey & van Schijndel 2021), dirección por
+  diferencia de medias y steering, autoevaluación (32 768 parámetros). Sin cambios.
+- Matiz: con ReLU sobre los k mayores, L0 ≤ k (puede ser < k si alguna preactivación del top-k es negativa); el texto
+  dice «L0 = k exacto».

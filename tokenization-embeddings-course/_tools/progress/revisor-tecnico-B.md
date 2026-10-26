@@ -7,8 +7,8 @@ Agente: Revisor técnico · Módulos: 09–20 · Informe: tokenization-embedding
 - [x] 13_dense_sparse_late_interaction
 - [x] 14_indexacion_ann
 - [x] 15_evaluacion_retrieval
-- [ ] 16_embeddings_multimodales
-- [ ] 17_interpretabilidad_geometria
+- [x] 16_embeddings_multimodales
+- [x] 17_interpretabilidad_geometria
 - [ ] 18_produccion
 - [ ] 19_playbook_elite
 - [ ] 20_capstone
