@@ -1087,23 +1087,23 @@ Porque el vector cuantizado $\bar o$ no es unitario respecto a $o$: $\langle\bar
     nb.md(r"""## 16 · Referencias (verificadas; consultadas en oct-2026)
 
 **Papers (arXiv)**
-- Malkov & Yashunin (2016/2018). *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs*. <https://arxiv.org/abs/1603.09320>
-- Guo et al. (2019). *Accelerating Large-Scale Inference with Anisotropic Vector Quantization* (ScaNN). <https://arxiv.org/abs/1908.10396>
-- Gao & Long (2024). *RaBitQ: Quantizing High-Dimensional Vectors with a Theoretical Error Bound for Approximate Nearest Neighbor Search*. <https://arxiv.org/abs/2405.12497> · Gao et al. (2024). *Practical and Asymptotically Optimal Quantization of High-Dimensional Vectors in Euclidean Space for Approximate Nearest Neighbor Search* (Extended RaBitQ). <https://arxiv.org/abs/2409.09913>
-- Douze et al. (2024). *The Faiss library*. <https://arxiv.org/abs/2401.08281>
-- Aumüller, Bernhardsson & Faithfull (2018). *ANN-Benchmarks: A Benchmarking Tool for Approximate Nearest Neighbor Algorithms*. <https://arxiv.org/abs/1807.05614>
-- Patel et al. (2024). *ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data*. <https://arxiv.org/abs/2403.04871>
-- Singh et al. (2021). *FreshDiskANN: A Fast and Accurate Graph-Based ANN Index for Streaming Similarity Search*. <https://arxiv.org/abs/2105.09613>
+- Malkov & Yashunin (2016/2018). *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs*. IEEE TPAMI 42(4), 2020. <https://arxiv.org/abs/1603.09320>
+- Guo et al. (2019). *Accelerating Large-Scale Inference with Anisotropic Vector Quantization* (ScaNN). ICML 2020. <https://arxiv.org/abs/1908.10396>
+- Gao & Long (2024). *RaBitQ: Quantizing High-Dimensional Vectors with a Theoretical Error Bound for Approximate Nearest Neighbor Search*. SIGMOD 2024. <https://arxiv.org/abs/2405.12497> · Gao et al. (2024). *Practical and Asymptotically Optimal Quantization of High-Dimensional Vectors in Euclidean Space for Approximate Nearest Neighbor Search* (Extended RaBitQ). Preprint. <https://arxiv.org/abs/2409.09913>
+- Douze et al. (2024). *The Faiss library*. Preprint. <https://arxiv.org/abs/2401.08281>
+- Aumüller, Bernhardsson & Faithfull (2018). *ANN-Benchmarks: A Benchmarking Tool for Approximate Nearest Neighbor Algorithms*. Information Systems 87 (2020; versión completa del artículo de SISAP 2017). <https://arxiv.org/abs/1807.05614>
+- Patel et al. (2024). *ACORN: Performant and Predicate-Agnostic Search Over Vector Embeddings and Structured Data*. SIGMOD 2024. <https://arxiv.org/abs/2403.04871>
+- Singh et al. (2021). *FreshDiskANN: A Fast and Accurate Graph-Based ANN Index for Streaming Similarity Search*. Preprint. <https://arxiv.org/abs/2105.09613>
 
 **Papers (sin arXiv)**
-- Jégou, Douze & Schmid (2011). *Product Quantization for Nearest Neighbor Search*. IEEE TPAMI.
-- Ge, He, Ke & Sun (2013). *Optimized Product Quantization for Approximate Nearest Neighbor Search*. CVPR.
-- Subramanya et al. (2019). *DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node*. NeurIPS.
+- Jégou, Douze & Schmid (2011). *Product Quantization for Nearest Neighbor Search*. IEEE TPAMI 33(1).
+- Ge, He, Ke & Sun (2013). *Optimized Product Quantization for Approximate Nearest Neighbor Search*. CVPR 2013.
+- Subramanya et al. (2019). *DiskANN: Fast Accurate Billion-point Nearest Neighbor Search on a Single Node*. NeurIPS 2019.
 
 **Código y blogs**
 - FAISS: <https://github.com/facebookresearch/faiss> · DiskANN: <https://github.com/microsoft/DiskANN> · ScaNN: <https://github.com/google-research/google-research/tree/master/scann>
 - Elastic Search Labs. *Better Binary Quantization (BBQ) in Lucene and Elasticsearch*. <https://www.elastic.co/search-labs/blog/better-binary-quantization-lucene-elasticsearch>
-- Milvus. *Bring Vector Compression to the Extreme: How Milvus Serves 3× More Queries with RaBitQ* (blog de Milvus).
+- Milvus. *Bring Vector Compression to the Extreme: How Milvus Serves 3× More Queries with RaBitQ* (blog de Milvus). <https://milvus.io/blog/bring-vector-compression-to-the-extreme-how-milvus-serves-3%C3%97-more-queries-with-rabitq.md>
 - Curso de recsys del repositorio: [`recsys-course/08_deep_retrieval_ann`](../../recsys-course/08_deep_retrieval_ann/README.md).
 
 **Para profundizar:** módulo 15 (evaluación de retrieval de extremo a extremo), módulo 18 (operación de bases vectoriales: Qdrant/pgvector, versionado y migración).

@@ -91,3 +91,15 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Weaviate MUVERA (v1.31) y recomendación para modelos tipo ColPali | ✅ | Blog y documentación de Weaviate (por buscador) |
 | Qdrant multivector `MAX_SIM` + `m=0`; Elastic ELSER / `semantic_text`; OpenSearch neural sparse; bge-reranker-v2-m3 | ✅ | Documentación oficial |
 | Mapa de madurez | ✅ | Cada «quién la usa» con documentación del motor o paper |
+
+## 14 · Indexación ANN
+| Referencia | Estado | Nota |
+|---|---|---|
+| 8 IDs arXiv (HNSW, ScaNN, RaBitQ, Extended RaBitQ, Faiss, ANN-Benchmarks, ACORN, FreshDiskANN) | ✅ | Autor y año coinciden |
+| Venues | ✏️ | HNSW IEEE TPAMI 42(4) 2020, ScaNN ICML 2020, RaBitQ y ACORN SIGMOD 2024, ANN-Benchmarks Information Systems 87 (2020), Jégou TPAMI 33(1), OPQ CVPR 2013, DiskANN NeurIPS 2019; Extended RaBitQ, Faiss y FreshDiskANN como preprint |
+| Milvus, *Bring Vector Compression to the Extreme…* | ✏️ | Existe (RaBitQ desde Milvus 2.6, ≈ 3× QPS); añadida la URL |
+| Elastic BBQ (Elasticsearch 8.16, ≈ 95 % menos memoria) | ✅ | Elastic Search Labs (por buscador; el dominio no abre desde el proxy) |
+| FAISS, DiskANN, ScaNN (repositorios) | ✅ | README presentes en GitHub (raw) |
+| pgvector (HNSW e IVFFlat), Lucene/Elasticsearch/OpenSearch, Qdrant, Weaviate con HNSW | ✅ | Documentación oficial |
+| Enlace al curso de recsys (`recsys-course/08_deep_retrieval_ann`) | ✅ | Existe en el repositorio |
+| Mapa de madurez | ✅ | «Quién la usa» respaldado (FAISS, Google ScaNN, Microsoft DiskANN, Elastic BBQ, Milvus ≥ 2.6) |
