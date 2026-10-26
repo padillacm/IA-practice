@@ -6,7 +6,7 @@ Agente: Revisor de ejecutabilidad · Módulos: 09–20 · Informe: tokenization-
 - [x] 12_embedders_modernos (lección + proyecto ejecutados con nbclient)
 - [x] 13_dense_sparse_late_interaction (lección + proyecto ejecutados con nbclient)
 - [x] 14_indexacion_ann (lección + proyecto ejecutados con nbclient)
-- [ ] 15_evaluacion_retrieval (lección + proyecto ejecutados con nbclient)
+- [x] 15_evaluacion_retrieval (lección + proyecto ejecutados con nbclient)
 - [ ] 16_embeddings_multimodales (lección + proyecto ejecutados con nbclient)
 - [ ] 17_interpretabilidad_geometria (lección + proyecto ejecutados con nbclient)
 - [ ] 18_produccion (lección + proyecto ejecutados con nbclient)
@@ -24,3 +24,4 @@ Agente: Revisor de ejecutabilidad · Módulos: 09–20 · Informe: tokenization-
 - 12 lección: 43 s, 0 errores (fallback TF-IDF+SVD con aviso; RUN_MTEB=False). Proyecto: 27 s, 0 errores, 8/8 ✅ (plantilla ❌/⏳ sin romper). Cambio: pip sin -U (12–14).
 - 13 lección: 31 s, 0 errores. Proyecto: 23 s, 0 errores, 8/8 ✅. Cambio: pip sin -U.
 - 14 lección: 114 s, 0 errores. Proyecto: 36 s, 0 errores, 6/6 ✅. Cambio: pip sin -U (numpy).
+- 15 lección: 76 s, 0 errores (HF 403 → sintético con aviso; ranx coincide). Proyecto: 7 s, 0 errores, 12/12 ✅. Sin cambios.
