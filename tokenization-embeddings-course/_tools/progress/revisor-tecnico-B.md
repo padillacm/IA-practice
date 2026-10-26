@@ -1,0 +1,19 @@
+# Progreso: revisor-tecnico-B
+Agente: Revisor técnico · Módulos: 09–20 · Informe: tokenization-embeddings-course/_tools/REVISION_TECNICA_B.md
+- [x] 09_capa_embedding_llm
+- [x] 10_embeddings_contextuales_oraciones
+- [x] 11_aprendizaje_contrastivo
+- [x] 12_embedders_modernos
+- [x] 13_dense_sparse_late_interaction
+- [x] 14_indexacion_ann
+- [x] 15_evaluacion_retrieval
+- [x] 16_embeddings_multimodales
+- [x] 17_interpretabilidad_geometria
+- [x] 18_produccion
+- [x] 19_playbook_elite
+- [x] 20_capstone
+- [x] extras/GUIA_ENTREVISTAS.md y extras/LECTURA_PAPERS.md
+- [x] check_course.py OK + informe final
+
+## Notas para retomar
+- (decisiones tomadas)
