@@ -1,7 +1,7 @@
 # Progreso: revisor-consistencia-B
 Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras · Informe: tokenization-embeddings-course/_tools/REVISION_CONSISTENCIA.md (sección Bloque B)
 - [x] 20_capstone
-- [ ] 19_playbook_elite
+- [x] 19_playbook_elite
 - [ ] 18_produccion
 - [ ] 17_interpretabilidad_geometria
 - [ ] 16_embeddings_multimodales
@@ -18,3 +18,4 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 ## Notas para retomar
 - Convención B: cabecera en tabla (Nivel · Duración estimada · GPU recomendada · Prerrequisitos) + subtítulo del curso; proyectos con las mismas etiquetas. Encabezados: «## N. Título»; secciones fijas sin número y con emoji (🎯 Objetivos · 🔁 · 🗺️ Mapa de madurez · 🏭 · 🧠 · ⚠️ · 📝 Autoevaluación · 📚 Referencias). IDs Gemini con 2 dígitos (M15-IMG-01).
 - M20: cabecera en tabla; VID-01 con listas y puntuaciones RRF exactas + sin música; IMG-01 sin «int8» fijo; IMG-02 con los 7 criterios reales.
+- M19: cabecera en tabla; IDs IMG-02/03 renumerados por orden de aparición; árbol M19-IMG-01 alineado con elige_indice (70 % de RAM, grafo + vectores en SSD); T2 sin rojo.

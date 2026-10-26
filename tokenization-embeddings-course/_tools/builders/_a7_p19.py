@@ -131,9 +131,9 @@ def project(nb):
 | | |
 |---|---|
 | **Nivel** | 🔴 Experto |
-| **Duración** | ≈ 1.5 h |
-| **GPU** | No necesaria (solo cálculo; < 10 s de ejecución) |
-| **Requiere** | Lección 19 (árboles de decisión, costes a escala, checklist) · 14 (índices) · 16 (multimodal) · 18 (costes, migración, privacidad) |
+| **Duración estimada** | ≈ 1.5 h |
+| **GPU recomendada** | No necesaria (solo cálculo; < 10 s de ejecución) |
+| **Prerrequisitos** | Lección 19 (árboles de decisión, costes a escala, checklist) · 14 (índices) · 16 (multimodal) · 18 (costes, migración, privacidad) |
 | **Conecta con** | `extras/GUIA_ENTREVISTAS.md` (las preguntas de system design usan estos casos) · **Módulo 20** (el capstone aplica la plantilla de diseño a Políglota) |
 
 ## 🏢 Contexto de negocio

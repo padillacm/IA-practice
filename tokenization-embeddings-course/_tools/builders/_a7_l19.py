@@ -7,10 +7,14 @@ def lesson(nb):
     nb.md(nb.badge() + r'''
 
 # Módulo 19 · Playbook de élite: decisiones, trampas y revisión
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
-**Nivel:** 🔴 Experto · **Duración:** ≈ 4 h (lección ≈ 2.5 h + proyecto ≈ 1.5 h) · **GPU:** no necesaria (CPU, `FAST_DEV_RUN`) · **Cómputo estimado:** 0 unidades de Colab.
-
-**Prerrequisitos:** todo el curso, en especial 04 (vocabularios), 12 (embedders), 13 (híbrido), 14 (ANN), 15 (evaluación) y 18 (producción).
+| | |
+|---|---|
+| **Nivel** | 🔴 Experto |
+| **Duración estimada** | ≈ 4 h (lección ≈ 2.5 h + proyecto ≈ 1.5 h) |
+| **GPU recomendada** | Ninguna (CPU, `FAST_DEV_RUN`); 0 unidades de Colab |
+| **Prerrequisitos** | Todo el curso, en especial 04 (vocabularios), 12 (embedders), 13 (híbrido), 14 (ANN), 15 (evaluación) y 18 (producción) |
 
 > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 1.5 h, lo que usa el proyecto): §1 árboles de decisión · §2 trampas de evaluación · §4 costes a escala (la rúbrica A del proyecto usa sus fórmulas) · §6 checklist. Ampliación (≈ 1 h): §3 gap offline/online · §4b chunking · §5 galería de fallos · §7 cultura.
 
@@ -96,10 +100,10 @@ Hazlo en papel y comprueba que la salida de `elige_indice` coincide con tus dos 
         "imagen", "M19-IMG-01", "Árbol de decisión del índice vectorial",
         "La versión visual del árbol `elige_indice`: de N, memoria, filtros y actualizaciones a Flat, HNSW, HNSW+int8, IVF-PQ o DiskANN.",
         """Diagrama de árbol de decisión técnico, fondo blanco, paleta: azul #1F6FEB (preguntas), verde #2CA02C (decisiones finales), naranja #F28E2B (advertencias), gris #6B7280 (flechas). Tipografía sans-serif legible. Flujo de arriba abajo.
-Nodo raíz (rombo azul): "¿Fuerza bruta cumple el p99 con batch = 1? (mídelo)". Rama "sí" → hoja verde "Flat exacto (FAISS IndexFlatIP / numpy)". Rama "no" → rombo azul "¿Vectores float32 + grafo caben en RAM?".
-"sí" → hoja verde "HNSW (M = 16–32, efSearch según recall)". "no" → rombo azul "¿Caben en RAM con int8?".
-"sí" → hoja verde "HNSW + int8 (rescore con float en disco)". "no" → rombo azul "¿SSD rápido disponible?".
-"sí" → hoja verde "DiskANN / Vamana (PQ en RAM, grafo en SSD)". "no" → hoja verde "IVF-PQ (+ refine)".
+Nodo raíz (rombo azul): "¿Fuerza bruta cumple el p99 con batch = 1? (mídelo)". Rama "sí" → hoja verde "Flat exacto (FAISS IndexFlatIP / numpy)". Rama "no" → rombo azul "¿float32 + grafo caben en el 70 % de la RAM?".
+"sí" → hoja verde "HNSW (M = 16–32, efSearch según recall)". "no" → rombo azul "¿int8 + grafo caben en el 70 % de la RAM?".
+"sí" → hoja verde "HNSW + int8 (rescore con float32 en disco)". "no" → rombo azul "¿SSD rápido disponible?".
+"sí" → hoja verde "DiskANN / Vamana (PQ en RAM, grafo + vectores en SSD)". "no" → hoja verde "IVF-PQ (+ refine)".
 A la derecha, dos notas naranjas conectadas con línea discontinua a todo el árbol: "Filtros muy selectivos → pre-filtro o grafo con filtros (ACORN)" y "Muchas actualizaciones → evita reentrenar IVF; HNSW admite inserciones, compacta borrados".
 Título arriba: "¿Qué índice vectorial?".
 Evita: cifras de rendimiento, logotipos, iconos decorativos, texto pequeño.""",
@@ -230,11 +234,11 @@ for f, kw in [(elige_tokenizer, dict(usa_modelo_preentrenado=False, n_scripts=3,
     nb.md(r'''## 2. Trampas de evaluación, reproducidas y medidas
 Cuatro trampas que hacen que un número «mejore» sin que el sistema mejore. Para cada una: el valor **reportado** con la práctica incorrecta y el valor **honesto**.''')
     nb.gemini(
-        "imagen", "M19-IMG-03", "Cuatro trampas de evaluación en retrieval",
+        "imagen", "M19-IMG-02", "Cuatro trampas de evaluación en retrieval",
         "Mapa visual de las cuatro trampas que se reproducen en la sección: tuning en test, winner's curse, dependencia del golden set y sesgo de pooling, con la dirección del sesgo y su remedio.",
         """Infografía técnica en cuadrícula 2x2, fondo blanco, paleta: naranja #F28E2B (práctica incorrecta), azul #1F6FEB (práctica correcta), gris #6B7280 (texto secundario), verde #2CA02C (remedio). Sans-serif legible, sin decoración.
 Cuadrante 1, título "T1 · Ajustar en el test": a la izquierda una rejilla de 21 puntos con uno resaltado en naranja y la etiqueta "α elegido mirando el test"; a la derecha cinco bloques apilados (pliegues) con uno en azul y la etiqueta "validación cruzada". Flecha hacia arriba naranja "sesgo: optimista". Remedio verde: "CV o test ciego".
-Cuadrante 2, título "T2 · Winner's curse": nube de 20 puntos grises en un plano "dev" (eje x) vs "test" (eje y), uno rojo arriba a la derecha en x y en el centro en y. Flecha naranja "sesgo: optimista". Remedio: "IC pareado + Holm".
+Cuadrante 2, título "T2 · Winner's curse": nube de 20 puntos grises en un plano "dev" (eje x) vs "test" (eje y), uno naranja más grande, el más a la derecha en x y a media altura en y, con la etiqueta "ganadora en dev". Flecha naranja "sesgo: optimista". Remedio: "IC pareado + Holm".
 Cuadrante 3, título "T3 · Depende del golden set": dos pequeñas tablas lado a lado, "ítem conocido (títulos)" y "paráfrasis", con dos barras cada una "BM25" y "denso" cuyo orden se invierte entre tablas. Remedio: "reportar por golden set y por slice".
 Cuadrante 4, título "T4 · Sesgo de pooling": un embudo "top-10 de BM25 → juicios", y un sistema nuevo con documentos marcados "relevante sin juzgar = 0". Flecha naranja hacia abajo "sesgo: penaliza al sistema nuevo". Remedio: "juzgar el top-k del sistema nuevo".
 Evita: cifras inventadas, logotipos, iconos decorativos, texto pequeño.""",
@@ -335,7 +339,7 @@ Tres fuentes clásicas de discrepancia entre el nDCG del golden set y lo que viv
 
 🧪 (1) Recalculamos la comparación BM25 vs denso v2 ponderando cada slice por una mezcla de tráfico que varía de 0 % a 80 % de queries de código.''')
     nb.gemini(
-        "imagen", "M19-IMG-02", "Del nDCG offline a la métrica online",
+        "imagen", "M19-IMG-03", "Del nDCG offline a la métrica online",
         "Embudo que muestra por qué una mejora offline se encoge o se invierte online: mezcla de tráfico, interfaz y sesgo de posición, queries sin respuesta, latencia.",
         """Infografía técnica en forma de embudo horizontal (izquierda → derecha), fondo blanco, paleta: azul #1F6FEB (métricas), naranja #F28E2B (pérdidas), verde #2CA02C (métrica final), gris #6B7280 (texto secundario). Sans-serif legible.
 A la izquierda, una caja azul ancha: "nDCG@10 offline (golden set)". El embudo se estrecha en cuatro tramos, cada uno con una etiqueta naranja encima:
