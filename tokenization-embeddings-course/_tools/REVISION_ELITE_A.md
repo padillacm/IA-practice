@@ -64,3 +64,14 @@ Diagnóstico: 🏭 y 🧠 de buen nivel (len() entre lenguajes, NFC/NFD en byte-
 - 🧠 #3 ampliado: Gopher usaba NFKC y Chinchilla lo quitó, con mejora reportada en matemáticas y química
   (Hoffmann et al., 2022, §4.1, verificado en el PDF); los tokenizers basados en `tiktoken` no normalizan. Referencia
   añadida. Sin celdas nuevas (la demo de NFKC ya existe en la lección).
+
+## 03 · WordPiece, Unigram, SentencePiece
+Diagnóstico: 🧠 excelente y medido (WordPiece de HF ≈ BPE, `max_sentence_length`, normalización no lossless, `[UNK]`
+por id, mezcla 10:1:1:1). Hueco: **cómo y con qué semántica se reservan ids** al entrenar, que es una decisión de
+seguridad además de capacidad.
+- **Añadido 🧪 en §11 (ampliación, en la 🧭)**: entrenamiento con `control_symbols=["<|im_end|>"]` y
+  `user_defined_symbols=["<|tool|>"]`; medido: el control **no** se puede fabricar desde texto (se trocea en bytes) y
+  decodifica a `''`; el user-defined sí sale atómico. Fuente: `doc/special_symbols.md` del repositorio oficial
+  (incluye la motivación de seguridad, issue #215).
+- 🧠 #8 reescrito: ids reservados al entrenar (byte_fallback 256 + 3) y su semántica control vs user-defined.
+  Lección: 85 → 88 celdas (lo nuevo marcado como ampliación).
