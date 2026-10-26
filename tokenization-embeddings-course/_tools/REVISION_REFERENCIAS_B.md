@@ -32,3 +32,15 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Rumbelow & Watkins 2023 (LessWrong) | ✅ | Ya verificado en el bloque A (feb-2023) |
 | Precio `text-embedding-3-small` 0.02 $/1M (preguntas 41 y 48: 80 $, 240 $) | ✅ | Coincide con la revisión técnica del 18; aritmética recalculada |
 | Autores/años citados en las respuestas (Kudo 2018, Petrov 2023, … Dean & Barroso 2013) | ✅ | Coinciden con arXiv |
+
+## 09 · Capa de embedding en LLMs
+| Referencia | Estado | Nota |
+|---|---|---|
+| 15 IDs arXiv (Press & Wolf, Inan, Yang, Gao, Godey, Kobayashi, Land & Bartolo, Chung, He, Gemma ×2, Hsu, Takase, Mikolov ×2) | ✅ | Primer autor y año coinciden |
+| Venues | ✏️ | Añadidos/completados: EACL 2017, ICLR 2017 (Inan), ICLR 2018/2019/2021, Findings ACL 2023 (Kobayashi), EMNLP 2024 (Land & Bartolo), ICLR 2023 (DeBERTaV3), COLM 2025 (*Spike No More*, según arXiv), ICLR 2013 workshop / NeurIPS 2013 (word2vec), EMNLP 2014, NeurIPS 2014; Godey y Liger Kernel como preprint |
+| Godey et al. 2024 | ✏️ | Título abreviado «LM Saturation» → *Studying Language Model Saturation via the Softmax Bottleneck*; «< ~1000 dimensiones» coincide con el abstract |
+| Gemma 1 «share embeddings across our inputs and outputs»; Gemma 2 «Tied embedding» | ✅ | Comprobado en el PDF/HTML de arXiv |
+| nanoGPT `vocab_size = 50304` «padded up to nearest multiple of 64 for efficiency» | ✅ | `model.py` en GitHub (línea 111) |
+| Hewitt 2021 (blog), Liger Kernel (GitHub), `resize_token_embeddings` | ✅ | Ya verificados en el bloque A / revisión técnica |
+| Mapa de madurez / 🏭 / 🧠 | ✅ | Cada «quién la usa» con fuente (GPT-2, Gemma 1/2, RemBERT, DeBERTaV3, Liger, Cohere) |
+| Prompts Gemini (ids «[1212, 8745, …]», piezas de «serialización») | ⚠️ | Ilustrativos: el vocabulario de GPT-2 no se puede descargar desde aquí; el texto no los presenta como ids reales |

@@ -942,21 +942,21 @@ No hay unembedding ni «masa filtrada»; la inicialización por media de sub-tok
 nb.md(r"""
 ## Referencias
 **Papers**
-- Press, O., & Wolf, L. (2017). *Using the Output Embedding to Improve Language Models.* EACL. [arXiv:1608.05859](https://arxiv.org/abs/1608.05859)
-- Inan, H., Khosravi, K., & Socher, R. (2016). *Tying Word Vectors and Word Classifiers: A Loss Framework for Language Modeling.* [arXiv:1611.01462](https://arxiv.org/abs/1611.01462)
-- Yang, Z., Dai, Z., Salakhutdinov, R., et al. (2018). *Breaking the Softmax Bottleneck: A High-Rank RNN Language Model.* ICLR. [arXiv:1711.03953](https://arxiv.org/abs/1711.03953)
-- Gao, J., He, D., Tan, X., et al. (2019). *Representation Degeneration Problem in Training Natural Language Generation Models.* ICLR. [arXiv:1907.12009](https://arxiv.org/abs/1907.12009)
-- Godey, N., de la Clergerie, É., & Sagot, B. (2024). *Why do small language models underperform? Studying LM Saturation via the Softmax Bottleneck.* [arXiv:2404.07647](https://arxiv.org/abs/2404.07647)
-- Kobayashi, G., Kuribayashi, T., Yokoi, S., et al. (2023). *Transformer Language Models Handle Word Frequency in Prediction Head.* [arXiv:2305.18294](https://arxiv.org/abs/2305.18294)
-- Land, S., & Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* [arXiv:2405.05417](https://arxiv.org/abs/2405.05417)
-- Chung, H. W., Févry, T., Tsai, H., et al. (2021). *Rethinking Embedding Coupling in Pre-trained Language Models.* ICLR. [arXiv:2010.12821](https://arxiv.org/abs/2010.12821)
-- He, P., Gao, J., Chen, W. (2021). *DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing.* [arXiv:2111.09543](https://arxiv.org/abs/2111.09543)
+- Press, O., & Wolf, L. (2017). *Using the Output Embedding to Improve Language Models.* EACL 2017. [arXiv:1608.05859](https://arxiv.org/abs/1608.05859)
+- Inan, H., Khosravi, K., & Socher, R. (2016). *Tying Word Vectors and Word Classifiers: A Loss Framework for Language Modeling.* ICLR 2017. [arXiv:1611.01462](https://arxiv.org/abs/1611.01462)
+- Yang, Z., Dai, Z., Salakhutdinov, R., et al. (2018). *Breaking the Softmax Bottleneck: A High-Rank RNN Language Model.* ICLR 2018. [arXiv:1711.03953](https://arxiv.org/abs/1711.03953)
+- Gao, J., He, D., Tan, X., et al. (2019). *Representation Degeneration Problem in Training Natural Language Generation Models.* ICLR 2019. [arXiv:1907.12009](https://arxiv.org/abs/1907.12009)
+- Godey, N., de la Clergerie, É., & Sagot, B. (2024). *Why do small language models underperform? Studying Language Model Saturation via the Softmax Bottleneck.* Preprint. [arXiv:2404.07647](https://arxiv.org/abs/2404.07647)
+- Kobayashi, G., Kuribayashi, T., Yokoi, S., et al. (2023). *Transformer Language Models Handle Word Frequency in Prediction Head.* Findings of ACL 2023. [arXiv:2305.18294](https://arxiv.org/abs/2305.18294)
+- Land, S., & Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* EMNLP 2024. [arXiv:2405.05417](https://arxiv.org/abs/2405.05417)
+- Chung, H. W., Févry, T., Tsai, H., et al. (2021). *Rethinking Embedding Coupling in Pre-trained Language Models.* ICLR 2021. [arXiv:2010.12821](https://arxiv.org/abs/2010.12821)
+- He, P., Gao, J., Chen, W. (2021). *DeBERTaV3: Improving DeBERTa using ELECTRA-Style Pre-Training with Gradient-Disentangled Embedding Sharing.* ICLR 2023. [arXiv:2111.09543](https://arxiv.org/abs/2111.09543)
 - Gemma Team (2024a). *Gemma: Open Models Based on Gemini Research and Technology.* [arXiv:2403.08295](https://arxiv.org/abs/2403.08295) · Gemma Team (2024b). *Gemma 2: Improving Open Language Models at a Practical Size.* [arXiv:2408.00118](https://arxiv.org/abs/2408.00118)
-- Hsu, P.-L., Dai, Y., Kothapalli, V., et al. (2024). *Liger Kernel: Efficient Triton Kernels for LLM Training.* [arXiv:2410.10989](https://arxiv.org/abs/2410.10989)
-- Takase, S., Kiyono, S., Kobayashi, S., et al. (2023). *Spike No More: Stabilizing the Pre-training of Large Language Models.* [arXiv:2312.16903](https://arxiv.org/abs/2312.16903)
-- Mikolov, T., Chen, K., Corrado, G., & Dean, J. (2013a). *Efficient Estimation of Word Representations in Vector Space.* [arXiv:1301.3781](https://arxiv.org/abs/1301.3781) · Mikolov et al. (2013b). *Distributed Representations of Words and Phrases and their Compositionality.* [arXiv:1310.4546](https://arxiv.org/abs/1310.4546)
-- Pennington, J., Socher, R., & Manning, C. D. (2014). *GloVe: Global Vectors for Word Representation.* EMNLP.
-- Levy, O., & Goldberg, Y. (2014). *Neural Word Embedding as Implicit Matrix Factorization.* NeurIPS.
+- Hsu, P.-L., Dai, Y., Kothapalli, V., et al. (2024). *Liger Kernel: Efficient Triton Kernels for LLM Training.* Preprint. [arXiv:2410.10989](https://arxiv.org/abs/2410.10989)
+- Takase, S., Kiyono, S., Kobayashi, S., et al. (2023). *Spike No More: Stabilizing the Pre-training of Large Language Models.* COLM 2025. [arXiv:2312.16903](https://arxiv.org/abs/2312.16903)
+- Mikolov, T., Chen, K., Corrado, G., & Dean, J. (2013a). *Efficient Estimation of Word Representations in Vector Space.* ICLR 2013 (workshop). [arXiv:1301.3781](https://arxiv.org/abs/1301.3781) · Mikolov et al. (2013b). *Distributed Representations of Words and Phrases and their Compositionality.* NeurIPS 2013. [arXiv:1310.4546](https://arxiv.org/abs/1310.4546)
+- Pennington, J., Socher, R., & Manning, C. D. (2014). *GloVe: Global Vectors for Word Representation.* EMNLP 2014.
+- Levy, O., & Goldberg, Y. (2014). *Neural Word Embedding as Implicit Matrix Factorization.* NeurIPS 2014.
 
 **Blogs, código y documentación**
 - Hewitt, J. (2021). *Initializing New Word Embeddings for Pretrained Language Models* (blog, enlazado desde el docstring de `resize_token_embeddings`): https://nlp.stanford.edu/~johnhew/vocab-expansion.html
