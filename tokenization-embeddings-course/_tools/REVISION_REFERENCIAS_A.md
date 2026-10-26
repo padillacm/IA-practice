@@ -94,3 +94,21 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Mistral Tekken (🏭 y Mapa de madurez) | ✏️ | Igual que en 03: la cifra ≈ 30 % viene del anuncio de Mistral NeMo y se limita a código y 7 idiomas; fuente añadida |
 | FLORES+ (`openlanguagedata/flores_plus`), `Helsinki-NLP/opus-100`, `tiktoken` | ✅ | |
 | Mapa de madurez | ✅ | Cada «quién la usa» con fuente; SuperBPE 🟡/🔴 y leyes de escala con V 🟡 bien acotados |
+
+## 05 · Patologías y robustez
+| Referencia | Estado | Nota |
+|---|---|---|
+| Rumbelow & Watkins (feb-2023), *SolidGoldMagikarp (plus, prompt generation)*, LessWrong | ✅ | El post existe (citado por Land & Bartolo y el Alignment Forum) |
+| «OpenAI corrigió ChatGPT … según la actualización del post» (🏭) | ⚠️ | LessWrong no se puede abrir desde aquí y no hay comunicado de OpenAI: marcado como fuente secundaria |
+| Land & Bartolo 2024 (EMNLP 2024) + `cohere-ai/magikarp` | ✅ | En el PDF: 5–50 % de candidatos verificados ≈ 0.1–1 % del vocabulario; fragmentos de usuarios ` TheNitrome`, ` RandomRedditor`; 24 modelos en la tabla 1 |
+| Li et al. 2024, GlitchHunter | ✏️ | Añadido venue (FSE 2024, research track) |
+| Geiping et al. 2024; Zhang, Cao & You 2024; Singh & Strouse 2024 | ✏️ | Marcados como preprint |
+| Jang et al. 2024, *Improbable Bigrams* | ✏️ | Añadido venue (EMNLP 2025); «≈ 90 % menos alucinación en Llama 3.1» confirmado en el abstract |
+| Edman et al. 2024 (CUTE); Chai et al. 2024 | ✏️ | Venues (EMNLP 2024; Findings EMNLP 2024) |
+| Phan et al. 2024, *Exact Byte-Level Probabilities…* | ✏️ | Añadido venue (ICLR 2025); ≈ 18 % en FIM confirmado |
+| Lundberg & Ribeiro 2023, TDS | ✏️ | Fecha (8-may-2023) confirmada |
+| «`guidance` aplica token healing por defecto en backends locales» (🏭 y madurez) | ⚠️ | Lo dice el post de 2023; la documentación/README actuales no lo confirman: reescrito como «lo introdujo y lo aplicaba» + aviso |
+| promptfoo, *ASCII Smuggling for LLMs* | ✅ | Plugin `ascii-smuggling` con el bloque Tags |
+| `garak` (`probes.glitch`) | ✏️ | Existe; se precisa que la sonda está inactiva por defecto y que el contrabando ASCII está en `smuggling` |
+| UTS #39 | ✅ | Ver 01 |
+| Mapa de madurez | ✅ | Glitch tokens 🟢 respaldado por > 20 modelos de Land & Bartolo; resto 🟡 con un grupo/paper cada uno |
