@@ -146,3 +146,22 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Hewitt (2021), blog de inicialización por media | ✏️ | Existe; añadido espejo en Columbia. `mean_resizing=True` por defecto verificado por la revisión técnica |
 | AdaptiVocab (arXiv:2503.19693), retrofitting dinámico (arXiv:2411.18553) | ✅ | Títulos y autores coinciden |
 | Mapa de madurez | ✅ | Todas las filas con fuente; 🔴 para H-Net y seguimiento coherente con la regla declarada |
+
+## 08 · Tokens multimodales y de audio
+| Referencia | Estado | Nota |
+|---|---|---|
+| Dosovitskiy et al. (ViT) | ✏️ | Venue (ICLR 2021) |
+| van den Oord et al. (VQ-VAE); Razavi et al. (VQ-VAE-2); Esser et al. (VQGAN) | ✏️ | Venues (NeurIPS 2017, NeurIPS 2019, CVPR 2021) |
+| «VQ-VAE: base de DALL·E 1» (Mapa de madurez) | ✏️ | DALL·E 1 usó un dVAE con relajación Gumbel-softmax, no un VQ-VAE: matizado |
+| Mentzer et al. (FSQ) | ✏️ | Venue (ICLR 2024); «sin colapso del codebook ni maquinaria de VQ» confirmado en el abstract |
+| Yu et al. (MAGVIT-v2/LFQ, ICLR 2024); Chameleon Team; Wang et al. (Emu3) | ✅ | |
+| Zhou et al. (Transfusion) | ✏️ | Venue (ICLR 2025); «hasta 7B» confirmado en el abstract |
+| Li et al. (MAR); Fan et al. (Fluid) | ✏️/✅ | MAR: NeurIPS 2024; Fluid: informe técnico |
+| Yu et al. (TiTok); Bachmann et al. (FlexTok) | ✏️ | Venues (NeurIPS 2024, ICML 2025); afiliaciones ByteDance/TUM y EPFL/Apple coherentes |
+| Zeghidour et al. (SoundStream); Défossez et al. (EnCodec) | ✏️ | Venues (IEEE/ACM TASLP 30, 2022; TMLR 2023) |
+| Kumar et al. (DAC) | ✏️ | Venue (NeurIPS 2023); «44.1 kHz a 8 kbps, ~90x» confirmado en el abstract |
+| Défossez et al. (Moshi/Mimi); Zhang et al. (SpeechTokenizer) | ✏️/✅ | SpeechTokenizer: ICLR 2024; Mimi destila WavLM en el primer nivel (split RVQ), coherente con el paper |
+| Copet et al. (MusicGen); Liu et al. (LLaVA); Rajput et al. (TIGER) | ✏️ | Venues (NeurIPS 2023 ×3) |
+| NVIDIA, Cosmos, arXiv:2501.03575 | ✅ | Niveles FSQ y compresiones verificados por la revisión técnica |
+| `transformers.EncodecModel`, `torchvision.datasets.MNIST`, `sklearn.datasets.load_sample_image` | ✅ | |
+| Mapa de madurez / 🏭 | ✅ | Cada «quién la usa» con paper; los modelos cerrados se declaran «no documentados» |

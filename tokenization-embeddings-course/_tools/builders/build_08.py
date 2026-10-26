@@ -314,7 +314,7 @@ Con las tres modalidades vistas, esta tabla resume qué tokenizers son estándar
 | Técnica | Madurez | Quién la usa / respaldo público | Fuente |
 |---|---|---|---|
 | Parches ViT (tokens continuos) | 🟢 | Base de los encoders visuales de CLIP/SigLIP y de VLMs abiertos que los conectan a un LLM (p. ej. LLaVA) | Dosovitskiy et al. 2020 (arXiv:2010.11929); Liu et al. 2023 (arXiv:2304.08485) |
-| VQ-VAE | 🟢 (técnica) / 🟡 (como interfaz LLM) | Base de DALL·E 1, VQGAN y de los tokenizers de imagen discretos | van den Oord et al. 2017 (arXiv:1711.00937) |
+| VQ-VAE | 🟢 (técnica) / 🟡 (como interfaz LLM) | Base de VQGAN y de los tokenizers de imagen discretos (DALL·E 1 usó una variante, el dVAE con relajación Gumbel-softmax) | van den Oord et al. 2017 (arXiv:1711.00937) |
 | VQGAN (+ transformer *prior*) | 🟢 | CompVis; pérdida perceptual + adversarial sobre VQ | Esser et al. 2020 (arXiv:2012.09841) |
 | **FSQ** | 🟡 | Tokenizers *discretos* de Cosmos (NVIDIA) con niveles (8,8,8,5,5,5) = 64 000 | Mentzer et al. 2023 (arXiv:2309.15505); Cosmos (arXiv:2501.03575) |
 | LFQ / MAGVIT-v2 | 🟡 | Google/CMU; ICLR 2024; tokenizer de imagen+vídeo con vocabulario común | Yu et al. 2023 (arXiv:2310.05737) |
@@ -385,21 +385,21 @@ nb.md(r"""
 nb.md(r"""
 ## 17. Referencias
 
-Verificadas (título/autores/fecha) en arXiv en la fecha de redacción.
+Verificadas (título/autores/fecha) en arXiv en la fecha de redacción; venues revisados el 26-oct-2026.
 
-* Dosovitskiy et al. **An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale.** arXiv:2010.11929.
-* van den Oord, Vinyals, Kavukcuoglu. **Neural Discrete Representation Learning** (VQ-VAE). arXiv:1711.00937. · Razavi et al. **Generating Diverse High-Fidelity Images with VQ-VAE-2.** arXiv:1906.00446.
-* Esser, Rombach, Ommer. **Taming Transformers for High-Resolution Image Synthesis** (VQGAN). arXiv:2012.09841.
-* Mentzer, Minnen, Agustsson, Tschannen. **Finite Scalar Quantization: VQ-VAE Made Simple.** arXiv:2309.15505.
+* Dosovitskiy et al. **An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale.** ICLR 2021, arXiv:2010.11929.
+* van den Oord, Vinyals, Kavukcuoglu. **Neural Discrete Representation Learning** (VQ-VAE). NeurIPS 2017, arXiv:1711.00937. · Razavi et al. **Generating Diverse High-Fidelity Images with VQ-VAE-2.** NeurIPS 2019, arXiv:1906.00446.
+* Esser, Rombach, Ommer. **Taming Transformers for High-Resolution Image Synthesis** (VQGAN). CVPR 2021, arXiv:2012.09841.
+* Mentzer, Minnen, Agustsson, Tschannen. **Finite Scalar Quantization: VQ-VAE Made Simple.** ICLR 2024, arXiv:2309.15505.
 * Yu et al. **Language Model Beats Diffusion — Tokenizer is Key to Visual Generation** (MAGVIT-v2, LFQ). ICLR 2024, arXiv:2310.05737.
 * Chameleon Team. **Chameleon: Mixed-Modal Early-Fusion Foundation Models.** arXiv:2405.09818. · Wang et al. **Emu3: Next-Token Prediction is All You Need.** arXiv:2409.18869.
-* Zhou et al. **Transfusion: Predict the Next Token and Diffuse Images with One Multi-Modal Model.** arXiv:2408.11039. · Li et al. **Autoregressive Image Generation without Vector Quantization.** arXiv:2406.11838. · Fan et al. **Fluid: Scaling Autoregressive Text-to-image Generative Models with Continuous Tokens.** arXiv:2410.13863.
-* Yu et al. **An Image is Worth 32 Tokens for Reconstruction and Generation** (TiTok). arXiv:2406.07550. · Bachmann et al. **FlexTok: Resampling Images into 1D Token Sequences of Flexible Length.** arXiv:2502.13967.
-* Zeghidour et al. **SoundStream: An End-to-End Neural Audio Codec.** arXiv:2107.03312. · Défossez et al. **High Fidelity Neural Audio Compression** (EnCodec). arXiv:2210.13438. · Kumar et al. **High-Fidelity Audio Compression with Improved RVQGAN** (DAC). arXiv:2306.06546.
-* Défossez et al. **Moshi: a speech-text foundation model for real-time dialogue** (Mimi). arXiv:2410.00037. · Zhang et al. **SpeechTokenizer: Unified Speech Tokenizer for Speech Large Language Models.** arXiv:2308.16692.
-* Copet et al. **Simple and Controllable Music Generation** (MusicGen). arXiv:2306.05284.
+* Zhou et al. **Transfusion: Predict the Next Token and Diffuse Images with One Multi-Modal Model.** ICLR 2025, arXiv:2408.11039. · Li et al. **Autoregressive Image Generation without Vector Quantization.** NeurIPS 2024, arXiv:2406.11838. · Fan et al. **Fluid: Scaling Autoregressive Text-to-image Generative Models with Continuous Tokens.** arXiv:2410.13863.
+* Yu et al. **An Image is Worth 32 Tokens for Reconstruction and Generation** (TiTok). NeurIPS 2024, arXiv:2406.07550. · Bachmann et al. **FlexTok: Resampling Images into 1D Token Sequences of Flexible Length.** ICML 2025, arXiv:2502.13967.
+* Zeghidour et al. **SoundStream: An End-to-End Neural Audio Codec.** IEEE/ACM TASLP 30 (2022), arXiv:2107.03312. · Défossez et al. **High Fidelity Neural Audio Compression** (EnCodec). TMLR 2023, arXiv:2210.13438. · Kumar et al. **High-Fidelity Audio Compression with Improved RVQGAN** (DAC). NeurIPS 2023, arXiv:2306.06546.
+* Défossez et al. **Moshi: a speech-text foundation model for real-time dialogue** (Mimi). arXiv:2410.00037. · Zhang et al. **SpeechTokenizer: Unified Speech Tokenizer for Speech Large Language Models.** ICLR 2024, arXiv:2308.16692.
+* Copet et al. **Simple and Controllable Music Generation** (MusicGen). NeurIPS 2023, arXiv:2306.05284.
 * NVIDIA. **Cosmos World Foundation Model Platform for Physical AI.** arXiv:2501.03575.
-* Liu et al. **Visual Instruction Tuning** (LLaVA). arXiv:2304.08485. · Rajput et al. **Recommender Systems with Generative Retrieval.** arXiv:2305.05065.
+* Liu et al. **Visual Instruction Tuning** (LLaVA). NeurIPS 2023, arXiv:2304.08485. · Rajput et al. **Recommender Systems with Generative Retrieval.** NeurIPS 2023, arXiv:2305.05065.
 * Documentación: `torchvision.datasets.MNIST`, `transformers.EncodecModel`, `scikit-learn` (`load_sample_image`).
 
 ## 18. Siguiente paso

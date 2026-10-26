@@ -8,7 +8,7 @@ Agente: Verificador de referencias · Módulos: 00–08 · Informe: tokenization
 - [x] 05_patologias_robustez
 - [x] 06_tokenizer_free_bytes_blt
 - [x] 07_hnet_tokenizer_transfer
-- [ ] 08_tokens_multimodales_audio
+- [x] 08_tokens_multimodales_audio
 - [ ] check_course.py OK + informe final
 
 ## Notas para retomar
