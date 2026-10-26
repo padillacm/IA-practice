@@ -187,7 +187,7 @@ def carga_encoders(textos):
 '''
 
 WHITEN = r'''
-# ── Post-procesado desde cero: centrado, whitening (Su et al., 2021) y "all-but-the-top" (Mu & Viswanath, 2018) ──
+# ── Post-procesado desde cero: centrado, whitening (Su et al., 2021) y "all-but-the-top" (Mu, Bhat & Viswanath, 2018) ──
 def ajusta_whitening(X, k=None, eps=1e-6):
     """Devuelve (mu, W) tales que (x - mu) @ W tiene covarianza identidad en las k primeras direcciones."""
     mu = X.mean(0, keepdims=True)
@@ -515,7 +515,7 @@ Queremos una transformación lineal $\tilde{\mathbf x}=(\mathbf x-\boldsymbol\mu
 
 ✍️ **Ejemplo a mano (2D, sin rotación).** Si $\Sigma = \mathrm{diag}(4, 0.25)$, entonces $U = I$, $\Lambda^{-1/2} = \mathrm{diag}(0.5, 2)$ y $W = \mathrm{diag}(0.5, 2)$. Un vector centrado $(2, 0.5)$, a una desviación típica en cada eje, pasa a $(1, 1)$: ambos ejes cuentan lo mismo. Antes, el coseno lo decidía casi solo el eje 1 (varianza 16 veces mayor): la anisotropía del módulo 09 en miniatura. Con $k = 1$ te quedarías solo con el eje 1 (reducción).
 
-**Relación con BERT-flow** (Li et al., 2020): aprende un *normalizing flow* invertible que lleva los embeddings a una gaussiana isótropa; whitening es el caso **lineal** de esa idea y Su et al. reportan resultados comparables o mejores sin entrenar nada. **All-but-the-top** (Mu & Viswanath, 2018) es aún más simple: centrar y quitar las primeras componentes principales.
+**Relación con BERT-flow** (Li et al., 2020): aprende un *normalizing flow* invertible que lleva los embeddings a una gaussiana isótropa; whitening es el caso **lineal** de esa idea y Su et al. reportan resultados comparables o mejores sin entrenar nada. **All-but-the-top** (Mu, Bhat & Viswanath, 2018) es aún más simple: centrar y quitar las primeras componentes principales.
 ⚠️ $\boldsymbol\mu$ y $W$ se ajustan **con los documentos del índice** (o un corpus de referencia), nunca con las consultas de evaluación.
 """)
 nb.code(r'''
@@ -698,7 +698,7 @@ nb.md(r"""
 | CLS pooling | 🟢 sólido (según modelo) | DPR usa la representación de `[CLS]` | Karpukhin et al. 2020 |
 | Last-token pooling en decoders | 🟡 emergente → estándar en LLM-embedders | SGPT; embedders basados en LLMs (módulo 12) | Muennighoff 2022 |
 | Prefijos / instrucciones | 🟢 sólido | E5 (`query:`/`passage:`), INSTRUCTOR | Wang et al. 2022; Su et al. 2022 |
-| Whitening / centrado post-hoc | 🟡 útil para encoders crudos; poco usado con embedders modernos | — | Su et al. 2021; Mu & Viswanath 2018 |
+| Whitening / centrado post-hoc | 🟡 útil para encoders crudos; poco usado con embedders modernos | — | Su et al. 2021; Mu, Bhat & Viswanath 2018 |
 | BERT-flow | 🔴 mayormente superado (whitening lineal comparable) | — | Li et al. 2020; Su et al. 2021 |
 | Multilingüe por destilación | 🟢 sólido | `paraphrase-multilingual-*` de sentence-transformers | Reimers & Gurevych 2020 |
 | Cross-encoder para re-ranking | 🟢 sólido | ver módulo 13 | Reimers & Gurevych 2019 |
@@ -775,21 +775,21 @@ Centrado por idioma (restar la media de documentos de cada idioma y la de las co
 
 nb.md(r"""
 ## Referencias
-- Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2019). *BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.* [arXiv:1810.04805](https://arxiv.org/abs/1810.04805)
-- Reimers, N., & Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.* EMNLP. [arXiv:1908.10084](https://arxiv.org/abs/1908.10084)
-- Reimers, N., & Gurevych, I. (2020). *Making Monolingual Sentence Embeddings Multilingual using Knowledge Distillation.* [arXiv:2004.09813](https://arxiv.org/abs/2004.09813)
-- Ethayarajh, K. (2019). *How Contextual are Contextualized Word Representations? Comparing the Geometry of BERT, ELMo, and GPT-2 Embeddings.* EMNLP. [arXiv:1909.00512](https://arxiv.org/abs/1909.00512)
-- Li, B., Zhou, H., He, J., et al. (2020). *On the Sentence Embeddings from Pre-trained Language Models* (BERT-flow). [arXiv:2011.05864](https://arxiv.org/abs/2011.05864)
-- Su, J., Cao, J., Liu, W., et al. (2021). *Whitening Sentence Representations for Better Semantics and Faster Retrieval.* [arXiv:2103.15316](https://arxiv.org/abs/2103.15316)
-- Mu, J., Bhat, S., & Viswanath, P. (2018). *All-but-the-Top: Simple and Effective Postprocessing for Word Representations.* ICLR. [arXiv:1702.01417](https://arxiv.org/abs/1702.01417)
-- Timkey, W., & van Schijndel, M. (2021). *All Bark and No Bite: Rogue Dimensions in Transformer Language Models Obscure Representational Quality.* [arXiv:2109.04404](https://arxiv.org/abs/2109.04404)
-- Godey, N., de la Clergerie, É., & Sagot, B. (2024). *Anisotropy Is Inherent to Self-Attention in Transformers.* [arXiv:2401.12143](https://arxiv.org/abs/2401.12143)
-- Libovický, J., Rosa, R., & Fraser, A. (2019). *How Language-Neutral is Multilingual BERT?* [arXiv:1911.03310](https://arxiv.org/abs/1911.03310)
-- Wang, L., Yang, N., Huang, X., et al. (2022). *Text Embeddings by Weakly-Supervised Contrastive Pre-training* (E5). [arXiv:2212.03533](https://arxiv.org/abs/2212.03533)
-- Su, H., Shi, W., Kasai, J., et al. (2022). *One Embedder, Any Task: Instruction-Finetuned Text Embeddings* (INSTRUCTOR). [arXiv:2212.09741](https://arxiv.org/abs/2212.09741)
-- Muennighoff, N. (2022). *SGPT: GPT Sentence Embeddings for Semantic Search.* [arXiv:2202.08904](https://arxiv.org/abs/2202.08904)
-- Karpukhin, V., Oğuz, B., Min, S., et al. (2020). *Dense Passage Retrieval for Open-Domain Question Answering.* [arXiv:2004.04906](https://arxiv.org/abs/2004.04906)
-- Steck, H., Ekanadham, C., & Kallus, N. (2024). *Is Cosine-Similarity of Embeddings Really About Similarity?* [arXiv:2403.05440](https://arxiv.org/abs/2403.05440)
+- Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2019). *BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.* NAACL 2019. [arXiv:1810.04805](https://arxiv.org/abs/1810.04805)
+- Reimers, N., & Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.* EMNLP-IJCNLP 2019. [arXiv:1908.10084](https://arxiv.org/abs/1908.10084)
+- Reimers, N., & Gurevych, I. (2020). *Making Monolingual Sentence Embeddings Multilingual using Knowledge Distillation.* EMNLP 2020. [arXiv:2004.09813](https://arxiv.org/abs/2004.09813)
+- Ethayarajh, K. (2019). *How Contextual are Contextualized Word Representations? Comparing the Geometry of BERT, ELMo, and GPT-2 Embeddings.* EMNLP-IJCNLP 2019. [arXiv:1909.00512](https://arxiv.org/abs/1909.00512)
+- Li, B., Zhou, H., He, J., et al. (2020). *On the Sentence Embeddings from Pre-trained Language Models* (BERT-flow). EMNLP 2020. [arXiv:2011.05864](https://arxiv.org/abs/2011.05864)
+- Su, J., Cao, J., Liu, W., et al. (2021). *Whitening Sentence Representations for Better Semantics and Faster Retrieval.* Preprint. [arXiv:2103.15316](https://arxiv.org/abs/2103.15316)
+- Mu, J., Bhat, S., & Viswanath, P. (2018). *All-but-the-Top: Simple and Effective Postprocessing for Word Representations.* ICLR 2018. [arXiv:1702.01417](https://arxiv.org/abs/1702.01417)
+- Timkey, W., & van Schijndel, M. (2021). *All Bark and No Bite: Rogue Dimensions in Transformer Language Models Obscure Representational Quality.* EMNLP 2021. [arXiv:2109.04404](https://arxiv.org/abs/2109.04404)
+- Godey, N., de la Clergerie, É., & Sagot, B. (2024). *Anisotropy Is Inherent to Self-Attention in Transformers.* EACL 2024. [arXiv:2401.12143](https://arxiv.org/abs/2401.12143)
+- Libovický, J., Rosa, R., & Fraser, A. (2019). *How Language-Neutral is Multilingual BERT?* Preprint. [arXiv:1911.03310](https://arxiv.org/abs/1911.03310)
+- Wang, L., Yang, N., Huang, X., et al. (2022). *Text Embeddings by Weakly-Supervised Contrastive Pre-training* (E5). Preprint. [arXiv:2212.03533](https://arxiv.org/abs/2212.03533)
+- Su, H., Shi, W., Kasai, J., et al. (2022). *One Embedder, Any Task: Instruction-Finetuned Text Embeddings* (INSTRUCTOR). Findings of ACL 2023. [arXiv:2212.09741](https://arxiv.org/abs/2212.09741)
+- Muennighoff, N. (2022). *SGPT: GPT Sentence Embeddings for Semantic Search.* Preprint. [arXiv:2202.08904](https://arxiv.org/abs/2202.08904)
+- Karpukhin, V., Oğuz, B., Min, S., et al. (2020). *Dense Passage Retrieval for Open-Domain Question Answering.* EMNLP 2020. [arXiv:2004.04906](https://arxiv.org/abs/2004.04906)
+- Steck, H., Ekanadham, C., & Kallus, N. (2024). *Is Cosine-Similarity of Embeddings Really About Similarity?* WWW 2024 Companion. [arXiv:2403.05440](https://arxiv.org/abs/2403.05440)
 - Librería: sentence-transformers (https://pypi.org/project/sentence-transformers/), módulos `Transformer` y `Pooling`.
 
 ## Siguiente módulo

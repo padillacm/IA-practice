@@ -44,3 +44,14 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Hewitt 2021 (blog), Liger Kernel (GitHub), `resize_token_embeddings` | ✅ | Ya verificados en el bloque A / revisión técnica |
 | Mapa de madurez / 🏭 / 🧠 | ✅ | Cada «quién la usa» con fuente (GPT-2, Gemma 1/2, RemBERT, DeBERTaV3, Liger, Cohere) |
 | Prompts Gemini (ids «[1212, 8745, …]», piezas de «serialización») | ⚠️ | Ilustrativos: el vocabulario de GPT-2 no se puede descargar desde aquí; el texto no los presenta como ids reales |
+
+## 10 · Embeddings contextuales y de oraciones
+| Referencia | Estado | Nota |
+|---|---|---|
+| 15 IDs arXiv (Devlin, Reimers ×2, Ethayarajh, Li, Su ×2, Mu, Timkey, Godey, Libovický, Wang, Muennighoff, Karpukhin, Steck) | ✅ | Autor y año coinciden |
+| Mu & Viswanath 2018 (texto, comentario y Mapa de madurez) | ✏️ | Faltaba la coautora: Mu, Bhat & Viswanath (ICLR 2018) |
+| Venues | ✏️ | NAACL 2019, EMNLP-IJCNLP 2019 ×2, EMNLP 2020 ×3 (Reimers 2020, BERT-flow, DPR), EMNLP 2021 (Timkey), EACL 2024 (Godey), Findings ACL 2023 (INSTRUCTOR), WWW 2024 Companion (Steck); whitening, Libovický, E5 y SGPT como preprint |
+| Cifras de SBERT (54.81 / 29.19 / 61.32) | ✅ | Ya contrastadas por la revisión técnica |
+| Mapa de madurez («quién la usa»: SBERT, E5 *average pooling*, DPR `[CLS]`, SGPT, INSTRUCTOR, `paraphrase-multilingual-*`) | ✅ | Todos descritos así en sus papers/model cards |
+| `sentence-transformers` (PyPI, `Transformer`/`Pooling`) | ✅ | |
+| Prompts Gemini | ✅ | Sin datos técnicos verificables más allá de fórmulas ya revisadas |
