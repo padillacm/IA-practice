@@ -91,7 +91,7 @@ Composición: 4 filas horizontales apiladas, todas muestran la MISMA frase en es
 Fila 1, etiqueta "Bytes": 15 cajitas grises, una por carácter (E, l, ␣, g, a, t, o, ␣, d, u, e, r, m, e, .). Texto derecha: "1 byte por paso · secuencia larga (15 pasos)".
 Fila 2, etiqueta "Tokens BPE (vocabulario fijo)": 4 bloques naranjas contiguos con los textos "El", "␣gato", "␣duerme", ".". Texto derecha: "~4.4 bytes por token en Llama 3 (dato del paper de BLT) · ids opacos".
 Fila 3, etiqueta "Parches fijos (MegaByte, k=4)": 4 bloques azules de igual ancho con los textos "El␣g", "ato␣", "duer", "me.". Texto derecha: "tamaño fijo · corta palabras al azar".
-Fila 4, etiqueta "Parches dinámicos (BLT)": 5 bloques verdes de ancho distinto con los textos "El", "␣g", "ato", "␣d", "uerme." y encima de cada bloque una pequeña barra vertical cuya altura sugiere la entropía del primer byte (más alta en "g" y "d"). Texto derecha: "tamaño según la incertidumbre del siguiente byte (ilustrativo)".
+Fila 4, etiqueta "Parches dinámicos (BLT)": 5 bloques verdes de ancho distinto con los textos "El", "␣g", "ato", "␣d", "uerme." y encima de cada bloque una pequeña barra vertical cuya altura sugiere la entropía del primer byte (más alta sobre el primer byte de los bloques "␣g" y "␣d"). Texto derecha: "tamaño según la incertidumbre del siguiente byte (ilustrativo)".
 Una flecha vertical a la izquierda de las filas, de arriba a abajo, con la leyenda "menos pasos del transformer grande ↓" y otra en el extremo opuesto "más control sobre los bytes ↑". Nota inferior en gris: "Segmentaciones ilustrativas; no son la salida de ningún modelo real".
 Evita: ilustraciones decorativas, texto ilegible, números inventados distintos de los dados, flechas ambiguas, sombras 3D.""",
           "Cuatro filas con la frase «El gato duerme.» segmentada en bytes, tokens BPE, parches fijos y parches dinámicos",
@@ -288,16 +288,16 @@ nb.gemini("imagen", "M06-IMG-03", "Cómputo uniforme por token vs. cómputo adap
           "Contrasta un transformer tokenizado (mismo gasto en cada token) con BLT (gasto concentrado donde sube la entropía).",
           """Diagrama técnico limpio, fondo blanco, sans-serif legible, sin ilustraciones decorativas ni texto inventado. Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Formato 16:9.
 Título: "¿Dónde se gasta el cómputo?".
-Dos paneles horizontales apilados que comparten el mismo eje x: la frase "Daenerys Targaryen is in Game of Thrones" escrita en 41 casillas pequeñas (una por carácter, espacios como ␣).
+Dos paneles horizontales apilados que comparten el mismo eje x: la frase "Daenerys Targaryen is in Game of Thrones" escrita en 40 casillas pequeñas (una por carácter, espacios como ␣).
 Panel superior, título "Transformer con tokens BPE": encima de la frase, bloques naranjas CONTIGUOS de ancho similar con los textos "Dae", "ner", "ys", "␣Tar", "gar", "yen", "␣is", "␣in", "␣Game", "␣of", "␣Thrones"; cada bloque sostiene una columna naranja de la MISMA altura. Leyenda a la derecha: "el mismo cómputo en cada token".
 Panel inferior, título "BLT con parches por entropía": una curva azul suave de entropía del siguiente byte sobre la frase, con picos al principio de cada palabra y valles dentro de ellas, y una línea roja horizontal discontinua etiquetada "umbral θ". Debajo, bloques verdes de ANCHO VARIABLE que empiezan donde la curva supera θ: columnas verdes altas y estrechas en los picos, columnas anchas y bajas donde la curva es baja. Leyenda a la derecha: "más cómputo donde hay más incertidumbre".
 Nota inferior en gris: "Ilustración conceptual; los valores de entropía no son medidas reales".
 Evita: valores numéricos de entropía inventados, adornos, texto ilegible, flechas ambiguas, sombras 3D.""",
           "Dos paneles: arriba cómputo igual por token BPE; abajo cómputo variable por parche según la curva de entropía",
-          """BPE :  [Dae][ner][ys][ Tar][gar][yen][ is][ in][ Game][ of][ Thrones]
+          """BPE :  [Dae][ner][ys][␣Tar][gar][yen][␣is][␣in][␣Game][␣of][␣Thrones]
         ####  ####  ###  ####  ####  ####  ###  ###  #####  ###  ########   <- cómputo uniforme por token
 BLT :  entropía:  /\\   /\\ ...  (picos al inicio de palabra, valles dentro)
-        parches :  [Dae ner ys][ T][argaryen][ is][ in][ G][ame of][ T][hrones]   <- ancho/cómputo según θ (ilustrativo)""")
+        parches :  [Daenerys][␣T][argaryen][␣is][␣in][␣G][ame␣of][␣T][hrones]   <- ancho/cómputo según θ (ilustrativo)""")
 nb.md(obs("""
 El ahorro de BLT no viene de «pensar menos» sino de **no repetir cómputo caro** en bytes triviales (las terminaciones de palabra) y de poder **gastar más** en los pocos bytes difíciles. En BPE ese reparto lo fija el diccionario, no el contenido.
 """))
@@ -352,14 +352,14 @@ nb.md(obs("""
 
 nb.gemini("video", "M06-VID-01", "Patching dinámico por entropía, paso a paso",
           "Animación del proceso: llegan bytes, el modelo de entropía mide la incertidumbre, se supera el umbral y se abre un parche; el transformer grande solo se activa al cerrar cada parche.",
-          """Video explicativo técnico de 25 segundos, 16:9, 1080p, ritmo calmado, sin voz en off, sin música intensa (opcional un fondo muy suave). Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas.
+          """Video explicativo técnico de 25 segundos, 16:9, 1080p, ritmo calmado, sin voz en off, sin música. Estilo: diagrama limpio sobre fondo blanco, tipografía sans-serif legible, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280. Sin ilustraciones decorativas.
 Texto de la escena: la frase "El servidor procesa las peticiones." escrita como una fila de cajitas, una por byte (espacios como ␣), en el centro-inferior de la pantalla.
 Guion por escenas:
 0–4 s: Título "Parches dinámicos por entropía" aparece y se desvanece. Aparece la fila de cajitas grises vacías y, sobre ella, un eje con la etiqueta "H(siguiente byte) en bits" y una línea roja discontinua horizontal etiquetada "umbral θ".
 4–14 s: los bytes se iluminan de izquierda a derecha, uno cada ~0.3 s. Sobre cada byte crece una barra azul con la entropía: alta (supera θ) en "E", "s" (de "servidor"), "p" (de "procesa"), "l" (de "las"), "p" (de "peticiones"); baja en el resto de letras dentro de cada palabra. Cuando una barra supera la línea roja se vuelve naranja y aparece una línea vertical verde que abre un nuevo parche; el parche anterior se rellena de verde claro y se cierra con un pequeño "clic" visual.
 14–20 s: los parches cerrados suben hacia un bloque grande etiquetado "Transformer latente global" que parpadea UNA vez por parche; debajo, contador "pasos del transformer grande: 5" frente a un contador gris "bytes: 35".
 20–25 s: texto final en pantalla: "Mismo contenido: 35 bytes → 5 parches. El umbral θ controla el coste." Se desvanece.
-Texto en pantalla solo en español, con términos técnicos en inglés (patch, threshold).
+Texto en pantalla solo en español.
 Evita: voz en off, texto ilegible, cambios bruscos de cámara, números distintos de los indicados, logos, decoraciones.""",
           "Animación en la que una fila de bytes se agrupa en parches cuando la entropía supera un umbral y el transformer grande se activa una vez por parche",
           """t=0s   [bytes vacíos] ---- línea θ ---------------------
