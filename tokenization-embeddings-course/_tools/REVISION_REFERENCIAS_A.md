@@ -80,3 +80,17 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Mistral, guía de tokenización (Tekken: BPE sobre tiktoken, ≈ 130 k + 1 k de control, > 100 idiomas) | ✏️ | La cifra «≈ 30 % mejor compresión» no está en la guía sino en el anuncio de Mistral NeMo (jul-2024), y se limita a código y 7 idiomas (2x coreano, 3x árabe): reescrito y añadida la fuente |
 | `tiktoken`, `sentencepiece`, `tokenizers`, HF LLM Course cap. 6.7 y 6.8 | ✅ | |
 | Mapa de madurez | ✅ | «Quién la usa» respaldado (BERT 30 000, T5 32 000, XLM-R 250 k, Llama 1/2, Gemma 3); WordPiece por verosimilitud 🔴 respaldado por el experimento de la lección |
+
+## 04 · Diseño de tokenizers modernos
+| Referencia | Estado | Nota |
+|---|---|---|
+| Tao et al. 2024 (NeurIPS 2024); Petrov et al. 2023; Ahia et al. 2023; Liu et al. 2025 (SuperBPE, COLM 2025) | ✅ | Cifras ya contrastadas por la revisión técnica |
+| Singh & Strouse 2024 | ✏️ | Marcado como preprint (sin venue en arXiv) |
+| Dagan et al. 2024 | ✏️ | Añadido venue (ICML 2024) |
+| Rust et al. 2021; Goldman et al. 2024; Schmidt et al. 2024; Conneau et al. 2019 | ✏️ | Venues (ACL 2021, Findings EMNLP 2024, EMNLP 2024, ACL 2020) |
+| Land & Bartolo 2024, tabla 1 (Llama 2 32 000, Llama 3 128 256, Gemma 256 000, Command R/R+ 255 029 con tying) | ✏️ | Cifras confirmadas en el PDF; título completo; «Command R ≈ 255 k» → 255 029 (R y R+) |
+| «Gemma (1/2) 256 000» | ✏️ | Land & Bartolo solo cubre Gemma 1; para Gemma 2 se añade su informe (arXiv:2408.00118, «256k entries»), nueva referencia |
+| Llama 3, Gemma 3, Qwen2 technical reports; LLaMA | ✅ | |
+| Mistral Tekken (🏭 y Mapa de madurez) | ✏️ | Igual que en 03: la cifra ≈ 30 % viene del anuncio de Mistral NeMo y se limita a código y 7 idiomas; fuente añadida |
+| FLORES+ (`openlanguagedata/flores_plus`), `Helsinki-NLP/opus-100`, `tiktoken` | ✅ | |
+| Mapa de madurez | ✅ | Cada «quién la usa» con fuente; SuperBPE 🟡/🔴 y leyes de escala con V 🟡 bien acotados |

@@ -222,7 +222,7 @@ Cifras **a oct-2026** y solo las que he podido contrastar con una fuente primari
 | Llama 2 | BPE vía SentencePiece | 32 000 | Land & Bartolo 2024 (tabla 1) |
 | Llama 3 | tiktoken (100 K) + 28 K no ingleses | 128 256 | Llama 3 report; Land & Bartolo 2024 |
 | Qwen2 | byte-level BPE | 151 643 regulares + 3 de control | Qwen2 technical report |
-| Gemma (1/2) | SentencePiece | 256 000 | Land & Bartolo 2024 (tabla 1) |
+| Gemma (1/2) | SentencePiece | 256 000 | Land & Bartolo 2024 (tabla 1, Gemma 1); Gemma 2 report (arXiv:2408.00118: «256k entries») |
 | Gemma 3 | SentencePiece (dígitos separados, bytes) | ≈ 262 k (texto) / 256 k (pie de tabla): el informe es inconsistente | Gemma 3 report |
 | Mistral NeMo y posteriores (**Tekken**) | BPE basado en tiktoken | ≈ 130 k + ≈ 1 k tokens de control | Docs de Mistral (tokenization guide) |
 | Command R (Cohere) | BPE | 255 029 | Land & Bartolo 2024 (tabla 1) |
@@ -737,7 +737,7 @@ Estado del arte a **oct-2026**; las cifras de vocabulario cambian con cada versi
 | Dígitos tratados aparte (sueltos o en grupos) | 🟢 | Llama 1/2 y Gemma 3: dígitos separados; GPT-3.5/4: grupos de hasta 3 dígitos | Touvron 2023; Gemma 3; Singh & Strouse 2024 |
 | Tokenizador específico con código/indentación (espacios agrupados) | 🟢 | cl100k/o200k agrupan espacios; GPT-2 no (medido en la sección 8) | Dagan et al. 2024; medición propia |
 | Vocabulario óptimo según presupuesto de cómputo (leyes de escala con V) | 🟡 | Resultados de NeurIPS 2024 a ≤ 3 B parámetros; extrapolación a modelos grandes no contrastada | Tao et al. 2024 |
-| Equidad multilingüe del tokenizer (paridad) | 🟡 | Medida y reportada (p. ej. Tekken de Mistral frente al SentencePiece anterior); sin estándar común | Petrov et al. 2023; Ahia et al. 2023; docs de Mistral |
+| Equidad multilingüe del tokenizer (paridad) | 🟡 | Medida y reportada (p. ej. Tekken de Mistral frente al SentencePiece anterior); sin estándar común | Petrov et al. 2023; Ahia et al. 2023; anuncio de Mistral NeMo (2024) |
 | Tokens que cruzan palabras (SuperBPE) | 🟡 / 🔴 | Resultados a 8 B, solo inglés; adopción en producción no verificada | Liu et al. 2025 (COLM) |
 | Chat templates con tokens de control | 🟢 | Estándar de facto (ChatML, plantillas por modelo en `tokenizer_config`) | Docs de HF `transformers` |
 """)
@@ -749,9 +749,9 @@ Cifras de vocabulario **a oct-2026** (ver tabla de la sección 5); verifica siem
 
 - **OpenAI.** `o200k_base` (GPT-4o) amplió el vocabulario de ≈ 100 k a ≈ 200 k; en nuestra medición reduce la prima de hindi de ≈ 4.9× a ≈ 1.6× y la de ruso de ≈ 2.1× a ≈ 1.25× frente a `cl100k` (mini-conjunto paralelo; repítelo con FLORES+).
 - **Meta.** Llama 3 pasó de 32 000 (Llama 2) a 128 256 tokens y reporta una compresión sobre inglés de 3.17 → 3.94 caracteres/token.
-- **Mistral.** Tekken (≈ 130 k + ≈ 1 k de control, basado en tiktoken, > 100 idiomas) sustituye al SentencePiece anterior y Mistral reporta ≈ 30 % mejor compresión en código y varios idiomas (según su guía de tokenización).
+- **Mistral.** Tekken (≈ 130 k + ≈ 1 k de control, basado en tiktoken, > 100 idiomas) sustituye al SentencePiece anterior (guía de tokenización de Mistral); el anuncio de Mistral NeMo (jul-2024) reporta ≈ 30 % más compresión en código fuente, chino, italiano, francés, alemán, español y ruso, 2x en coreano y 3x en árabe.
 - **Google.** Gemma usa vocabularios de ≈ 256 k con dígitos separados y bytes; la proporción de parámetros en embeddings es muy alta en los modelos pequeños (gráfico de la sección 4).
-- **Cohere.** Command R usa ≈ 255 k tokens con embeddings atados (Land & Bartolo 2024); Cohere publicó además el análisis de tokens sub-entrenados que verás en el módulo 05.
+- **Cohere.** Command R/R+ usan 255 029 tokens con embeddings atados (tabla 1 de Land & Bartolo 2024); Cohere publicó además el análisis de tokens sub-entrenados que verás en el módulo 05.
 - **Coste real.** Facturación por token + paridad = **prima de precio por idioma** (Ahia et al., 2023). Antes de comprometer un contrato de API para un producto multilingüe, **mide tus textos con el tokenizer del proveedor** y proyecta el coste por idioma.
 - **Evaluación independiente.** Compara tokenizers con un corpus que **no** se usó para entrenarlos (FLORES+, por ejemplo) y siempre sobre *contenido paralelo*.
 """)
@@ -824,23 +824,23 @@ Porque la pérdida por token depende de cuánto texto cubre cada token; normaliz
 nb.md(r"""
 ## 18. Referencias
 
-**Papers (verificados)**
+**Papers (verificados: autores, título, venue y enlace; revisados el 26-oct-2026)**
 - Tao, C. et al. (2024). *Scaling Laws with Vocabulary: Larger Models Deserve Larger Vocabularies.* NeurIPS 2024. <https://arxiv.org/abs/2407.13623>
 - Petrov, A., La Malfa, E., Torr, P. y Bibi, A. (2023). *Language Model Tokenizers Introduce Unfairness Between Languages.* NeurIPS 2023. <https://arxiv.org/abs/2305.15425>
 - Ahia, O. et al. (2023). *Do All Languages Cost the Same? Tokenization in the Era of Commercial Language Models.* EMNLP 2023. <https://arxiv.org/abs/2305.13707>
 - Liu, A., Hayase, J., Hofmann, V., Oh, S., Smith, N. A. y Choi, Y. (2025). *SuperBPE: Space Travel for Language Models.* COLM 2025. <https://arxiv.org/abs/2503.13423>
-- Singh, A. K. y Strouse, D. J. (2024). *Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs.* <https://arxiv.org/abs/2402.14903>
-- Dagan, G., Synnaeve, G. y Rozière, B. (2024). *Getting the most out of your tokenizer for pre-training and domain adaptation.* <https://arxiv.org/abs/2402.01035>
-- Rust, P. et al. (2021). *How Good is Your Tokenizer? On the Monolingual Performance of Multilingual Language Models.* <https://arxiv.org/abs/2012.15613>
-- Goldman, O. et al. (2024). *Unpacking Tokenization: Evaluating Text Compression and its Correlation with Model Performance.* <https://arxiv.org/abs/2403.06265>
-- Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* <https://arxiv.org/abs/2402.18376>
-- Land, S. y Bartolo, M. (2024). *Fishing for Magikarp.* <https://arxiv.org/abs/2405.05417> (tabla de vocabularios)
-- Llama Team (2024). *The Llama 3 Herd of Models.* <https://arxiv.org/abs/2407.21783> · Gemma Team (2025). *Gemma 3 Technical Report.* <https://arxiv.org/abs/2503.19786> · Yang et al. (2024). *Qwen2 Technical Report.* <https://arxiv.org/abs/2407.10671>
-- Conneau, A. et al. (2019). *Unsupervised Cross-lingual Representation Learning at Scale.* <https://arxiv.org/abs/1911.02116>
-- Touvron, H. et al. (2023). *LLaMA.* <https://arxiv.org/abs/2302.13971>
+- Singh, A. K. y Strouse, D. J. (2024). *Tokenization counts: the impact of tokenization on arithmetic in frontier LLMs.* Preprint. <https://arxiv.org/abs/2402.14903>
+- Dagan, G., Synnaeve, G. y Rozière, B. (2024). *Getting the most out of your tokenizer for pre-training and domain adaptation.* ICML 2024. <https://arxiv.org/abs/2402.01035>
+- Rust, P. et al. (2021). *How Good is Your Tokenizer? On the Monolingual Performance of Multilingual Language Models.* ACL 2021. <https://arxiv.org/abs/2012.15613>
+- Goldman, O. et al. (2024). *Unpacking Tokenization: Evaluating Text Compression and its Correlation with Model Performance.* Findings of EMNLP 2024. <https://arxiv.org/abs/2403.06265>
+- Schmidt, C. W. et al. (2024). *Tokenization Is More Than Compression.* EMNLP 2024. <https://arxiv.org/abs/2402.18376>
+- Land, S. y Bartolo, M. (2024). *Fishing for Magikarp: Automatically Detecting Under-trained Tokens in Large Language Models.* EMNLP 2024. <https://arxiv.org/abs/2405.05417> (tabla de vocabularios)
+- Llama Team (2024). *The Llama 3 Herd of Models.* <https://arxiv.org/abs/2407.21783> · Gemma Team (2024). *Gemma 2: Improving Open Language Models at a Practical Size.* <https://arxiv.org/abs/2408.00118> · Gemma Team (2025). *Gemma 3 Technical Report.* <https://arxiv.org/abs/2503.19786> · Yang et al. (2024). *Qwen2 Technical Report.* <https://arxiv.org/abs/2407.10671>
+- Conneau, A. et al. (2019). *Unsupervised Cross-lingual Representation Learning at Scale.* ACL 2020. <https://arxiv.org/abs/1911.02116>
+- Touvron, H. et al. (2023). *LLaMA: Open and Efficient Foundation Language Models.* <https://arxiv.org/abs/2302.13971>
 
 **Datos, librerías y docs**
-- FLORES+ (`openlanguagedata/flores_plus`) y `Helsinki-NLP/opus-100` en Hugging Face Datasets; `tiktoken` <https://github.com/openai/tiktoken>; Mistral, guía de tokenización <https://docs.mistral.ai/guides/tokenization/>.
+- FLORES+ (`openlanguagedata/flores_plus`) y `Helsinki-NLP/opus-100` en Hugging Face Datasets; `tiktoken` <https://github.com/openai/tiktoken>; Mistral, guía de tokenización <https://docs.mistral.ai/guides/tokenization/> y anuncio de Mistral NeMo <https://mistral.ai/news/mistral-nemo/>.
 
 **Siguiente:** módulo 05 (qué falla cuando el vocabulario y los datos del modelo no coinciden: glitch tokens, números, letras, Unicode).
 """)
