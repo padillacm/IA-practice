@@ -2,7 +2,7 @@
 Agente: Revisor élite / industria · Módulos: 09–20 · Informe: tokenization-embeddings-course/_tools/REVISION_ELITE_B.md
 - [x] 20_capstone
 - [x] 19_playbook_elite
-- [ ] 18_produccion
+- [x] 18_produccion
 - [ ] 17_interpretabilidad_geometria
 - [x] 16_embeddings_multimodales
 - [x] 15_evaluacion_retrieval

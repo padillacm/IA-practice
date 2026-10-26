@@ -69,3 +69,15 @@ región**.
   queries ≈ 1 % del índice en la construcción). Consecuencias: ajustar con queries reales con su prefijo, reajustar
   al cambiar prefijo/instrucción, más `efSearch` en búsqueda cruzada.
 - 🧠 #1 ampliado con el porqué; referencia añadida. Lección 56 → 59 celdas; ejecución completa 203 s.
+
+## 18 · Producción
+Diagnóstico: el módulo cubre con medición casi toda la lista del encargo (coste API/GPU, batching y padding, p99 y
+*tail at scale*, caché versionada, migración con adaptadores y alias, cuantización en RAM/disco, filtros y
+multi-tenant en Qdrant, privacidad e inversión, drift sin etiquetas, interleaving vs A/B), con 🧠 concretos. Con 76
+celdas no se añadió sección nueva. Hueco puntual: la **reproducibilidad numérica** de los vectores servidos.
+- 🧠 #1 ampliado: no hay reproducibilidad bit a bit fuera del contrato de versión (no asociatividad + kernels que
+  cambian según el tamaño de lote, que depende de la carga; He / Thinking Machines Lab, 10-sep-2025, verificado por
+  búsqueda: el blog no resolvía desde el proxy, se citan solo su tesis central y la fecha). Consecuencias: tolerancia
+  en CI, nunca hash del vector como identidad, clave = texto normalizado + versión. Medido en esta revisión con el
+  `MiniEncoder` del §2 (CPU, 1 hilo): el mismo texto solo o en un lote de 32 con padding sale idéntico bit a bit en
+  float32 y bf16 (se dice explícitamente que el efecto aparece con kernels sensibles al lote). Referencia añadida.

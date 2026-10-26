@@ -801,7 +801,7 @@ Ya has medido cada pieza (costes, colas, caché, migración, cuantización, filt
 * **Evaluación online:** interleaving (Chapelle et al. 2012; Radlinski et al. 2008) y A/B con la metodología de Kohavi et al. (2020).
 ''')
     nb.md(r'''## 🧠 Secretos de la élite
-1. **La versión del vector es un contrato, no un número**: incluye modelo + revisión del checkpoint + servidor (TEI 1.9 cambió valores por defecto: GeLU con aproximación tanh y `--auto-truncate` activado, según sus notas de versión) + preprocesado (normalización Unicode, truncado, prefijo). Guárdala en el payload de cada punto y en la clave de caché; un cambio en cualquiera es una migración.
+1. **La versión del vector es un contrato, no un número**: incluye modelo + revisión del checkpoint + servidor (TEI 1.9 cambió valores por defecto: GeLU con aproximación tanh y `--auto-truncate` activado, según sus notas de versión) + preprocesado (normalización Unicode, truncado, prefijo). Guárdala en el payload de cada punto y en la clave de caché; un cambio en cualquiera es una migración. Y no esperes reproducibilidad **bit a bit** fuera de ese contrato: la aritmética en coma flotante no es asociativa y muchos kernels de GPU cambian el orden de reducción según el tamaño de lote, que en un servidor depende de la carga; He (Thinking Machines Lab, 2025) lo identifica como la causa principal de la no-determinación de los endpoints de inferencia de LLMs, y el mismo mecanismo afecta a un encoder servido con micro-batching. Consecuencias: compara vectores con tolerancia (coseno ≥ 0.9999 en tests de CI, no `==`), no uses el hash del vector como identidad ni para deduplicar, y usa el texto normalizado + versión como clave (§4). (Con el `MiniEncoder` de §2 en CPU y un hilo, el mismo texto solo o dentro de un lote de 32 con padding sale idéntico bit a bit, en float32 y en bf16: el problema aparece con kernels que eligen estrategia según el lote.)
 2. **Mide $\theta$ (tokens/s) con tus longitudes reales**: los benchmarks de throughput con textos de longitud fija sobreestiman el rendimiento con documentación real (longitudes de cola larga → padding).
 3. **El p99 se diseña, no se optimiza al final**: evita el *fan-out* si el índice cabe en una réplica, usa hedged requests si no, y fija `max_wait` del micro-batching con tráfico realista (§3).
 4. **Re-embeber suele ser barato; lo caro es la incertidumbre**: presupuesta el doble índice, la evaluación pareada y el interleaving, no solo los tokens.
@@ -847,6 +847,7 @@ Interleaving para decidir rápido qué candidato prefieren los usuarios (mucha m
 ''')
     nb.md(r'''## 📚 Referencias
 **Papers y artículos**
+* He, H. & Thinking Machines Lab (2025). *Defeating Nondeterminism in LLM Inference* (blog, 10-sep-2025). https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/
 * Dean, J. & Barroso, L. A. (2013). *The Tail at Scale*. Communications of the ACM 56(2). https://doi.org/10.1145/2408776.2408794
 * Shen, Y., Xiong, Y., Xia, W., Soatto, S. (2020). *Towards Backward-Compatible Representation Learning*. CVPR 2020. https://arxiv.org/abs/2003.11942
 * Song, C. & Raghunathan, A. (2020). *Information Leakage in Embedding Models*. ACM CCS 2020. https://arxiv.org/abs/2004.00053
