@@ -35,7 +35,7 @@ QRELS = CORPUS["qrels"]
 print(CORPUS["source"], len(DOC_IDS), "docs ·", len(QRYS), "queries")
 
 def run_denso(Eq, Ed, k=10):
-    """Búsqueda exacta por producto punto (embeddings normalizados -> coseno)."""
+    """Búsqueda exacta por producto escalar (embeddings normalizados -> coseno)."""
     S = Eq @ Ed.T
     return {q["qid"]: rank_from_scores(S[i], DOC_IDS, k) for i, q in enumerate(QRYS)}
 
@@ -64,10 +64,14 @@ def lesson() -> None:
 
 # Módulo 12 · Embedders modernos: instrucciones, Matryoshka y cuantización
 
-**Nivel:** 🟠 Avanzado · **Duración:** ≈ 5 h en total (lección ≈ 3 h + proyecto ≈ 2 h) · **GPU recomendada:** T4 (todo corre en CPU con `FAST_DEV_RUN = True`) ·
-**Cómputo estimado:** 0 unidades en CPU; ≈ 1–3 unidades de Colab en T4 con `FAST_DEV_RUN = False` (estimación orientativa: depende de cuántos modelos actives).
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
-**Prerrequisitos:** módulo 09 (matriz de embeddings y geometría), módulo 10 (pooling, anisotropía, similitudes) y módulo 11 (InfoNCE, hard negatives, MRL como "ingrediente" contrastivo).
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+| **GPU recomendada** | T4 (todo corre en CPU con `FAST_DEV_RUN = True`); 0 unidades en CPU, ≈ 1–3 unidades de Colab en T4 con `FAST_DEV_RUN = False` (estimación orientativa: depende de cuántos modelos actives) |
+| **Prerrequisitos** | Módulo 09 (matriz de embeddings y geometría), módulo 10 (pooling, anisotropía, similitudes) y módulo 11 (InfoNCE, hard negatives, MRL como "ingrediente" contrastivo) |
 
 **Hilo conductor — Políglota.** Eres ML engineer en *Políglota Labs*. Ya tienes un baseline BM25 (00) y entrenaste tu propio embedder (11). Ahora el CTO pregunta:
 *«¿Qué embedder comprobado ponemos en producción, a qué dimensión y con qué cuantización, para que 10 M de documentos quepan en un nodo?»*
@@ -93,7 +97,7 @@ Antes de empezar, intenta contestar de memoria (la respuesta está plegada):
 
 <details><summary><b>1 · (M11)</b> ¿Qué hace InfoNCE con los negativos <i>in-batch</i> y qué controla la temperatura $\tau$?</summary>
 
-Trata a los otros $B-1$ documentos del lote como negativos de cada query y maximiza la probabilidad softmax del positivo: $\mathcal{L}=-\log\frac{e^{s(q,d^+)/\tau}}{\sum_j e^{s(q,d_j)/\tau}}$. Una $\tau$ pequeña (≈ 0.02–0.05) afila la distribución y da más peso a los negativos difíciles. Hoy ese mismo bloque de código se *reusa* para Matryoshka: se calcula varias veces sobre prefijos del vector.
+Trata a los otros $B-1$ documentos del lote como negativos de cada query y maximiza la probabilidad softmax del positivo: $\mathcal{L}=-\log\frac{e^{s(q,d^+)/\tau}}{\sum_j e^{s(q,d_j)/\tau}}$. Una $\tau$ pequeña (≈ 0.02–0.05) afila la distribución y da más peso a los negativos duros. Hoy ese mismo bloque de código se *reusa* para Matryoshka: se calcula varias veces sobre prefijos del vector.
 </details>
 
 <details><summary><b>2 · (M10)</b> ¿Por qué el <i>mean pooling</i> suele ganar al CLS en modelos sin fine-tuning contrastivo, y qué es la anisotropía?</summary>
@@ -118,7 +122,7 @@ float32: $768 \times 32 = 24\,576$ bits; binario: **768 bits** (32× menos); un 
 
 
     # ───────────────────────────── 2. Setup ─────────────────────────────
-    nb.md(r'''## 0 · Preparación del entorno
+    nb.md(r'''## 0. Preparación del entorno
 Las celdas de utilidades (corpus, métricas, embedder) están en esta lección porque **cada notebook del curso es autocontenido**.
 Si no hay acceso a Hugging Face (proxy, sin red), todo sigue funcionando con un **fallback** que te avisa con un `⚠️`: los números cambian, los conceptos no.
 ''')
@@ -138,7 +142,7 @@ Si no hay acceso a Hugging Face (proxy, sin red), todo sigue funcionando con un 
     nb.code(CODE_LOAD_CORPUS_EMB)
 
     # ───────────────────────────── 3. Intuición ─────────────────────────────
-    nb.md(r'''## 1 · Intuición: tres olas de embedders
+    nb.md(r'''## 1. Intuición: tres olas de embedders
 
 **Ola 1 (2019–2022) — encoders contrastivos pequeños.** Sentence-BERT, luego E5/BGE/GTE: un encoder bidireccional (BERT/XLM-R) con *mean pooling*, entrenado primero con una enorme cantidad de pares débilmente supervisados y luego con datos etiquetados y *hard negatives*. 100–500 M de parámetros, 384–1024 dimensiones, 512 tokens.
 
@@ -177,7 +181,7 @@ Si no hay acceso a Hugging Face (proxy, sin red), todo sigue funcionando con un 
 ''')
 
     # ───────────────────────────── 4. Pooling ─────────────────────────────
-    nb.md(r'''## 2 · Pooling en encoders y en decoders (desde cero)
+    nb.md(r'''## 2. Pooling en encoders y en decoders (desde cero)
 
 Un transformer produce una matriz de estados ocultos $H\in\mathbb{R}^{T\times d}$ por texto. El embedder necesita **un** vector $e\in\mathbb{R}^d$:
 
@@ -266,7 +270,7 @@ Todo esto se resume en: *el backbone importa menos que los datos y que la forma 
 ''')
 
     # ───────────────────────────── 5. Instrucciones y prefijos ─────────────────────────────
-    nb.md(r'''## 3 · Embeddings con instrucciones y prefijos
+    nb.md(r'''## 3. Embeddings con instrucciones y prefijos
 
 Un embedder moderno es **asimétrico**: la *query* ("¿cómo recorto un vector?") y el *documento* (un párrafo que lo explica) son textos de naturaleza distinta. La solución estándar es **anteponer un prefijo** distinto a cada lado:
 
@@ -312,7 +316,7 @@ plt.tight_layout(); plt.show()
 ''')
 
     # ───────────────────────────── 6. Matryoshka ─────────────────────────────
-    nb.md(r'''## 4 · Matryoshka (MRL): vectores que se pueden recortar
+    nb.md(r'''## 4. Matryoshka (MRL): vectores que se pueden recortar
 
 **Problema.** Un embedder de 1024 dimensiones cuesta 4 KB por documento en `float32`. Si solo necesitas 256 dimensiones, ¿puedes quedarte con las *primeras* 256? Con un modelo normal, **no**: la información está repartida por igual en todas las coordenadas (cualquier rotación ortogonal del espacio es equivalente para el coseno).
 
@@ -324,7 +328,7 @@ $$\mathcal{L}_{MRL}=\sum_{m\in\mathcal{M}} c_m\;\mathcal{L}_{InfoNCE}\!\left(\fr
 - La **renormalización** de cada prefijo dentro de la pérdida es esencial: es la misma operación que harás al truncar en inferencia.
 - Coste de entrenamiento: $K$ evaluaciones de una matriz $B\times B$ de similitudes (despreciable frente al backbone).
 
-**En inferencia:** `e_m = e[:, :m] / ||e[:, :m]||`. Sin la renormalización, el producto punto mezcla normas distintas y el ranking cambia.
+**En inferencia:** `e_m = e[:, :m] / ||e[:, :m]||`. Sin la renormalización, el producto escalar mezcla normas distintas y el ranking cambia.
 
 **Cuándo NO usarlo:** si tu modelo *no* fue entrenado con MRL, truncar degrada rápido; en ese caso usa PCA (aprende una base ordenada por varianza) o un modelo con MRL. Lo comprobamos a continuación.
 ''')
@@ -421,12 +425,12 @@ plt.tight_layout(); plt.show()
         "video", "M12-VID-01", "Truncar y renormalizar paso a paso",
         "Animación de un embedding que se recorta a un prefijo, se renormaliza y se usa para ordenar 5 documentos; contrasta un modelo con Matryoshka y otro sin él.",
         """
-        Video explicativo de 16:9, fondo blanco, estilo diagrama técnico limpio, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280, tipografía sans-serif, ritmo calmado, SIN voz en off ni música; solo texto en pantalla en español (términos técnicos en inglés).
+        Video explicativo de 16:9, fondo blanco, estilo diagrama técnico limpio, paleta azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280, tipografía sans-serif, ritmo calmado, sin voz en off, sin música; solo texto en pantalla en español (términos técnicos en inglés).
 
         Escena 1 (0–5 s): aparece una barra horizontal gris dividida en 16 bloques con la etiqueta "embedding completo (d = 16, ejemplo)". Título arriba: "Truncar un embedding".
         Escena 2 (5–10 s): los 8 primeros bloques se vuelven azules y los otros 8 se desvanecen; etiqueta "m = 8: nos quedamos con el prefijo". Un contador de memoria cambia de "64 bytes" a "32 bytes".
         Escena 3 (10–16 s): una flecha naranja vector 2D (dibujada como flecha desde el origen) crece o se encoge hasta tocar un círculo unitario punteado; etiqueta "renormalizar: e / ||e||". La flecha termina con longitud 1.
-        Escena 4 (16–24 s): se muestran 5 documentos D1…D5 como puntos en el círculo y una query Q como flecha verde; una lista a la derecha ordena los documentos por similitud coseno. Con "modelo Matryoshka" el orden es D3 > D1 > D4 > D2 > D5 (igual que con el vector completo); con "modelo estándar truncado" el orden cambia a D2 > D5 > D3 > D1 > D4 y se marca en naranja "ranking roto".
+        Escena 4 (16–24 s): se muestran 5 documentos D1…D5 como puntos en el círculo y una query Q como flecha verde; una lista a la derecha ordena los documentos por similitud coseno. Con "modelo Matryoshka" el orden es D3 > D1 > D4 > D2 > D5 (igual que con el vector completo); con "modelo estándar truncado" el orden cambia a D2 > D5 > D3 > D1 > D4 y se marca en naranja "ranking roto". Pie pequeño: "rankings ilustrativos".
         Escena 5 (24–28 s): fundido con el texto "Matryoshka: el prefijo ya es un buen embedding. Sin MRL, el truncado destruye el ranking."
 
         Evita: voz, música, texto ilegible, números distintos a los dados, elementos decorativos, cambios bruscos de cámara.
@@ -440,7 +444,7 @@ plt.tight_layout(); plt.show()
         """,
         duration="25-30 s",
     )
-    nb.md(r'''> 👀 **Qué debes observar.** La renormalización devuelve el vector a la esfera unidad (el coseno vuelve a ser un producto punto) y, con un modelo Matryoshka, el **orden** de los documentos no cambia. Con un modelo no entrenado así, el ranking se rompe.
+    nb.md(r'''> 👀 **Qué debes observar.** La renormalización devuelve el vector a la esfera unidad (el coseno vuelve a ser un producto escalar) y, con un modelo Matryoshka, el **orden** de los documentos no cambia. Con un modelo no entrenado así, el ranking se rompe.
 ''')
     nb.md(r'''### Truncado en un embedder real (o fallback)
 Medimos nDCG@10 al truncar `E_d`/`E_q` a distintas dimensiones con tres estrategias: **prefijo + renormalizar** (lo correcto para MRL), **prefijo sin renormalizar** (el error típico) y **PCA** (la alternativa cuando el modelo *no* es Matryoshka).
@@ -477,11 +481,11 @@ ax.set_title(f"Truncado de {emb.clave} en Políglota ({CORPUS['source']})"); ax.
 plt.tight_layout(); plt.show()
 print({m: round(float(v), 3) for m, v in zip(dims, curvas["prefijo + renormalizar"])})
 ''')
-    nb.md(r'''> 👀 **Qué debes observar.** (1) Si el modelo es **Matryoshka** (Nomic v2, Qwen3-Embedding, EmbeddingGemma…), "prefijo + renormalizar" cae despacio. (2) Si **no** lo es (p. ej. `multilingual-e5-small`, el modelo por defecto de esta celda, o el fallback), la curva del prefijo cae antes y **PCA** la supera: ordena las direcciones por varianza en tu corpus. (3) La curva naranja (sin renormalizar) es la del error típico: puede quedar por debajo de la azul porque el producto punto mezcla normas. Prueba a cambiar `emb` por un modelo con MRL y repite.
+    nb.md(r'''> 👀 **Qué debes observar.** (1) Si el modelo es **Matryoshka** (Nomic v2, Qwen3-Embedding, EmbeddingGemma…), "prefijo + renormalizar" cae despacio. (2) Si **no** lo es (p. ej. `multilingual-e5-small`, el modelo por defecto de esta celda, o el fallback), la curva del prefijo cae antes y **PCA** la supera: ordena las direcciones por varianza en tu corpus. (3) La curva naranja (sin renormalizar) es la del error típico: puede quedar por debajo de la azul porque el producto escalar mezcla normas. Prueba a cambiar `emb` por un modelo con MRL y repite.
 ''')
 
     # ───────────────────────────── 7. Cuantización ─────────────────────────────
-    nb.md(r'''## 5 · Cuantización de embeddings: `int8` y binaria (desde cero)
+    nb.md(r'''## 5. Cuantización de embeddings: `int8` y binaria (desde cero)
 
 Después de reducir las *dimensiones*, se reducen los *bits por dimensión*. Para $N$ documentos de $d$ dimensiones:
 
@@ -495,7 +499,7 @@ Después de reducir las *dimensiones*, se reducen los *bits por dimensión*. Par
 **Escalar `int8`.** Para cada dimensión $j$ se calibra un rango $[lo_j, hi_j]$ sobre una muestra del **corpus** y se mapea linealmente a 256 niveles:
 $$q_{ij}=\operatorname{round}\!\Big(\tfrac{x_{ij}-lo_j}{(hi_j-lo_j)/255}\Big)-128\quad\in[-128,127].$$
 
-**Binaria.** $b_{ij}=\mathbb{1}[x_{ij}>0]$, empaquetado 8 bits por byte. La similitud se aproxima con la **distancia de Hamming** (XOR + popcount). Para vectores $\pm1$, $\langle a,b\rangle=d-2\,H(a,b)$: es decir, ordenar por Hamming ordena por producto punto de los signos.
+**Binaria.** $b_{ij}=\mathbb{1}[x_{ij}>0]$, empaquetado 8 bits por byte. La similitud se aproxima con la **distancia de Hamming** (XOR + popcount). Para vectores $\pm1$, $\langle a,b\rangle=d-2\,H(a,b)$: es decir, ordenar por Hamming ordena por producto escalar de los signos.
 
 ✍️ **Ejemplo a mano.** *int8:* en una dimensión con $[lo, hi] = [-0.5, 0.5]$, el paso es $1/255 \approx 0.00392$; $x = 0.12$ → $\operatorname{round}(0.62/0.00392) - 128 = 158 - 128 = $ **30**, y al decodificar $30 + 128 = 158 \to 158 \cdot 0.00392 - 0.5 = 0.1196$ (error $4\times10^{-4}$, menor que medio paso). *Binaria:* $a = (0.12, -0.50, 0.33, 0.01) \to$ `1011`, $b = (0.20, 0.10, -0.30, 0.05) \to$ `1101`; difieren en $H = 2$ bits, y en $\pm1$: $\langle a, b\rangle = 4 - 2\cdot2 = 0$ (compruébalo: $1 - 1 - 1 + 1$). Fíjate en que $a_4 = 0.01$ cuenta igual que $a_3 = 0.33$: la binaria tira la magnitud, y por eso hace falta el rescoring.
 
@@ -631,7 +635,7 @@ print({f: round(v, 3) for f, v in zip(factores, ov)})
 
         PARTE SUPERIOR (3 filas, de arriba abajo): un mismo vector de 8 coordenadas de ejemplo [0.12, -0.50, 0.33, 0.01, -0.27, 0.64, -0.08, 0.41].
         Fila 1 (gris): "float32 · 4 bytes por dimensión" mostrando los 8 números en cajas anchas. A la derecha: "d = 1024 → 4096 bytes".
-        Fila 2 (azul): "int8 · 1 byte por dimensión" mostrando 8 enteros entre -128 y 127: [-22, -128, 38, -64, -91, 127, -75, 67]. A la derecha: "d = 1024 → 1024 bytes".
+        Fila 2 (azul): "int8 · 1 byte por dimensión" mostrando los 8 enteros que da la cuantización con rango de calibración [lo, hi] = [-0.5, 0.5] en cada dimensión (q = round((x − lo)·255/(hi − lo)) − 128, recortado a [-128, 127]): [30, -128, 84, 2, -69, 127, -21, 104]; el 127 de la sexta casilla lleva la nota "recortado (0.64 > hi)". A la derecha: "d = 1024 → 1024 bytes".
         Fila 3 (naranja): "binario · 1 bit por dimensión" mostrando 8 cajitas con los bits 1 0 1 1 0 1 0 1 (1 si la coordenada es positiva). A la derecha: "d = 1024 → 128 bytes".
 
         PARTE INFERIOR: un flujo de izquierda a derecha con 3 cajas y flechas: "Query float32" → "Hamming (XOR + popcount) sobre bits: top 40 candidatos" (naranja) → "Rescoring: query float32 × vectores int8: top 10" (verde). Debajo una nota gris: "RAM: bits · Disco/SSD: int8".
@@ -641,7 +645,7 @@ print({f: round(v, 3) for f, v in zip(factores, ov)})
         "Un vector en float32, int8 y bits con su coste en bytes, y el flujo de búsqueda binaria con rescoring",
         """
         float32 : [ 0.12 -0.50  0.33  0.01 -0.27  0.64 -0.08  0.41]   4096 B (d=1024)
-        int8    : [ -22 -128   38  -64   -91  127   -75   67]          1024 B
+        int8    : [  30 -128   84    2   -69  127   -21  104]          1024 B   ([lo,hi]=[-0.5,0.5])
         bits    : [   1    0    1    1     0    1     0    1]           128 B
         flujo   : query f32 -> Hamming top-40 -> rescoring int8 -> top-10
         """,
@@ -649,7 +653,7 @@ print({f: round(v, 3) for f, v in zip(factores, ov)})
     nb.md(r'''> 👀 **Qué debes observar.** Cada fila reduce el tamaño: 4× (float32→int8) y luego 8× (int8→bit), en total 32×. El flujo inferior es la receta que usan los sistemas de búsqueda: la compresión fuerte filtra y la precisión alta decide.
 ''')
     # ───────────────────────────── 8. Librerías de industria ─────────────────────────────
-    nb.md(r'''## 6 · Con librerías de industria: comparar embedders reales
+    nb.md(r'''## 6. Con librerías de industria: comparar embedders reales
 
 `sentence-transformers` unifica la carga y el `encode` de casi todas las familias (con `trust_remote_code=True` en las que traen código propio, como GTE y Nomic). Comparamos los candidatos del catálogo en **tres ejes**: calidad (nDCG@10 en Políglota), **memoria** (bytes del corpus por dimensión) y **latencia** (ms por documento/consulta en tu hardware).
 
@@ -730,7 +734,7 @@ if len(claves) >= 2:
 ''')
 
     # ───────────────────────────── 10. MTEB ─────────────────────────────
-    nb.md(r'''## 7 · MTEB y MMTEB: qué miden y qué no
+    nb.md(r'''## 7. MTEB y MMTEB: qué miden y qué no
 
 **MTEB** (Muennighoff et al., 2022) agrupa tareas de 8 tipos (clasificación, clustering, clasificación de pares, reranking, retrieval, STS, resumen, bitext mining). **MMTEB** (Enevoldsen et al., 2025) lo extiende de forma colaborativa a cientos de tareas y a más de 250 idiomas. La librería `mteb` (v2 en 2026) expone `mteb.get_benchmark(...)`, `mteb.get_model(...)` y `mteb.evaluate(...)`.
 
@@ -779,7 +783,7 @@ else:
 ''')
 
     # ───────────────────────────── 11. Elegir ─────────────────────────────
-    nb.md(r'''## 8 · Cómo elegir un embedder: árbol de decisión
+    nb.md(r'''## 8. Cómo elegir un embedder: árbol de decisión
 
 ```
 ¿Tus documentos pueden salir de tu infraestructura y aceptas coste por llamada?
@@ -809,7 +813,7 @@ FAMILIAS = pd.DataFrame([
     ("EmbeddingGemma-300m", "pesos con licencia Gemma (gated)", "768 → 128 / sí", "2k", False, "308 M parámetros; prompts por tarea"),
     ("jina-embeddings-v5-text (nano/small)", "pesos; CC-BY-NC-4.0 según la tarjeta", "nano 768 · small 1024 / sí (hasta 32)", "small 32k; nano 8k (8192 según el anuncio de Jina y Elastic; la página del modelo dice 32k)", False, "18-feb-2026 (239 M / 677 M); LoRA por tarea; hay variante omni (may-2026)"),
     ("gemini-embedding-001 (API)", "API", "3072 / sí (128–3072)", "2048", False, "solo el vector de 3072 sale normalizado: renormaliza tú al reducir"),
-    ("gemini-embedding-2 (API; preview 10-mar-2026, GA 22-abr-2026)", "API", "3072 / sí (128–3072)", "8192 (texto)", True, "texto, imagen, vídeo, audio y PDF en un espacio (módulo 16)"),
+    ("gemini-embedding-2 (API; preview 10-mar-2026, GA 22-abr-2026)", "API", "3072 / sí (128–3072)", "8192 (texto)", True, "texto, imagen, video, audio y PDF en un espacio (módulo 16)"),
     ("OpenAI text-embedding-3-small/large (API)", "API", "1536 / 3072 · parámetro dimensions", "—", False, "ene-2024; el parámetro recorta dimensiones"),
     ("Cohere Embed v4 (API)", "API", "256/512/1024/1536 / sí", "128k", True, "texto + imágenes en un embedding"),
     ("Voyage-4 (API)", "API (large: cerrado)", "2048/1024/512/256 / sí + QAT", "32k", False, "anunciada el 15-ene-2026 (large, base, lite y nano de pesos abiertos); salidas float/int8/binario"),
@@ -873,7 +877,7 @@ Ya has visto por dentro cada pieza (pooling last-token, prefijos, Matryoshka, in
 | Elegir embedder **solo** por el promedio de MTEB | 🔴 (mala práctica) | — | ver sección 7 |
 | Evaluar en tu propio golden set con intervalos de confianza | 🟢 | práctica estándar en equipos de search | módulo 15 |
 ''')
-    nb.md(r'''## 9 · 🏭 En producción
+    nb.md(r'''## 🏭 En producción
 
 - **OpenAI** ofrece `text-embedding-3-small` y `-large` (25-ene-2024) con el parámetro `dimensions`, que acorta el vector descartando valores del final conservando sus propiedades (documentación y anuncio de OpenAI). *Es Matryoshka de cara al usuario.*
 - **Google** publicó `gemini-embedding-001` (paper: Lee et al., 2025) y **EmbeddingGemma** (≈ 300 M, pensado para ejecutarse en dispositivo; Google indica que cuantizado cabe en menos de 200 MB de RAM). **Gemini Embedding 2** salió en *vista previa pública* el 10-mar-2026 como primer modelo nativamente multimodal de Google y pasó a disponibilidad general (`gemini-embedding-2`) el 22-abr-2026 (blog de Google; módulo 16).
@@ -884,24 +888,24 @@ Ya has visto por dentro cada pieza (pooling last-token, prefijos, Matryoshka, in
 
 **Aritmética de coste** (10 M documentos, $d=1024$): `float32` = 40.96 GB · `int8` = 10.24 GB · binario = 1.28 GB (+ 10.24 GB de `int8` en disco si haces rescoring). Con $d=256$ Matryoshka + `int8`: 2.56 GB. Esa es la diferencia entre un clúster y un nodo.
 ''')
-    nb.md(r'''## 10 · 🧠 Secretos de la élite
+    nb.md(r'''## 🧠 Secretos de la élite
 
 1. **Tu golden set manda sobre MTEB.** La librería `mteb` marca explícitamente qué resultados son *zero-shot*; un modelo puede liderar el promedio por haber visto datos de las tareas. Valida con IC (bootstrap) en tus queries (módulo 15).
 2. **El prefijo/instrucción no es opcional.** Las tarjetas de E5, Nomic, Qwen3-Embedding y EmbeddingGemma definen formatos distintos; el README de Qwen3-Embedding indica que usar la instrucción «suele mejorar entre un 1 % y un 5 %» en la mayoría de tareas. Un fallo de prefijo es silencioso: ningún error, solo peor ranking.
 3. **Last-token + padding a la derecha = bug silencioso.** Usa siempre el índice del último token *real* (`attention_mask.sum(1)-1`) o `padding_side="left"`; lo reproducimos en la sección 2.
 4. **Calibra `int8` con el corpus, no con las queries.** `sentence-transformers` pide `calibration_embeddings` representativos; rangos calculados con pocas queries (más cortas, otra distribución) recortan los valores del corpus.
-5. **Renormaliza siempre tras truncar o cuantizar.** No cuesta nada y evita mezclar normas en el producto punto. Con `gemini-embedding-001`, fuentes de terceros indican que solo la salida de 3072 dimensiones viene normalizada: verifica en la documentación y renormaliza.
+5. **Renormaliza siempre tras truncar o cuantizar.** No cuesta nada y evita mezclar normas en el producto escalar. Con `gemini-embedding-001`, fuentes de terceros indican que solo la salida de 3072 dimensiones viene normalizada: verifica en la documentación y renormaliza.
 6. **Binaria = barata en RAM, pero con rescoring.** El post de Hugging Face (2024) y la documentación de `sentence-transformers` reportan hasta ≈ 96 % del rendimiento con 32× menos memoria *con rescoring*; la cifra depende del modelo y de la dimensión: mídela.
 7. **La dimensión es una decisión de capacidad, no solo de memoria.** Weller et al. (2025) muestran, teórica y empíricamente (dataset sintético LIMIT), que una dimensión fija limita qué conjuntos top-k pueden representarse: dimensiones muy pequeñas fallan en consultas "combinatorias" aunque el promedio de MTEB parezca bueno. Se retoma en el módulo 15.
 8. **Cambiar de embedder = reindexar todo.** Planifica versionado y migración (módulo 18); un espacio compartido entre tamaños (reportado para Voyage-4) permite asimetría query/documento sin reindexar.
 ''')
-    nb.md(r'''## 11 · ⚠️ Errores comunes
+    nb.md(r'''## ⚠️ Errores comunes
 
 | Error | Síntoma | Arreglo |
 |---|---|---|
 | Olvidar `query:`/`passage:` (o la instrucción) | nDCG baja unos puntos sin error | centraliza el formateo en un único `Embedder` y testéalo |
 | Truncar un modelo sin MRL | calidad se desploma a < 256 dims | usa un modelo Matryoshka o PCA |
-| No renormalizar tras truncar | ranking inestable con producto punto | `e / ‖e‖` siempre |
+| No renormalizar tras truncar | ranking inestable con producto escalar | `e / ‖e‖` siempre |
 | Calibrar `int8` con las queries | pérdida de calidad inexplicable | rangos sobre el corpus |
 | Binarizar sin rescoring | recall muy inferior | `top-(k·over)` con Hamming + rescoring `int8` |
 | Mezclar `padding_side` | embeddings de decoders raros | índice del último token real |
@@ -912,14 +916,14 @@ Ya has visto por dentro cada pieza (pooling last-token, prefijos, Matryoshka, in
 ''')
 
     # ───────────────────────────── 13. Autoevaluación ─────────────────────────────
-    nb.md(r'''## 12 · Autoevaluación
+    nb.md(r'''## 📝 Autoevaluación
 
 <details><summary><b>1 · (Cálculo)</b> Tienes 25 M de documentos con $d=768$. ¿Cuánta RAM ocupa el índice en <code>float32</code>, en <code>int8</code> y en binario? ¿Y si usas Matryoshka a 256 dimensiones + <code>int8</code>?</summary>
 
 `float32`: $25\cdot10^6\cdot768\cdot4 = 76.8$ GB. `int8`: $19.2$ GB. Binario: $768/8=96$ B por vector → $2.4$ GB. Matryoshka 256 + `int8`: $256$ B por vector → $6.4$ GB. (Más los metadatos y la estructura del índice ANN, que no están incluidos.)
 </details>
 
-<details><summary><b>2 · (Cálculo)</b> Dos vectores binarios de 1024 bits difieren en 100 bits. ¿Cuál es el producto punto de sus versiones $\pm1$ y su "coseno"?</summary>
+<details><summary><b>2 · (Cálculo)</b> Dos vectores binarios de 1024 bits difieren en 100 bits. ¿Cuál es el producto escalar de sus versiones $\pm1$ y su "coseno"?</summary>
 
 $\langle a,b\rangle = d-2H = 1024-200 = 824$. Como $\lVert a\rVert=\lVert b\rVert=\sqrt{1024}$, el coseno es $824/1024\approx0.805$.
 </details>
@@ -951,7 +955,7 @@ La pérdida contrastiva evaluada en **varios prefijos** (anidados) y la **renorm
 ''')
 
     # ───────────────────────────── 14. Referencias ─────────────────────────────
-    nb.md(r'''## 13 · Referencias (verificadas; consultadas en oct-2026)
+    nb.md(r'''## 📚 Referencias (verificadas; consultadas en oct-2026)
 
 **Papers (arXiv)**
 - Kusupati et al. (2022). *Matryoshka Representation Learning*. NeurIPS 2022. <https://arxiv.org/abs/2205.13147>
@@ -995,23 +999,28 @@ def project() -> None:
 
 # Proyecto 12 · Comparativa de embedders para Políglota: calidad vs memoria vs latencia
 
-**Nivel:** 🟠 Avanzado · **Duración:** ≈ 2 h · **GPU:** T4 recomendada para los 4–6 modelos (CPU basta con `FAST_DEV_RUN = True` y 2 modelos) · **Cómputo:** ≈ 1–2 unidades de Colab en T4 con `FAST_DEV_RUN = False`.
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | T4 para los 4–6 modelos (CPU basta con `FAST_DEV_RUN = True` y 2 modelos); ≈ 1–2 unidades de Colab con `FAST_DEV_RUN = False` |
+| **Prerrequisitos** | Lección 12 · módulo 11 (tu embedder contrastivo, si lo guardaste) |
 
 **Conexión.** *Viene de:* módulo 11 (tu embedder contrastivo ES/EN: lo medirás contra estos baselines si lo tienes guardado) y de la lección 12. *Va hacia:* módulo 13 (el mejor embedder será el retriever denso del sistema híbrido) y 14 (la configuración elegida decide el tamaño del índice).
 ''')
-    nb.md(r'''## 1 · Contexto de negocio
+    nb.md(r'''## 1. Contexto de negocio
 Eres ML engineer en **Políglota Labs**. Vamos a indexar **10 millones de fragmentos** de documentación (ES/EN/código). El CTO te da un límite: **el índice de vectores debe caber en ≈ 20 GB de RAM** y la búsqueda debe ser rápida. Tu tarea: construir una **comparativa reproducible de 4–6 embedders**, cada uno con **truncado Matryoshka** y **cuantización** (`float32`, `int8`, binaria, binaria+rescoring), y entregar una **recomendación justificada** con la frontera de Pareto calidad-memoria-latencia.
 
-## 2 · Dataset
+## 2. Dataset
 Corpus Políglota vía `carga_corpus()` (Wikipedia ES/EN + CodeSearchNet si hay acceso a Hugging Face; si no, el **corpus sintético** del módulo 00: texto ES/EN de plantillas + funciones de la stdlib como código — verás un `⚠️`). Con el corpus sintético los números **no son comparables** con los del real, pero el pipeline y las conclusiones relativas (int8 ≈ float32, binaria necesita rescoring…) sí se ejercitan.
 
-## 3 · Entregables
+## 3. Entregables
 1. `construye_store` / `buscar` funcionando para 4 precisiones (`float32`, `int8`, `binario`, `binario+rescore`) y 4 escalas de dimensión (D, D/2, D/4, D/8).
 2. Una **tabla de resultados** (`RESULTS`) con: modelo, dimensión, precisión, nDCG@10, overlap@10 vs float32, bytes/vector, MB para 10 M docs, ms/query.
 3. La **frontera de Pareto** (memoria vs nDCG@10) y una **recomendación** para el presupuesto de 20 GB.
 4. Una conclusión escrita (≤ 10 líneas) que cite números de **tu** tabla.
 
-## 4 · Rúbrica (umbrales calibrados con lo que MIDE la solución de referencia)
+## 4. Rúbrica (umbrales calibrados con lo que MIDE la solución de referencia)
 Los umbrales de abajo son **invariantes relativas** a la propia ejecución (no valores absolutos), porque el nDCG absoluto depende del corpus y de los modelos que puedas descargar. La solución de referencia se ejecutó en un entorno **sin acceso a Hugging Face** (corpus sintético + embedders de respaldo TF-IDF+SVD + un modelo local diminuto con pesos aleatorios para ejercitar la ruta de `sentence-transformers`); los valores medidos están en la última columna. **No se verificó con modelos reales descargados**; si en Colab tus números reales son mejores, mejor.
 
 | # | Criterio | Umbral | Medido por la solución de referencia |
@@ -1028,7 +1037,7 @@ Los umbrales de abajo son **invariantes relativas** a la propia ejecución (no v
 ''')
 
     # ── setup (mismas utilidades que la lección) ──
-    nb.md(r'''## 5 · Preparación (celdas dadas, no hay que modificarlas)''')
+    nb.md(r'''## 5. Preparación (celdas dadas, no hay que modificarlas)''')
     nb.code(CODE_PIP)
     nb.code(C.CODE_SETUP_COMMON)
     for _src in src_corpus_cells():
@@ -1077,7 +1086,7 @@ print(CORPUS["source"], len(DOC_IDS), "docs ·", len(QRYS), "queries")
 ''')
 
     # ── TODO 1: embedders ──
-    nb.md(r'''## 6 · Paso 1 — Codificar con 4–6 embedders (TODO 1)
+    nb.md(r'''## 6. Paso 1 — Codificar con 4–6 embedders (TODO 1)
 Usa `cargar_embedder(clave)` (ya definido): devuelve un `Embedder` con `encode_queries` / `encode_docs` que **aplican el prefijo correcto**. Si no se puede descargar, devuelve `None`. En ese caso el proyecto añade **embedders de respaldo** (TF-IDF+SVD con distintas configuraciones) para que la comparativa siga ejecutándose.
 
 Mide para cada modelo: embeddings de queries/documentos, **ms por documento** y **ms por query**, y el número de parámetros.
@@ -1129,7 +1138,7 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 2: truncado ──
-    nb.md(r'''## 7 · Paso 2 — Truncado Matryoshka (TODO 2)
+    nb.md(r'''## 7. Paso 2 — Truncado Matryoshka (TODO 2)
 Implementa `trunc_renorm(E, m)`: conserva las primeras `m` dimensiones y **renormaliza** cada fila a norma 1 (protege la división por cero con `np.maximum(norma, 1e-9)`).
 Después `dims_grid(D)` devuelve las 4 escalas `D, D/2, D/4, D/8` redondeadas a múltiplos de 8 (la binaria empaqueta de 8 en 8) y nunca menores que 8.
 ''')
@@ -1152,7 +1161,7 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 3-4: cuantización ──
-    nb.md(r'''## 8 · Paso 3 — Cuantización `int8` y binaria (TODO 3 y 4)
+    nb.md(r'''## 8. Paso 3 — Cuantización `int8` y binaria (TODO 3 y 4)
 **TODO 3 (`int8`).** `ajusta_rangos` calcula `lo`/`hi` por dimensión **sobre el corpus**. `cuantiza_int8` aplica $q=\operatorname{round}((x-lo)/((hi-lo)/255))-128$ recortado a $[-128,127]$ (`np.int8`) y `descuantiza_int8` lo invierte.
 
 **TODO 4 (binaria).** `cuantiza_binario` empaqueta `E > 0` con `np.packbits(..., axis=1)`. `hamming(qb, db)` devuelve la matriz (nº queries × nº docs) de distancias de Hamming usando XOR + la tabla `POPCNT` (procesa los documentos por bloques para no agotar RAM).
@@ -1193,16 +1202,16 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 5: búsqueda ──
-    nb.md(r'''## 9 · Paso 4 — Búsqueda con cada precisión (TODO 5)
+    nb.md(r'''## 9. Paso 4 — Búsqueda con cada precisión (TODO 5)
 `construye_store(Ed, m)` prepara, para una escala `m`, los vectores truncados en las tres representaciones; `buscar(Eq, store, precision, k, over)` devuelve los índices del top-k:
 
-- `float32`: producto punto exacto sobre los vectores truncados y renormalizados.
+- `float32`: producto escalar exacto sobre los vectores truncados y renormalizados.
 - `int8`: la query en `float32` contra los documentos `int8` **descuantizados**.
 - `binario`: ordena por menor Hamming entre `Q > 0` empaquetada y los bits de los documentos.
 - `binario+rescore`: recupera `k*over` candidatos por Hamming y **reordena** con la query `float32` contra los `int8` descuantizados.
 
 <details><summary>🪜 Pista 1 (idea)</summary>
-El rescoring es "dos etapas": primero un top-(k·over) barato (Hamming), luego un top-k caro pero solo sobre esos candidatos (producto punto con vectores descuantizados).
+El rescoring es "dos etapas": primero un top-(k·over) barato (Hamming), luego un top-k caro pero solo sobre esos candidatos (producto escalar con vectores descuantizados).
 </details>
 <details><summary>🪜 Pista 2 (casi la API)</summary>
 <code>H = hamming(np.packbits(Q &gt; 0, axis=1), store["bin"])</code> · <code>cand = topk_scores(-H.astype(np.float32), k*over)</code> · para cada query <code>v = descuantiza_int8(store["int8"][cand[i]], lo, hi)</code> y <code>cand[i][np.argsort(-(v @ Q[i]))[:k]]</code>.
@@ -1227,7 +1236,7 @@ except (NotImplementedError, StopIteration) as e:
 ''')
 
     # ── TODO 6: evaluación de la rejilla ──
-    nb.md(r'''## 10 · Paso 5 — La rejilla completa (TODO 6)
+    nb.md(r'''## 10. Paso 5 — La rejilla completa (TODO 6)
 Para cada modelo × escala × precisión calcula:
 - `ndcg10` y `recall10` sobre el corpus original (`store` construido con `Ed`),
 - `overlap10`: fracción del top-10 exacto en `float32` **a la misma dimensión m** que conserva el método (aísla el error de *cuantización* del de truncado), medido sobre el **corpus ampliado** `aumenta(Ed)` (vecinos difíciles),
@@ -1258,7 +1267,7 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 7: Pareto y recomendación ──
-    nb.md(r'''## 11 · Paso 6 — Frontera de Pareto y recomendación (TODO 7)
+    nb.md(r'''## 11. Paso 6 — Frontera de Pareto y recomendación (TODO 7)
 Una configuración está en la **frontera de Pareto** si ninguna otra tiene a la vez **menos memoria y mejor (o igual) nDCG@10**. Implementa:
 - `frontera_pareto(df)`: devuelve las filas no dominadas ordenadas por `bytes_vec` creciente (recorre en orden de memoria y conserva una fila solo si su `ndcg10` supera estrictamente el mejor visto).
 - `recomienda(df, presupuesto_gb, n_docs)`: entre las filas que caben en el presupuesto (`bytes_vec * n_docs / 1e9 <= presupuesto_gb`), elige la de mayor `ndcg10` (desempate: menos bytes, luego menos `ms_query`).
@@ -1295,7 +1304,7 @@ except (NotImplementedError, AttributeError, TypeError) as e:
     print("⏳ pendiente:", repr(e))
 ''')
     nb.md(r'''> 👀 **Qué debes observar:** ¿qué precisiones forman la frontera? Si contiene puntos que no son `float32` (la solución de referencia los tiene: R7), a igual memoria te conviene más recortar **bits** que dimensiones; si no, comprueba tus `bytes_vec`. Mira dónde cruza la frontera la línea del presupuesto: esa es tu recomendación. Si un modelo entero queda por debajo de la frontera en todas sus escalas, está dominado y se descarta por datos, no por opinión. Con el corpus de respaldo los valores absolutos cambian; la forma de la frontera es lo que debes defender.''')
-    nb.md(r'''## 12 · Autocomprobación de la rúbrica
+    nb.md(r'''## 12. Autocomprobación de la rúbrica
 Esta celda evalúa R1–R8 sobre **tus** funciones y resultados. Debe imprimir `✅` en todo cuando termines (R9 es manual: escribe tu conclusión en la celda de abajo).
 ''')
     CODE_GRADER = r'''
@@ -1336,20 +1345,20 @@ def autograder():
 _ = autograder()
 '''
     nb.code(CODE_GRADER)
-    nb.md(r'''## 13 · Tu conclusión (R9)
+    nb.md(r'''## 13. Tu conclusión (R9)
 Escribe aquí (≤ 10 líneas, con números de tu tabla): ¿qué configuración recomiendas para 10 M de documentos en 20 GB, por qué, y qué riesgos tiene (licencia, latencia, calidad en código, drift)?
 
 > *(Edita esta celda.)*
 ''')
 
-    nb.md(r'''## 14 · Retos extra (nivel experto)
+    nb.md(r'''## 14. Retos extra (nivel experto)
 1. **PCA en lugar de truncado** para los modelos sin Matryoshka: compara la curva nDCG vs dimensión con y sin PCA (aprende la proyección con el corpus).
 2. **Product Quantization** (anticipo del módulo 14): comprime a 32–64 bytes/vector y colócala en la gráfica de Pareto.
 3. **Bootstrap pareado** (lección, sección 6): añade intervalos de confianza al nDCG y marca qué diferencias son significativas.
 4. **Tu embedder del módulo 11** como un modelo más: ¿le gana a `multilingual-e5-small` en código?
 5. **Asimetría**: indexa documentos con un modelo grande y consulta con uno pequeño de la misma familia (solo si comparten espacio de embeddings; compruébalo midiendo, no lo asumas).
 
-## 15 · Reflexión (conecta con producción y con el hilo conductor)
+## 15. Reflexión (conecta con producción y con el hilo conductor)
 - ¿Qué cambia si el 80 % de las queries son en español y los documentos están mayoritariamente en inglés? ¿Qué métrica añadirías por idioma?
 - El rescoring `int8` vive en disco: ¿qué latencia p99 añade leer `k·over` vectores por query? (módulo 14)
 - ¿Cómo versionarías el índice para migrar de embedder sin downtime? (módulo 18)

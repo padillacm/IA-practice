@@ -8,7 +8,7 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - [x] 15_evaluacion_retrieval
 - [x] 14_indexacion_ann
 - [x] 13_dense_sparse_late_interaction
-- [ ] 12_embedders_modernos
+- [x] 12_embedders_modernos
 - [ ] 11_aprendizaje_contrastivo
 - [ ] 10_embeddings_contextuales_oraciones
 - [ ] 09_capa_embedding_llm
@@ -25,3 +25,4 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - M18: cabecera inline → tabla canónica + subtítulo; IMG-02: lote 2 no podía cerrarse por max_batch = 32 con 2 peticiones → ejemplo con max_batch = 4 y q1–q7; IMG-01 sin «p99 ≤ 100 ms» inventado; VID-01 sin música; «Costo» → «Coste» en la salida.
 - M17: etiquetas canónicas + subtítulo; secciones fijas sin número, 📝; IDs renumerados por orden de aparición (IMG-01 capas de información, VID-01 steering, IMG-02 superposición, IMG-03 SAE); 👀 añadido tras VID-01 (faltaba); SAE de la figura con 96 latentes como §7 (decía 256); colores fuera de paleta (negro, rojo) sustituidos.
 - M13: cabecera inline → tabla (lección y proyecto) + subtítulo; «N ·» → «N.»; fijas canónicas; 👀 añadido tras M13-IMG-04 (faltaba); VID-01 MaxSim 0.82+0.91+0.78 = 2.51 verificado, «sin música»; SPLADE con alturas «ilustrativas»; re-score → rescoring; costo → coste; producto punto → producto escalar.
+- M12: cabecera inline → tabla (lección y proyecto) + subtítulo; «N ·» → «N.»; fijas canónicas; IMG-03: los enteros int8 no salían de ninguna regla → recalculados con [lo, hi] = [-0.5, 0.5] (mismo esquema que el ✍️ de §5: 0.12 → 30), con el recorte de 0.64; VID-01 rankings marcados ilustrativos, sin música; vídeo → video; producto punto → producto escalar; negativos difíciles → negativos duros.
