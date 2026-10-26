@@ -99,27 +99,7 @@ nb.code(C.SETUP_COMMON + S.SETUP8)
 nb.md("Datos de imagen: **MNIST real** vía `torchvision` (si no hay red, figuras sintéticas 28x28) y dos **fotos reales** empaquetadas con scikit-learn.")
 nb.code(S.DATA_IMG)
 
-nb.md(r"""
-## 4. Mapa de madurez (a oct-2026)
-
-| Técnica | Madurez | Quién la usa / respaldo público | Fuente |
-|---|---|---|---|
-| Parches ViT (tokens continuos) | 🟢 | Base de los encoders visuales de CLIP/SigLIP y de VLMs abiertos que los conectan a un LLM (p. ej. LLaVA) | Dosovitskiy et al. 2020 (arXiv:2010.11929); Liu et al. 2023 (arXiv:2304.08485) |
-| VQ-VAE | 🟢 (técnica) / 🟡 (como interfaz LLM) | Base de DALL·E 1, VQGAN y de los tokenizers de imagen discretos | van den Oord et al. 2017 (arXiv:1711.00937) |
-| VQGAN (+ transformer *prior*) | 🟢 | CompVis; pérdida perceptual + adversarial sobre VQ | Esser et al. 2020 (arXiv:2012.09841) |
-| **FSQ** | 🟡 | Tokenizers *discretos* de Cosmos (NVIDIA) con niveles (8,8,8,5,5,5) = 64 000 | Mentzer et al. 2023 (arXiv:2309.15505); Cosmos (arXiv:2501.03575) |
-| LFQ / MAGVIT-v2 | 🟡 | Google/CMU; ICLR 2024; tokenizer de imagen+vídeo con vocabulario común | Yu et al. 2023 (arXiv:2310.05737) |
-| Tokens de imagen en un LLM (early fusion): Chameleon, Emu3 | 🟡 | Meta (Chameleon, 2024); BAAI (Emu3, 2024) | arXiv:2405.09818; arXiv:2409.18869 |
-| Híbridos continuos+LM: Transfusion, MAR/Fluid (sin cuantización vectorial) | 🔴/🟡 | Meta (Transfusion, hasta 7B); resultados en investigación | arXiv:2408.11039; arXiv:2406.11838; arXiv:2410.13863 |
-| Tokenizers 1D de imagen (TiTok, FlexTok) | 🔴 | ByteDance/TUM (32 tokens por imagen); EPFL/Apple | arXiv:2406.07550; arXiv:2502.13967 |
-| SoundStream, **EnCodec**, DAC (RVQ) | 🟢 | EnCodec es el tokenizer de MusicGen (50 Hz, 32 kHz); DAC: 44.1 kHz a 8 kbps (~90x) | arXiv:2107.03312; 2210.13438; 2306.06546; 2306.05284 |
-| **Mimi** (tokens semántico-acústicos, 12.5 Hz) | 🟡 | Kyutai (Moshi): conversación en tiempo real | arXiv:2410.00037 |
-| Tokenizers de vídeo 3D (Cosmos, MAGVIT-v2) | 🟡 | NVIDIA (pesos abiertos), Google | arXiv:2501.03575; arXiv:2310.05737 |
-
-> Los modelos cerrados de frontera (multimodales nativos) **no documentan** sus tokenizers: lo que sabemos viene de papers abiertos.
-""")
-
-nb.md("## 5. Presupuesto de tokens: ¿cuánto contexto cuesta cada modalidad?\n\nAntes de implementar nada, una **calculadora**. Cada fila usa una cifra de un paper o la fórmula de la arquitectura (marcamos con `~` lo aproximado).")
+nb.md("## 4. Presupuesto de tokens: ¿cuánto contexto cuesta cada modalidad?\n\nAntes de implementar nada, una **calculadora**. Cada fila usa una cifra de un paper o la fórmula de la arquitectura (marcamos con `~` lo aproximado).")
 nb.code(S.TOKEN_BUDGET)
 nb.md(obs("""
 * **El audio es caro:** a 6 kbps EnCodec produce 600 tokens/s; **1 hora = 2.16 M de tokens**, y una ventana de 128K tokens cabe solo ~3.6 minutos. Por eso Mimi baja a **12.5 Hz** (100 tokens/s aplanado) y Moshi modela los niveles con un transformer «de profundidad» pequeño en lugar de aplanarlos.
@@ -128,7 +108,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 6. Tokens continuos: parches ViT
+## 5. Tokens continuos: parches ViT
 
 Un **Vision Transformer** parte la imagen en una rejilla de parches $p\times p$, aplana cada uno ($p^2 C$ números) y lo proyecta linealmente a $D$ dimensiones: $N=(H/p)(W/p)$ tokens. Es *exactamente* una convolución con `kernel=p, stride=p`. Es también la «lectura» de una imagen que usan CLIP/SigLIP (módulo 16).
 """)
@@ -139,7 +119,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 7. Tokens discretos: VQ-VAE
+## 6. Tokens discretos: VQ-VAE
 
 **Idea.** Un autoencoder cuyo cuello de botella es un **codebook** de $K$ vectores $\{e_j\}_{j=1}^{K}\subset\mathbb{R}^d$. El encoder produce $z_e(x)$ (una rejilla de vectores), cada vector se **sustituye por su vecino más cercano** y el decoder reconstruye desde esos vectores:
 
@@ -150,6 +130,8 @@ $$k = \arg\min_{j}\ \lVert z_e - e_j\rVert_2,\qquad z_q = e_k,\qquad \hat x = \t
 $$\mathcal{L} = \underbrace{\lVert x-\hat x\rVert_2^2}_{\text{reconstrucción}} + \underbrace{\lVert \operatorname{sg}[z_e]-e\rVert_2^2}_{\text{codebook}} + \beta\underbrace{\lVert z_e-\operatorname{sg}[e]\rVert_2^2}_{\text{commitment}},\qquad \beta=0.25$$
 
 El **argmin** no es diferenciable: se usa el **straight-through estimator**, $z_q = z_e + \operatorname{sg}(e - z_e)$, que en *forward* da $e$ y en *backward* copia el gradiente de $z_q$ a $z_e$. La pérdida de codebook mueve los $e_j$ hacia los vectores que se les asignan; el *commitment* evita que el encoder «salte» entre códigos.
+
+**Ejemplo a mano.** Codebook de $K=3$ vectores en 2D: $e_1=(0,0)$, $e_2=(1,1)$, $e_3=(2,0)$, y un vector del encoder $z_e=(0.9,\,0.6)$. Distancias al cuadrado: $\lVert z_e-e_1\rVert^2=0.81+0.36=1.17$, $\lVert z_e-e_2\rVert^2=0.01+0.16=\mathbf{0.17}$, $\lVert z_e-e_3\rVert^2=1.21+0.36=1.57$ → **token 2**, $z_q=(1,1)$. Con $\beta=0.25$ el *commitment* vale $0.25\cdot0.17=0.043$, y ese token cuesta $\log_2 3=1.58$ bits. Es exactamente una asignación de **k-means** (los $e_j$ son centroides); la misma idea reaparece en la cuantización de productos (PQ) de los índices ANN del módulo 14.
 
 **Tasa.** Con una rejilla de $N$ tokens, la tasa es $R = N\log_2 K$ bits por imagen (o $R/(H W)$ bits por píxel, **bpp**).
 
@@ -174,17 +156,17 @@ pérdidas: ||x-x̂||² + ||sg[z_e]-e||² + β||z_e - sg[e]||²""")
 nb.md(obs("""
 Hay **tres** caminos: (1) el de *reconstrucción* (a través de $z_q$ con STE hasta el encoder), (2) el del **codebook** (mueve los $e_j$ hacia los $z_e$) y (3) el del **commitment** (mantiene a $z_e$ cerca del código elegido). Sin el STE el encoder no recibiría gradiente de la reconstrucción.
 """))
-nb.md("### 7.1 Cuantizadores desde cero\n\nLos tres cuantizadores (`VQ`, `FSQ`, `RVQ`) comparten interfaz.")
+nb.md("### 6.1 Cuantizadores desde cero\n\nLos tres cuantizadores (`VQ`, `FSQ`, `RVQ`) comparten interfaz.")
 nb.code(S.QUANTIZERS)
 nb.code(S.AE_MODEL)
-nb.md("### 7.2 Entrenar un VQ-VAE ($K=64$, 49 tokens por imagen)")
+nb.md("### 6.2 Entrenar un VQ-VAE ($K=64$, 49 tokens por imagen)")
 nb.code(S.VQ_BASE)
 nb.md(obs("""
 * **Fila central:** la imagen se reconstruye desde solo **49 ids** (¡de ~6 300 bits en bruto a ~300!), con detalles borrosos: es una compresión **con pérdida** muy agresiva.
 * **Fila inferior:** el mapa de tokens 7x7 tiene **estructura espacial**: trazos parecidos reutilizan los mismos ids. Eso es lo que un LM puede aprender a predecir después.
 * **Perplejidad impresa:** si es muy inferior a $K$, el codebook no se usa por completo (siguiente celda).
 """))
-nb.md("### 7.3 Barrido de $K$ y colapso del codebook\n\nEntrenamos varios $K$ y un caso **sin los trucos** de uso (sin init por datos ni reinicio de códigos muertos) para ver el colapso.")
+nb.md("### 6.3 Barrido de $K$ y colapso del codebook\n\nEntrenamos varios $K$ y un caso **sin los trucos** de uso (sin init por datos ni reinicio de códigos muertos) para ver el colapso.")
 nb.code(S.VQ_SWEEP)
 nb.md(obs("""
 * **Izquierda (tasa-distorsión):** más bits (más $K$) → más PSNR, con **rendimientos decrecientes**. El codo marca el compromiso razonable.
@@ -193,7 +175,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 8. FSQ y RVQ: dos maneras de esquivar el codebook (o de apilarlo)
+## 7. FSQ y RVQ: dos maneras de esquivar el codebook (o de apilarlo)
 
 **FSQ — *Finite Scalar Quantization*** (Mentzer et al., 2023). Elimina el codebook: acota cada canal de $z$ con una $\tanh$ y lo **redondea a $L_i$ niveles** enteros (con STE para el redondeo):
 
@@ -215,7 +197,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 9. Tokens de imagen dentro de un LLM (estilo Chameleon) y modelos «continuos»
+## 8. Tokens de imagen dentro de un LLM (estilo Chameleon) y modelos «continuos»
 
 **Chameleon** (Meta, 2024) entrena un transformer *early-fusion* sobre **secuencias mixtas** texto+imagen en un único vocabulario: un tokenizer de imagen convierte una imagen de 512x512 en **1 024 tokens** de un codebook de **8 192**, y el vocabulario total (BPE de texto + tokens de imagen) es de **65 536** entradas. **Emu3** (BAAI, 2024) lleva la idea a «solo predecir el siguiente token» para texto, imagen y vídeo.
 
@@ -229,7 +211,7 @@ Cada fila se genera con un **token de clase** como prefijo y 49 tokens muestread
 """))
 
 nb.md(r"""
-## 10. Audio: de la forma de onda a tokens con un códec neuronal
+## 9. Audio: de la forma de onda a tokens con un códec neuronal
 
 **Pipeline** (SoundStream, EnCodec, DAC, Mimi): `waveform → encoder convolucional (stride total S) → RVQ (Q niveles) → decoder → waveform`. A una frecuencia de muestreo $f_s$, el encoder entrega $f_s/S$ *frames* por segundo, y
 
@@ -265,7 +247,7 @@ nb.md(obs("""
 El orden de los niveles **importa**: el 1.º captura lo más energético (envolvente, tono) y los demás añaden detalle; por eso se pueden **truncar niveles** para bajar la tasa. La matriz de tokens (niveles x frames) es lo que luego modelan los LMs de audio (MusicGen, Moshi…), ya sea **aplanándola** (más tokens) o con un transformer extra para los niveles.
 """))
 
-nb.md("### 10.1 Voz real a 8 kHz y un códec de juguete\n\nUsamos el **Free Spoken Digit Dataset** (FSDD: dígitos hablados en inglés por 6 hablantes, 8 kHz mono, CC BY-SA 4.0), que se descarga de su repositorio oficial en GitHub en segundos; concatenamos las grabaciones y cortamos clips de 1 s. Si no hay red, el respaldo es **voz sintética** (pulsos glotales + formantes de vocales + envolvente silábica) con aviso visible. Es un banco **didáctico** y pequeño: LibriSpeech tiene mucha más variedad.")
+nb.md("### 9.1 Voz real a 8 kHz y un códec de juguete\n\nUsamos el **Free Spoken Digit Dataset** (FSDD: dígitos hablados en inglés por 6 hablantes, 8 kHz mono, CC BY-SA 4.0), que se descarga de su repositorio oficial en GitHub en segundos; concatenamos las grabaciones y cortamos clips de 1 s. Si no hay red, el respaldo es **voz sintética** (pulsos glotales + formantes de vocales + envolvente silábica) con aviso visible. Es un banco **didáctico** y pequeño: LibriSpeech tiene mucha más variedad.")
 nb.code(S.AUDIO_DATA)
 nb.code(S.AUDIO_MODEL)
 nb.code(S.AUDIO_EVAL)
@@ -299,7 +281,7 @@ El error baja **con cada nivel** y cada nivel cuesta lo mismo ($\\log_2 K$ bits)
 """))
 
 nb.md(r"""
-### 10.2 EnCodec real con Hugging Face
+### 9.2 EnCodec real con Hugging Face
 
 `transformers` incluye `EncodecModel` con los pesos oficiales (`facebook/encodec_24khz`). Si no hay acceso al hub, la celda instancia el modelo con **pesos aleatorios** solo para mostrar las **formas** y la **tasa de tokens** (el audio decodificado sería ruido).
 """)
@@ -309,7 +291,7 @@ nb.md(obs("""
 """))
 
 nb.md(r"""
-## 11. Tokenizers de vídeo
+## 10. Tokenizers de vídeo
 
 El vídeo añade el eje temporal: un **tokenizer 3D** comprime con factores $c_t\times c_s\times c_s$ (tiempo x alto x ancho), de modo que $N\approx \tfrac{T}{c_t}\cdot\tfrac{H}{c_s}\cdot\tfrac{W}{c_s}$. **Cosmos** (NVIDIA, 2025) publica tokenizers *continuos* y *discretos* (FSQ, 64 000 códigos) con compresiones espacio-temporales de **4x8x8, 8x8x8 y 8x16x16** (y 8x8 / 16x16 para imágenes); **MAGVIT-v2** (Google/CMU) usa *lookup-free quantization* para un vocabulario común de imagen y vídeo. La compresión más agresiva ahorra contexto pero **degrada la calidad** (el paper de Cosmos muestra el compromiso PSNR-compresión).
 """)
@@ -319,9 +301,31 @@ En escala log-log, las tres rectas son **paralelas** (el factor de compresión e
 """))
 
 nb.md(r"""
-## 12. Puente con embeddings multimodales (módulo 16)
+## 11. Puente con embeddings multimodales (módulo 16)
 
-No lo desarrollamos aquí, solo lo ubicamos: los **parches ViT** (sección 6) son la entrada de CLIP/SigLIP, y un **embedding de imagen** para retrieval es el vector resultante de procesar esos tokens y **agruparlos** (pooling) o conservarlos como **multi-vector** (ColPali, módulo 16). Los **tokens discretos** de este módulo sirven sobre todo para **generar o comprimir**, no para comparar: para buscar PDFs en Políglota querrás vectores **continuos** alineados con texto. (La excepción son los *semantic IDs* de recomendación generativa, que usan RQ-VAE para indexar.)
+No lo desarrollamos aquí, solo lo ubicamos: los **parches ViT** (sección 5) son la entrada de CLIP/SigLIP, y un **embedding de imagen** para retrieval es el vector resultante de procesar esos tokens y **agruparlos** (pooling) o conservarlos como **multi-vector** (ColPali, módulo 16). Los **tokens discretos** de este módulo sirven sobre todo para **generar o comprimir**, no para comparar: para buscar PDFs en Políglota querrás vectores **continuos** alineados con texto. (La excepción son los *semantic IDs* de recomendación generativa, que usan RQ-VAE para indexar.)
+""")
+
+nb.md(r"""
+## 12. Mapa de madurez (a oct-2026)
+
+Con las tres modalidades vistas, esta tabla resume qué tokenizers son estándar y cuáles emergentes.
+
+| Técnica | Madurez | Quién la usa / respaldo público | Fuente |
+|---|---|---|---|
+| Parches ViT (tokens continuos) | 🟢 | Base de los encoders visuales de CLIP/SigLIP y de VLMs abiertos que los conectan a un LLM (p. ej. LLaVA) | Dosovitskiy et al. 2020 (arXiv:2010.11929); Liu et al. 2023 (arXiv:2304.08485) |
+| VQ-VAE | 🟢 (técnica) / 🟡 (como interfaz LLM) | Base de DALL·E 1, VQGAN y de los tokenizers de imagen discretos | van den Oord et al. 2017 (arXiv:1711.00937) |
+| VQGAN (+ transformer *prior*) | 🟢 | CompVis; pérdida perceptual + adversarial sobre VQ | Esser et al. 2020 (arXiv:2012.09841) |
+| **FSQ** | 🟡 | Tokenizers *discretos* de Cosmos (NVIDIA) con niveles (8,8,8,5,5,5) = 64 000 | Mentzer et al. 2023 (arXiv:2309.15505); Cosmos (arXiv:2501.03575) |
+| LFQ / MAGVIT-v2 | 🟡 | Google/CMU; ICLR 2024; tokenizer de imagen+vídeo con vocabulario común | Yu et al. 2023 (arXiv:2310.05737) |
+| Tokens de imagen en un LLM (early fusion): Chameleon, Emu3 | 🟡 | Meta (Chameleon, 2024); BAAI (Emu3, 2024) | arXiv:2405.09818; arXiv:2409.18869 |
+| Híbridos continuos+LM: Transfusion, MAR/Fluid (sin cuantización vectorial) | 🔴/🟡 | Meta (Transfusion, hasta 7B); resultados en investigación | arXiv:2408.11039; arXiv:2406.11838; arXiv:2410.13863 |
+| Tokenizers 1D de imagen (TiTok, FlexTok) | 🔴 | ByteDance/TUM (32 tokens por imagen); EPFL/Apple | arXiv:2406.07550; arXiv:2502.13967 |
+| SoundStream, **EnCodec**, DAC (RVQ) | 🟢 | EnCodec es el tokenizer de MusicGen (50 Hz, 32 kHz); DAC: 44.1 kHz a 8 kbps (~90x) | arXiv:2107.03312; 2210.13438; 2306.06546; 2306.05284 |
+| **Mimi** (tokens semántico-acústicos, 12.5 Hz) | 🟡 | Kyutai (Moshi): conversación en tiempo real | arXiv:2410.00037 |
+| Tokenizers de vídeo 3D (Cosmos, MAGVIT-v2) | 🟡 | NVIDIA (pesos abiertos), Google | arXiv:2501.03575; arXiv:2310.05737 |
+
+> Los modelos cerrados de frontera (multimodales nativos) **no documentan** sus tokenizers: lo que sabemos viene de papers abiertos.
 """)
 
 nb.md(r"""

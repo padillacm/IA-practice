@@ -97,3 +97,13 @@ y algún ejemplo a mano ausente.
 - **Reestructurado:** Mapa de madurez de §4 a §8 (antes de 🏭); secciones 5–8 renumeradas (4–7).
 - **👀 añadida** tras las curvas de adaptación del proyecto, coherente con lo medido por la revisión de
   ejecutabilidad (en cero-shot las inits apenas difieren; tras la fase 1, FVT ≈ 0.70 vs aleatoria ≈ 0.78 bpb).
+
+## 08 · Tokens multimodales y de audio
+- Bien: 🔁 que conecta VQ con BPE (diccionario con/sin pérdida), bits por byte ↔ bpp/kbps y presupuesto de contexto
+  (04); intuición «tokenizar = cuantizar»; datos reales (MNIST, fotos de scikit-learn, voz FSDD); 59 celdas.
+- **Ejemplo a mano:** VQ-VAE pasaba de la pérdida al código; añadido un codebook de 3 vectores en 2D (distancias,
+  token elegido, commitment, 1.58 bits) con la analogía explícita k-means ↔ PQ de los índices ANN (módulo 14).
+- **Reestructurado:** Mapa de madurez de §4 a §12 (antes de 🏭); secciones 5–12 renumeradas (4–11), incluida la
+  referencia «parches ViT (sección 6)» → 5.
+- **👀 añadida** tras la figura de tasa-distorsión del proyecto (imagen y audio), formulada sin presuponer el
+  resultado frente a JPEG y con la conclusión que el alumno debe poder defender.

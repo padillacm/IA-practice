@@ -207,6 +207,7 @@ En **Políglota Labs** alguien propone guardar las capturas de los PDFs y los au
     nb.code(TODO4)
     nb.code(FLOW_AUD)
     nb.code(PLOT)
+    nb.md(C.observe("**Paneles 1–2:** la reconstrucción con tokens VQ pierde detalle fino (bordes, textura) pero conserva la estructura; su título da los bpp y el PSNR. **Panel 3 (imagen):** compara las dos curvas a igual bpp; si JPEG queda por encima, no es un fallo tuyo: un códec diseñado durante décadas para el ojo puede comprimir mejor que un tokenizer diminuto entrenado en minutos. **Panel 4 (audio):** cada nivel RVQ extra sube los kbps y el SNR; μ-law es la referencia clásica. La conclusión que debes poder defender: estos tokens no se diseñan para ganar a JPEG o μ-law, sino para que un **transformer** pueda modelar imágenes y audio como secuencias discretas (lección, §8)."))
     nb.md("## Paso 3 · Conclusión y rúbrica\n\nEscribe en `CONCLUSION` (≥ 300 caracteres): ¿le ganan tus tokens a JPEG/μ-law? ¿para qué sirven entonces? ¿qué recomendarías a Políglota y qué **no** puedes concluir?")
     nb.code('CONCLUSION = ""   # TODO 5\n')
     nb.code("THR = " + repr(T) + "\n" + RUBRIC + "\nrubrica(RES)")
