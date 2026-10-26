@@ -169,3 +169,17 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Anthropic, *Introducing Contextual Retrieval* (5.7 % → 3.7 % / 2.9 % / 1.9 %; 50–100 tokens; 1.02 $/M tokens) | ✏️ | Cifras coinciden con el post (bloque A); añadida la fecha (19-sep-2024) |
 | Precio de re-embedding (0.02 $/1M ⇒ 80 $ ≤ 500 $) | ✅ | Coincide con el 18 |
 | Mapa de madurez / 🏭 | ✅ | Todas las piezas con fuente o módulo del curso |
+
+## Resumen
+- **176 IDs arXiv** de 09–20 y extras descargados de arxiv.org y cruzados con autor y año: todos existen y corresponden (ningún ❌).
+- **Correcciones de contenido:** autores de *All-but-the-Top* (Mu, Bhat & Viswanath; 10 y 17); título de JumpReLU (17); títulos abreviados
+  (Godey 2024, RocketQA, SPLADE ×3, BGE-M3, ColBERT, BEIR, HNSW, ColPali, ModernBERT, Alaofi, Li et al., Gemma Scope, SAEBench…);
+  fuente primaria de la mejora del 1–5 % con instrucción en Qwen3 (README de `QwenLM/Qwen3-Embedding`, en lugar de un export ONNX de terceros);
+  MUVERA «2–5×» confirmado en el abstract; Jina-ColBERT-v2 separando lo que dice el paper de lo que dice el anuncio; cambios concretos de TEI 1.9;
+  URLs de vLLM y Milvus; GA de Gemini Embedding 2 atribuida al blog de Google.
+- **jina-embeddings-v5-text-nano:** contexto **8k (8192)** según el anuncio de Jina, Elastic y la página de v5-omni-nano; solo la página de modelo dice 32K.
+- **≈ 250 venues** añadidos o completados (años en «ICML/ICLR/EMNLP», actas, revistas; preprints marcados).
+- **⚠️ Fuente secundaria:** límites por petición de Gemini Embedding 2 y su espacio incompatible con `gemini-embedding-001` (prensa); «89 idiomas / consultas de 32»
+  de Jina-ColBERT-v2 (anuncio no accesible); ids de GPT-2 de los prompts Gemini del 09 (ilustrativos).
+- **No accesible desde el entorno:** Hugging Face, jina.ai, elastic.co, blog.google, openai.com, dblp y la API de arXiv (confirmado por buscador).
+- `check_course.py`: Todo OK (26-oct-2026).

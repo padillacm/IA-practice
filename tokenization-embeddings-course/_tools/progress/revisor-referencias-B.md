@@ -13,7 +13,7 @@ Agente: Verificador de referencias · Módulos: 09–20 + extras · Informe: tok
 - [x] 18_produccion
 - [x] 19_playbook_elite
 - [x] 20_capstone
-- [ ] check_course.py OK + informe final
+- [x] check_course.py OK + informe final
 
 ## Notas para retomar
 - Metadatos arXiv de los 176 IDs en <scratchpad>/refs/meta/<id>.txt (script refs/fetch.sh; curl a arxiv.org/abs funciona, API/dblp/HF bloqueados).
