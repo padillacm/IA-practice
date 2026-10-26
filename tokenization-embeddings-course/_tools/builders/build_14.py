@@ -87,12 +87,17 @@ def lesson() -> None:
 
 # Módulo 14 · Indexación y búsqueda aproximada de vecinos (ANN)
 
-**Nivel:** 🟠 Avanzado · **Duración:** ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) · **GPU:** no necesaria (CPU; todo en `FAST_DEV_RUN` en minutos) ·
-**Cómputo estimado:** 0 unidades de Colab (CPU); con `FAST_DEV_RUN = False` conviene un runtime con más RAM, pero no GPU.
+**Tokenización y Embeddings: de BPE a los modelos modernos**
+
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+| **GPU recomendada** | Ninguna (CPU; todo en `FAST_DEV_RUN` en minutos; 0 unidades de Colab). Con `FAST_DEV_RUN = False` conviene un runtime con más RAM, pero no GPU |
+| **Prerrequisitos** | Módulo 12 (dimensión, Matryoshka, cuantización int8/binaria) y 13 (qué vectores indexas: densos, multi-vector) |
 
 > 🧭 **Ruta núcleo vs ampliación.** Núcleo (≈ 3 h): secciones 1–5 (fuerza bruta, métricas, IVF, PQ, HNSW) y 10 (FAISS en uso real). Ampliación (≈ 1–2 h): Vamana/DiskANN (6), ScaNN (7), RaBitQ (8) y búsqueda filtrada (9).
 
-**Prerrequisitos:** módulo 12 (dimensión, Matryoshka, cuantización int8/binaria) y 13 (qué vectores indexas: densos, multi-vector).
 **Puente con recsys:** el módulo [`recsys-course/08_deep_retrieval_ann`](../../recsys-course/08_deep_retrieval_ann/README.md) ya enseña FAISS (Flat/IVF/IVF-PQ/HNSW) con curvas recall-latencia sobre vectores de *two-tower*. Aquí **no lo repetimos**: construimos los algoritmos desde cero (mini-HNSW, PQ/OPQ, Vamana, RaBitQ), tratamos el recall como métrica de ingeniería y añadimos lo que allí no está: **grafos en disco, cuantización con garantías y búsqueda filtrada**.
 
 **Hilo conductor — Políglota.** Con 10 M de fragmentos, la búsqueda exacta cuesta ~40 GB de lecturas por consulta. El CTO pide una *ficha técnica* del índice: **recall@10 ≥ 0.95, p99 ≤ 20 ms, memoria ≤ X GB**. Hoy aprendes a construirla con datos.
@@ -136,7 +141,7 @@ Un **centroide**: IVF (*inverted file*, sección 3) asigna cada vector a su cent
 ''')
 
     # ───────────────────────────── Setup ─────────────────────────────
-    nb.md(r'''## 0 · Preparación
+    nb.md(r'''## 0. Preparación
 Esta lección usa **vectores sintéticos "tipo embedding"** (mezcla de clusters con espectro decreciente, normalizados) para poder generar cientos de miles de vectores sin descargar nada, y al final repite una medición con **vectores reales de Políglota** (módulo 12) si hay un embedder disponible. Todos los experimentos usan **un hilo**: la latencia de una query es lo que importa.
 ''')
     nb.code(CODE_PIP)
@@ -145,7 +150,7 @@ Esta lección usa **vectores sintéticos "tipo embedding"** (mezcla de clusters 
     nb.code(CODE_ANN_GEN)
 
     # ───────────────────────────── 1. Intuición ─────────────────────────────
-    nb.md(r'''## 1 · Intuición: por qué existe el ANN y cuándo NO usarlo
+    nb.md(r'''## 1. Intuición: por qué existe el ANN y cuándo NO usarlo
 
 Buscar los $k$ vectores más parecidos a una query entre $N$ vectores de dimensión $d$ cuesta $O(N d)$ operaciones y, sobre todo, **leer $4Nd$ bytes de memoria** por consulta: es un problema limitado por el ancho de banda. Con $N=10^7$ y $d=1024$ son **41 GB por consulta**. Los índices ANN cambian exactitud por velocidad con tres ideas ortogonales:
 
@@ -188,7 +193,7 @@ Se combinan (IVF-PQ, HNSW+PQ, DiskANN con PQ en RAM). Y el triángulo de siempre
     )
     nb.md(r'''> 👀 **Qué debes observar.** Las tres columnas atacan costes distintos: **cuántos vectores se tocan** (IVF), **cuántas comparaciones se hacen** (grafo) y **cuántos bytes ocupa y se lee cada vector** (compresión). Los sistemas reales combinan una de cada tipo.
 
-## 2 · Fuerza bruta y el protocolo de medición
+## 2. Fuerza bruta y el protocolo de medición
 
 Antes de cualquier índice hace falta (a) el **oráculo** (top-$k$ exacto), (b) la métrica y (c) un protocolo de latencia honesto:
 
@@ -221,7 +226,7 @@ print(f"A N={N:,} y d={D}: {4*D*N/1e6:.0f} MB que leer por query. Para 10 M x 10
 ''')
     nb.md(r'''> 👀 **Qué debes observar.** (1) En escala log-log la latencia es una **recta de pendiente 1**: duplicar $N$ duplica el tiempo. (2) A $N$ pequeño domina el *overhead* de llamada y el ancho de banda efectivo es bajo; al crecer $N$ se acerca al límite de memoria de tu CPU. (3) Con tu $N$ actual la fuerza bruta puede ser *rápida*: **el ANN solo gana cuando $N$ es grande o el presupuesto de latencia es estricto**. Guarda este gráfico como línea base.
 
-## 3 · IVF desde cero: particionar con k-means
+## 3. IVF desde cero: particionar con k-means
 
 **Entrenamiento:** k-means con $n_{list}$ centroides (regla práctica: $n_{list}\approx\sqrt N$ a $4\sqrt N$). Cada vector se asigna a su centroide más cercano y va a su **lista invertida**. **Búsqueda:** calcula la similitud de la query con los $n_{list}$ centroides, visita las **$n_{probe}$ listas** más cercanas y busca exacto solo en ellas:
 
@@ -290,7 +295,7 @@ plt.tight_layout(); plt.show()
 ''')
     nb.md(r'''> 👀 **Qué debes observar.** (1) Tu IVF y el de FAISS dan casi el mismo recall (pequeñas diferencias por la inicialización de k-means). (2) El recall **sube rápido y luego se aplana**: pasar de `nprobe` 16 a 64 cuesta 4× más escaneo para ganar pocos puntos. (3) A la derecha, el recall se pierde sobre todo por vecinos que caen **en una celda vecina**: cuanto menos separados los clusters (datos más "difíciles"), más celdas hay que mirar. Lo habitual en producción: elegir `nprobe` como el menor valor que cumple el recall objetivo en un conjunto de validación.
 
-## 4 · Product Quantization (PQ) y OPQ desde cero
+## 4. Product Quantization (PQ) y OPQ desde cero
 
 **PQ** (Jégou et al., 2011) divide cada vector en $m$ subvectores de dimensión $d/m$ y aprende **un diccionario de $K=256$ centroides por subespacio** (k-means). Cada vector se sustituye por $m$ índices de **1 byte** (compresión $4d/m$). La distancia entre una query $q$ y un vector codificado se calcula con **ADC** (*asymmetric distance computation*): se precomputa una tabla $T_j[c]=\langle q_j,\mu_{j,c}\rangle$ (para cada subespacio $j$ y centroide $c$) y el score es
 $$\langle q,\hat x\rangle=\sum_{j=1}^{m}T_j\big[\text{code}_j(x)\big],$$
@@ -349,7 +354,7 @@ display(tab_pq.round(3))
     nb.code(r'''
 fig, axs = plt.subplots(1, 2, figsize=(11, 3.5))
 axs[0].plot(tab_pq["bytes_por_vector"], tab_pq["recall_ADC"], "o-", label="solo ADC", color="#F28E2B")
-axs[0].plot(tab_pq["bytes_por_vector"], tab_pq["recall_ADC_mas_refine100"], "s-", label="ADC + re-ranking exacto de 100", color="#2CA02C")
+axs[0].plot(tab_pq["bytes_por_vector"], tab_pq["recall_ADC_mas_refine100"], "s-", label="ADC + reranking exacto de 100", color="#2CA02C")
 axs[0].axvline(4 * D, color="#6B7280", ls=":"); axs[0].text(4 * D, 0.05, " float32", color="#6B7280", fontsize=8)
 axs[0].set_xscale("log", base=2); axs[0].set_xlabel("bytes por vector (m)"); axs[0].set_ylabel("recall@10"); axs[0].set_title("PQ: memoria vs recall"); axs[0].legend(fontsize=8); axs[0].grid(alpha=.3)
 
@@ -368,7 +373,7 @@ axs[1].set_xlabel("iteración de OPQ (0 = PQ sin rotación)"); axs[1].set_ylabel
 plt.tight_layout(); plt.show()
 print(f"MSE PQ = {mses[0]:.3f} → OPQ = {mses[-1]:.3f} ({100*(1-mses[-1]/mses[0]):.0f}% menos)")
 ''')
-    nb.md(r'''> 👀 **Qué debes observar.** (1) Con pocos bytes por vector el ADC **solo** pierde mucho recall (los datos de esta lección son poco anisótropos, un caso difícil para PQ); con más bytes sube. (2) **PQ + re-ranking exacto** de unos pocos cientos de candidatos recupera casi todo el recall con el mismo índice comprimido: es el patrón estándar (IVF-PQ + *refine*). Por eso en producción los códigos PQ viven en RAM y los vectores completos en disco/SSD. (3) A la derecha, **OPQ** reduce el error de cuantización cuando la varianza está desigualmente repartida entre subespacios (aquí `decay=1.0`); en datos casi isótropos la ganancia es mínima. Mide antes de pagar su coste de entrenamiento.
+    nb.md(r'''> 👀 **Qué debes observar.** (1) Con pocos bytes por vector el ADC **solo** pierde mucho recall (los datos de esta lección son poco anisótropos, un caso difícil para PQ); con más bytes sube. (2) **PQ + reranking exacto** de unos pocos cientos de candidatos recupera casi todo el recall con el mismo índice comprimido: es el patrón estándar (IVF-PQ + *refine*). Por eso en producción los códigos PQ viven en RAM y los vectores completos en disco/SSD. (3) A la derecha, **OPQ** reduce el error de cuantización cuando la varianza está desigualmente repartida entre subespacios (aquí `decay=1.0`); en datos casi isótropos la ganancia es mínima. Mide antes de pagar su coste de entrenamiento.
 ''')
     nb.gemini(
         "imagen", "M14-IMG-02", "Product Quantization: del vector al código de m bytes",
@@ -427,7 +432,7 @@ plt.tight_layout(); plt.show()
 """)
     nb.md(r"""> 👀 **Qué debes observar.** `Flat` y `IVFFlat` guardan los vectores completos (≈ $4d$ B). `HNSW` guarda **los vectores más el grafo** (cada nodo guarda sus vecinos): es *más grande* que `Flat`. `IVFPQ` guarda 16 bytes de código + id: ~10× menos. Elegir HNSW es pagar RAM por velocidad; elegir IVF-PQ, pagar recall por RAM.
 
-## 5 · HNSW desde cero (mini)
+## 5. HNSW desde cero (mini)
 
 **HNSW** (Malkov & Yashunin, 2016/2018) es un grafo de proximidad *jerárquico*:
 - Cada vector recibe un **nivel máximo** aleatorio $\ell=\lfloor -\ln U\cdot m_L\rfloor$, con $m_L=1/\ln M$. Así $P(\ell\ge l)=M^{-l}$: cada capa tiene $M$ veces menos nodos que la inferior. Nº esperado de capas $\approx\ln N/\ln M$.
@@ -595,7 +600,7 @@ print({f"capa {c}": len(v) for c, v in sorted(traza2.items(), reverse=True)}, "n
         "video", "M14-VID-01", "Recorrido de HNSW por capas",
         "Animación de una búsqueda en HNSW: entrada por la capa superior, descenso voraz capa a capa y búsqueda con lista de candidatos en la capa 0.",
         """
-        Video explicativo 16:9, fondo blanco, estilo diagrama técnico limpio. Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280; tipografía sans-serif; ritmo calmado; SIN voz en off ni música; solo texto en pantalla en español (términos técnicos en inglés).
+        Video explicativo 16:9, fondo blanco, estilo diagrama técnico limpio. Paleta: azul #1F6FEB, naranja #F28E2B, verde #2CA02C, gris #6B7280; tipografía sans-serif; ritmo calmado; sin voz en off, sin música; solo texto en pantalla en español (términos técnicos en inglés).
 
         Composición: tres paneles horizontales apilados que representan las capas 2 (arriba), 1 (centro) y 0 (abajo) de un grafo HNSW. En la capa 2 hay 4 nodos grises con 4 aristas largas; en la capa 1 hay 10 nodos; en la capa 0 hay 40 nodos con muchas aristas cortas. Los nodos de las capas altas están conectados con líneas verticales punteadas a los mismos nodos en la capa de abajo. Una estrella naranja (la consulta) está en la zona derecha de la capa 0.
 
@@ -619,7 +624,7 @@ print({f"capa {c}": len(v) for c, v in sorted(traza2.items(), reverse=True)}, "n
     nb.md(r"""> 👀 **Qué debes observar.** El tiempo se reparte así: **pocos saltos en las capas altas** (guía gruesa), **mucha exploración en la capa 0** (precisión). `ef` controla cuántos candidatos se mantienen en esa exploración: más `ef` = más recall = más distancias.
 """)
     # ───────────────────────────── 6. Vamana / DiskANN ─────────────────────────────
-    nb.md(r"""## 6 · Vamana y DiskANN: grafos pensados para el SSD
+    nb.md(r"""## 6. Vamana y DiskANN: grafos pensados para el SSD
 
 HNSW exige **todo en RAM**. Para $10^9$ vectores eso son terabytes. **DiskANN** (Subramanya et al., NeurIPS 2019) resuelve el problema de dos maneras:
 
@@ -729,7 +734,7 @@ plt.tight_layout(); plt.show()
         Dos zonas verticales separadas por una línea punteada.
         IZQUIERDA, azul, título "RAM (pequeña)": una tabla con 8 filas "id 0 … id 7" y una columna "código PQ (m bytes)" con ejemplos "[17 203 5 88]" en las dos primeras filas y puntos suspensivos. Debajo, la nota: "distancias aproximadas para decidir qué sector leer".
         DERECHA, naranja, título "SSD (grande)": una fila de 6 rectángulos alargados llamados "sector 4 KB", cada uno con dos partes: "vector completo" (barra larga) y "vecinos: [a, b, c, d]" (4 casillas).
-        Entre ambas zonas, flechas: 1) desde un cuadro verde "consulta q" hacia la tabla PQ, con la etiqueta "1. puntuar vecinos con PQ"; 2) desde la tabla PQ hacia 2 sectores del SSD con la etiqueta "2. leer solo los W mejores sectores (beam search)"; 3) desde esos sectores hacia una caja verde "3. re-ordenar con vectores completos" y luego "top-k".
+        Entre ambas zonas, flechas: 1) desde un cuadro verde "consulta q" hacia la tabla PQ, con la etiqueta "1. puntuar vecinos con PQ"; 2) desde la tabla PQ hacia 2 sectores del SSD con la etiqueta "2. leer solo los W mejores sectores (beam search)"; 3) desde esos sectores hacia una caja verde "3. reordenar con vectores completos" y luego "top-k".
         Pie de figura: "Latencia ≈ nº de lecturas de SSD · RAM ≈ N × m bytes".
 
         Evita: texto ilegible, más de 6 sectores, números distintos de los indicados, logos, decoración.
@@ -737,13 +742,13 @@ plt.tight_layout(); plt.show()
         "Esquema con los códigos PQ en RAM, los sectores con vector y vecinos en SSD, y el flujo de búsqueda por haz",
         """
         RAM:  id0 [17 203 5 88]            SSD: [sector: vector completo | vecinos a b c d] x N
-              id1 [ 9  44 120 3]    ←→      1) q puntúa vecinos con PQ  2) lee W sectores  3) re-ordena con vectores completos
+              id1 [ 9  44 120 3]    ←→      1) q puntúa vecinos con PQ  2) lee W sectores  3) reordena con vectores completos
         RAM ≈ N·m bytes · latencia ≈ nº de lecturas de SSD
         """,
     )
     nb.md(r"""> 👀 **Qué debes observar.** Dos cuellos de botella distintos: la **RAM** escala con $N\cdot m$ (bytes de PQ), la **latencia** con el número de lecturas. DiskANN permite que $N$ crezca 10–100× más que lo que cabe en RAM manteniendo latencias de milisegundos.
 
-## 7 · ScaNN: cuantización *anisótropa*
+## 7. ScaNN: cuantización *anisótropa*
 
 La PQ minimiza el error de reconstrucción $\|x-\tilde x\|^2$. Pero en búsqueda por producto interno (MIPS) lo que importa es el error del **score** $\langle q,x\rangle$, y ese error no afecta por igual a todos los pares: para los vecinos que **sí** serán top-$k$ (los de score alto), la query está casi alineada con $x$. Descomponiendo el residuo $r=x-\tilde x$ en la componente **paralela** $r_\parallel$ (en la dirección de $x$) y la **ortogonal** $r_\perp$, el error de score proviene sobre todo de $r_\parallel$. ScaNN (Guo et al., ICML 2020) minimiza una pérdida **ponderada**
 $$\ell(x,\tilde x)=h_\parallel\,\|r_\parallel\|^2+h_\perp\,\|r_\perp\|^2,\qquad h_\parallel>h_\perp,$$
@@ -789,7 +794,7 @@ except Exception as e:
 """)
 
     # ───────────────────────────── 8. RaBitQ ─────────────────────────────
-    nb.md(r"""## 8 · Cuantización binaria con garantías: RaBitQ
+    nb.md(r"""## 8. Cuantización binaria con garantías: RaBitQ
 
 El módulo 12 mostró la binaria "ingenua" ($\text{sign}(x)$). **RaBitQ** (Gao & Long, SIGMOD 2024) la convierte en un método con **estimador insesgado y cota de error**: $D$ bits por vector y un error $O(1/\sqrt D)$ con alta probabilidad.
 
@@ -854,7 +859,7 @@ plt.tight_layout(); plt.show()
 
 > 🏭 **Adopción (fuentes):** Elastic describe su *Better Binary Quantization* (BBQ, Elasticsearch 8.16) como construido sobre ideas de RaBitQ, con diferencias (un único centroide, sin rotación aleatoria del libro de códigos); Milvus informa soporte de RaBitQ desde la 2.6 y haber contribuido una versión optimizada a FAISS. Son afirmaciones de cada proyecto: verifica la versión que uses.
 
-## 9 · Búsqueda filtrada: el problema abierto de la producción
+## 9. Búsqueda filtrada: el problema abierto de la producción
 
 Políglota necesita consultas como «solo documentación en español de la versión 3.x». Tres estrategias:
 
@@ -904,7 +909,7 @@ plt.tight_layout(); plt.show()
 """)
     nb.md(r"""> 👀 **Qué debes observar.** (1) Con filtros poco selectivos (50 %) todo funciona. (2) Al bajar la selectividad, el **post-filtro** colapsa (no hay suficientes permitidos en el top-100) y el **filtro dentro del grafo** también pierde recall (el subgrafo permitido se desconecta). (3) El **pre-filtro** es exacto y su coste *baja* con la selectividad (menos vectores que escanear): para filtros muy selectivos es **la mejor opción**. Regla de ingeniería: estimar la selectividad y elegir estrategia (pre-filtro si $s\cdot N$ es pequeño; filtro en grafo si es moderado; post-filtro solo si $s$ es alto).
 
-## 10 · FAISS en uso real: barrer configuraciones y elegir con un SLA
+## 10. FAISS en uso real: barrer configuraciones y elegir con un SLA
 
 El flujo de trabajo de un ingeniero de search: (1) fijar el **SLA** (p. ej. recall@10 ≥ 0.95, p99 ≤ 5 ms), (2) barrer familias y parámetros, (3) quedarse con la frontera de Pareto y (4) elegir el punto que cumple el SLA con **menos memoria**. `index_factory` describe una configuración en una cadena (`"IVF141,PQ16"`, `"HNSW16"`, `"IVF141,Flat"`).
 """)
@@ -1009,7 +1014,7 @@ ax.legend(fontsize=8); ax.grid(alpha=.3); plt.tight_layout(); plt.show()
     nb.md(r"""> 👀 **Qué debes observar.** Con los **mismos** índices y parámetros, el recall cae de forma monótona al alejar las queries de los documentos (en la ejecución de referencia, HNSW ef = 32: 0.84 → 0.62 de g = 0 a g = 2; IVF nprobe = 4: 0.70 → 0.28; a ef = 64 con g = 2 el recall, 0.79, queda por debajo del de ef = 32 sin desplazar), y hace falta un `efSearch` mayor para volver al mismo recall, es decir, más latencia. Consecuencias prácticas: (1) mide y ajusta con una muestra de **queries reales** (o de queries del golden set, con su prefijo), nunca con documentos; (2) reajusta tras cambiar el prefijo o la instrucción del embedder, que mueve las queries; (3) en búsqueda cruzada (texto→imagen, ES→EN) espera necesitar más `efSearch`/`nprobe` que en búsqueda simétrica.
 
 """)
-    nb.md(r"""## 11 · Puente con `recsys-course/08_deep_retrieval_ann`""" + r"""
+    nb.md(r"""## 11. Puente con `recsys-course/08_deep_retrieval_ann`""" + r"""
 | Tema | Aquí (módulo 14) | Allí (recsys 08) |
 |---|---|---|
 | Vectores | embeddings de texto (Matryoshka, binarios…) | embeddings de ítems de un *two-tower* |
@@ -1035,7 +1040,7 @@ Ya has construido IVF, PQ y un HNSW mínimo y barrido FAISS con un SLA; la tabla
 | Búsqueda filtrada dentro del grafo (ACORN y similares) | 🟡 | investigación + algunos motores | Patel et al. 2024 (2403.04871) |
 | GPU para ANN (FAISS-GPU/cuVS, CAGRA) | 🟡 | NVIDIA/Meta; depende de versiones | Douze et al. 2024; docs |
 ''')
-    nb.md(r"""## 12 · 🏭 En producción
+    nb.md(r"""## 🏭 En producción
 
 - **FAISS** (Meta; Douze et al., 2024) es la biblioteca de referencia: Flat, IVF, PQ/OPQ, HNSW, cuantización escalar, GPU y composición de índices con `index_factory`. El paper documenta el diseño y las decisiones de ingeniería.
 - **HNSW** es el índice por defecto de gran parte de los motores: **Lucene/Elasticsearch/OpenSearch**, **pgvector** (ofrece HNSW e IVFFlat), Qdrant y Weaviate. Por eso la mayoría de las decisiones del equipo son `M`, `efConstruction` y `efSearch`.
@@ -1045,7 +1050,7 @@ Ya has construido IVF, PQ y un HNSW mínimo y barrido FAISS con un SLA; la tabla
 - **Evaluación independiente:** *ann-benchmarks* (Aumüller et al., 2018) compara implementaciones en curvas recall-QPS; úsalo como referencia para tu clase de dataset, no como sustituto de medir los tuyos.
 - La **operación** (sharding, réplicas, actualizaciones, backups) es el tema del módulo 18.
 """)
-    nb.md(r"""## 13 · 🧠 Secretos de la élite
+    nb.md(r"""## 🧠 Secretos de la élite
 
 1. **Mide con el protocolo correcto.** Neighbor recall contra fuerza bruta **sobre queries reales** (no documentos usados como queries: en retrieval asimétrico las queries viven en otra región y el recall cae con los mismos parámetros; sección 10, OOD), batch=1, un hilo, p99 (no la media) y bytes serializados reales. Comparar un índice a 8 hilos en lote con otro a 1 hilo es la fuente de la mitad de los benchmarks engañosos.
 2. **Los parámetros no se transfieren entre datasets** (lo viste en la sección 10): el `nprobe` o `efSearch` que da 0.95 con un modelo de embeddings da otro valor con el siguiente. Reajusta tras **cada cambio de embedder, de dimensión o de cuantización** (módulo 12).
@@ -1058,7 +1063,7 @@ Ya has construido IVF, PQ y un HNSW mínimo y barrido FAISS con un SLA; la tabla
 9. **El *refine* es un dial barato:** subir `k_factor` (candidatos re-puntuados) cuesta lecturas del vector completo, no distancias aproximadas; es la primera palanca cuando el recall no llega al SLA.
 10. **Recall del índice ≠ recall de la tarea.** Un índice con recall@10 = 0.95 sobre un embedder con nDCG@10 = 0.60 sigue dando ≈ 0.57 de nDCG: evalúa ambas capas por separado (módulo 15).
 """)
-    nb.md(r"""## 14 · ⚠️ Errores comunes
+    nb.md(r"""## ⚠️ Errores comunes
 
 | Error | Síntoma | Arreglo |
 |---|---|---|
@@ -1073,7 +1078,7 @@ Ya has construido IVF, PQ y un HNSW mínimo y barrido FAISS con un SLA; la tabla
 | Olvidar el *refine* en IVF-PQ | recall estancado | `IndexRefineFlat` o re-ranking con vectores completos |
 | Mezclar vectores de dos versiones de embedder en un índice | recall aleatorio | un índice por (modelo, versión, dimensión, precisión) |
 """)
-    nb.md(r"""## 15 · Autoevaluación
+    nb.md(r"""## 📝 Autoevaluación
 
 <details><summary><b>1 · (Cálculo)</b> HNSW con $N=10^8$, $d=768$ en <code>float32</code> y $M=32$ (grado máximo $2M=64$ en la capa 0, enlaces de 4 B). Estima la RAM del índice.</summary>
 
@@ -1110,7 +1115,7 @@ HNSW no cabe (≈ 3 TB). Opciones: **DiskANN/Vamana** (PQ de, p. ej., 64–96 B/
 Porque el vector cuantizado $\bar o$ no es unitario respecto a $o$: $\langle\bar o,q\rangle$ **subestima** sistemáticamente $\langle o,q\rangle$ por el factor $\langle\bar o,o\rangle<1$. Dividir da un estimador **insesgado**; sin ello, los productos internos altos (los de los vecinos que buscamos) salen comprimidos y el ranking entre candidatos se distorsiona (en la sección 8 el ingenuo estimaba ≈ 0.75 del valor real).
 </details>
 """)
-    nb.md(r"""## 16 · Referencias (verificadas; consultadas en oct-2026)
+    nb.md(r"""## 📚 Referencias (verificadas; consultadas en oct-2026)
 
 **Papers (arXiv)**
 - Malkov & Yashunin (2016/2018). *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs*. IEEE TPAMI 42(4), 2020. <https://arxiv.org/abs/1603.09320>
@@ -1156,11 +1161,16 @@ def project() -> None:
 
 # Proyecto 14 · Índice de Políglota: curvas recall@10 vs latencia vs memoria
 
-**Nivel:** 🟠 Avanzado · **Duración:** ≈ 2 h · **GPU:** no necesaria (CPU) · **Cómputo:** 0 unidades de Colab.
+| | |
+|---|---|
+| **Nivel** | 🟠 Avanzado |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | Ninguna (CPU; 0 unidades de Colab) |
+| **Prerrequisitos** | Lección 14 · módulos 12 (embedder y dimensión) y 13 (retriever denso del híbrido) |
 
 **Conexión.** *Viene de:* módulo 12 (el embedder y la dimensión elegidos) y 13 (el retriever denso del sistema híbrido). *Va hacia:* módulo 15 (evaluar el sistema completo) y 18 (operar el índice: Qdrant/pgvector, versionado, migración).
 
-## 1 · Contexto de negocio
+## 1. Contexto de negocio
 Políglota Labs indexará **10 millones de fragmentos**. El CTO te entrega la «ficha técnica» que debe cumplir el índice en producción:
 
 | Requisito | Valor |
@@ -1171,17 +1181,17 @@ Políglota Labs indexará **10 millones de fragmentos**. El CTO te entrega la «
 
 Tu trabajo: medir con el protocolo correcto varias familias de índices FAISS sobre **vectores de Políglota**, dibujar las curvas, extraer la frontera de Pareto y **recomendar** una configuración (o decir con datos por qué ninguna cumple).
 
-## 2 · Dataset
+## 2. Dataset
 Embeddings del corpus Políglota (`carga_corpus`, módulo 00; sintético con `⚠️` si no hay acceso) calculados con el embedder del módulo 12 (si no se puede descargar, el fallback TF-IDF+SVD de 64 dimensiones). Como el corpus tiene solo ~400 documentos, se **amplía con copias ruidosas** (vecinos difíciles) hasta `N` vectores; las queries son las del corpus. **Con vectores reales de un modelo los resultados serán distintos de los del fallback**: lo importante es el procedimiento.
 
-## 3 · Entregables
+## 3. Entregables
 1. Funciones `exacto_topk`, `mide_latencia` y `tam_indice_MB` (protocolo de medición).
 2. `construye` y `fija_parametro` para 4 familias FAISS: `Flat`, `IVF-Flat`, `IVF-PQ+refine` y `HNSW`.
 3. `barrido`: tabla con recall@10, p50, p99, QPS, MB y MB extrapolados a 10 M para cada (familia, parámetro).
 4. `no_dominados` (frontera de Pareto en 3 objetivos) y `elige_config` (mínima memoria que cumple el SLA).
 5. Dos gráficas: recall vs latencia (con memoria en la leyenda) y recall vs memoria; y una conclusión escrita.
 
-## 4 · Rúbrica (umbrales calibrados con lo que MIDE la solución de referencia)
+## 4. Rúbrica (umbrales calibrados con lo que MIDE la solución de referencia)
 La solución de referencia se ejecutó en un entorno **sin acceso a Hugging Face** (corpus sintético y embedder de respaldo TF-IDF+SVD de 64 dimensiones), con `N` = 20 000 y un hilo; **no se verificó con un embedder real**. Los umbrales son invariantes relativas; el valor medido está en la última columna.
 
 | # | Criterio | Umbral | Medido por la solución |
@@ -1194,7 +1204,7 @@ La solución de referencia se ejecutó en un entorno **sin acceso a Hugging Face
 | R6 | `elige_config` devuelve una fila que cumple el SLA (o `None` si ninguna lo cumple) | cumplido | IVF-Flat nprobe=4 (recall 0.95, p99 0.06 ms, 5.3 MB) |
 | R7 | Conclusión escrita con ≥ 3 números de tus tablas | — | revisión manual |
 """)
-    nb.md("## 5 · Preparación (celdas dadas)")
+    nb.md("## 5. Preparación (celdas dadas)")
     nb.code(CODE_PIP)
     nb.code(C.CODE_SETUP_COMMON)
     for _src in src_corpus_cells():
@@ -1209,7 +1219,7 @@ import matplotlib.pyplot as plt
 ''' + F_RECALL)
 
     # ── TODO 1-3 medición ──
-    nb.md(r"""## 6 · Paso 1 — Protocolo de medición (TODO 1–3)
+    nb.md(r"""## 6. Paso 1 — Protocolo de medición (TODO 1–3)
 - **TODO 1 `exacto_topk(Q, X, k)`**: fuerza bruta por producto interno (vectores normalizados) procesando las queries por bloques de 64; devuelve los **índices** del top-`k` ordenados de mayor a menor score. Es el oráculo para el recall.
 - **TODO 2 `mide_latencia(fn, Q)`**: llama a `fn(q)` para **cada query por separado** (batch = 1), tras un calentamiento de 10 queries, y devuelve `(p50_ms, p99_ms, qps)` donde `qps = 1000 / media_ms`.
 - **TODO 3 `tam_indice_MB(index)`**: tamaño real del índice serializado en MB (`faiss.serialize_index`).
@@ -1243,7 +1253,7 @@ except NotImplementedError as e:
 ''')
 
     # ── datos ──
-    nb.md(r"""## 7 · Paso 2 — Vectores de Políglota (dado)
+    nb.md(r"""## 7. Paso 2 — Vectores de Políglota (dado)
 Embebemos documentos y queries con el embedder del módulo 12 y ampliamos el corpus con copias ruidosas hasta `N` vectores (vecinos difíciles). Las queries y el índice quedan **separados** (las queries nunca se añaden al índice).
 """)
     nb.code(r'''
@@ -1278,7 +1288,7 @@ print(f"embedder={emb.clave} (real={emb.is_real}) · X: {X.shape} · Q: {Q.shape
 ''')
 
     # ── TODO 4: construcción ──
-    nb.md(r"""## 8 · Paso 3 — Construir y parametrizar 4 familias (TODO 4)
+    nb.md(r"""## 8. Paso 3 — Construir y parametrizar 4 familias (TODO 4)
 Implementa `construye(familia, X)` y `fija_parametro(ix, familia, valor)`:
 
 | Familia | Construcción (producto interno) | Parámetro de búsqueda |
@@ -1315,7 +1325,7 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 5: barrido ──
-    nb.md(r"""## 9 · Paso 4 — El barrido (TODO 5)
+    nb.md(r"""## 9. Paso 4 — El barrido (TODO 5)
 Para cada familia y parámetro: recall@10 contra `exacto_topk`, p50/p99/QPS con batch=1, `MB` real y `MB_10M` (= `MB * N_PROD / N`, extrapolación lineal: suficiente para comparar, **no** para dimensionar un clúster). Devuelve un `DataFrame` con columnas `familia, param, recall, p50_ms, p99_ms, QPS, MB, MB_10M, seg_construir`.
 
 <details><summary>🪜 Pista 1 (idea)</summary>
@@ -1340,7 +1350,7 @@ except NotImplementedError as e:
 ''')
 
     # ── TODO 6-7 ──
-    nb.md(r"""## 10 · Paso 5 — Frontera de Pareto y recomendación (TODO 6–7)
+    nb.md(r"""## 10. Paso 5 — Frontera de Pareto y recomendación (TODO 6–7)
 - `no_dominados(df, maximizar, minimizar)`: filas para las que **no existe otra** que sea al menos igual en todos los objetivos y estrictamente mejor en alguno. Úsalo con `maximizar=["recall"]`, `minimizar=["p99_ms", "MB"]`.
 - `elige_config(df, recall_min, p99_max_ms, mem_max_MB10M)`: entre las filas que cumplen el SLA, la de **menor `MB`** (desempate: menor `p99_ms`); `None` si ninguna cumple.
 
@@ -1385,7 +1395,7 @@ except (NotImplementedError, TypeError, AttributeError) as e:
     print("⏳ pendiente:", repr(e))
 ''')
     nb.md(r"""> 👀 **Qué debes observar:** a la izquierda, cada familia es una curva: subir `nprobe`/`efSearch` compra recall con latencia, y la de HNSW suele quedar arriba-izquierda a costa de más memoria (mírala a la derecha). Los círculos negros son los no dominados: la configuración elegida debe ser uno de ellos. Si la fuerza bruta (gris) cumple el SLA con tu $N$, la respuesta correcta es «no hace falta ANN» (sección 1). La extrapolación `MB_10M` es lineal: sirve para comparar familias, no para dimensionar.""")
-    nb.md("## 11 · Autocomprobación de la rúbrica")
+    nb.md("## 11. Autocomprobación de la rúbrica")
     nb.code(r'''
 def autograder():
     ch = {}
@@ -1419,19 +1429,19 @@ def autograder():
 
 _ = autograder()
 ''')
-    nb.md(r"""## 12 · Tu conclusión (R7)
+    nb.md(r"""## 12. Tu conclusión (R7)
 En ≤ 10 líneas, con números de tus tablas: ¿qué configuración recomiendas para 10 M de fragmentos y por qué? ¿Qué familia gana en latencia, cuál en memoria y cuál en tiempo de construcción? ¿Qué cambiaría si el SLA exigiera recall ≥ 0.99? ¿Qué riesgos ves al extrapolar de `N` = 20 000 a 10 M?
 
 > *(Edita esta celda.)*
 
-## 13 · Retos extra (nivel experto)
+## 13. Retos extra (nivel experto)
 1. **Matryoshka + índice** (módulo 12): trunca el embedder a D/2 y D/4 y repite el barrido; ¿qué combinación (dimensión × familia) domina?
 2. **Mini-HNSW de la lección** (sección 5) frente a `IndexHNSWFlat` con tus vectores: ¿cuántas distancias evalúa cada una para el mismo recall?
 3. **Búsqueda filtrada**: añade un atributo `lang` (`es`/`en`/`code`) a cada vector (el corpus lo trae) y mide recall/latencia de pre-filtro, post-filtro y filtro en grafo (lección, sección 9).
 4. **Binaria + rescoring con FAISS** (`IndexBinaryFlat` / `IndexBinaryIVF`): compara con `IVF-PQ+refine` en memoria y recall.
 5. **Curva con N creciente**: repite con N = 20 k, 50 k, 100 k y grafica cómo escala la latencia de cada familia.
 
-## 14 · Reflexión (producción e hilo conductor)
+## 14. Reflexión (producción e hilo conductor)
 - ¿A partir de qué `N` empieza a ganar un ANN a la fuerza bruta en tu máquina? (reto 5)
 - ¿Qué parte de tu elección cambia si el 30 % de las consultas llevan un filtro por idioma o versión?
 - ¿Cómo detectarías en producción que el recall del índice se ha degradado (deriva, borrados acumulados)? (módulo 18)
@@ -1513,7 +1523,7 @@ _ = autograder()
 ''')
     nb.md("> 👀 **Qué debes observar:** compara tus curvas con estas. Si tu frontera tiene menos puntos, revisa que `no_dominados` use los tres objetivos y que la latencia se mida con batch = 1.")
     nb.md(r"""### Conclusión de referencia (ejemplo)
-Con los números de la tabla anterior: la fuerza bruta da recall 1.0 como oráculo; IVF-Flat y HNSW alcanzan el recall objetivo con el parámetro de búsqueda más bajo que lo cumple, IVF-PQ+refine ocupa **más** que IVF-Flat porque, además de los códigos PQ, guarda los vectores completos para el re-ranking (en producción esos vectores irían a disco, no a RAM), y HNSW es el más grande y el más lento de construir. La configuración recomendada es la de **menor memoria que cumple recall, p99 y límite de memoria** (ver `ELEGIDA`); si ninguna cumple, los datos justifican relajar el SLA o cambiar de familia. Riesgos: extrapolar linealmente de 20 000 a 10 M, que el recall depende del embedder y de la dimensión, y que el p99 de una máquina de pruebas no es el de producción.
+Con los números de la tabla anterior: la fuerza bruta da recall 1.0 como oráculo; IVF-Flat y HNSW alcanzan el recall objetivo con el parámetro de búsqueda más bajo que lo cumple, IVF-PQ+refine ocupa **más** que IVF-Flat porque, además de los códigos PQ, guarda los vectores completos para el reranking (en producción esos vectores irían a disco, no a RAM), y HNSW es el más grande y el más lento de construir. La configuración recomendada es la de **menor memoria que cumple recall, p99 y límite de memoria** (ver `ELEGIDA`); si ninguna cumple, los datos justifican relajar el SLA o cambiar de familia. Riesgos: extrapolar linealmente de 20 000 a 10 M, que el recall depende del embedder y de la dimensión, y que el p99 de una máquina de pruebas no es el de producción.
 """)
     nb.save(PROJECT)
 
