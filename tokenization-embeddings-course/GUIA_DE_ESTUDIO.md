@@ -7,7 +7,7 @@ ES/EN. Duración total ≈ 104 h; ritmo sugerido de **8 h/semana**, unas 13 sema
 
 1. **Antes de empezar (10 min):** responde de memoria la caja **🔁 Conexión con módulos anteriores** sin desplegar
    las respuestas. Si fallas más de una, repasa esa sección del módulo citado antes de seguir.
-2. **Lección:** sigue la caja **🧭 Ruta núcleo vs ampliación** si la hay (módulos 01, 02, 03, 05, 06, 13, 14, 15, 18, 19 y 20). El núcleo
+2. **Lección:** sigue la caja **🧭 Ruta núcleo vs ampliación** si la hay (módulos 01, 02, 03, 05, 06 y 13–20). El núcleo
    es lo que necesita el proyecto; la ampliación puede esperar a la semana siguiente (eso ya es repaso espaciado).
 3. **Ejemplos a mano:** hazlos con papel *antes* de ejecutar la celda que los comprueba.
 4. **👀 Qué debes observar:** léela después de mirar el gráfico, no antes. Primero escribe tu propia conclusión.
@@ -166,7 +166,7 @@ Ideas que atraviesan el curso (vuelve a ellas en cada módulo):
 sus proyectos; se corrigieron 09, 11–18 en la tabla de la sección 2. Los tiempos no cambian.
 
 **Cómo estudiar el bloque B.** Además de lo de la sección 1:
-- Las cajas **🧭** del bloque están en 13, 14, 15, 18, 19 y 20 (y 16–17 si la tienen): el núcleo es siempre lo que usa
+- Las cajas **🧭** del bloque están en 13–20 (corregidas para que coincidan con la numeración real): el núcleo es lo que usa
   el proyecto.
 - Cada lección tiene ejemplos **✍️ a mano** antes del código (pooling, whitening, InfoNCE, int8/binaria, MaxSim, PQ,
   bootstrap pareado, punto de equilibrio API/GPU, PSI, team-draft, árbol del índice, criterios de aceptación):

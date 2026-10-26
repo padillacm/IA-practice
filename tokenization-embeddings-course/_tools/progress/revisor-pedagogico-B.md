@@ -12,7 +12,7 @@ Agente: Revisor pedagógico · Módulos: 09–20 · Informe: tokenization-embedd
 - [x] 15_evaluacion_retrieval
 - [x] 16_embeddings_multimodales
 - [x] 17_interpretabilidad_geometria
-- [ ] GUIA_DE_ESTUDIO.md (sección bloque B) + check_course.py OK + informe final
+- [x] GUIA_DE_ESTUDIO.md (sección bloque B) + check_course.py OK + informe final
 
 ## Notas para retomar
 - (decisiones tomadas)

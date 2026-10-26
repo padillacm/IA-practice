@@ -191,3 +191,30 @@ como punto de partida en cada módulo.
   un documento de «git» con α = 1), con analogías word2vec y *boost* por categoría de recsys.
 - **Repaso espaciado:** añadida R5 (01 + 04, Diagnóstico): un probe de idioma al 99 % no prueba comprensión porque el
   idioma se lee en la superficie (bytes, tokens, fertilidad) → selectividad.
+
+## Resumen transversal del bloque B
+- **Mapa de madurez** movido al final (antes de 🏭) en 12, 13, 14, 15, 16, 17, 18, 19 y 20 (09–11 ya lo tenían bien),
+  con frase puente: igual que en el bloque A.
+- **🧭** corregidas en 13, 15, 16, 17, 18, 19 y 20: casi todas citaban números de sección que no correspondían o
+  dejaban en ampliación una sección que el proyecto exige. Regla aplicada: núcleo = lo que usa el proyecto.
+- **Ejemplos ✍️ a mano** añadidos en todos los módulos (09–20) donde la secuencia saltaba de la fórmula al código.
+- **🔁 con repaso espaciado lejano** en los 12 módulos: 00 (métricas, IC, BM25, índice invertido) en 11, 13, 14, 19 y
+  20; 01 (Unicode) en 15–19; 02/04 (BPE, prima de tokens) en 09, 10, 15, 17, 18; 08 (VQ) en 12 y 14.
+- **👀**: añadidas tras 3 celdas Gemini (M15-IMG-2, M17-IMG-1/2) y tras los gráficos de proyecto que no la tenían
+  (12, 14, 16). Ya no queda ningún gráfico ni Gemini sin 👀 en 09–20 (auditoría automática).
+- **Andamiaje 🪜**: pistas 2 que faltaban en 09, 10, 11, 14 y pistas completas para TODOs sin ninguna (09 TODO 2, 10
+  TODO 5, 12 TODO 7, 14 TODO 6–7).
+- **Respaldo:** las 👀 nuevas de proyectos se formulan sin presuponer el resultado (en 16 se reescribió una que lo
+  anticipaba mal: con el respaldo, el OCR por plantillas resiste mejor el ruido que el retriever visual).
+- **Terminología:** coste/costes, prima de tokens y video en 16 y 18–20; glosario ES/EN del bloque B en la guía.
+- `GUIA_DE_ESTUDIO.md`: columna «Requiere» corregida (09, 11–18, 19, 20), sección 5 completa (cómo estudiar el
+  bloque, rutas abreviadas, glosario de ≈ 60 términos) y mapa mermaid ampliado con 18–20 y enlaces lejanos.
+- `check_course.py`: Todo OK.
+
+## Pendientes y recomendaciones (no aplicadas)
+- Encabezados sin emoji en 09–11 («Objetivos de aprendizaje», «Autoevaluación», «Mapa de madurez» frente a 🎯/✅/🗺️
+  en 12–20) y numeración «## N ·» frente a «## N.»: para la pasada de consistencia B.
+- `extras/GEMINI_ASSETS.md` debe regenerarse (cambiaron textos de prompts Gemini de 18–20 al pasar «costo» → «coste»).
+- Duraciones: 15 (93 celdas) y 18 (76) son densas para 5 h; las 🧭 lo mitigan, no se tocaron las horas.
+- 18–20 se editaron antes de que la revisión de ejecutabilidad B los ejecutara; los cambios son de markdown salvo
+  títulos de gráficos y claves de presentación («coste $»), sin efecto en la lógica.
