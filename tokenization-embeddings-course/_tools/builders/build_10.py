@@ -221,12 +221,13 @@ def anisotropia(X, n=3000, seed=SEED):
 nb = Notebook("Módulo 10 · Embeddings contextuales y de oraciones", colab_path=LESSON)
 nb.md(nb.badge() + r"""
 # Módulo 10 · Embeddings contextuales y de oraciones
+**Tokenización y Embeddings: de BPE a los modelos modernos**
 
 | | |
 |---|---|
 | **Nivel** | 🟡 Intermedio |
-| **Duración** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
-| **Cómputo** | CPU basta en `FAST_DEV_RUN` (≈ 5 min); con modelos reales, T4 recomendada (≈ 0.5 h de T4: multiplica por la tarifa de unidades/hora que muestra tu panel de recursos de Colab) |
+| **Duración estimada** | ≈ 5 h (lección ≈ 3 h + proyecto ≈ 2 h) |
+| **GPU recomendada** | CPU basta en `FAST_DEV_RUN` (≈ 5 min); con modelos reales, T4 recomendada (≈ 0.5 h de T4: multiplica por la tarifa de unidades/hora que muestra tu panel de recursos de Colab) |
 | **Prerrequisitos** | 09 (capa de embedding, anisotropía de $E$), atención y Transformers |
 | **Hilo conductor** | Políglota necesita **un vector por documento y por consulta**. Hoy aprendes a sacarlo de un encoder preentrenado y a medir cuál funciona en nuestro corpus |
 
@@ -234,7 +235,7 @@ nb.md(nb.badge() + r"""
 """)
 
 nb.md(r"""
-## Objetivos de aprendizaje
+## 🎯 Objetivos de aprendizaje
 1. **Distinguir** embeddings estáticos (fila de $E$) de contextuales (estado oculto de la capa $\ell$) y **medir** la contextualidad por capa (*self-similarity*, Ethayarajh 2019).
 2. **Implementar desde cero** pooling CLS, media, máximo y último token con máscaras correctas, y **verificarlo** contra `sentence-transformers`.
 3. **Explicar** la arquitectura bi-encoder (SBERT) frente a cross-encoder y su coste.
@@ -551,11 +552,11 @@ nb.gemini(
     "imagen", "M10-IMG-03", "Anisotropía: del cono a la esfera (centrado y whitening)",
     "Visualiza el efecto geométrico de centrar y de blanquear un conjunto de embeddings anisótropos, conectando con la caída del coseno medio.",
     """
-    Diagrama técnico limpio, fondo blanco, 16:9, tres paneles de izquierda a derecha con flechas entre ellos. Paleta: azul #1F6FEB para los puntos, naranja #F28E2B para la dirección media, gris #6B7280 para ejes y texto.
+    Diagrama técnico limpio, fondo blanco, 16:9, tres paneles de izquierda a derecha con flechas entre ellos. Paleta: azul #1F6FEB para los puntos, naranja #F28E2B para la dirección media, verde #2CA02C para las flechas entre paneles, gris #6B7280 para ejes y texto. Tipografía sans-serif legible.
     Panel 1, título «Anisótropo»: ejes 2D con el origen marcado; una nube alargada y estrecha de 40 puntos azules lejos del origen, todos dentro de un cono delgado; una flecha naranja gruesa desde el origen hasta el centro de la nube rotulada «μ (dirección media)». Texto bajo el panel: «coseno medio ≈ 0.8».
-    Flecha a la derecha con el rótulo «restar μ».
+    Flecha verde a la derecha con el rótulo «restar μ».
     Panel 2, título «Centrado»: la misma nube, ahora centrada en el origen pero todavía alargada en diagonal (elipse). Texto: «coseno medio ≈ 0, pero varianza desigual».
-    Flecha a la derecha con el rótulo «× U Λ^(-1/2)».
+    Flecha verde a la derecha con el rótulo «× U Λ^(-1/2)».
     Panel 3, título «Whitening»: nube redonda (círculo) centrada en el origen. Texto: «covarianza = I (isótropo)».
     Franja inferior: «Whitening = (x − μ) · U Λ^(-1/2); con k columnas también reduce dimensión».
     Evita: texto ilegible, flechas ambiguas, añadir números distintos de los indicados, decoración.
@@ -665,23 +666,23 @@ nb.md(r"""
 nb.md(r"""
 ## 9. Bi-encoder vs cross-encoder
 - **Bi-encoder** (SBERT): $\text{score}(q,d)=\cos(f(q),f(d))$. Los documentos se codifican **una vez** y se indexan; una consulta cuesta 1 forward + una búsqueda ANN. Coste de buscar en $N$ documentos: $O(1)$ forwards por consulta.
-- **Cross-encoder**: $\text{score}(q,d)=g([q;d])$, un Transformer que lee consulta y documento juntos (atención cruzada completa). Más preciso, pero cuesta **$N$ forwards por consulta**: inviable como primera etapa, ideal para **re-rankear** los top-100 (módulo 13).
+- **Cross-encoder**: $\text{score}(q,d)=g([q;d])$, un Transformer que lee consulta y documento juntos (atención cruzada completa). Más preciso, pero cuesta **$N$ forwards por consulta**: inviable como primera etapa, ideal para **rerankear** los top-100 (módulo 13).
 - SBERT (Reimers & Gurevych, 2019) mostró que entrenar el bi-encoder siamés (pesos compartidos) para similitud resolvía el problema de BERT crudo: es el patrón que entrenarás tú en el módulo 11.
 """)
 nb.gemini(
     "imagen", "M10-IMG-04", "Bi-encoder (siamés) frente a cross-encoder",
     "Compara las dos arquitecturas de similitud y su coste: dos torres con pesos compartidos y coseno vs un único Transformer que lee el par concatenado.",
     """
-    Diagrama técnico limpio, fondo blanco, 16:9, dos mitades separadas por una línea vertical gris. Paleta: azul #1F6FEB (bi-encoder), naranja #F28E2B (cross-encoder), verde #2CA02C (salidas), gris #6B7280 (texto secundario).
-    Mitad izquierda, título «Bi-encoder (SBERT)»: dos cajas de texto abajo «consulta: cómo configurar la caché» y «documento: La caché es una memoria rápida…». Encima de cada una, una torre azul idéntica rotulada «Transformer + pooling» y entre las dos torres un candado con el texto «pesos compartidos». Sobre cada torre un vector verde «u» y «v», y arriba una caja «cos(u, v)». A un lado: «documentos: se codifican UNA vez y se indexan (ANN)» y «coste por consulta: 1 forward + búsqueda».
-    Mitad derecha, título «Cross-encoder»: una sola caja de texto «[CLS] consulta [SEP] documento [SEP]», encima una única torre naranja más ancha rotulada «Transformer (atención cruzada completa)» y arriba una caja verde «score ∈ ℝ». A un lado: «coste por consulta: N forwards (uno por documento)» y «uso típico: re-rankear el top-100».
+    Diagrama técnico limpio, fondo blanco, 16:9, dos mitades separadas por una línea vertical gris. Paleta: azul #1F6FEB (bi-encoder), naranja #F28E2B (cross-encoder), verde #2CA02C (salidas), gris #6B7280 (texto secundario). Tipografía sans-serif legible.
+    Mitad izquierda, título «Bi-encoder (SBERT)»: dos cajas de texto abajo «consulta: cómo configurar la caché» y «documento: La caché es una memoria rápida…». Encima de cada una, una torre azul idéntica rotulada «Transformer + pooling» y entre las dos torres una línea gris de doble flecha con el texto «pesos compartidos». Sobre cada torre un vector verde «u» y «v», y arriba una caja «cos(u, v)». A un lado: «documentos: se codifican UNA vez y se indexan (ANN)» y «coste por consulta: 1 forward + búsqueda».
+    Mitad derecha, título «Cross-encoder»: una sola caja de texto «[CLS] consulta [SEP] documento [SEP]», encima una única torre naranja más ancha rotulada «Transformer (atención cruzada completa)» y arriba una caja verde «score ∈ ℝ». A un lado: «coste por consulta: N forwards (uno por documento)» y «uso típico: rerankear el top-100».
     Evita: texto ilegible, flechas ambiguas, números inventados, decoración.
     """,
     "Bi-encoder con dos torres de pesos compartidos y coseno frente a cross-encoder con un único Transformer sobre el par concatenado.",
     """
     BI-ENCODER                          | CROSS-ENCODER
     q ─► [Transformer+pool] ─► u ┐      | [CLS] q [SEP] d [SEP] ─► [Transformer] ─► score
-    d ─► [Transformer+pool] ─► v ┴ cos  | coste: N forwards/consulta → re-ranking
+    d ─► [Transformer+pool] ─► v ┴ cos  | coste: N forwards/consulta → reranking
     (pesos compartidos; d se indexa)    |
     """,
 )
@@ -690,7 +691,7 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-## Mapa de madurez (a oct-2026)
+## 🗺️ Mapa de madurez (a oct-2026)
 
 | Técnica | Madurez | Quién la usa (verificable) | Fuente |
 |---|---|---|---|
@@ -701,7 +702,7 @@ nb.md(r"""
 | Whitening / centrado post-hoc | 🟡 útil para encoders crudos; poco usado con embedders modernos | — | Su et al. 2021; Mu, Bhat & Viswanath 2018 |
 | BERT-flow | 🔴 mayormente superado (whitening lineal comparable) | — | Li et al. 2020; Su et al. 2021 |
 | Multilingüe por destilación | 🟢 sólido | `paraphrase-multilingual-*` de sentence-transformers | Reimers & Gurevych 2020 |
-| Cross-encoder para re-ranking | 🟢 sólido | ver módulo 13 | Reimers & Gurevych 2019 |
+| Cross-encoder para reranking | 🟢 sólido | ver módulo 13 | Reimers & Gurevych 2019 |
 """)
 
 nb.md(r"""
@@ -710,7 +711,7 @@ nb.md(r"""
 - **Prefijos en producción.** Los modelos tipo E5 requieren `query: `/`passage: `; muchos embedders recientes usan instrucciones por tarea (módulo 12). Un servicio que indexa con un prefijo y consulta con otro degrada en silencio: inclúyelo en tests de integración.
 - **Normaliza una vez.** Si el modelo se entrenó con coseno, guarda vectores L2-normalizados y usa producto escalar en el índice (FAISS `IndexFlatIP`, HNSW con IP): más rápido y equivalente (módulo 14).
 - **Post-procesado como transformación del índice.** Centrado/whitening son una matriz $d\times k$: se aplican al indexar y al consultar, se versionan junto al modelo y, con $k<d$, reducen memoria.
-- **Para Políglota:** el bi-encoder será la primera etapa (recall), con BM25 en híbrido (13) y un cross-encoder opcional para re-rankear.
+- **Para Políglota:** el bi-encoder será la primera etapa (recall), con BM25 en híbrido (13) y un cross-encoder opcional para rerankear.
 """)
 
 nb.md(r"""
@@ -736,13 +737,13 @@ nb.md(r"""
 """)
 
 nb.md(r"""
-## Autoevaluación
+## 📝 Autoevaluación
 <details><summary><b>1. (Cálculo)</b> Dos vectores unitarios tienen coseno 0.8. ¿Cuál es su distancia L2? ¿Y si el coseno es 0.2?</summary>
 
 $\|\mathbf q-\mathbf d\|=\sqrt{2-2\cdot0.8}=\sqrt{0.4}\approx0.632$; con 0.2: $\sqrt{1.6}\approx1.265$.
 </details>
 
-<details><summary><b>2. (Cálculo)</b> Un cross-encoder tarda 5 ms por par en GPU. ¿Cuánto tarda en puntuar 1 M de documentos para una consulta? ¿Y re-rankear el top-100?</summary>
+<details><summary><b>2. (Cálculo)</b> Un cross-encoder tarda 5 ms por par en GPU. ¿Cuánto tarda en puntuar 1 M de documentos para una consulta? ¿Y rerankear el top-100?</summary>
 
 $10^6\times5$ ms $=5000$ s ≈ 83 min por consulta; el top-100, 0.5 s (y en lote, menos). Por eso el cross-encoder va **después** del bi-encoder.
 </details>
@@ -759,7 +760,7 @@ No. Isotropía no es relevancia: el whitening da el mismo peso a direcciones de 
 
 <details><summary><b>5. (Transferencia)</b> En tu *two-tower* de recsys, los ítems populares tienen normas grandes. ¿Coseno o producto escalar para recuperar candidatos? ¿Qué cambia?</summary>
 
-Con producto escalar la norma actúa como prior de popularidad (más clics, menos diversidad); con coseno se elimina. La elección depende del objetivo; lo correcto es usar la del entrenamiento y, si quieres controlar popularidad, hacerlo explícitamente (logQ, re-ranking).
+Con producto escalar la norma actúa como prior de popularidad (más clics, menos diversidad); con coseno se elimina. La elección depende del objetivo; lo correcto es usar la del entrenamiento y, si quieres controlar popularidad, hacerlo explícitamente (logQ, reranking).
 </details>
 
 <details><summary><b>6.</b> ¿Por qué la self-similarity de una palabra en la capa 0 es casi 1?</summary>
@@ -774,7 +775,7 @@ Centrado por idioma (restar la media de documentos de cada idioma y la de las co
 """)
 
 nb.md(r"""
-## Referencias
+## 📚 Referencias
 - Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2019). *BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.* NAACL 2019. [arXiv:1810.04805](https://arxiv.org/abs/1810.04805)
 - Reimers, N., & Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.* EMNLP-IJCNLP 2019. [arXiv:1908.10084](https://arxiv.org/abs/1908.10084)
 - Reimers, N., & Gurevych, I. (2020). *Making Monolingual Sentence Embeddings Multilingual using Knowledge Distillation.* EMNLP 2020. [arXiv:2004.09813](https://arxiv.org/abs/2004.09813)
@@ -807,9 +808,9 @@ pj.md(pj.badge() + r"""
 | | |
 |---|---|
 | **Nivel** | 🟡 Intermedio |
-| **Duración** | ≈ 2 h |
-| **Cómputo** | CPU en `FAST_DEV_RUN` (≈ 4 min, la mayor parte construyendo los encoders de fallback); con modelos reales, T4 recomendada |
-| **Requisitos** | Lección 10 |
+| **Duración estimada** | ≈ 2 h |
+| **GPU recomendada** | CPU en `FAST_DEV_RUN` (≈ 4 min, la mayor parte construyendo los encoders de fallback); con modelos reales, T4 recomendada |
+| **Prerrequisitos** | Lección 10 |
 
 ## Contexto de negocio
 En **Políglota Labs** aún no hay embedder propio (llega en el módulo 11). Producto quiere una primera versión de búsqueda semántica **ya**, con encoders preentrenados.

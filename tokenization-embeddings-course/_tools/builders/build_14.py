@@ -341,7 +341,7 @@ for m in (4, 8, 16, 32):
     t0 = time.perf_counter(); libros = entrena_pq(X, m); codigos = codifica_pq(X, libros); t_pq = time.perf_counter() - t0
     mse = float(((X - decodifica_pq(codigos, libros)) ** 2).sum(1).mean())
     r_pq = np.stack([np.argsort(-adc(q, libros, codigos))[:10] for q in Q])
-    r_refine = []                                                   # PQ para candidatos + re-ranking exacto de los 100 mejores
+    r_refine = []                                                   # PQ para candidatos + reranking exacto de los 100 mejores
     for q in Q:
         cand = np.argsort(-adc(q, libros, codigos))[:100]
         r_refine.append(cand[np.argsort(-(X[cand] @ q))[:10]])
@@ -752,7 +752,7 @@ plt.tight_layout(); plt.show()
 
 La PQ minimiza el error de reconstrucción $\|x-\tilde x\|^2$. Pero en búsqueda por producto interno (MIPS) lo que importa es el error del **score** $\langle q,x\rangle$, y ese error no afecta por igual a todos los pares: para los vecinos que **sí** serán top-$k$ (los de score alto), la query está casi alineada con $x$. Descomponiendo el residuo $r=x-\tilde x$ en la componente **paralela** $r_\parallel$ (en la dirección de $x$) y la **ortogonal** $r_\perp$, el error de score proviene sobre todo de $r_\parallel$. ScaNN (Guo et al., ICML 2020) minimiza una pérdida **ponderada**
 $$\ell(x,\tilde x)=h_\parallel\,\|r_\parallel\|^2+h_\perp\,\|r_\perp\|^2,\qquad h_\parallel>h_\perp,$$
-con $h_\parallel/h_\perp$ derivado del umbral de score que se quiere preservar y de la dimensión. Resultado: códigos que **sacrifican error ortogonal** (que casi no altera el ranking) para **proteger los scores altos**. Es la base de la búsqueda vectorial de Google (`scann`: árbol/particionado + *asymmetric hashing* anisótropo + re-ranking).
+con $h_\parallel/h_\perp$ derivado del umbral de score que se quiere preservar y de la dimensión. Resultado: códigos que **sacrifican error ortogonal** (que casi no altera el ranking) para **proteger los scores altos**. Es la base de la búsqueda vectorial de Google (`scann`: árbol/particionado + *asymmetric hashing* anisótropo + reranking).
 """)
     nb.code(r"""
 # Ejemplo numérico mínimo: dos palabras de código candidatas para x = (1, 0) y consultas alineadas con x
@@ -776,7 +776,7 @@ for c, col, et in ((c1, "#F28E2B", "c1"), (c2, "#2CA02C", "c2")):
 ax.set_xlim(0.6, 1.15); ax.set_ylim(-0.15, 0.4); ax.set_aspect("equal"); ax.grid(alpha=.3); ax.set_title("Residuo paralelo (c1) vs ortogonal (c2)")
 plt.tight_layout(); plt.show()
 """)
-    nb.md(r"""> 👀 **Qué debes observar.** La PQ clásica prefiere $c_1$ (menor error cuadrático total) pero $c_1$ **subestima el score** de las consultas alineadas con $x$ (0.80 en vez de 1.00); la pérdida anisótropa prefiere $c_2$, que conserva el score exacto aunque su error total sea mayor. En la práctica el efecto es sutil y se mide con recall del top-$k$ de MIPS; ScaNN lo combina con particionado y re-ranking.
+    nb.md(r"""> 👀 **Qué debes observar.** La PQ clásica prefiere $c_1$ (menor error cuadrático total) pero $c_1$ **subestima el score** de las consultas alineadas con $x$ (0.80 en vez de 1.00); la pérdida anisótropa prefiere $c_2$, que conserva el score exacto aunque su error total sea mayor. En la práctica el efecto es sutil y se mide con recall del top-$k$ de MIPS; ScaNN lo combina con particionado y reranking.
 
 La librería oficial se instala con `pip install scann` (solo Linux x86). La celda siguiente la usa si está disponible (si no, la omite):
 """)
@@ -1075,7 +1075,7 @@ Ya has construido IVF, PQ y un HNSW mínimo y barrido FAISS con un SLA; la tabla
 | PQ con `m` que no divide a `d` o entrenada con pocas muestras | libros pobres | `d % m == 0`, ≥ 39·256 muestras por subespacio como regla de FAISS |
 | HNSW con `efSearch < k` | menos resultados que `k` | `efSearch ≥ k` |
 | Post-filtro con filtros muy selectivos | resultados vacíos | pre-filtro / más sobremuestreo / grafo filtrable |
-| Olvidar el *refine* en IVF-PQ | recall estancado | `IndexRefineFlat` o re-ranking con vectores completos |
+| Olvidar el *refine* en IVF-PQ | recall estancado | `IndexRefineFlat` o reranking con vectores completos |
 | Mezclar vectores de dos versiones de embedder en un índice | recall aleatorio | un índice por (modelo, versión, dimensión, precisión) |
 """)
     nb.md(r"""## 📝 Autoevaluación
