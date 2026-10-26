@@ -12,8 +12,8 @@ Agente: Consistencia y lenguaje + celdas Gemini · Módulos: 09–20 + extras ·
 - [x] 11_aprendizaje_contrastivo
 - [x] 10_embeddings_contextuales_oraciones
 - [x] 09_capa_embedding_llm
-- [ ] extras (GUIA_ENTREVISTAS, LECTURA_PAPERS), README del curso y GUIA_DE_ESTUDIO coherentes
-- [ ] regenerar extras/GEMINI_ASSETS.md + check_course.py OK + informe
+- [x] extras (GUIA_ENTREVISTAS, LECTURA_PAPERS), README del curso y GUIA_DE_ESTUDIO coherentes
+- [x] regenerar extras/GEMINI_ASSETS.md + check_course.py OK + informe
 
 ## Notas para retomar
 - Convención B: cabecera en tabla (Nivel · Duración estimada · GPU recomendada · Prerrequisitos) + subtítulo del curso; proyectos con las mismas etiquetas. Encabezados: «## N. Título»; secciones fijas sin número y con emoji (🎯 Objetivos · 🔁 · 🗺️ Mapa de madurez · 🏭 · 🧠 · ⚠️ · 📝 Autoevaluación · 📚 Referencias). IDs Gemini con 2 dígitos (M15-IMG-01).

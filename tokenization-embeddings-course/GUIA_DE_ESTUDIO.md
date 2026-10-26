@@ -185,7 +185,8 @@ sus proyectos; se corrigieron 09, 11–18 en la tabla de la sección 2. Los tiem
 ### Glosario ES/EN · Bloque B (09–20)
 
 Misma convención que el bloque A: término técnico en inglés cuando es el habitual, **coste/costes**, **prima de
-tokens**, **tokenizer**, **pipeline** (m.).
+tokens**, **tokenizer**, **pipeline** (m.). Además (pasada de consistencia B): **producto escalar** (no «producto punto»), **negativos
+duros**, **reranker/reranking**, **rescoring**, **multi-vector**.
 
 | Español (como se usa en el curso) | Inglés | Definición breve | Módulo |
 |---|---|---|---|
