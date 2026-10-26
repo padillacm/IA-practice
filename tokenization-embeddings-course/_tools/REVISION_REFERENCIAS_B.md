@@ -103,3 +103,15 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | pgvector (HNSW e IVFFlat), Lucene/Elasticsearch/OpenSearch, Qdrant, Weaviate con HNSW | ✅ | Documentación oficial |
 | Enlace al curso de recsys (`recsys-course/08_deep_retrieval_ann`) | ✅ | Existe en el repositorio |
 | Mapa de madurez | ✅ | «Quién la usa» respaldado (FAISS, Google ScaNN, Microsoft DiskANN, Elastic BBQ, Milvus ≥ 2.6) |
+
+## 15 · Evaluación de retrieval
+| Referencia | Estado | Nota |
+|---|---|---|
+| 20 IDs arXiv (BEIR, MIRACL, MTEB, MMTEB, SciFact, Wang et al. 2013, MS MARCO, Arabzadeh, Urbano, Thomas, Faggioli, Soboroff, Clarke & Dietz, Alaofi, Zheng, LIMIT, Reimers 2021, e5-mistral…) | ✅ | Autor y año coinciden |
+| RTEB: blog de HF (beta oct-2025) y póster NeurIPS 2026 (`neurips.cc/virtual/2026/poster/139103`, Verma, Liu et al.) | ✅ | Ambos existen (por buscador): 48 datasets, 28 privados |
+| e5-mistral «sección de análisis de contaminación» | ✅ | El PDF tiene la sección *Test Set Contamination Analysis* (nombrada); venue ACL 2024 |
+| Alaofi et al. | ✏️ | Título completo con el paréntesis «(best café near me; …)»; SIGIR-AP 2024 confirmado en arXiv |
+| Venues | ✏️ | Años añadidos (NeurIPS 2021 D&B, ICLR 2025, EMNLP 2020, COLT 2013, ECIR 2022, KDD 2020, CIKM 2007, SIGIR 2006/2019, NeurIPS 2023 D&B, ACL 2021); nuevos: MIRACL TACL 11 (2023), MTEB EACL 2023, MS MARCO SIGIR 2021, Arabzadeh *Information Retrieval Journal* 25 (2022), Thomas SIGIR 2024, Faggioli ICTIR 2023, Soboroff IRR 2025; Clarke & Dietz preprint |
+| Smucker et al. 2007 (DOI 10.1145/1321440.1321528), Sakai 2006 (DOI 10.1145/1148170.1148261), ranx (GitHub) | ✅ | |
+| Enlace a `recsys-course/02_evaluation` | ✅ | Existe en el repositorio |
+| Mapa de madurez | ✅ | MTEB usa nDCG@10 en retrieval; LIMIT con autores de Google DeepMind/JHU; RTEB beta oct-2025 |

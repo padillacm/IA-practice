@@ -7,7 +7,7 @@ Agente: Verificador de referencias · Módulos: 09–20 + extras · Informe: tok
 - [x] 12_embedders_modernos
 - [x] 13_dense_sparse_late_interaction
 - [x] 14_indexacion_ann
-- [ ] 15_evaluacion_retrieval
+- [x] 15_evaluacion_retrieval
 - [ ] 16_embeddings_multimodales
 - [ ] 17_interpretabilidad_geometria
 - [ ] 18_produccion

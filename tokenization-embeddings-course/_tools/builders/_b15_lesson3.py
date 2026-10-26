@@ -432,35 +432,35 @@ def part3(nb):
     nb.md("""
     ## 16. 📚 Referencias
     **Evaluación y benchmarks**
-    - Thakur, Reimers, Rücklé, Srivastava, Gurevych (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS Datasets & Benchmarks. <https://arxiv.org/abs/2104.08663>
-    - Zhang et al. (2022). *Making a MIRACL: Multilingual Information Retrieval Across a Continuum of Languages*. <https://arxiv.org/abs/2210.09984>
-    - Muennighoff, Tazi, Magne, Reimers (2022). *MTEB: Massive Text Embedding Benchmark*. <https://arxiv.org/abs/2210.07316>
-    - Enevoldsen et al. (2025). *MMTEB: Massive Multilingual Text Embedding Benchmark*. ICLR. <https://arxiv.org/abs/2502.13595>
+    - Thakur, Reimers, Rücklé, Srivastava, Gurevych (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS 2021 Datasets & Benchmarks. <https://arxiv.org/abs/2104.08663>
+    - Zhang et al. (2022). *Making a MIRACL: Multilingual Information Retrieval Across a Continuum of Languages*. TACL 11 (2023). <https://arxiv.org/abs/2210.09984>
+    - Muennighoff, Tazi, Magne, Reimers (2022). *MTEB: Massive Text Embedding Benchmark*. EACL 2023. <https://arxiv.org/abs/2210.07316>
+    - Enevoldsen et al. (2025). *MMTEB: Massive Multilingual Text Embedding Benchmark*. ICLR 2025. <https://arxiv.org/abs/2502.13595>
     - RTEB (2025). *Introducing RTEB: A New Standard for Retrieval Evaluation* (Hugging Face blog) <https://huggingface.co/blog/rteb> y *RTEB: An Overfitting-Resistant Benchmark for Embedding Model Evaluation* (NeurIPS 2026 poster) <https://neurips.cc/virtual/2026/poster/139103>
-    - Wadden et al. (2020). *Fact or Fiction: Verifying Scientific Claims* (SciFact). EMNLP. <https://arxiv.org/abs/2004.14974>
-    - Wang, Wang, Li (2013). *A Theoretical Analysis of NDCG Type Ranking Measures*. COLT. <https://arxiv.org/abs/1304.6480>
-    - Bassani (2022). *ranx: A Blazing-Fast Python Library for Ranking Evaluation and Comparison*. ECIR. <https://github.com/AmenRa/ranx>
-    - Craswell, Mitra, Yilmaz, Campos, Lin (2021). *MS MARCO: Benchmarking Ranking Models in the Large-Data Regime*. <https://arxiv.org/abs/2105.04021>
-    - Arabzadeh, Vtyurina, Yan, Clarke (2021). *Shallow pooling for sparse labels*. <https://arxiv.org/abs/2109.00062>
-    - Krichene & Rendle (2020). *On Sampled Metrics for Item Recommendation*. KDD. <https://research.google/pubs/on-sampled-metrics-for-item-recommendation/> (ver `recsys-course/02_evaluation`)
+    - Wadden et al. (2020). *Fact or Fiction: Verifying Scientific Claims* (SciFact). EMNLP 2020. <https://arxiv.org/abs/2004.14974>
+    - Wang, Wang, Li (2013). *A Theoretical Analysis of NDCG Type Ranking Measures*. COLT 2013. <https://arxiv.org/abs/1304.6480>
+    - Bassani (2022). *ranx: A Blazing-Fast Python Library for Ranking Evaluation and Comparison*. ECIR 2022. <https://github.com/AmenRa/ranx>
+    - Craswell, Mitra, Yilmaz, Campos, Lin (2021). *MS MARCO: Benchmarking Ranking Models in the Large-Data Regime*. SIGIR 2021. <https://arxiv.org/abs/2105.04021>
+    - Arabzadeh, Vtyurina, Yan, Clarke (2021). *Shallow pooling for sparse labels*. Information Retrieval Journal 25 (2022). <https://arxiv.org/abs/2109.00062>
+    - Krichene & Rendle (2020). *On Sampled Metrics for Item Recommendation*. KDD 2020. <https://research.google/pubs/on-sampled-metrics-for-item-recommendation/> (ver `recsys-course/02_evaluation`)
 
     **Estadística en IR**
-    - Smucker, Allan, Carterette (2007). *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*. CIKM. DOI 10.1145/1321440.1321528
-    - Sakai (2006). *Evaluating Evaluation Metrics based on the Bootstrap*. SIGIR. DOI 10.1145/1148170.1148261
-    - Urbano, Lima, Hanjalic (2019). *Statistical Significance Testing in Information Retrieval: An Empirical Analysis of Type I, Type II and Type III Errors*. SIGIR. <https://arxiv.org/abs/1905.11096>
+    - Smucker, Allan, Carterette (2007). *A Comparison of Statistical Significance Tests for Information Retrieval Evaluation*. CIKM 2007. DOI 10.1145/1321440.1321528
+    - Sakai (2006). *Evaluating Evaluation Metrics based on the Bootstrap*. SIGIR 2006. DOI 10.1145/1148170.1148261
+    - Urbano, Lima, Hanjalic (2019). *Statistical Significance Testing in Information Retrieval: An Empirical Analysis of Type I, Type II and Type III Errors*. SIGIR 2019. <https://arxiv.org/abs/1905.11096>
 
     **LLM-as-judge**
-    - Thomas, Spielman, Craswell, Mitra (2023). *Large language models can accurately predict searcher preferences*. <https://arxiv.org/abs/2309.10621>
-    - Faggioli et al. (2023). *Perspectives on Large Language Models for Relevance Judgment*. <https://arxiv.org/abs/2304.09161>
-    - Soboroff (2024). *Don't Use LLMs to Make Relevance Judgments*. <https://arxiv.org/abs/2409.15133>
-    - Clarke & Dietz (2024). *LLM-based relevance assessment still can't replace human relevance assessment*. <https://arxiv.org/abs/2412.17156>
-    - Alaofi, Thomas, Scholer, Sanderson (2024). *LLMs can be Fooled into Labelling a Document as Relevant*. SIGIR-AP. <https://arxiv.org/abs/2501.17969>
-    - Zheng et al. (2023). *Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena*. NeurIPS D&B. <https://arxiv.org/abs/2306.05685>
+    - Thomas, Spielman, Craswell, Mitra (2023). *Large language models can accurately predict searcher preferences*. SIGIR 2024. <https://arxiv.org/abs/2309.10621>
+    - Faggioli et al. (2023). *Perspectives on Large Language Models for Relevance Judgment*. ICTIR 2023. <https://arxiv.org/abs/2304.09161>
+    - Soboroff (2024). *Don't Use LLMs to Make Relevance Judgments*. Information Retrieval Research 1(1) (2025). <https://arxiv.org/abs/2409.15133>
+    - Clarke & Dietz (2024). *LLM-based relevance assessment still can't replace human relevance assessment*. Preprint. <https://arxiv.org/abs/2412.17156>
+    - Alaofi, Thomas, Scholer, Sanderson (2024). *LLMs can be Fooled into Labelling a Document as Relevant* (título completo: «…(best café near me; this paper is perfectly relevant)»). SIGIR-AP 2024. <https://arxiv.org/abs/2501.17969>
+    - Zheng et al. (2023). *Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena*. NeurIPS 2023 D&B. <https://arxiv.org/abs/2306.05685>
 
     **Límites de los embeddings y contaminación**
     - Weller, Boratko, Naim, Lee (2025; v2 mar-2026, ICLR 2026). *On the Theoretical Limitations of Embedding-Based Retrieval*. <https://arxiv.org/abs/2508.21038>
-    - Reimers & Gurevych (2021). *The Curse of Dense Low-Dimensional Information Retrieval for Large Index Sizes*. ACL. <https://arxiv.org/abs/2012.14210>
-    - Wang et al. (2024). *Improving Text Embeddings with Large Language Models* (E5-Mistral; sección de análisis de contaminación). <https://arxiv.org/abs/2401.00368>
+    - Reimers & Gurevych (2021). *The Curse of Dense Low-Dimensional Information Retrieval for Large Index Sizes*. ACL 2021. <https://arxiv.org/abs/2012.14210>
+    - Wang et al. (2024). *Improving Text Embeddings with Large Language Models* (E5-Mistral; sección *Test Set Contamination Analysis* sobre MTEB). ACL 2024. <https://arxiv.org/abs/2401.00368>
 
     **Material del curso**: [`recsys-course/02_evaluation`](../../recsys-course/02_evaluation/README.md) · módulos 00, 10, 12, 13, 14 y 18.
     """)
