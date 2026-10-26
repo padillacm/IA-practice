@@ -78,3 +78,16 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | Cohere *Announcing Embed Multimodal v4* (256/512/1024/1536, 128k, imagen+texto) | ✅ | URL del changelog confirmada por buscador |
 | Shakir, Aarsen, Lee 2024 (HF), docs de `sentence-transformers`, OpenAI (25-ene-2024), Gemini Embedding 2 (preview/GA), EmbeddingGemma (< 200 MB), MongoDB/Voyage-4 | ✅ | Confirmados por la revisión técnica o por buscador (los dominios no abren desde el proxy) |
 | Mapa de madurez / 🏭 | ✅ | Cada «quién la usa» con paper, tarjeta o documentación del proveedor |
+
+## 13 · Dense, sparse y late interaction
+| Referencia | Estado | Nota |
+|---|---|---|
+| 17 IDs arXiv (ColBERT, ColBERTv2, PLAID, WARP, MUVERA, SPLADE ×3, SPLADE-v3, Geng, BGE-M3, Jina-ColBERT-v2, Late Chunking, Nogueira & Cho, Bruch, BEIR, Qwen3) | ✅ | Autor y año coinciden |
+| «*SPLADE*», «*SPLADE v2*», «*From Distillation to Hard Negative Sampling…*», «*M3-Embedding (BGE-M3)*», «*BEIR*» | ✏️ | Títulos completos (y autores de SPLADE v2, que faltaban) |
+| Venues | ✏️ | SIGIR 2020 (ColBERT), NAACL 2022, CIKM 2022 (PLAID), SIGIR 2025 (WARP), NeurIPS 2024 (MUVERA), SIGIR 2021/2022 short (SPLADE), Findings ACL 2024, TOIS 2023 (Bruch), NeurIPS 2021 D&B (BEIR), FnTIR 3(4); preprints marcados |
+| MUVERA «2–5× menos candidatos … (no verificado aquí)» (🧠 6) | ✏️ | Confirmado en el abstract; quitado el aviso |
+| Jina-ColBERT-v2 «89 idiomas, 8192 tokens, consultas de 32, 128/96/64» (🏭) | ✏️ / ⚠️ | 8192 (preentrenamiento) y cabezas MRL 64/96/128 confirmados en el PDF; «89 idiomas» y «consultas de 32» solo en el anuncio de Jina (no abre desde aquí): atribuidos a él |
+| Vespa: ColBERT embedder con compresión asimétrica de hasta 32× y Long-Context ColBERT | ✅ | Blog de Vespa (por buscador) |
+| Weaviate MUVERA (v1.31) y recomendación para modelos tipo ColPali | ✅ | Blog y documentación de Weaviate (por buscador) |
+| Qdrant multivector `MAX_SIM` + `m=0`; Elastic ELSER / `semantic_text`; OpenSearch neural sparse; bge-reranker-v2-m3 | ✅ | Documentación oficial |
+| Mapa de madurez | ✅ | Cada «quién la usa» con documentación del motor o paper |

@@ -1079,7 +1079,7 @@ Ya has construido BM25, SPLADE, MaxSim, MUVERA, la fusión y el reranker; la tab
 - **Qdrant** soporta campos **multivector** con comparador `MAX_SIM`; su tutorial recomienda usarlo para *reranking* y desactivar el índice HNSW de ese campo (`m=0`) para ahorrar cómputo y memoria.
 - **Weaviate** documenta una opción de **codificación MUVERA** para reducir la memoria de los embeddings multi-vector, recomendándola para modelos tipo ColPali (módulo 16).
 - **Elastic** ofrece ELSER (sparse aprendido, campo `sparse_vector`, flujo `semantic_text`) y **OpenSearch** el *neural sparse search*, incluyendo checkpoints multilingües e *inference-free* (Geng et al., 2024).
-- **Jina** publicó Jina-ColBERT-v2 (89 idiomas, documentos de hasta 8192 tokens, consultas de 32, dimensiones de salida 128/96/64 por Matryoshka) y la técnica de late chunking.
+- **Jina** publicó Jina-ColBERT-v2 (89 idiomas y consultas de 32 tokens según su anuncio; preentrenamiento con secuencias de 8192 tokens y cabezas Matryoshka de 128/96/64 dimensiones según el paper) y la técnica de late chunking.
 - **BAAI**: BGE-M3 (tres modos) y `bge-reranker-v2-m3`.
 - **Patrón común**: búsqueda híbrida (léxico + denso) como configuración por defecto de los motores modernos, con fusión RRF o convexa, y un reranker sobre el top-$K$ con $K$ de decenas.
 ''')
@@ -1090,7 +1090,7 @@ Ya has construido BM25, SPLADE, MaxSim, MUVERA, la fusión y el reranker; la tab
 3. **La normalización decide la combinación lineal.** Min-max es frágil ante un único documento con score extremo (comprime al resto); z-score por query o normalizar sobre el top-$K$ son alternativas habituales. Prueba las tres.
 4. **El analyzer de BM25 es parte del modelo.** Tildes, minúsculas, stemming y separación de identificadores (`snake_case`, `CamelCase`, versiones) cambian el nDCG más que ajustar $k_1$ o $b$ (módulos 01–05). Indexar el identificador completo **y** sus partes es una práctica habitual.
 5. **Late interaction se paga en almacenamiento, no en cómputo de consulta.** Comprime (residual, binarización, MUVERA+PQ) y úsala como reranker de un subconjunto cuando puedas; Jina-ColBERT-v2 ofrece dimensiones de salida reducidas (128/96/64) por esta razón.
-6. **MUVERA es un generador de candidatos, no un sustituto del MaxSim.** El paper lo usa como paso previo y re-puntúa con Chamfer exacto; reporta recuperar 2–5× menos candidatos que heurísticas previas a igual recall (resultado del paper, no verificado aquí).
+6. **MUVERA es un generador de candidatos, no un sustituto del MaxSim.** El paper lo usa como paso previo y re-puntúa con Chamfer exacto; reporta recuperar 2–5× menos candidatos que heurísticas previas a igual recall (abstract del paper; no lo reproducimos aquí).
 7. **El reranker se puede romper por distribución.** Un cross-encoder entrenado en MS MARCO (inglés/web) puede degradar el orden en documentación técnica en español o en código; mídelo en tu golden set **antes** de ponerlo en el camino crítico. Fija un presupuesto de latencia p95 y calcula $K$ máximo a partir de él.
 8. **Late chunking exige una cadena técnica coherente**: encoder de contexto largo, acceso a estados por token y pooling consistente con el entrenamiento (media). No lo actives "por moda": mídelo con consultas cuyo sujeto está en otro chunk.
 9. **Filtros y sparse**: un índice invertido aplica filtros duros (idioma, versión, permisos) de forma exacta y barata; en ANN denso los filtros son un problema abierto (módulo 14). Esto es un argumento a favor de mantener la rama léxica aunque el denso sea mejor en promedio.
@@ -1149,19 +1149,19 @@ Es el patrón de **generación de candidatos (varias fuentes) → ranker caro** 
     nb.md(r'''## 15 · Referencias (verificadas; consultadas en oct-2026)
 
 **Papers (arXiv)**
-- Khattab & Zaharia (2020). *ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT*. <https://arxiv.org/abs/2004.12832>
-- Santhanam et al. (2021). *ColBERTv2: Effective and Efficient Retrieval via Lightweight Late Interaction*. <https://arxiv.org/abs/2112.01488> · Santhanam et al. (2022). *PLAID: An Efficient Engine for Late Interaction Retrieval*. <https://arxiv.org/abs/2205.09707> · Scheerer et al. (2025). *WARP: An Efficient Engine for Multi-Vector Retrieval*. <https://arxiv.org/abs/2501.17788>
-- Dhulipala et al. (2024). *MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings*. <https://arxiv.org/abs/2405.19504>
-- Formal et al. (2021). *SPLADE*. <https://arxiv.org/abs/2107.05720> · *SPLADE v2*. <https://arxiv.org/abs/2109.10086> · Formal et al. (2022). *From Distillation to Hard Negative Sampling…*. <https://arxiv.org/abs/2205.04733> · Lassance et al. (2024). *SPLADE-v3: New baselines for SPLADE*. <https://arxiv.org/abs/2403.06789>
-- Geng et al. (2024). *Towards Competitive Search Relevance For Inference-Free Learned Sparse Retrievers*. <https://arxiv.org/abs/2411.04403>
-- Chen et al. (2024). *M3-Embedding (BGE-M3)*. <https://arxiv.org/abs/2402.03216>
-- Jha et al. (2024). *Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever*. <https://arxiv.org/abs/2408.16672>
-- Günther et al. (2024). *Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models*. <https://arxiv.org/abs/2409.04701>
-- Nogueira & Cho (2019). *Passage Re-ranking with BERT*. <https://arxiv.org/abs/1901.04085>
-- Bruch, Gai & Ingber (2022). *An Analysis of Fusion Functions for Hybrid Retrieval*. <https://arxiv.org/abs/2210.11934>
-- Thakur et al. (2021). *BEIR*. <https://arxiv.org/abs/2104.08663>
+- Khattab & Zaharia (2020). *ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT*. SIGIR 2020. <https://arxiv.org/abs/2004.12832>
+- Santhanam et al. (2021). *ColBERTv2: Effective and Efficient Retrieval via Lightweight Late Interaction*. NAACL 2022. <https://arxiv.org/abs/2112.01488> · Santhanam et al. (2022). *PLAID: An Efficient Engine for Late Interaction Retrieval*. CIKM 2022. <https://arxiv.org/abs/2205.09707> · Scheerer et al. (2025). *WARP: An Efficient Engine for Multi-Vector Retrieval*. SIGIR 2025. <https://arxiv.org/abs/2501.17788>
+- Dhulipala et al. (2024). *MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings*. NeurIPS 2024. <https://arxiv.org/abs/2405.19504>
+- Formal, Piwowarski & Clinchant (2021). *SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking*. SIGIR 2021 (short). <https://arxiv.org/abs/2107.05720> · Formal et al. (2021). *SPLADE v2: Sparse Lexical and Expansion Model for Information Retrieval*. Preprint. <https://arxiv.org/abs/2109.10086> · Formal et al. (2022). *From Distillation to Hard Negative Sampling: Making Sparse Neural IR Models More Effective*. SIGIR 2022 (short). <https://arxiv.org/abs/2205.04733> · Lassance et al. (2024). *SPLADE-v3: New baselines for SPLADE*. Informe técnico. <https://arxiv.org/abs/2403.06789>
+- Geng et al. (2024). *Towards Competitive Search Relevance For Inference-Free Learned Sparse Retrievers*. Preprint. <https://arxiv.org/abs/2411.04403>
+- Chen et al. (2024). *M3-Embedding: Multi-Linguality, Multi-Functionality, Multi-Granularity Text Embeddings Through Self-Knowledge Distillation* (BGE-M3). Findings of ACL 2024. <https://arxiv.org/abs/2402.03216>
+- Jha et al. (2024). *Jina-ColBERT-v2: A General-Purpose Multilingual Late Interaction Retriever*. Preprint (enviado a un taller de EMNLP 2024). <https://arxiv.org/abs/2408.16672>
+- Günther et al. (2024). *Late Chunking: Contextual Chunk Embeddings Using Long-Context Embedding Models*. Preprint. <https://arxiv.org/abs/2409.04701>
+- Nogueira & Cho (2019). *Passage Re-ranking with BERT*. Preprint. <https://arxiv.org/abs/1901.04085>
+- Bruch, Gai & Ingber (2022). *An Analysis of Fusion Functions for Hybrid Retrieval*. ACM TOIS 42(1), 2023. <https://arxiv.org/abs/2210.11934>
+- Thakur et al. (2021). *BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models*. NeurIPS 2021 (Datasets & Benchmarks). <https://arxiv.org/abs/2104.08663>
 - Cormack, Clarke & Büttcher (2009). *Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods*. SIGIR 2009.
-- Robertson & Zaragoza (2009). *The Probabilistic Relevance Framework: BM25 and Beyond*. Foundations and Trends in IR.
+- Robertson & Zaragoza (2009). *The Probabilistic Relevance Framework: BM25 and Beyond*. Foundations and Trends in IR 3(4).
 
 **Documentación y blogs**
 - Vespa: *Announcing the Vespa ColBERT embedder*. <https://blog.vespa.ai/announcing-colbert-embedder-in-vespa/> · *Announcing Long-Context ColBERT in Vespa*. <https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/>
