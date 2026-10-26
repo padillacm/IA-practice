@@ -21,7 +21,7 @@ open(f"{MOD}/assets/.gitkeep", "a").close()
 
 # ───────────────────────── celdas de código compartidas por lección y proyecto ─────────────────────────
 CODE_PIP = r'''
-!pip install -q -U sentence-transformers transformers scikit-learn matplotlib pandas mteb
+!pip install -q sentence-transformers transformers scikit-learn matplotlib pandas mteb
 '''
 
 CODE_EMBEDDER_TOOLS = C.CODE_EMBEDDER_TOOLS

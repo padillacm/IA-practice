@@ -20,7 +20,7 @@ os.makedirs(f"{MOD}/assets", exist_ok=True)
 open(f"{MOD}/assets/.gitkeep", "a").close()
 
 CODE_PIP = r'''
-!pip install -q -U faiss-cpu numpy scipy scikit-learn matplotlib pandas sentence-transformers
+!pip install -q faiss-cpu numpy scipy scikit-learn matplotlib pandas sentence-transformers
 '''
 
 CODE_ANN_BASE = r'''

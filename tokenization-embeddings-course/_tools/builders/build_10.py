@@ -60,15 +60,30 @@ FALLBACK10 = r'''
 # ── Fallback documentado: si no hay acceso al hub, construimos dos encoders diminutos LOCALES con la API de HF ──
 #    mini-BERT "crudo" (solo MLM, como un BERT sin ajustar) y mini-SBERT (el mismo + 200 pasos contrastivos con
 #    pares débiles frase-1 ↔ resto-del-documento; el módulo 11 explica este entrenamiento paso a paso).
-from tokenizers import BertWordPieceTokenizer
+from tokenizers import Tokenizer, models, normalizers, pre_tokenizers, trainers
 from transformers import BertConfig, BertForMaskedLM, BertModel, BertTokenizerFast, DataCollatorForLanguageModeling
+
+
+def vocab_wordpiece_determinista(textos, vocab_size=2000):
+    """Vocabulario con convención WordPiece ("##" = continuación de palabra), REPRODUCIBLE entre ejecuciones.
+    El WordPiece trainer de `tokenizers` rompe empates según el orden de un HashMap de Rust, que cambia en cada proceso:
+    el vocabulario (y con él todo lo que se entrena encima) variaba entre ejecuciones. Unigram sí es determinista."""
+    uni = Tokenizer(models.Unigram())
+    uni.normalizer = normalizers.BertNormalizer(lowercase=True, strip_accents=False)
+    uni.pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.BertPreTokenizer(), pre_tokenizers.Metaspace()])
+    uni.train_from_iterator(textos, trainers.UnigramTrainer(vocab_size=vocab_size, unk_token="[UNK]",
+                                                            special_tokens=["[UNK]"], show_progress=False))
+    chars = sorted({c for t in textos for c in uni.normalizer.normalize_str(t) if not c.isspace()})
+    piezas = [p for p, _ in sorted(uni.get_vocab().items(), key=lambda x: x[1]) if p not in ("[UNK]", "▁")]
+    piezas = [p[1:] if p.startswith("▁") else "##" + p for p in piezas]       # "▁x" inicia palabra; "x" → "##x"
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"] + chars + ["##" + c for c in chars] + piezas
+    return list(dict.fromkeys(vocab))
 
 
 def construye_fallback(textos, out="mini_encoders", steps_mlm=200, steps_cl=200, seed=SEED):
     os.makedirs(f"{out}/raw", exist_ok=True)
-    wp = BertWordPieceTokenizer(lowercase=True, strip_accents=False)
-    wp.train_from_iterator(textos, vocab_size=2000, min_frequency=2)
-    wp.save_model(f"{out}/raw")
+    with open(f"{out}/raw/vocab.txt", "w", encoding="utf-8") as f:
+        f.write("\n".join(vocab_wordpiece_determinista(textos)) + "\n")
     tk = BertTokenizerFast(f"{out}/raw/vocab.txt", do_lower_case=True, strip_accents=False)
     torch.manual_seed(seed); rng = random.Random(seed)
     mlm = BertForMaskedLM(BertConfig(vocab_size=len(tk), hidden_size=128, num_hidden_layers=2, num_attention_heads=4,

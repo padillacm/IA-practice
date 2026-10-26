@@ -232,13 +232,23 @@ def modelo_st():
         return SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", device=device), "paraphrase-multilingual-MiniLM-L12-v2"
     except Exception as e:
         print(f"⚠️  sin hub ({type(e).__name__}): mini-BERT local aleatorio (fallback)")
-    from tokenizers import BertWordPieceTokenizer
+    from tokenizers import Tokenizer, models, normalizers, pre_tokenizers, trainers
     from transformers import BertConfig, BertModel, BertTokenizerFast
     os.makedirs("mini_st", exist_ok=True)
-    wp = BertWordPieceTokenizer(lowercase=True, strip_accents=False); wp.train_from_iterator(doc_txt, vocab_size=2000); wp.save_model("mini_st")
+    # Vocabulario WordPiece REPRODUCIBLE: el WordPiece trainer de `tokenizers` rompe empates según un HashMap y cambia en
+    # cada proceso; Unigram es determinista y lo convertimos a la convención WordPiece ("##" = continuación).
+    uni = Tokenizer(models.Unigram()); uni.normalizer = normalizers.BertNormalizer(lowercase=True, strip_accents=False)
+    uni.pre_tokenizer = pre_tokenizers.Sequence([pre_tokenizers.BertPreTokenizer(), pre_tokenizers.Metaspace()])
+    uni.train_from_iterator(doc_txt, trainers.UnigramTrainer(vocab_size=2000, unk_token="[UNK]", special_tokens=["[UNK]"], show_progress=False))
+    chars = sorted({c for t in doc_txt for c in uni.normalizer.normalize_str(t) if not c.isspace()})
+    piezas = [p for p, _ in sorted(uni.get_vocab().items(), key=lambda x: x[1]) if p not in ("[UNK]", "▁")]
+    vocab = list(dict.fromkeys(["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"] + chars + ["##" + c for c in chars]
+                               + [p[1:] if p.startswith("▁") else "##" + p for p in piezas]))
+    with open("mini_st/vocab.txt", "w", encoding="utf-8") as f:
+        f.write("\n".join(vocab) + "\n")
     BertTokenizerFast("mini_st/vocab.txt", do_lower_case=True, strip_accents=False).save_pretrained("mini_st")
     torch.manual_seed(SEED)
-    BertModel(BertConfig(vocab_size=2000, hidden_size=128, num_hidden_layers=2, num_attention_heads=4, intermediate_size=256,
+    BertModel(BertConfig(vocab_size=len(vocab), hidden_size=128, num_hidden_layers=2, num_attention_heads=4, intermediate_size=256,
                          max_position_embeddings=128)).save_pretrained("mini_st")
     tr = Transformer("mini_st", max_seq_length=64)
     return SentenceTransformer(modules=[tr, Pooling(tr.get_word_embedding_dimension(), "mean")], device=device), "mini-BERT local (fallback)"
