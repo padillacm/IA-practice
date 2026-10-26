@@ -112,3 +112,19 @@ Leyenda: ✅ verificada · ✏️ corregida · ❌ eliminada · ⚠️ fuente se
 | `garak` (`probes.glitch`) | ✏️ | Existe; se precisa que la sonda está inactiva por defecto y que el contrabando ASCII está en `smuggling` |
 | UTS #39 | ✅ | Ver 01 |
 | Mapa de madurez | ✅ | Glitch tokens 🟢 respaldado por > 20 modelos de Land & Bartolo; resto 🟡 con un grupo/paper cada uno |
+
+## 06 · Tokenizer-free I (bytes, BLT)
+| Referencia | Estado | Nota |
+|---|---|---|
+| Pagnoni et al., BLT (14 autores, lista completa correcta), arXiv:2412.09871; ACL 2025 long, 2025.acl-long.453 | ✅ | Anthology confirmada (pp. 9238–9258) |
+| `facebookresearch/blt` y pesos 1B/7B | ✏️ | README: licencia CC-BY-NC-4.0 y pesos con solicitud de acceso en HF (añadido a la referencia; el 🏭 ya lo decía) |
+| Clark et al., CANINE, TACL 2022; Xue et al., ByT5, TACL 2022 | ✅ | |
+| Yu et al., MEGABYTE | ✏️ | Añadido venue (NeurIPS 2023) |
+| Slagle, SpaceByte | ✏️ | Añadido venue (NeurIPS 2024); en el Mapa de madurez decía «cierra parte de la brecha»: el abstract dice que a cómputo fijo «aproximadamente iguala» a los tokenizados |
+| Wang et al., MambaByte, COLM 2024 | ✅ | |
+| Nawrot et al. 2021 / 2022 | ✏️ | Venues (Findings NAACL 2022; ACL 2023) |
+| Hwang, Wang & Gu, H-Net (ICLR 2026); Videau et al., AU-Net (NeurIPS 2025); Minixhofer et al., Bolmo | ✅ | Venues confirmados por la revisión técnica |
+| Schmidt et al. 2024 (EMNLP 2024) | ✅ | |
+| Neitemeier et al., HAT, arXiv:2501.10322 | ✏️ | Título completo; sin venue confirmado → preprint |
+| `ByT5Tokenizer`, `CanineTokenizer`, `BltForCausalLM` | ✅ | Existen en `transformers` 5.20.2 (comprobado con `hasattr`) |
+| Mapa de madurez / 🏭 | ✅ | «Quién la usa» respaldado (Meta FAIR, Ai2 Bolmo 1B/7B, Cartesia/CMU); la ausencia en modelos de frontera se presenta como «sin evidencia pública» |

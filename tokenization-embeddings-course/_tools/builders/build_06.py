@@ -388,7 +388,7 @@ Tras ver el mecanismo, el mini-experimento y lo que dice el paper, esta tabla re
 | CANINE (encoder a nivel de carácter con *downsampling*) | 🟡 | Google Research; pesos publicados; no es base de modelos de frontera | Clark et al., TACL 2022 (arXiv:2103.06874) |
 | ByT5 (T5 byte-a-byte) | 🟡 | Google Research; robusto a ruido, 4x más largo | Xue et al., TACL 2022 (arXiv:2105.13626) |
 | MegaByte (parches fijos, local+global) | 🔴 | Meta; el propio paper de BLT lo ve por detrás de BPE a escala | Yu et al., 2023 (arXiv:2305.07185) |
-| SpaceByte (parche tras cada espacio) | 🔴 | Investigación (autor único); cierra parte de la brecha con BPE | Slagle, 2024 (arXiv:2404.14408) |
+| SpaceByte (parche tras cada espacio) | 🔴 | Investigación (autor único, NeurIPS 2024); a cómputo fijo iguala aproximadamente a los Transformers tokenizados en sus experimentos | Slagle, 2024 (arXiv:2404.14408) |
 | MambaByte (SSM sobre bytes) | 🔴 | Investigación (COLM 2024); modelos de 353M a 972M (y 1.6B en una prueba de velocidad) | Wang et al., 2024 (arXiv:2401.13660) |
 | **BLT: parches por entropía** | 🟡/🔴 | Meta FAIR; hasta 8B / 4T bytes; ACL 2025; pesos 1B y 7B en HF (acceso controlado) | Pagnoni et al., 2024 (arXiv:2412.09871) |
 | *Byte-ification* de un LLM ya entrenado (Bolmo) | 🔴 | Ai2: Bolmo 1B/7B a partir de Olmo 2 1B / Olmo 3 7B | Minixhofer et al., 2025 (arXiv:2512.15586) |
@@ -455,20 +455,20 @@ nb.md(r"""
 nb.md(r"""
 ## 17. Referencias
 
-Todas verificadas (título/autores/fecha) consultando arXiv o el ACL Anthology en la fecha de redacción.
+Todas verificadas (título/autores/fecha) consultando arXiv o el ACL Anthology en la fecha de redacción, y de nuevo (venue, licencia, clases de `transformers` 5.20) el 26-oct-2026.
 
-* Pagnoni, Pasunuru, Rodriguez, Nguyen, Muller, Li, Zhou, Yu, Weston, Zettlemoyer, Ghosh, Lewis, Holtzman, Iyer. **Byte Latent Transformer: Patches Scale Better Than Tokens.** arXiv:2412.09871 (dic. 2024); ACL 2025 (Long Papers), <https://aclanthology.org/2025.acl-long.453>. Código: <https://github.com/facebookresearch/blt>.
+* Pagnoni, Pasunuru, Rodriguez, Nguyen, Muller, Li, Zhou, Yu, Weston, Zettlemoyer, Ghosh, Lewis, Holtzman, Iyer. **Byte Latent Transformer: Patches Scale Better Than Tokens.** arXiv:2412.09871 (dic. 2024); ACL 2025 (Long Papers), <https://aclanthology.org/2025.acl-long.453>. Código: <https://github.com/facebookresearch/blt> (licencia CC-BY-NC-4.0; pesos 1B y 7B en HF con solicitud de acceso).
 * Clark, Garrette, Turc, Wieting. **CANINE: Pre-training an Efficient Tokenization-Free Encoder for Language Representation.** TACL 2022, arXiv:2103.06874.
 * Xue et al. **ByT5: Towards a token-free future with pre-trained byte-to-byte models.** TACL 2022, arXiv:2105.13626.
-* Yu, Simig, Flaherty, Aghajanyan, Zettlemoyer, Lewis. **MEGABYTE: Predicting Million-byte Sequences with Multiscale Transformers.** arXiv:2305.07185.
-* Slagle. **SpaceByte: Towards Deleting Tokenization from Large Language Modeling.** arXiv:2404.14408.
+* Yu, Simig, Flaherty, Aghajanyan, Zettlemoyer, Lewis. **MEGABYTE: Predicting Million-byte Sequences with Multiscale Transformers.** NeurIPS 2023, arXiv:2305.07185.
+* Slagle. **SpaceByte: Towards Deleting Tokenization from Large Language Modeling.** NeurIPS 2024, arXiv:2404.14408.
 * Wang, Gangavarapu, Yan, Rush. **MambaByte: Token-free Selective State Space Model.** COLM 2024, arXiv:2401.13660.
-* Nawrot et al. **Hierarchical Transformers Are More Efficient Language Models.** arXiv:2110.13711. · Nawrot et al. **Efficient Transformers with Dynamic Token Pooling.** arXiv:2211.09761.
+* Nawrot et al. **Hierarchical Transformers Are More Efficient Language Models.** Findings of NAACL 2022, arXiv:2110.13711. · Nawrot et al. **Efficient Transformers with Dynamic Token Pooling.** ACL 2023, arXiv:2211.09761.
 * Hwang, Wang, Gu. **Dynamic Chunking for End-to-End Hierarchical Sequence Modeling.** arXiv:2507.07955 (ICLR 2026) — módulo 07.
 * Videau et al. **From Bytes to Ideas: Language Modeling with Autoregressive U-Nets.** NeurIPS 2025, arXiv:2506.14761.
 * Minixhofer et al. **Bolmo: Byteifying the Next Generation of Language Models.** arXiv:2512.15586.
 * Schmidt et al. **Tokenization Is More Than Compression.** EMNLP 2024, arXiv:2402.18376.
-* Neitemeier et al. **Hierarchical Autoregressive Transformers: Combining Byte- and Word-Level Processing…** arXiv:2501.10322.
+* Neitemeier et al. **Hierarchical Autoregressive Transformers: Combining Byte- and Word-Level Processing for Robust, Adaptable Language Models.** arXiv:2501.10322 (preprint).
 * Documentación: Hugging Face `transformers` (`ByT5Tokenizer`, `CanineTokenizer`, `BltForCausalLM`).
 
 ## 18. Siguiente paso
