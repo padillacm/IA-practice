@@ -392,6 +392,47 @@ print({k: round(v, 3) for k, v in METRICAS.items() if k.startswith(("p5", "p9", 
 ''')
     nb.md(r'''> 👀 **Qué debes observar:** la distribución fría es la que ve un usuario con una query nueva y es la que cuenta para el criterio de p99; el tráfico Zipf mezcla aciertos (rápidos) y fallos (lentos), y su cola la ponen los fallos. En producción con un embedder neuronal, el embedder domina la latencia fría: ahí es donde pagan el micro-batching y la GPU (módulo 18).''')
 
+    # ─────────────── §6b Presupuesto de error (revisión élite) ───────────────
+    nb.md(r'''## 6b. Presupuesto de error: ¿qué aproximación del despliegue te cuesta calidad?
+Entre el «denso exacto en float32 con $d$ completa» de un paper y lo que sirves hay una cadena de aproximaciones: recortar $d$, cuantizar, un índice ANN, la fusión. Un equipo de búsqueda serio **descompone** la diferencia por escalón (en dev, una variable cada vez) para saber dónde gastar: si el ANN no cuesta nada, subir `efSearch` es tirar latencia; si cuesta, es lo primero que se arregla.
+
+La segunda parte separa dos cosas que se confunden a menudo: el **neighbor recall@10** del ANN (cuántos vecinos del exacto devuelve, relevantes o no; módulo 14) y lo que el usuario nota: cuántos de los **documentos relevantes** que encontraba el exacto se pierden y cuánto nDCG cuesta. Como con 400 documentos el HNSW es prácticamente exacto, añadimos al índice las $N$ copias ruidosas del §5 como **distractores no relevantes** (casi duplicados: el caso difícil) y usamos un grafo pequeño (M = 16) para que haya fallos visibles.''')
+    nb.code(r'''
+esc = {"exacto · d completa · float32": pq_S(Q_full @ D_full.T)[I_DEV].mean(),
+       f"+ d recortada ({dim})": pq_S(Q_dim @ D_dim.T)[I_DEV].mean(),
+       f"+ {precision}": pq_S(Q_dim @ D_sel.T)[I_DEV].mean()}
+run_den = {qids[i]: [d for d, _ in svc.buscar(q_texts[i], k=10, modo="denso")] for i in I_DEV}
+esc["+ HNSW del servicio"] = ndcg_por_query(run_den)[I_DEV].mean()
+esc["+ fusión (servicio completo)"] = ndcg_por_query(run_svc)[I_DEV].mean()
+pasos = list(esc); delta = [0.0] + [esc[b] - esc[a] for a, b in zip(pasos, pasos[1:])]
+print("\n".join(f"{p:<32} nDCG@10 dev = {esc[p]:.3f}  (Δ escalón {d:+.3f})" for p, d in zip(pasos, delta)))
+# ANN: neighbor recall frente a recall de los relevantes, con distractores casi duplicados
+Xd = np.vstack([l2n(D_sel), X]).astype(np.float32); ids_d = doc_ids + [f"distractor_{j}" for j in range(len(X))]
+Qd = Q_dim[I_DEV]; gt_d = faiss.IndexFlatIP(dim); gt_d.add(Xd); gx = gt_d.search(Qd, 10)[1]
+hn = faiss.IndexHNSWFlat(dim, 16, faiss.METRIC_INNER_PRODUCT); hn.hnsw.efConstruction = 40; hn.add(Xd)
+nd_ids = lambda I: ndcg_por_query({qids[i]: [ids_d[j] for j in fila] for i, fila in zip(I_DEV, I)})[I_DEV]
+nd_ex = nd_ids(gx); filas_b = []
+for ef in (10, 16, 32, 64, 128):
+    I = hn.search(Qd, 10, params=faiss.SearchParametersHNSW(efSearch=ef))[1]
+    rel_ex = [{ids_d[j] for j in a} & set(qrels[qids[i]]) for i, a in zip(I_DEV, gx)]
+    rel_hn = [{ids_d[j] for j in b} for b in I]
+    filas_b.append({"ef": ef, "neighbor_recall@10": np.mean([len(set(a) & set(b)) / 10 for a, b in zip(gx, I)]),
+                    "recall_relevantes": sum(len(r & h) for r, h in zip(rel_ex, rel_hn)) / max(sum(map(len, rel_ex)), 1),
+                    "pérdida_nDCG": nd_ex.mean() - nd_ids(I).mean()})
+df_b = pd.DataFrame(filas_b)
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(11, 3.8))
+a1.barh(pasos[::-1], [esc[p] for p in pasos[::-1]], color=[VERDE, AZUL, AZUL, AZUL, GRIS])
+a1.set_xlim(min(esc.values()) - .1, max(esc.values()) + .05); a1.set_xlabel("nDCG@10 en dev"); a1.set_title("Escalones del despliegue")
+a2.plot(df_b.ef, df_b["neighbor_recall@10"], "o-", color=AZUL, label="neighbor recall@10 (vs exacto)")
+a2.plot(df_b.ef, df_b["recall_relevantes"], "s-", color=VERDE, label="relevantes del exacto que se conservan")
+a2.plot(df_b.ef, 1 - df_b["pérdida_nDCG"], "^--", color=NARANJA, label="1 − pérdida de nDCG@10")
+a2.set_xscale("log", base=2); a2.set_xlabel("efSearch"); a2.set_title(f"HNSW M=16 con {len(X):,} distractores"); a2.legend(fontsize=8)
+plt.tight_layout(); plt.show()
+METRICAS["presupuesto_error"] = dict(zip(pasos, delta))
+df_b.round(3)
+''')
+    nb.md(r'''> 👀 **Qué debes observar:** (1) en la barra de escalones, el salto grande está en la **fusión** (y, con modelos reales, en el **modelo**), no en recortar $d$, en int8 ni en el ANN: por eso el §3 recorta con tolerancia y el §5 no persigue recall 1.0. (2) A la derecha, con `efSearch` bajo el neighbor recall cae mucho más que los relevantes conservados y que el nDCG (en la ejecución de referencia, a ef = 10: neighbor recall ≈ 0.57, relevantes ≈ 0.77, pérdida de nDCG ≈ 0.03): los vecinos que el ANN se salta suelen ser distractores o estar al fondo del top-10. Con ef alto la «pérdida» puede salir **negativa**: el exacto llena el top-10 de casi duplicados y el ANN, al saltarse alguno, deja entrar un relevante. No es una razón para bajar `efSearch`; es la prueba de que el neighbor recall mide **fidelidad al exacto**, no calidad. El criterio recall ≥ 0.95 es una cota prudente y barata de medir sin qrels; un sistema maduro decide `efSearch` mirando también la pérdida con qrels **por slice** (si los relevantes de un idioma viven en una región peor conectada del grafo, ese slice pierde más que la media).''')
+
     # ─────────────── §7 Evaluación final ───────────────
     nb.md(r'''## 7. Evaluación final: test ciego, una sola vez
 Comparamos el **servicio** (no un notebook paralelo: se evalúa lo que se despliega) contra el baseline BM25 del módulo 00 y contra el denso solo, en las queries de **test** que no se usaron para ninguna decisión.''')
@@ -525,18 +566,19 @@ Cierra el sistema mirando la madurez de cada pieza que acabas de integrar: casi 
 ''')
     nb.md(r'''## 🏭 En producción
 * El patrón que has integrado — normalización simétrica, BM25 + denso con RRF, reranking opcional, índice HNSW/IVF cuantizado, caché versionada y alias de colección — es el que documentan los motores de búsqueda y vector DBs de uso general (Elasticsearch/OpenSearch, Vespa, Qdrant, Weaviate, pgvector) en sus guías de búsqueda híbrida (consultadas oct-2026).
-* **Contextual Retrieval** (Anthropic, 2024) es un ejemplo publicado de mejora sobre este mismo esqueleto: añadir a cada chunk un resumen de contexto antes de embeber e indexar con BM25, combinado con reranking.
+* **Contextual Retrieval** (Anthropic, 2024) es un ejemplo publicado de mejora sobre este mismo esqueleto: un LLM añade a cada chunk un contexto de ≈ 50–100 tokens antes de embeberlo e indexarlo con BM25. En su evaluación, la tasa de fallo en el top-20 bajó de 5.7 % a 3.7 % (solo embeddings contextuales), 2.9 % (+ BM25 contextual) y 1.9 % (+ reranking), con un coste único estimado de 1.02 $ por millón de tokens de documento gracias al *prompt caching*. Fíjate en cómo lo reportan: una ablación por escalón, como el §6b, y el coste al lado de la ganancia.
 * Los *technical reports* de embedders recientes (Qwen3 Embedding, EmbeddingGemma, Gemini Embedding; módulo 12) reportan por tarea e idioma: tu informe debe hacer lo mismo con tus slices.
 * Decidir en dev, evaluar en test ciego, confirmar online con interleaving y A/B, y migrar con alias (módulos 15, 18, 19) es el ciclo de vida que se repite en cada versión.
 ''')
     nb.md(r'''## 🧠 Secretos de la élite
 1. **Escribe los criterios de aceptación antes del primer experimento** y no los cambies después sin dejar constancia en el informe.
-2. **Evalúa lo que despliegas**: el número final sale del servicio (con su caché, su índice ANN y su cuantización), no de un notebook con fuerza bruta en float32.
+2. **Evalúa lo que despliegas y descompón la diferencia**: el número final sale del servicio (con su caché, su índice ANN y su cuantización), no de un notebook con fuerza bruta en float32; y la distancia entre ambos se reparte por escalón (§6b) para saber qué perilla tocar. El *neighbor recall* del ANN es una cota prudente, no la pérdida de calidad: mídelas las dos.
 3. **Las decisiones interactúan**: dimensión y precisión del embedder fijan la memoria, que fija el índice, que fija la latencia; decide en ese orden y re-verifica al final.
 4. **Informe generado, no escrito a mano**: cada cifra del informe sale de una variable; así no hay números obsoletos tras re-ejecutar.
 5. **La regla «lo simple salvo prueba en contra»** (RRF salvo que lineal gane con IC) protege contra el *winner's curse* del módulo 19.
 6. **El tokenizer del LLM no es el analizador de tu BM25**: úsalo para costes y contexto; el analizador léxico se elige por nDCG.
 7. **Un criterio en ❌ con explicación vale más que diez en ✅ con umbrales ajustados a posteriori.**
+8. **El golden set caduca el día del lanzamiento**: lo escribiste tú, con tu vocabulario y tus slices. La primera iteración tras desplegar es muestrear queries reales (sobre todo las huérfanas y las de clics bajos, módulo 18 §9), etiquetarlas y re-medir; la mezcla real de idiomas cambia qué sistema gana (gap offline/online, módulo 19 §3).
 ''')
     nb.md(r'''## ⚠️ Errores comunes
 * Elegir la dimensión, la fusión o el `efSearch` mirando el test.
