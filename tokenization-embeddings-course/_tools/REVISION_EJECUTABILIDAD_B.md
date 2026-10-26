@@ -18,6 +18,8 @@ y PyPI → OK. En Colab las ramas oficiales deberían funcionar.
 | 11 proyecto | 114 s | OK | Ídem | 6/6 (BM25 0.866 · sin entrenar 0.342 · lote 0.500 · duros 0.533) | nota de calibración con lo medido |
 | 12 lección | 43 s | OK | Sintético + stdlib; embedders del hub → TF-IDF+SVD (aviso «NO representa al modelo real»); `RUN_MTEB=False` (registro de mteb sí, local) | — | pip sin `-U` |
 | 12 proyecto | 27 s | OK | Ídem | 8/8 automáticas (+R9 manual); plantilla 0/8 sin romper | pip sin `-U` |
+| 13 lección | 31 s | OK | Sintético + stdlib; encoders del hub → respaldos locales (aviso) | — | pip sin `-U` |
+| 13 proyecto | 23 s | OK | Ídem | 8/8; plantilla 0/8 sin romper | pip sin `-U` |
 <!-- TABLA -->
 
 ## Cambios aplicados (en builders; notebooks regenerados)
