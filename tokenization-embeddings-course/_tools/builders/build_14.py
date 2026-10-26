@@ -125,22 +125,14 @@ Un vector por token. MUVERA construye un único vector de dimensión fija por do
 
 El *recall* del top-K aproximado respecto al top-K exacto (neighbor recall). Es distinto del recall de la **tarea** (¿está el documento relevante?): el primero mide solo el error del índice.
 </details>
-''')
-    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
-🟢 sólido · 🟡 emergente · 🔴 experimental.
+<details><summary><b>5 · (M08, Cálculo)</b> Un codebook VQ de $K = 256$ centroides en 2D, ¿cuántos bits cuesta por vector? ¿Y si cuantizas un vector de 768 dimensiones en 96 trozos de 8 dimensiones, cada uno con su codebook de 256?</summary>
 
-| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
-|---|---|---|---|
-| Fuerza bruta (exacta, SIMD/GPU) | 🟢 | línea base obligatoria; óptima hasta cientos de miles de vectores | — |
-| IVF (listas invertidas por k-means) | 🟢 | FAISS, Milvus, muchos sistemas | Jégou et al. 2011; Douze et al. 2024 |
-| PQ / OPQ | 🟢 | FAISS (IVF-PQ), ScaNN, DiskANN (PQ en RAM) | Jégou et al. 2011; Ge et al. 2013 |
-| HNSW | 🟢 | Lucene/Elasticsearch/OpenSearch, pgvector, Qdrant, Weaviate, FAISS… | Malkov & Yashunin 2016 (1603.09320) |
-| ScaNN (cuantización anisótropa) | 🟢 | Google (`scann`); base de la búsqueda vectorial de Google | Guo et al. 2019 (1908.10396) |
-| DiskANN / Vamana (grafo + SSD) | 🟢/🟡 | Microsoft (código abierto); sistemas con índices en disco | Subramanya et al. 2019; FreshDiskANN 2105.09613 |
-| RaBitQ / Extended-RaBitQ | 🟡 | Elastic (BBQ, inspirado en RaBitQ), Milvus ≥ 2.6, contribuciones a FAISS | Gao & Long 2024 (2405.12497); 2409.09913 |
-| Cuantización binaria + rescoring | 🟡 | Elastic BBQ, proveedores de embeddings (módulo 12) | blog HF 2024; Elastic |
-| Búsqueda filtrada dentro del grafo (ACORN y similares) | 🟡 | investigación + algunos motores | Patel et al. 2024 (2403.04871) |
-| GPU para ANN (FAISS-GPU/cuVS, CAGRA) | 🟡 | NVIDIA/Meta; depende de versiones | Douze et al. 2024; docs |
+$\log_2 256 = 8$ bits = 1 byte por vector; troceado: 96 trozos × 1 byte = **96 B** (frente a 3 072 B en float32). Es **PQ** (sección 4): la VQ del módulo 08 aplicada por subespacios, con $256^{96}$ combinaciones posibles sin tener que entrenar un codebook gigante. Los centroides se aprenden con k-means, igual que en VQ e IVF.
+</details>
+<details><summary><b>6 · (M00, Transferencia)</b> El índice invertido del módulo 00 guarda, por término, la lista de documentos que lo contienen. ¿Qué haría de «término» en un índice vectorial?</summary>
+
+Un **centroide**: IVF (*inverted file*, sección 3) asigna cada vector a su centroide más cercano y guarda una lista por centroide; en la consulta solo se recorren las `nprobe` listas más cercanas, igual que BM25 solo recorre las listas de los términos de la query. La diferencia: un vector cerca de la frontera entre dos celdas puede quedar fuera, y de ahí el recall < 1.
+</details>
 ''')
 
     # ───────────────────────────── Setup ─────────────────────────────
@@ -302,7 +294,10 @@ plt.tight_layout(); plt.show()
 
 **PQ** (Jégou et al., 2011) divide cada vector en $m$ subvectores de dimensión $d/m$ y aprende **un diccionario de $K=256$ centroides por subespacio** (k-means). Cada vector se sustituye por $m$ índices de **1 byte** (compresión $4d/m$). La distancia entre una query $q$ y un vector codificado se calcula con **ADC** (*asymmetric distance computation*): se precomputa una tabla $T_j[c]=\langle q_j,\mu_{j,c}\rangle$ (para cada subespacio $j$ y centroide $c$) y el score es
 $$\langle q,\hat x\rangle=\sum_{j=1}^{m}T_j\big[\text{code}_j(x)\big],$$
-solo $m$ búsquedas en tabla y sumas por vector (la query **no** se cuantiza: asimétrica). **OPQ** (Ge et al., 2013) aprende además una **rotación ortogonal** $R$ que equilibra la varianza entre subespacios antes de cuantizar; se resuelve alternando "entrenar PQ" y "Procrustes" ($R=UV^\top$ con $U\Sigma V^\top=\text{SVD}(X^\top\hat X)$).
+solo $m$ búsquedas en tabla y sumas por vector (la query **no** se cuantiza: asimétrica).
+
+✍️ **Ejemplo a mano ($d = 4$, $m = 2$, $K = 2$).** Diccionarios: subespacio 1 $\{c_{1,0} = (1, 1),\ c_{1,1} = (-1, 0)\}$; subespacio 2 $\{c_{2,0} = (0, 0),\ c_{2,1} = (1, 1)\}$. El documento $x = (0.9, 0.8, 0.1, -0.1)$ se codifica por el centroide más cercano en cada mitad: $(0.9, 0.8) \to 0$, $(0.1, -0.1) \to 0$; código `[0, 0]` (2 bytes en vez de 16). Query $q = (1, 0, 0.5, 0.5)$: tablas $T_1 = (\langle(1,0),c_{1,0}\rangle, \langle(1,0),c_{1,1}\rangle) = (1, -1)$ y $T_2 = (0, 1)$. Score aproximado $= T_1[0] + T_2[0] = 1 + 0 = 1$; el exacto es $\langle q, x\rangle = 0.9 + 0 + 0.05 - 0.05 = 0.9$. Es la VQ del módulo 08 aplicada por trozos (con $K^m$ «centroides» implícitos, aquí 4) y la misma idea que un diccionario de compresión: guardas el id del patrón, no el dato. A escala, $d = 768$ float32 = 3 072 B frente a $m = 96$ códigos = 96 B (32×).
+ **OPQ** (Ge et al., 2013) aprende además una **rotación ortogonal** $R$ que equilibra la varianza entre subespacios antes de cuantizar; se resuelve alternando "entrenar PQ" y "Procrustes" ($R=UV^\top$ con $U\Sigma V^\top=\text{SVD}(X^\top\hat X)$).
 ''')
     nb.code(r'''
 def entrena_pq(V, m, K=256, iters=8, n_train=8000):
@@ -996,6 +991,24 @@ plt.tight_layout(); plt.show()
 | Foco | algoritmos, cuantización con garantías, disco, filtros | integración con el modelo, servicio top-K, filtrado de negocio |
 Léelo para ver cómo el mismo índice sirve a un *two-tower*; lo que cambia es el **modelo que produce los vectores**, no el índice.
 """)
+    nb.md(r'''## 🗺️ Mapa de madurez (a oct-2026)
+Ya has construido IVF, PQ y un HNSW mínimo y barrido FAISS con un SLA; la tabla sitúa esas familias y las más recientes (DiskANN, ScaNN, RaBitQ, filtros) por madurez antes de ver quién las usa.
+
+🟢 sólido · 🟡 emergente · 🔴 experimental.
+
+| Técnica | Madurez | Quién la usa (respaldado) | Fuente |
+|---|---|---|---|
+| Fuerza bruta (exacta, SIMD/GPU) | 🟢 | línea base obligatoria; óptima hasta cientos de miles de vectores | — |
+| IVF (listas invertidas por k-means) | 🟢 | FAISS, Milvus, muchos sistemas | Jégou et al. 2011; Douze et al. 2024 |
+| PQ / OPQ | 🟢 | FAISS (IVF-PQ), ScaNN, DiskANN (PQ en RAM) | Jégou et al. 2011; Ge et al. 2013 |
+| HNSW | 🟢 | Lucene/Elasticsearch/OpenSearch, pgvector, Qdrant, Weaviate, FAISS… | Malkov & Yashunin 2016 (1603.09320) |
+| ScaNN (cuantización anisótropa) | 🟢 | Google (`scann`); base de la búsqueda vectorial de Google | Guo et al. 2019 (1908.10396) |
+| DiskANN / Vamana (grafo + SSD) | 🟢/🟡 | Microsoft (código abierto); sistemas con índices en disco | Subramanya et al. 2019; FreshDiskANN 2105.09613 |
+| RaBitQ / Extended-RaBitQ | 🟡 | Elastic (BBQ, inspirado en RaBitQ), Milvus ≥ 2.6, contribuciones a FAISS | Gao & Long 2024 (2405.12497); 2409.09913 |
+| Cuantización binaria + rescoring | 🟡 | Elastic BBQ, proveedores de embeddings (módulo 12) | blog HF 2024; Elastic |
+| Búsqueda filtrada dentro del grafo (ACORN y similares) | 🟡 | investigación + algunos motores | Patel et al. 2024 (2403.04871) |
+| GPU para ANN (FAISS-GPU/cuVS, CAGRA) | 🟡 | NVIDIA/Meta; depende de versiones | Douze et al. 2024; docs |
+''')
     nb.md(r"""## 12 · 🏭 En producción
 
 - **FAISS** (Meta; Douze et al., 2024) es la biblioteca de referencia: Flat, IVF, PQ/OPQ, HNSW, cuantización escalar, GPU y composición de índices con `index_factory`. El paper documenta el diseño y las decisiones de ingeniería.
@@ -1278,6 +1291,9 @@ except NotImplementedError as e:
     nb.md(r"""## 9 · Paso 4 — El barrido (TODO 5)
 Para cada familia y parámetro: recall@10 contra `exacto_topk`, p50/p99/QPS con batch=1, `MB` real y `MB_10M` (= `MB * N_PROD / N`, extrapolación lineal: suficiente para comparar, **no** para dimensionar un clúster). Devuelve un `DataFrame` con columnas `familia, param, recall, p50_ms, p99_ms, QPS, MB, MB_10M, seg_construir`.
 
+<details><summary>🪜 Pista 1 (idea)</summary>
+Dos bucles: familias (construir es caro, se hace una vez) y valores del parámetro de búsqueda (`nprobe`, `efSearch`…, que se cambian sin reconstruir). Cada fila es un punto de la curva recall–latencia de la lección (sección 10).
+</details>
 <details><summary>🪜 Pista 2 (casi la API)</summary>
 Construye el índice una vez por familia (mide <code>seg_construir</code>), y para cada valor: <code>fija_parametro</code>, <code>_, I = ix.search(Q, 10)</code>, <code>mide_latencia(lambda q: ix.search(q[None], 10), Q)</code>.
 </details>
@@ -1300,6 +1316,13 @@ except NotImplementedError as e:
     nb.md(r"""## 10 · Paso 5 — Frontera de Pareto y recomendación (TODO 6–7)
 - `no_dominados(df, maximizar, minimizar)`: filas para las que **no existe otra** que sea al menos igual en todos los objetivos y estrictamente mejor en alguno. Úsalo con `maximizar=["recall"]`, `minimizar=["p99_ms", "MB"]`.
 - `elige_config(df, recall_min, p99_max_ms, mem_max_MB10M)`: entre las filas que cumplen el SLA, la de **menor `MB`** (desempate: menor `p99_ms`); `None` si ninguna cumple.
+
+<details><summary>🪜 Pista 1 (idea)</summary>
+Pon todos los objetivos en «mayor es mejor» (cambia el signo de los que se minimizan). La fila $i$ está dominada si alguna otra es $\ge$ en todo y $>$ en algo. Con tres objetivos ya no basta el «ordena y recorre» del proyecto 12.
+</details>
+<details><summary>🪜 Pista 2 (casi la API)</summary>
+<code>M = np.hstack([df[maximizar].to_numpy(), -df[minimizar].to_numpy()])</code>; para cada fila, <code>domina = ((M &gt;= M[i]).all(1)) &amp; ((M &gt; M[i]).any(1))</code> y consérvala si <code>not domina.any()</code>. Para <code>elige_config</code>: filtra por las tres condiciones y <code>sort_values(["MB", "p99_ms"]).iloc[0]</code>.
+</details>
 """)
     nb.code(r'''
 RECALL_MIN, P99_MAX_MS = 0.90, None          # P99_MAX_MS = 0.5 x p99 de la fuerza bruta: se fija tras el barrido
@@ -1334,6 +1357,7 @@ except (NotImplementedError, TypeError, AttributeError) as e:
     FRENTE = ELEGIDA = None
     print("⏳ pendiente:", repr(e))
 ''')
+    nb.md(r"""> 👀 **Qué debes observar:** a la izquierda, cada familia es una curva: subir `nprobe`/`efSearch` compra recall con latencia, y la de HNSW suele quedar arriba-izquierda a costa de más memoria (mírala a la derecha). Los círculos negros son los no dominados: la configuración elegida debe ser uno de ellos. Si la fuerza bruta (gris) cumple el SLA con tu $N$, la respuesta correcta es «no hace falta ANN» (sección 1). La extrapolación `MB_10M` es lineal: sirve para comparar familias, no para dimensionar.""")
     nb.md("## 11 · Autocomprobación de la rúbrica")
     nb.code(r'''
 def autograder():
@@ -1460,6 +1484,7 @@ dibuja(RES, FRENTE); plt.show()
 print("Configuración elegida:", None if ELEGIDA is None else ELEGIDA[["familia", "param", "recall", "p99_ms", "MB", "MB_10M"]].to_dict())
 _ = autograder()
 ''')
+    nb.md("> 👀 **Qué debes observar:** compara tus curvas con estas. Si tu frontera tiene menos puntos, revisa que `no_dominados` use los tres objetivos y que la latencia se mida con batch = 1.")
     nb.md(r"""### Conclusión de referencia (ejemplo)
 Con los números de la tabla anterior: la fuerza bruta da recall 1.0 como oráculo; IVF-Flat y HNSW alcanzan el recall objetivo con el parámetro de búsqueda más bajo que lo cumple, IVF-PQ+refine ocupa **más** que IVF-Flat porque, además de los códigos PQ, guarda los vectores completos para el re-ranking (en producción esos vectores irían a disco, no a RAM), y HNSW es el más grande y el más lento de construir. La configuración recomendada es la de **menor memoria que cumple recall, p99 y límite de memoria** (ver `ELEGIDA`); si ninguna cumple, los datos justifican relajar el SLA o cambiar de familia. Riesgos: extrapolar linealmente de 20 000 a 10 M, que el recall depende del embedder y de la dimensión, y que el p99 de una máquina de pruebas no es el de producción.
 """)

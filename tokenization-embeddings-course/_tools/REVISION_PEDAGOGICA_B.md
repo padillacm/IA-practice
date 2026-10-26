@@ -134,3 +134,16 @@ como punto de partida en cada módulo.
   analogía «cada término exige su evidencia» de BM25 y el contraste con el bi-encoder.
 - **Repaso espaciado:** añadida R5 (M00, Diagnóstico: +0.02 en 58 queries sin IC pareado, y α elegido sobre las
   mismas queries), como recomendaba la revisión pedagógica A para retomar nDCG/IC antes del 15.
+
+## 14 · Indexación y ANN
+- Bien: «cuándo NO usar ANN» en la intuición; protocolo de medición (batch = 1, p50/p99, neighbor recall) antes de
+  los índices; IVF, PQ/OPQ y un HNSW mínimo desde cero → FAISS con barrido y SLA; puente explícito con
+  `recsys-course/08`; 🧭 coherente con el proyecto; 👀 tras 12 gráficos y 4 Gemini.
+- **Reestructurado:** Mapa de madurez de la cabecera a justo antes de 🏭.
+- **Ejemplo a mano añadido** en §4: PQ con $d = 4$, $m = 2$, $K = 2$ (código `[0, 0]`, tablas ADC, score aproximado 1
+  frente a 0.9 exacto), enlazado con la VQ del 08 y la idea de diccionario de compresión; 3 072 B → 96 B a escala.
+- **Repaso espaciado:** añadidas R5 (M08, Cálculo: codebook de 256 = 1 byte; 96 trozos = 96 B → PQ) y R6 (M00,
+  Transferencia: IVF como índice invertido cuyo «término» es un centroide).
+- **Proyecto:** TODO 5 tenía 🪜 2 sin 🪜 1 → añadida; TODO 6–7 (no dominados con 3 objetivos, elección con SLA) sin
+  pistas → 🪜 1/2 coherentes con la solución. 👀 añadidas tras las curvas recall/latencia/memoria (plantilla y
+  solución), incluida la lectura «si Flat cumple el SLA, no hace falta ANN».
